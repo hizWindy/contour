@@ -765,6 +765,78 @@
         "title": "AssistantTask",
         "type": "object"
       },
+      "AssistantTaskIn": {
+        "additionalProperties": false,
+        "description": "One HubSpot task, as the review card sends it.",
+        "properties": {
+          "body": {
+            "default": "",
+            "description": "More words, if any, up to 2,000",
+            "maxLength": 2000,
+            "pattern": "^[^\\x00]*$",
+            "title": "Body",
+            "type": "string"
+          },
+          "company_key": {
+            "description": "The company: its HubSpot id. A Lead Finder company that isn't in HubSpot yet (lead:<id>) can't have a task",
+            "examples": [
+              "201"
+            ],
+            "maxLength": 64,
+            "pattern": "^[^\\x00]*$",
+            "title": "Company Key",
+            "type": "string"
+          },
+          "due": {
+            "description": "The day it is due: today or later, Melbourne time",
+            "format": "date",
+            "title": "Due",
+            "type": "string"
+          },
+          "kind": {
+            "default": "todo",
+            "description": "call, email or todo",
+            "enum": [
+              "call",
+              "email",
+              "todo"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A teammate's HubSpot owner id, from GET /team. None: me",
+            "title": "Owner Id"
+          },
+          "subject": {
+            "description": "What to do, 1 to 200 characters once trimmed (422 `task_empty`). An email address or a phone number in it is sent as [email left out] or [number left out]",
+            "examples": [
+              "Send Sample Logistics the floor plan"
+            ],
+            "maxLength": 200,
+            "pattern": "^[^\\x00]*$",
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "company_key",
+          "subject",
+          "due"
+        ],
+        "title": "AssistantTaskIn",
+        "type": "object"
+      },
       "Blocked": {
         "description": "Why a run can't start. The Start button shows `message`.",
         "properties": {
@@ -17172,11 +17244,11 @@
             "type": "string"
           },
           "step": {
-            "description": "company, note or list (the Lead Finder); call, fields, task:1, task:2 ..., note or meeting (an activity)",
+            "description": "company, note or list (the Lead Finder); call, fields, task:1, task:2 ..., note or meeting (an activity); status (a task ticked done or opened again)",
             "examples": [
               "task:1"
             ],
-            "pattern": "^(?:company|note|list|call|fields|task:[1-9][0-9]*|meeting)$",
+            "pattern": "^(?:company|note|list|call|fields|task:[1-9][0-9]*|meeting|status)$",
             "title": "Step",
             "type": "string"
           }
@@ -18262,6 +18334,434 @@
           "c"
         ],
         "title": "Tiers",
+        "type": "object"
+      },
+      "Today": {
+        "description": "The Assistant's first page: my day, the most urgent first. Free: no Claude request.",
+        "properties": {
+          "calls": {
+            "$ref": "#/components/schemas/TodayCalls"
+          },
+          "checked_at": {
+            "description": "When the tasks shown were read from HubSpot. When none could be read: when this answer was made",
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "deals": {
+            "description": "My open deals that need a nudge: close date passed first, then the longest without contact",
+            "items": {
+              "$ref": "#/components/schemas/TodayDeal"
+            },
+            "title": "Deals",
+            "type": "array"
+          },
+          "deals_more": {
+            "description": "More such deals beyond the ones listed (50 at most)",
+            "title": "Deals More",
+            "type": "integer"
+          },
+          "meetings": {
+            "description": "My meetings today and tomorrow, soonest first",
+            "items": {
+              "$ref": "#/components/schemas/TodayMeeting"
+            },
+            "title": "Meetings",
+            "type": "array"
+          },
+          "parts": {
+            "description": "The parts this person sees, in order. A part left out also comes back empty",
+            "items": {
+              "enum": [
+                "tasks",
+                "meetings",
+                "calls",
+                "deals"
+              ],
+              "type": "string"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "quiet_days": {
+            "description": "The days without contact that make a deal quiet",
+            "title": "Quiet Days",
+            "type": "integer"
+          },
+          "tasks": {
+            "description": "My open HubSpot tasks: overdue first, then today's, then the next 7 days', each group soonest due first",
+            "items": {
+              "$ref": "#/components/schemas/TodayTask"
+            },
+            "title": "Tasks",
+            "type": "array"
+          },
+          "tasks_more": {
+            "description": "Older overdue tasks HubSpot has beyond the ones listed (100 at most are read)",
+            "title": "Tasks More",
+            "type": "integer"
+          },
+          "tasks_sentence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Plain words when the tasks can't show, or show from an earlier read",
+            "title": "Tasks Sentence"
+          },
+          "tasks_state": {
+            "enum": [
+              "ok",
+              "no_owner",
+              "no_access",
+              "off",
+              "failed"
+            ],
+            "title": "Tasks State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parts",
+          "tasks",
+          "tasks_state",
+          "tasks_sentence",
+          "tasks_more",
+          "meetings",
+          "calls",
+          "deals",
+          "deals_more",
+          "quiet_days",
+          "checked_at"
+        ],
+        "title": "Today",
+        "type": "object"
+      },
+      "TodayCalls": {
+        "properties": {
+          "needs_look": {
+            "description": "My call notes that failed, were partly saved, or unsure",
+            "title": "Needs Look",
+            "type": "integer"
+          },
+          "to_confirm": {
+            "description": "My call notes waiting for me to confirm them",
+            "title": "To Confirm",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "to_confirm",
+          "needs_look"
+        ],
+        "title": "TodayCalls",
+        "type": "object"
+      },
+      "TodayCompany": {
+        "properties": {
+          "key": {
+            "description": "The company's key: its HubSpot id",
+            "examples": [
+              "201"
+            ],
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "title": "TodayCompany",
+        "type": "object"
+      },
+      "TodayDeal": {
+        "properties": {
+          "close_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Date"
+          },
+          "company": {
+            "$ref": "#/components/schemas/TodayCompany"
+          },
+          "hubspot_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hubspot Url"
+          },
+          "id": {
+            "description": "HubSpot's deal id",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_contact": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The last time anyone talked to the company: the newest of its last activity and last contacted, and the deal's last contacted. None when there is none",
+            "title": "Last Contact"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reasons": {
+            "description": "close_date_passed, quiet, or both",
+            "items": {
+              "enum": [
+                "close_date_passed",
+                "quiet"
+              ],
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HubSpot's stage, like Qualified Deal",
+            "title": "Stage"
+          },
+          "why": {
+            "description": "Why it needs a nudge, like 'Close date passed, 12 Nov' or 'No contact for 21 days'",
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "company",
+          "stage",
+          "close_date",
+          "last_contact",
+          "why",
+          "reasons",
+          "hubspot_url"
+        ],
+        "title": "TodayDeal",
+        "type": "object"
+      },
+      "TodayMeeting": {
+        "properties": {
+          "company": {
+            "$ref": "#/components/schemas/TodayCompany"
+          },
+          "day": {
+            "description": "today or tomorrow, Melbourne time",
+            "enum": [
+              "today",
+              "tomorrow"
+            ],
+            "title": "Day",
+            "type": "string"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "form": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MeetingFormState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its pre-read, if it has one"
+          },
+          "hubspot_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hubspot Url"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HubSpot's meeting id. None for a meeting typed in for a pre-read",
+            "title": "Id"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "starts_at",
+          "ends_at",
+          "day",
+          "company",
+          "form",
+          "hubspot_url"
+        ],
+        "title": "TodayMeeting",
+        "type": "object"
+      },
+      "TodayTask": {
+        "properties": {
+          "company": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TodayCompany"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its company, when it is linked to one in our HubSpot copy"
+          },
+          "due": {
+            "description": "The day it is due, Melbourne time",
+            "format": "date",
+            "title": "Due",
+            "type": "string"
+          },
+          "due_at": {
+            "description": "HubSpot's due time",
+            "format": "date-time",
+            "title": "Due At",
+            "type": "string"
+          },
+          "group": {
+            "description": "overdue, today, or soon (the next 7 days)",
+            "enum": [
+              "overdue",
+              "today",
+              "soon"
+            ],
+            "title": "Group",
+            "type": "string"
+          },
+          "hubspot_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The task in HubSpot, when HubSpot gave it",
+            "title": "Hubspot Url"
+          },
+          "id": {
+            "description": "HubSpot's task id",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "call",
+              "email",
+              "todo"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "overdue": {
+            "description": "Due before today, Melbourne time",
+            "title": "Overdue",
+            "type": "boolean"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority"
+          },
+          "subject": {
+            "description": "One line, with email addresses and phone numbers left out",
+            "maxLength": 300,
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "subject",
+          "kind",
+          "priority",
+          "due",
+          "due_at",
+          "overdue",
+          "group",
+          "company",
+          "hubspot_url"
+        ],
+        "title": "TodayTask",
         "type": "object"
       },
       "ToneChoice": {
@@ -19831,10 +20331,11 @@
           },
           "kind": {
             "default": "company",
-            "description": "company: the Lead Finder's send (a company, a note, a list). activity: a call, field changes, follow-up tasks and a note on one company (PLAN-V17)",
+            "description": "company: the Lead Finder's send (a company, a note, a list). activity: a call, field changes, follow-up tasks and a note on one company (PLAN-V17). task: one task ticked done or opened again (PLAN-V22)",
             "enum": [
               "company",
-              "activity"
+              "activity",
+              "task"
             ],
             "title": "Kind",
             "type": "string"
@@ -21386,6 +21887,785 @@
           }
         ],
         "summary": "Read a command",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/assistant/tasks": {
+      "post": {
+        "description": "Adds one HubSpot task on the company, for me or a teammate, through the same writer as a call note's follow-ups, and answers with the write: `status` (`done` when it is in HubSpot, `failed` or `uncertain` otherwise) and its step `task:1` in words, with HubSpot's id once made. HubSpot's search may take a few seconds to show it; Today shows it at once. Send an `Idempotency-Key`: the same key from the same person gives back the first write (200), so HubSpot gets one task, even for a double press. A send that timed out is never sent again blind: HubSpot is searched for it first. 409 `hubspot_writing_off` while HubSpot can't be written (nothing is sent), `task_sending` while the same task is being sent. 404 `company_not_found`. 422 `not_in_hubspot`, `task_empty`, `task_in_past`, `day_out_of_range`, `owner_not_found`. 503 `hubspot_unavailable`. A Viewer gets 403 `viewer_read_only`.",
+        "operationId": "add_assistant_task",
+        "parameters": [
+          {
+            "description": "Any unique text (a UUID is fine), made when the card opens. Send the same key on the preview and the send: a repeated key gives back the first task",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": true,
+            "schema": {
+              "description": "Any unique text (a UUID is fine), made when the card opens. Send the same key on the preview and the send: a repeated key gives back the first task",
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantTaskIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteOut"
+                }
+              }
+            },
+            "description": "The first task added with this key"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Add a task",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/assistant/tasks/preview": {
+      "post": {
+        "description": "What adding this task would do: the company as HubSpot has it now (one free read), the task in words (`plan.tasks`: what, its kind, when it is due and for whom), any warning (like no HubSpot owner linked to my account, so HubSpot shows it unassigned), and whether HubSpot can be written now (`can_write`, `waiting_for`). Nothing is sent; it works while writing is off. `owner_id`: me by default, or a teammate from GET /team. The task is due at 9:00 am on its day, Melbourne time. Send the card's `Idempotency-Key`: the send with the same key adds this task once. 404 `company_not_found`. 422 `not_in_hubspot` (a Lead Finder company), `task_empty`, `task_in_past`, `day_out_of_range`, `owner_not_found`. 503 `hubspot_not_connected` or `hubspot_unavailable` (HubSpot didn't answer). A Viewer gets 403 `viewer_read_only`.",
+        "operationId": "preview_assistant_task",
+        "parameters": [
+          {
+            "description": "Any unique text (a UUID is fine), made when the card opens. Send the same key on the preview and the send: a repeated key gives back the first task",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": true,
+            "schema": {
+              "description": "Any unique text (a UUID is fine), made when the card opens. Send the same key on the preview and the send: a repeated key gives back the first task",
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantTaskIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Check a task before adding it",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/assistant/tasks/{task_id}/done": {
+      "post": {
+        "description": "Ticks my HubSpot task done at once (choice 7: Undo is reopen). HubSpot is read first: a task that isn't mine is never changed (403 `not_your_task`). A task done already sends nothing. Each change is a row in HubSpot's write log. Today shows it at once. 404 `task_not_found`. 409 `hubspot_writing_off` while HubSpot can't be written, `no_hubspot_link` when my account has no HubSpot owner linked. 502 `task_not_changed` when HubSpot didn't take it (trying again is safe). 503 `hubspot_unavailable`. A Viewer gets 403 `viewer_read_only`.",
+        "operationId": "tick_assistant_task_done",
+        "parameters": [
+          {
+            "description": "HubSpot's task id",
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "description": "HubSpot's task id",
+              "maxLength": 32,
+              "minLength": 1,
+              "pattern": "^[0-9]+$",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Tick a task done",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/assistant/tasks/{task_id}/reopen": {
+      "post": {
+        "description": "Opens my HubSpot task again (the Undo of Done): it gets back the status it had before its last Done here, like In progress, else Not started. HubSpot is read first: a task that isn't mine is never changed (403 `not_your_task`). A task open already sends nothing. Each change is a row in HubSpot's write log. 404 `task_not_found`. 409 `hubspot_writing_off`, `no_hubspot_link`. 502 `task_not_changed`. 503 `hubspot_unavailable`. A Viewer gets 403 `viewer_read_only`.",
+        "operationId": "reopen_assistant_task",
+        "parameters": [
+          {
+            "description": "HubSpot's task id",
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "description": "HubSpot's task id",
+              "maxLength": 32,
+              "minLength": 1,
+              "pattern": "^[0-9]+$",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Open a task again",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/assistant/today": {
+      "get": {
+        "description": "The Assistant's first page, the most urgent first (`parts` says which this person sees). `tasks`: my open HubSpot tasks, overdue first, then today's, then the next 7 days' (Melbourne days), at most 100, latest due kept (`tasks_more` counts older overdue ones). They are read from HubSpot (two free requests: the tasks, then their companies) and kept for 5 minutes a person; `fresh=true` (Sync) reads them again, but HubSpot is asked at most once a minute a person. `tasks_state`: `ok`, `no_owner` (no HubSpot link: the rest still shows), `no_access` (HubSpot won't let the key read tasks), `off` (HubSpot isn't connected) or `failed` (HubSpot didn't answer and no earlier read is kept), with `tasks_sentence` in plain words; a read that fails after a good one keeps the good one, and the sentence says from when. `meetings`: mine today and tomorrow, not cancelled, each with its pre-read (`form`), and my typed-in pre-reads. `calls`: my notes to confirm and those that need a look. `deals`: my open deals whose close date has passed or whose company nobody has talked to for `quiet_days` days, at most 50 (`deals_more`). `checked_at`: when the tasks were read. No Claude request: it is free. Behind the Call logs or the Meetings tick (403 `feature_not_allowed`); a Viewer may read it.",
+        "operationId": "read_today",
+        "parameters": [
+          {
+            "description": "Sync: read the tasks from HubSpot again (at most once a minute)",
+            "in": "query",
+            "name": "fresh",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Sync: read the tasks from HubSpot again (at most once a minute)",
+              "title": "Fresh",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Today"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Today",
         "tags": [
           "Companies"
         ]
