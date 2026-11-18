@@ -18,7 +18,7 @@ import {
   TriangleAlert,
   type LucideIcon,
 } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { ApiProblem } from '@/api/client'
@@ -129,7 +129,9 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
   const canManageRuns = useCanWrite('lead_finder.start_run')
   const canResults = useCan('lead_finder.results')
   const showAdmin = useIsPlatformAdmin()
-  const events = useRunEvents(runId)
+  // Resume goes on with a run whose stream had closed at its end, so the stream opens again.
+  const [streamKey, setStreamKey] = useState(0)
+  const events = useRunEvents(runId, { restartKey: streamKey })
   const cancel = useCancelRun()
   const resume = useResumeRun()
   const { state, connection } = events
@@ -201,7 +203,11 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
                 type="button"
                 disabled={resume.isPending}
                 onClick={() => {
-                  resume.mutate(runId)
+                  resume.mutate(runId, {
+                    onSuccess: () => {
+                      setStreamKey((key) => key + 1)
+                    },
+                  })
                 }}
               >
                 <RotateCcw aria-hidden="true" />

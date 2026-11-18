@@ -222,6 +222,42 @@ describe('the run page', () => {
     })
   })
 
+  it('after Resume, opens the stream again and drops the old error', async () => {
+    // A run that failed, read to its end: the stream closed for good, and the page shows why.
+    let resumed = false
+    const failed = run({
+      status: 'failed',
+      stop_reason: 'Claude refused the request',
+      error: 'Claude refused the request. Something we send is not accepted.',
+    })
+    mockApi(() => (resumed ? run({ status: 'running' }) : failed))
+    const { user } = renderRun()
+    const first = await waitFor(() => FakeEventSource.last())
+    act(() => {
+      first.emitMessage(
+        event(1, 'run_started', { mode: 'discovery', caps: {}, rules_version: 'x' }),
+      )
+      first.emitMessage(event(2, 'run_finished', { status: 'failed', stop_reason: null }))
+      first.emitError({ closed: true })
+    })
+    const resume = await screen.findByRole('button', { name: 'Resume' })
+    expect(await screen.findAllByText(/Something we send is not accepted/)).not.toHaveLength(0)
+
+    resumed = true
+    await user.click(resume)
+    await waitFor(() => {
+      expect(FakeEventSource.instances.length).toBeGreaterThan(1)
+    })
+    const second = FakeEventSource.last()
+    expect(second.url).toContain('after=2') // only the events after the last one read
+    act(() => {
+      second.emitMessage(event(3, 'run_resumed', { from_status: 'failed' }))
+    })
+    expect(await screen.findByRole('button', { name: 'Stop' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Resume' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Something we send is not accepted/)).not.toBeInTheDocument()
+  })
+
   it('shows a failed run in plain words with its error id', async () => {
     mockApi(() =>
       run({

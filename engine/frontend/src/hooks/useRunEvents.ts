@@ -59,6 +59,11 @@ export interface UseRunEventsOptions {
   backoffMs?: number
   /** The longest wait before a retry, in milliseconds. Default 15000. */
   maxBackoffMs?: number
+  /**
+   * Change it to open the stream again: after Resume, a run that had ended goes on, but a stream
+   * that saw its end stays closed. The new stream asks only for the events after the last one read.
+   */
+  restartKey?: number
 }
 
 export interface UseRunEventsResult {
@@ -110,7 +115,13 @@ function storeReducer(store: Store, action: StoreAction): Store {
   switch (action.type) {
     case 'event': {
       const state = runEventsReducer(base.state, { type: 'event', event: action.event })
-      return state === base.state ? base : { ...base, state, connection: 'live' }
+      if (state === base.state) {
+        return base
+      }
+      // A resumed run goes on: the poll that read it as ended no longer holds, so the status
+      // follows the events again.
+      const run = action.event.type === 'run_resumed' ? null : base.run
+      return { ...base, state, run, connection: 'live' }
     }
     case 'connection':
       return base.connection === action.connection
@@ -133,6 +144,7 @@ export function useRunEvents(
   const enabled = (options.enabled ?? true) && typeof runId === 'string' && runId !== ''
   const backoffMs = options.backoffMs ?? DEFAULT_BACKOFF_MS
   const maxBackoffMs = options.maxBackoffMs ?? DEFAULT_MAX_BACKOFF_MS
+  const restartKey = options.restartKey ?? 0
 
   const [store, dispatch] = useReducer(storeReducer, null, () => freshStore(runId ?? null))
   // The highest seq read for a run. It outlives an effect run, so a second mount asks for
@@ -264,7 +276,7 @@ export function useRunEvents(
       }
       controller?.abort()
     }
-  }, [enabled, runId, backoffMs, maxBackoffMs])
+  }, [enabled, runId, backoffMs, maxBackoffMs, restartKey])
 
   const current = store.runId === (runId ?? null) ? store : freshStore(runId ?? null)
   const polled = current.run
