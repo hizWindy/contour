@@ -1,5 +1,6 @@
 """What the Assistant takes and gives (PLAN-V22): the command step (T1-1 and T1-2, the contract's
-part 1) and Today (T1-3, part 2). The website's types come from these.
+part 1), Today (T1-3, part 2), a task on its own (T1-4, part 3) and the team email (T1-5, part
+4). The website's types come from these.
 
 A command is one thing a rep says or types. The server turns it into one action and finds the
 company, the person, the meeting and the teammates in our HubSpot copy. Each thing it looks for
@@ -14,10 +15,13 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from apps.companies.schemas import (
+    MAX_RECIPIENTS,
+    Address,
     CompanyHit,
     MeetingFormState,
     NoteTaskKind,
     Out,
+    OwnerId,
     PrepPerson,
     TeamMember,
 )
@@ -349,3 +353,67 @@ class AssistantTaskIn(BaseModel):
         pattern=r"^[A-Za-z0-9_-]+$",
         description="A teammate's HubSpot owner id, from GET /team. None: me",
     )
+
+
+# --- The team email (T1-5, the contract's part 4) -------------------------------------------------
+
+EMAIL_SUBJECT_MAX_CHARS = 120
+EMAIL_BODY_MAX_CHARS = 4_000
+
+
+class AssistantEmailIn(BaseModel):
+    """An email to teammates, as the review card sends it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    owner_ids: list[OwnerId] = Field(
+        default_factory=list,
+        max_length=MAX_RECIPIENTS,
+        description="Teammates from GET /team, by HubSpot owner id. Each needs a Contour account "
+        "(422 `no_account` otherwise, with why)",
+    )
+    emails: list[Address] = Field(
+        default_factory=list,
+        max_length=MAX_RECIPIENTS,
+        description="Contour addresses typed in full. One outside address refuses the whole send "
+        "(422 `outside_address`, naming it)",
+    )
+    subject: SafeText = Field(
+        max_length=EMAIL_SUBJECT_MAX_CHARS,
+        description="1 to 120 characters once trimmed (422 `subject_empty`)",
+        examples=["The Sample Logistics floor plan"],
+    )
+    body: SafeText = Field(
+        max_length=EMAIL_BODY_MAX_CHARS,
+        description="1 to 4,000 characters once trimmed (422 `body_empty`). An email address or a "
+        "phone number in it is sent as [email left out] or [number left out]",
+    )
+    company_key: SafeText | None = Field(
+        None,
+        max_length=64,
+        description="A company in HubSpot (its id): the email links to it in Contour",
+        examples=["201"],
+    )
+
+
+class TeamEmailPerson(Out):
+    owner_id: str | None = Field(description="The teammate's HubSpot owner id. None: typed in")
+    name: str | None = Field(description="Their name, when known")
+    address: str = Field(description="The Contour address it goes to")
+
+
+class TeamEmail(Out):
+    """The team email as it goes (a preview), or as it went (a send)."""
+
+    subject: str
+    text: str = Field(description="The plain text, ending 'Sent by {name} from Contour HQ'")
+    html: str = Field(description="The HTML version, with every value escaped")
+    people: list[TeamEmailPerson] = Field(description="1 to 20 people, each once")
+    reply_to_me: bool = Field(
+        description="A reply goes to my own Contour address. False: to the sender's address"
+    )
+    company: TodayCompany | None = Field(description="The company it links to, if any")
+    can_send: bool = Field(description="Email is set up, so it can be sent now")
+    waiting_for: str | None = Field(description="Why it can't be sent now, in plain words")
+    sends_left: int = Field(description="Team emails I may still send today (30 a day, TBC)")
+    sent_at: datetime | None = Field(description="When it was sent. None for a preview")

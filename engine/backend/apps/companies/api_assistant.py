@@ -1,26 +1,29 @@
-"""The Assistant's routes (PLAN-V22, the contract's parts 1 and 2), under
+"""The Assistant's routes (PLAN-V22, the contract's parts 1 to 4), under
 /api/v1/companies/assistant.
 
 Behind the Call logs or the Meetings tick. Viewers get no V (choice 18), so the command step
 refuses one, though it changes nothing; every route that changes something refuses one too. The
-services are assistant.py (the command), today.py (Today) and assistant_tasks.py (a task on its
-own, Done and reopen).
+services are assistant.py (the command), today.py (Today), assistant_tasks.py (a task on its
+own, Done and reopen) and team_email.py (the team email).
 """
 
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 
-from apps.companies import assistant_tasks, today
+from apps.companies import assistant_tasks, team_email, today
 from apps.companies.api_meetings import SourceDep, WriterDep
 from apps.companies.assistant import Assistant, check_on, read_command
 from apps.companies.assistant_schemas import (
     AssistantCommand,
     AssistantCommandIn,
+    AssistantEmailIn,
     AssistantTaskIn,
+    TeamEmail,
     Today,
 )
 from apps.companies.deps import LeadsDep
+from apps.companies.team_email import TeamEmailBook
 from apps.companies.today import TaskCopy
 from core.api.access import SignedInDep, need
 from core.api.deps import SessionDep, SettingsDep
@@ -56,20 +59,31 @@ def task_copy(request: Request) -> TaskCopy:
     return found
 
 
+def team_email_book(request: Request) -> TeamEmailBook:
+    """Each person's team emails today and the keys already sent, made on first use. A test
+    puts its own in app.state."""
+    found: TeamEmailBook | None = getattr(request.app.state, "team_email", None)
+    if found is None:
+        found = TeamEmailBook()
+        request.app.state.team_email = found
+    return found
+
+
 AssistantDep = Annotated[Assistant, Depends(assistant_state)]
 AssistantOnDep = Annotated[Settings, Depends(assistant_on)]
 TaskCopyDep = Annotated[TaskCopy, Depends(task_copy)]
+EmailBookDep = Annotated[TeamEmailBook, Depends(team_email_book)]
 TaskId = Annotated[
     str, Path(min_length=1, max_length=32, pattern=r"^[0-9]+$", description="HubSpot's task id")
 ]
-TaskKey = Annotated[
+CardKey = Annotated[
     str,
     Header(
         min_length=1,
         max_length=64,
         pattern=IDEMPOTENCY_PATTERN,
-        description="Any unique text (a UUID is fine), made when the card opens. Send the same "
-        "key on the preview and the send: a repeated key gives back the first task",
+        description="Any unique text (a UUID is fine), made when the review card opens. A "
+        "repeated key from the same person gives back the first answer, and sends nothing again",
     ),
 ]
 CHANGES = need("companies.call_logs", "companies.meetings", write=True)
@@ -197,7 +211,7 @@ async def preview_assistant_task(
     auth: SignedInDep,
     writer: WriterDep,
     now: NowDep,
-    idempotency_key: TaskKey,
+    idempotency_key: CardKey,
 ) -> WriteOut:
     return await assistant_tasks.preview_task(
         session, body, app=request.app, auth=auth, writer=writer, key=idempotency_key, now=now
@@ -235,7 +249,7 @@ async def add_assistant_task(
     writer: WriterDep,
     copy: TaskCopyDep,
     now: NowDep,
-    idempotency_key: TaskKey,
+    idempotency_key: CardKey,
 ) -> WriteOut:
     written, new = await assistant_tasks.add_task(
         session,
@@ -329,3 +343,94 @@ async def reopen_assistant_task(
         now=now,
     )
     return Response(status_code=204)
+
+
+# --- The team email (T1-5) -----------------------------------------------------------------------
+
+
+@router.post(
+    "/email/preview",
+    response_model=TeamEmail,
+    dependencies=[Depends(CHANGES)],
+    summary="Check a team email before sending it",
+    description=(
+        "The email as it would go: the subject, the plain text and the HTML (every value "
+        "escaped, ending 'Sent by {name} from Contour HQ', with a link to the company when "
+        "`company_key` is given), who it goes to (1 to 20 people, each once), whether a reply "
+        "goes to my own Contour address (`reply_to_me`), whether it can be sent now "
+        "(`can_send`, `waiting_for`), and my sends left today (30 a day, TBC). Nothing is sent. "
+        "Teammates come from GET /team, each with a Contour account; Contour addresses can be "
+        "typed in full. 422 `outside_address` (one outside address refuses the whole email, "
+        "and is named), `no_account` (a teammate who can't get it, with why), "
+        "`owner_not_found`, `no_one`, `too_many_recipients`, `subject_empty`, `body_empty`, "
+        "`not_in_hubspot` (a Lead Finder company). 404 `company_not_found`. A Viewer gets 403 "
+        "`viewer_read_only`."
+    ),
+)
+async def preview_team_email(
+    body: AssistantEmailIn,
+    request: Request,
+    session: SessionDep,
+    settings: SettingsDep,
+    auth: SignedInDep,
+    source: SourceDep,
+    book: EmailBookDep,
+    now: NowDep,
+) -> TeamEmail:
+    return await team_email.preview_email(
+        session,
+        body,
+        app=request.app,
+        auth=auth,
+        settings=settings,
+        source=source,
+        book=book,
+        now=now,
+    )
+
+
+@router.post(
+    "/email",
+    response_model=TeamEmail,
+    status_code=201,
+    dependencies=[Depends(CHANGES)],
+    summary="Send a team email",
+    description=(
+        "Sends the email to Contour people only, through the same sender as a pre-read, and "
+        "answers with it as it went (`sent_at`). It isn't copied to HubSpot, and nothing is "
+        "saved. Send an `Idempotency-Key`: the same key from the same person gives back the "
+        "first send (200) and sends nothing again; the email service gets the same key too. At "
+        "most 30 sends a day a person, by the Melbourne day (TBC): 429 `too_many_emails`, with "
+        "`Retry-After`. 409 `email_not_set_up` while email isn't set up (nothing is sent), "
+        "`email_sending` while the same email is on its way. 502 `email_failed` when the email "
+        "service didn't take it (trying again is safe). The same 422 and 404 as the preview. A "
+        "Viewer gets 403 `viewer_read_only`."
+    ),
+    responses={200: {"model": TeamEmail, "description": "The first send with this key"}},
+)
+async def send_team_email(
+    body: AssistantEmailIn,
+    request: Request,
+    response: Response,
+    session: SessionDep,
+    settings: SettingsDep,
+    auth: SignedInDep,
+    source: SourceDep,
+    book: EmailBookDep,
+    now: NowDep,
+    idempotency_key: CardKey,
+) -> TeamEmail:
+    sent, new = await team_email.send_email(
+        session,
+        body,
+        app=request.app,
+        auth=auth,
+        settings=settings,
+        source=source,
+        book=book,
+        key=idempotency_key,
+        now=now,
+    )
+    if not new:
+        response.status_code = 200
+    return sent

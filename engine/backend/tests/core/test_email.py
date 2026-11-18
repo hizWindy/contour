@@ -172,3 +172,39 @@ async def test_the_email_test_command_says_what_is_missing(monkeypatch: pytest.M
     text, ok = await cli._email_test("al@example.com")
     assert not ok
     assert "email key" in text
+
+
+# --- Where a reply goes (PLAN-V22 T1-5) --------------------------------------------------------
+
+
+async def test_resend_gets_the_reply_to_address_only_when_there_is_one() -> None:
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        bodies.append(json.loads(request.content))
+        return httpx2.Response(200, json={"id": "email-1"})
+
+    sender = resend(handler)
+    await send(["jo@example.com"], "Hi", "Text", sender=sender, reply_to=" Mia@Example.com ")
+    await send(["jo@example.com"], "Hi", "Text", sender=sender)
+    assert bodies[0]["reply_to"] == "mia@example.com"
+    assert "reply_to" not in bodies[1]
+
+
+async def test_the_log_writes_the_reply_to_address_masked(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    sender = LogSender()
+    with caplog.at_level(logging.INFO, logger="core.email.sender"):
+        await send(["jo@example.com"], "Hi", "Text", sender=sender, reply_to="mia@example.com")
+    assert sender.sent[0].reply_to == "mia@example.com"
+    logged = " ".join(
+        record.getMessage() + json.dumps(record.__dict__, default=str) for record in caplog.records
+    )
+    assert "mia@example.com" not in logged and "jo@example.com" not in logged
+
+
+async def test_a_wrong_reply_to_is_refused_without_showing_it() -> None:
+    with pytest.raises(EmailError) as caught:
+        await send(["jo@example.com"], "Hi", "Text", sender=LogSender(), reply_to="mia@nowhere")
+    assert "mia@nowhere" not in caught.value.detail

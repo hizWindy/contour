@@ -14,6 +14,9 @@ Rules this follows:
 - **No contact details in the log.** An address is written as its domain only, like
   `***@contourinteriors.com.au`. The log sender writes the subject and the text, which hold no
   contact details (a run email holds company names, numbers and a link).
+- **Where a reply goes** (PLAN-V22 T1-5): an email may name one `reply_to` address, when a reply
+  should go to a person and not to the sender's address. Resend gets it as `reply_to` (the name
+  of Resend's field is TBC: no web access when it was added). The log writes it masked too.
 - **Plain errors.** A failure raises `EmailError` with a title and a detail a person can read.
 - The key goes in an `Authorization` header and is never logged.
 
@@ -74,12 +77,14 @@ def masked(address: str) -> str:
 
 
 class Email(BaseModel):
-    """One email. `text` is required (every mail program can show it); `html` is optional."""
+    """One email. `text` is required (every mail program can show it); `html` is optional, and so
+    is `reply_to`: one address a reply goes to instead of the sender's."""
 
     to: list[str] = Field(min_length=1, max_length=MAX_RECIPIENTS)
     subject: str = Field(min_length=1, max_length=MAX_SUBJECT_CHARS)
     text: str = Field(min_length=1)
     html: str | None = None
+    reply_to: str | None = None
 
     @field_validator("to")
     @classmethod
@@ -94,6 +99,16 @@ class Email(BaseModel):
     @classmethod
     def _one_line(cls, value: str) -> str:
         return " ".join(value.split())  # a line break in a subject could add a mail header
+
+    @field_validator("reply_to")
+    @classmethod
+    def _one_address(cls, value: str | None) -> str | None:
+        cleaned = (value or "").strip().lower()
+        if not cleaned:
+            return None
+        if not is_address(cleaned):
+            raise ValueError(f"Not an email address: {masked(cleaned)}")
+        return cleaned
 
 
 @dataclass(frozen=True)
@@ -124,6 +139,7 @@ class LogSender:
             "email_logged",
             extra={
                 "to": [masked(address) for address in email.to],
+                "reply_to": masked(email.reply_to) if email.reply_to else None,
                 "subject": email.subject,
                 "text": email.text[:MAX_LOGGED_TEXT_CHARS],
                 "key": key,
@@ -161,6 +177,8 @@ class ResendSender:
         }
         if email.html:
             body["html"] = email.html
+        if email.reply_to:
+            body["reply_to"] = email.reply_to  # Resend's name for it (TBC)
         headers = {"Authorization": f"Bearer {self._key}", "Idempotency-Key": key}
         owned = self._client is None
         client = self._client or httpx2.AsyncClient(timeout=httpx2.Timeout(self._timeout))
@@ -254,11 +272,13 @@ async def send(
     settings: Settings | None = None,
     sender: EmailSender | None = None,
     key: str | None = None,
+    reply_to: str | None = None,
 ) -> Sent:
     """Sends one email. `key` makes a retry safe: the same key never sends twice (a new one is
-    made when none is given). Raises `EmailError` with plain words when it can't."""
+    made when none is given). `reply_to`: where a reply goes, if not the sender. Raises
+    `EmailError` with plain words when it can't."""
     try:
-        email = Email(to=to, subject=subject, text=text, html=html)
+        email = Email(to=to, subject=subject, text=text, html=html, reply_to=reply_to)
     except ValidationError as error:
         first = error.errors()[0]
         where = ".".join(str(part) for part in first["loc"])
