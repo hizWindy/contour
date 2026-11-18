@@ -197,6 +197,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/assistant/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a team email
+         * @description Sends the email to Contour people only, through the same sender as a pre-read, and answers with it as it went (`sent_at`). It isn't copied to HubSpot, and nothing is saved. Send an `Idempotency-Key`: the same key from the same person gives back the first send (200) and sends nothing again; the email service gets the same key too. At most 30 sends a day a person, by the Melbourne day (TBC): 429 `too_many_emails`, with `Retry-After`. 409 `email_not_set_up` while email isn't set up (nothing is sent), `email_sending` while the same email is on its way. 502 `email_failed` when the email service didn't take it (trying again is safe). The same 422 and 404 as the preview. A Viewer gets 403 `viewer_read_only`.
+         */
+        post: operations["send_team_email"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/assistant/email/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a team email before sending it
+         * @description The email as it would go: the subject, the plain text and the HTML (every value escaped, ending 'Sent by {name} from Contour HQ', with a link to the company when `company_key` is given), who it goes to (1 to 20 people, each once), whether a reply goes to my own Contour address (`reply_to_me`), whether it can be sent now (`can_send`, `waiting_for`), and my sends left today (30 a day, TBC). Nothing is sent. Teammates come from GET /team, each with a Contour account; Contour addresses can be typed in full. 422 `outside_address` (one outside address refuses the whole email, and is named), `no_account` (a teammate who can't get it, with why), `owner_not_found`, `no_one`, `too_many_recipients`, `subject_empty`, `body_empty`, `not_in_hubspot` (a Lead Finder company). 404 `company_not_found`. A Viewer gets 403 `viewer_read_only`.
+         */
+        post: operations["preview_team_email"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/assistant/tasks": {
         parameters: {
             query?: never;
@@ -208,7 +248,7 @@ export interface paths {
         put?: never;
         /**
          * Add a task
-         * @description Adds one HubSpot task on the company, for me or a teammate, through the same writer as a call note's follow-ups, and answers with the write: `status` (`done` when it is in HubSpot, `failed` or `uncertain` otherwise) and its step `task:1` in words, with HubSpot's id once made. HubSpot's search may take a few seconds to show it; Today shows it at once. Send an `Idempotency-Key`: the same key from the same person gives back the first write (200), so HubSpot gets one task, even for a double press. A send that timed out is never sent again blind: HubSpot is searched for it first. 409 `hubspot_writing_off` while HubSpot can't be written (nothing is sent), `task_sending` while the same task is being sent. 404 `company_not_found`. 422 `not_in_hubspot`, `task_empty`, `task_in_past`, `day_out_of_range`, `owner_not_found`. 503 `hubspot_unavailable`. A Viewer gets 403 `viewer_read_only`.
+         * @description Adds one HubSpot task on the company, for me or a teammate, through the same writer as a call note's follow-ups, and answers with the write: `status` (`done` when it is in HubSpot, `failed` or `uncertain` otherwise) and its step `task:1` in words, with HubSpot's id once made. HubSpot's search may take a few seconds to show it; Today shows it at once. Send an `Idempotency-Key`: the same key from the same person gives back the first write (200), so HubSpot gets one task, even for a double press. A send that timed out is never sent again blind: HubSpot is searched for it first. 409 `hubspot_writing_off` while HubSpot can't be written (nothing is sent), `task_sending` while the same task is being sent. 429 `too_many_tasks` over 20 new tasks in a minute for one person (TBC), with `Retry-After`; a repeated key isn't counted. 404 `company_not_found`. 422 `not_in_hubspot`, `task_empty`, `task_in_past`, `day_out_of_range`, `owner_not_found`. 503 `hubspot_unavailable`. A Viewer gets 403 `viewer_read_only`.
          */
         post: operations["add_assistant_task"];
         delete?: never;
@@ -2386,6 +2426,39 @@ export interface components {
              */
             to: components["schemas"]["AssistantRecipient"][];
         };
+        /**
+         * AssistantEmailIn
+         * @description An email to teammates, as the review card sends it.
+         */
+        AssistantEmailIn: {
+            /**
+             * Body
+             * @description 1 to 4,000 characters once trimmed (422 `body_empty`). An email address or a phone number in it is sent as [email left out] or [number left out]
+             */
+            body: string;
+            /**
+             * Company Key
+             * @description A company in HubSpot (its id): the email links to it in Contour
+             * @example 201
+             */
+            company_key?: string | null;
+            /**
+             * Emails
+             * @description Contour addresses typed in full. One outside address refuses the whole send (422 `outside_address`, naming it)
+             */
+            emails?: string[];
+            /**
+             * Owner Ids
+             * @description Teammates from GET /team, by HubSpot owner id. Each needs a Contour account (422 `no_account` otherwise, with why)
+             */
+            owner_ids?: string[];
+            /**
+             * Subject
+             * @description 1 to 120 characters once trimmed (422 `subject_empty`)
+             * @example The Sample Logistics floor plan
+             */
+            subject: string;
+        };
         /** AssistantMeeting */
         AssistantMeeting: {
             /**
@@ -2821,8 +2894,8 @@ export interface components {
             transcript_max_chars?: number;
             /**
              * Voice Tool
-             * @description Which voice to text tool the mic uses: browser_model (Whisper in the browser: the voice stays on the laptop), browser_service (the browser's own speech service, which sends the voice to Google or Microsoft) or typing (no mic). browser_service comes only once the server allows it, after Levi's OK: until then a saved or server value of it comes as browser_model
-             * @default browser_model
+             * @description Which voice to text tool the mic uses: browser_service (the browser's own speech service, the default since PLAN-V22, which sends the voice to Google or Microsoft), browser_model (Whisper in the browser: the voice stays on the laptop) or typing (no mic). browser_service comes only once the server allows it, after Levi's OK: until then a saved or server value of it comes as browser_model
+             * @default browser_service
              * @enum {string}
              */
             voice_tool: "browser_model" | "browser_service" | "typing";
@@ -9889,6 +9962,74 @@ export interface components {
             note: string;
         };
         /**
+         * TeamEmail
+         * @description The team email as it goes (a preview), or as it went (a send).
+         */
+        TeamEmail: {
+            /**
+             * Can Send
+             * @description Email is set up, so it can be sent now
+             */
+            can_send: boolean;
+            /** @description The company it links to, if any */
+            company: components["schemas"]["TodayCompany"] | null;
+            /**
+             * Html
+             * @description The HTML version, with every value escaped
+             */
+            html: string;
+            /**
+             * People
+             * @description 1 to 20 people, each once
+             */
+            people: components["schemas"]["TeamEmailPerson"][];
+            /**
+             * Reply To Me
+             * @description A reply goes to my own Contour address. False: to the sender's address
+             */
+            reply_to_me: boolean;
+            /**
+             * Sends Left
+             * @description Team emails I may still send today (30 a day, TBC)
+             */
+            sends_left: number;
+            /**
+             * Sent At
+             * @description When it was sent. None for a preview
+             */
+            sent_at: string | null;
+            /** Subject */
+            subject: string;
+            /**
+             * Text
+             * @description The plain text, ending 'Sent by {name} from Contour HQ'
+             */
+            text: string;
+            /**
+             * Waiting For
+             * @description Why it can't be sent now, in plain words
+             */
+            waiting_for: string | null;
+        };
+        /** TeamEmailPerson */
+        TeamEmailPerson: {
+            /**
+             * Address
+             * @description The Contour address it goes to
+             */
+            address: string;
+            /**
+             * Name
+             * @description Their name, when known
+             */
+            name: string | null;
+            /**
+             * Owner Id
+             * @description The teammate's HubSpot owner id. None: typed in
+             */
+            owner_id: string | null;
+        };
+        /**
          * TeamMember
          * @description One active HubSpot owner selectable on the pre-read send list (never exposes emails).
          */
@@ -12135,11 +12276,269 @@ export interface operations {
             };
         };
     };
+    send_team_email: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Any unique text (a UUID is fine), made when the review card opens. A repeated key from the same person gives back the first answer, and sends nothing again */
+                "idempotency-key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantEmailIn"];
+            };
+        };
+        responses: {
+            /** @description The first send with this key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamEmail"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamEmail"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    preview_team_email: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantEmailIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamEmail"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     add_assistant_task: {
         parameters: {
             query?: never;
             header: {
-                /** @description Any unique text (a UUID is fine), made when the card opens. Send the same key on the preview and the send: a repeated key gives back the first task */
+                /** @description Any unique text (a UUID is fine), made when the review card opens. A repeated key from the same person gives back the first answer, and sends nothing again */
                 "idempotency-key": string;
             };
             path?: never;
@@ -12274,7 +12673,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Any unique text (a UUID is fine), made when the card opens. Send the same key on the preview and the send: a repeated key gives back the first task */
+                /** @description Any unique text (a UUID is fine), made when the review card opens. A repeated key from the same person gives back the first answer, and sends nothing again */
                 "idempotency-key": string;
             };
             path?: never;
