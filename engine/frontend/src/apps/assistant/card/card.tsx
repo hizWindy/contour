@@ -783,7 +783,11 @@ export default function ReviewCard(props: ReviewCardProps) {
   const client = useQueryClient()
   // The draft is made once, as the card opens.
   const [first] = useState<CardDraft | null>(() =>
-    request.kind === 'draft' ? request.draft : draftOf(request, signedInAs(client)),
+    request.kind === 'draft'
+      ? request.draft
+      : request.kind === 'command'
+        ? draftOf(request, signedInAs(client))
+        : null,
   )
   const preRead = request.kind === 'command' && request.command.action === 'pre_read'
   useEffect(() => {

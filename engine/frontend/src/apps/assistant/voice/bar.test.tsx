@@ -81,6 +81,8 @@ interface Open {
   /** The command step's answer, as JSON or a function of the call. */
   answer?: AssistantCommand | Answer
   read?: (body: AssistantCommandIn, signal: AbortSignal) => Promise<AssistantCommand>
+  /** Call notes switched on. Off: no one can log a call. */
+  notesOn?: boolean
 }
 
 function openBar({
@@ -91,9 +93,13 @@ function openBar({
   loaded,
   answer = command({}),
   read,
+  notesOn = true,
 }: Open = {}) {
   const mic = new FakeMic(micOptions)
-  const calls = mockApi({ [OPTIONS]: options(voiceTool), [COMMAND]: answer })
+  const calls = mockApi({
+    [OPTIONS]: { ...options(voiceTool), enabled: notesOn },
+    [COMMAND]: answer,
+  })
   const queryClient = createTestQueryClient()
   queryClient.setQueryData(queryKeys.auth.me(), signIn)
   loaded?.(queryClient)
@@ -512,8 +518,9 @@ describe('what each state shows (T3-2)', () => {
     ).toBeInTheDocument()
   })
 
-  it('with the AI that reads commands off: says the Assistant can’t read commands yet (T3-5 opens Log call)', async () => {
-    const { mic, user } = openBar({ answer: refusal(409, 'assistant_off') })
+  it('with the AI off and call notes off: says the Assistant can’t read commands yet', async () => {
+    // A rep who logs calls gets Log call with the words instead (T3-5, `card/actions.test.tsx`).
+    const { mic, user } = openBar({ answer: refusal(409, 'assistant_off'), notesOn: false })
     const found = await listening()
     await say(found, mic, SAID, user)
     await waitFor(() => {

@@ -5,7 +5,7 @@
  *
  * A closed card stays drawn, closed, until the next one opens, so it can shrink away (150ms). Each
  * opening is a new card, with its own draft. A draft a closed page cut off in its hold is offered
- * again here, once.
+ * again here, once. With the AI off, Log call opens here instead, with the words (`dictation.tsx`).
  */
 import { useQueryClient } from '@tanstack/react-query'
 import { lazy, Suspense, useEffect, useState } from 'react'
@@ -19,6 +19,7 @@ import { closeCard, openCard, useOpenCard, type CardRequest } from './store'
 import { draftsLeftWords, OPEN } from './words'
 
 const ReviewCard = lazy(loadCard)
+const Dictation = lazy(() => import('./dictation'))
 
 /** For tests: what the card is handed (the fake mic, the waits). */
 export type CardHostProps = Pick<ReviewCardProps, 'env' | 'makeTool' | 'read' | 'times'>
@@ -51,6 +52,19 @@ export function CardHost(props: CardHostProps) {
   const [shown, setShown] = useState<CardRequest | null>(request)
   if (request !== null && request !== shown) setShown(request)
   if (shown === null) return null
+  if (shown.kind === 'dictation') {
+    return (
+      <Suspense fallback={null}>
+        <Dictation
+          key={shown.id}
+          words={shown.words}
+          source={shown.source}
+          open={request?.id === shown.id}
+          onClose={closeCard}
+        />
+      </Suspense>
+    )
+  }
   return (
     <Suspense fallback={null}>
       <ReviewCard

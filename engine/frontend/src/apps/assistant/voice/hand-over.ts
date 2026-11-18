@@ -11,8 +11,9 @@
  *   With two or more meetings, or none ahead, the card asks.
  * - `unknown` shows its read-back (what the Assistant can do), with Try again.
  * - `change`, `send` and `cancel` only mean something on an open card, which reads them itself.
- * - With the AI that reads commands off (409 `assistant_off`), the bar says so. T3-5 opens Log
- *   call with the words instead (choice 17).
+ * - With the AI that reads commands off (409 `assistant_off`), V works as dictation (choice 17):
+ *   for a rep who can log calls, Log call opens with the words in a new call note, and the rep picks
+ *   the company. Anyone else is told the Assistant can't read commands yet.
  */
 import { api, toApiProblem, unwrap } from '@/api/client'
 import type {
@@ -53,6 +54,11 @@ export type StartPreRead = (meetingId: string) => Promise<{ id: string }>
 export interface HandOverTools {
   /** Opens a page of the app. */
   go: (to: string) => void
+  /**
+   * With the AI off: Log call opens with the words in a new call note (choice 17). False when the
+   * rep can't log calls: then the bar says the Assistant can't read commands yet.
+   */
+  dictate?: (words: string, source: CommandSource) => boolean
   /** For tests: starts a pre-read. */
   start?: StartPreRead
 }
@@ -128,10 +134,11 @@ export function openMeeting(
 
 export function handOver(
   heard: Heard,
-  { go, start = startPreRead }: HandOverTools,
+  { go, dictate = () => false, start = startPreRead }: HandOverTools,
 ): AfterAnswer | Promise<AfterAnswer> {
   if (heard.kind === 'dictation') {
-    // T3-5: Log call opens, with these words in a new call note.
+    // V still works as dictation: the words go in a new call note (choice 17).
+    if (dictate(heard.words, heard.source)) return CLOSE
     return { kind: 'show', line: CANT_READ_YET, unsure: null, again: false }
   }
   const { command } = heard

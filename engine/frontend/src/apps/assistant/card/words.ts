@@ -74,6 +74,10 @@ export const HUBSPOT_OFF =
   'Sending to HubSpot is off for now, so the call waits in Call logs. Nothing is lost.'
 export const OPEN_CALL_LOGS = 'Open Call logs'
 
+/** The AI is off (the plan's table): Log call opens with the words. */
+export const AI_OFF =
+  "The Assistant can't read commands yet, so your words are in a new call note. Pick the company, then save."
+
 // --- V on the card --------------------------------------------------------------------------------
 
 export const LISTENING = 'Listening'

@@ -11,7 +11,7 @@ import { useLocation } from 'react-router'
 import { queryKeys } from '@/api/query'
 import type { AssistantCommand } from '@/api/types'
 import { FakeMic } from '@/apps/companies/call-notes/mic/fake-mic'
-import { mockApi } from '@/test/mock-api'
+import { mockApi, type Answer } from '@/test/mock-api'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import VoiceBar from '../voice/bar'
 import type { Times } from '../voice/bar-session'
@@ -237,6 +237,36 @@ describe('each action from V to sent (T3-5)', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).toBeNull()
     })
+  })
+
+  it('V with the AI off: Log call opens, the rep picks the company, and the words are in the note', async () => {
+    vi.useFakeTimers(CLOCK)
+    const off: Answer = () =>
+      Response.json(
+        { title: "The Assistant can't read commands yet", status: 409, code: 'assistant_off' },
+        { status: 409 },
+      )
+    const words = 'Spoke to Jo, the lease ends June 2027'
+    const { mic, of, user } = page(command({}), {
+      [API.command]: off,
+      '/api/v1/companies': { items: [], total: 0 },
+      [API.search]: { companies: [SAMPLE], people: [] },
+    })
+    await speak(mic, words, user)
+    expect(
+      await screen.findByText(
+        "The Assistant can't read commands yet, so your words are in a new call note. Pick the company, then save.",
+      ),
+    ).toBeInTheDocument()
+    const panel = await screen.findByRole('dialog', { name: /Log call/ })
+    await user.type(
+      within(panel).getByRole('combobox', { name: 'Which company was the call with?' }),
+      'Sample',
+    )
+    await user.click(await within(panel).findByRole('option', { name: /Sample Logistics/ }))
+    expect(await within(panel).findByRole('textbox', { name: 'Call note' })).toHaveValue(words)
+    // Nothing is saved or sent until the rep saves it.
+    expect(of(API.notes)).toHaveLength(0)
   })
 
   it('opening a page: it goes there, with no card and nothing sent', async () => {

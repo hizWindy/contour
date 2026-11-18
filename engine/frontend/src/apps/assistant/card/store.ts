@@ -12,10 +12,16 @@ export type CardRequest =
   | { id: number; kind: 'command'; command: AssistantCommand; words: string; source: CommandSource }
   /** A draft again: after Undo, or one kept in this browser. */
   | { id: number; kind: 'draft'; draft: CardDraft }
+  /**
+   * The AI that reads commands is off (choice 17): the words go in a new call note, and Log call
+   * opens for the rep to pick the company (T3-5).
+   */
+  | { id: number; kind: 'dictation'; words: string; source: CommandSource }
 
 type Opening =
   | Omit<Extract<CardRequest, { kind: 'command' }>, 'id'>
   | Omit<Extract<CardRequest, { kind: 'draft' }>, 'id'>
+  | Omit<Extract<CardRequest, { kind: 'dictation' }>, 'id'>
 
 let current: CardRequest | null = null
 let opened = 0

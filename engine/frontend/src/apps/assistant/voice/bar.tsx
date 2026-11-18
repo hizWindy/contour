@@ -30,11 +30,13 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router'
 import { readCommand } from '@/api/hooks/assistant'
 import { useCallNoteOptions, voiceToolOf } from '@/api/hooks/call-note-counts'
-import type { AssistantCommand, AssistantCommandIn } from '@/api/types'
+import type { SignIn } from '@/api/hooks/auth'
+import { queryKeys } from '@/api/query'
+import type { AssistantCommand, AssistantCommandIn, CallNoteOptions } from '@/api/types'
 import { LiveWords } from '@/apps/companies/call-notes/mic/live-words'
 import type { MicEnv } from '@/apps/companies/call-notes/mic/session'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
@@ -45,7 +47,7 @@ import {
   STEP_WORDS,
   type MicAction,
 } from '@/apps/companies/call-notes/mic/words'
-import { useIsViewer } from '@/auth/can'
+import { canWrite, useIsViewer } from '@/auth/can'
 import { FrequencyBars } from '@/components/motion/frequency-bars'
 import { INSTANT, springs } from '@/components/motion/springs'
 import { useStill } from '@/components/motion/use-still'
@@ -55,6 +57,7 @@ import { Kbd } from '@/components/ui/kbd'
 import { isTyping } from '@/lib/is-typing'
 import { useBarRoom } from '@/lib/use-bar-room'
 import { CardHost } from '../card/host'
+import { openCard } from '../card/store'
 import { preloadCard } from '../card/load'
 import { BarSession, MAX_CHARS, type BarProblem, type BarSnapshot, type Times } from './bar-session'
 import { handOver } from './hand-over'
@@ -93,6 +96,15 @@ const CLOSED: BarSnapshot = {
   answer: null,
   voice: true,
   fixes: [],
+}
+
+/** A rep who may log a call now: the Call logs tick, not a Viewer, and call notes on. */
+function canLogCalls(client: QueryClient): boolean {
+  const options = client.getQueryData<CallNoteOptions>(queryKeys.companies.callNoteOptions())
+  return (
+    options?.enabled === true &&
+    canWrite(client.getQueryData<SignIn>(queryKeys.auth.me()), 'companies.call_logs')
+  )
 }
 
 const noSubscribe = (): (() => void) => () => undefined
@@ -217,6 +229,7 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   const asked = useVoiceBarOpen()
   const open = asked && !viewer
   const options = useCallNoteOptions()
+
   const navigate = useNavigate()
   const location = useLocation()
   const client = useQueryClient()
@@ -240,6 +253,13 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
             handOver(heard, {
               go: (to) => {
                 void navigate(to)
+              },
+              // With the AI off, the words open Log call for a rep who logs calls (choice 17).
+              // Read as the answer comes: the switches may load after the bar opened.
+              dictate: (words, source) => {
+                if (!canLogCalls(client)) return false
+                openCard({ kind: 'dictation', words, source })
+                return true
               },
             }),
           onClose: closeVoiceBar,
