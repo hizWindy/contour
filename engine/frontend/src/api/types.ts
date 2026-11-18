@@ -210,3 +210,10 @@ export type HubSpotOwnerOption = Schemas['HubSpotOwnerChoice']
 export type HubSpotOwnerList = Schemas['HubSpotOwnerList']
 export type HubSpotOwnerIn = Schemas['HubSpotOwnerIn']
 export type CallNoteQuery = NonNullable<operations['list_call_notes']['parameters']['query']>
+
+// The Assistant (PLAN-V22): the command step (T1-1, the contract part 1)
+export type AssistantCommand = Schemas['AssistantCommand']
+export type AssistantCommandIn = Schemas['AssistantCommandIn']
+export type AssistantOnPage = Schemas['AssistantOnPage']
+export type AssistantOpen = Schemas['AssistantOpen']
+export type CommandSource = AssistantCommandIn['source']

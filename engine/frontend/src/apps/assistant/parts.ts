@@ -48,3 +48,5 @@ export const UpcomingMeetings = late(loadUpcomingCard, (card) => card.UpcomingMe
 // "Check my mic" (PLAN-V18 T3-4): the account menu's row, and the card the frame draws.
 export const MicCheckMenuItem = late(loadAssistantLinks, (links) => links.MicCheckMenuItem)
 export const MicCheckHost = late(loadAssistantLinks, (links) => links.MicCheckHost)
+// "Speak (V)" in the top bar (PLAN-V22 T3-1, choice 13).
+export const SpeakButton = late(loadAssistantLinks, (links) => links.SpeakButton)

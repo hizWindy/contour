@@ -1,5 +1,5 @@
 import { PanelLeft } from 'lucide-react'
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, Suspense, useEffect, useState } from 'react'
 import { Link, useMatches } from 'react-router'
 import {
   Breadcrumb,
@@ -14,12 +14,30 @@ import { useSidebar } from '@/components/ui/sidebar'
 import { CommandMenu } from './command-menu'
 import { crumbsOf } from './crumbs'
 import { UserMenu } from './user-menu'
+import { useVisibleModules } from './visible-modules'
 
 const APP_NAME = 'Contour'
 
 /**
- * The bar above every page: the menu button, where you are (breadcrumbs), and the command menu.
- * It also keeps the browser tab's title in step with the page.
+ * The buttons the projects bring (`AppModule.topBar`), like the Assistant's "Speak (V)" (PLAN-V22
+ * T3-1), each in its own `Suspense`: they may load late, and show nothing till then. They sit
+ * before Ctrl+K, so their coming moves nothing on the right of the bar.
+ */
+function ProjectButtons() {
+  const modules = useVisibleModules()
+  return modules.map((app) => {
+    const Part = app.topBar
+    return Part ? (
+      <Suspense key={app.id} fallback={null}>
+        <Part />
+      </Suspense>
+    ) : null
+  })
+}
+
+/**
+ * The bar above every page: the menu button, where you are (breadcrumbs), the projects' own
+ * buttons, and the command menu. It also keeps the browser tab's title in step with the page.
  *
  * On a phone it also holds the account menu, and it stays at the top while the page scrolls, so
  * the account is always one tap away (PLAN-V15 T2-5).
@@ -87,6 +105,7 @@ export function TopBar() {
           ))}
         </BreadcrumbList>
       </Breadcrumb>
+      <ProjectButtons />
       <CommandMenu />
       {/* From a tablet up, the account is at the foot of the left menu. */}
       <UserMenu className="md:hidden" />
