@@ -5,8 +5,8 @@ This plan makes the Lead Finder find, research and show many more companies, wit
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms the rule numbers marked **TBC with Levi**.
-- **Last updated:** 18 Nov 2026 (Parts 1 to 3 built; waiting on Al-khair: the full backend run, the test set ranges, a look at the screens).
-- **Progress:** S0: 1 of 1. Part 1: 8 of 9. Part 2: 4 of 6. Part 3: 5 of 6. M1 to M4: 0 of 4. W1 and W2: 0 of 2.
+- **Last updated:** 18 Nov 2026 (merged into `master` and pushed on Al-khair's word; not deployed).
+- **Progress:** S0: 1 of 1. Part 1: 9 of 9. Part 2: 5 of 6. Part 3: 5 of 6. M1 to M4: 1 of 4. W1 and W2: 0 of 2.
 - **Sources:**
   - Al-khair's asks in chat (18 Nov), with 3 screenshots of the Start page;
   - the audit in the same chat: the live site's runs, leads, settings, schedules and sources, read through Chrome (GET only);
@@ -211,7 +211,7 @@ One session builds every step, in order: Part 1, then Part 2, then Part 3. The b
   - **Done when:** tests show that a company with only Signal Hire's 48 is researched, and that one with HubSpot's 20 staff (a sure match) is still stopped at no cost.
 - [x] **T1-8. Every card keeps its sign.** Done 18 Nov 2026 (`a222bff`). The signs discovery found go on the card and the row whatever happens next: a failed form, a failed second form, the early size stop or a research error. Each is marked "from the search, not checked by the research".
   - **Done when:** a test for each of the four paths passes, the row's `trigger_id` is set, and the card's "Why it fits" names the sign.
-- [ ] **T1-9. Check.** Done except the full backend run, which was stopped for low memory (see the Log). It waits for Al-khair's word. ruff, ruff format, mypy, the fast tests and the full backend run (`RUN_GATES=1`). The numbers go in the Log.
+- [x] **T1-9. Check.** Done 18 Nov 2026 at M1: the full backend run, in four batches to spare the memory (see the M1 line in the Log). ruff, ruff format, mypy, the fast tests and the full backend run (`RUN_GATES=1`). The numbers go in the Log.
 
 ### Part 1 Log
 
@@ -240,7 +240,7 @@ One session builds every step, in order: Part 1, then Part 2, then Part 3. The b
   - **Done when:** an API test checks the default.
 - [ ] **T2-5. The quality bar.** Built (`734a3ea`), waiting for Al-khair's yes to the ranges. The test set has no expected results today (since PLAN-V16 T1-2). Propose a tier range for each test set company from its last saved result, like "C or better" or "Discard or C". Al-khair confirms them before M2. The test set report shows each company's tier, and whether it is inside its range.
   - **Done when:** the ranges are in `testset.yaml`, Al-khair has said yes in chat, and a free report on the saved results shows them.
-- [ ] **T2-6. Check.** The contract and the types are made again (`305c78c`); the full backend run waits, as in T1-9. ruff, mypy, the fast tests and the full backend run. Make the API contract and the website's types again for Part 3. The rejudge tables go in the Log.
+- [x] **T2-6. Check.** Done 18 Nov 2026: the contract and the types made again (`305c78c`), and the full backend run at M1. ruff, mypy, the fast tests and the full backend run. Make the API contract and the website's types again for Part 3. The rejudge tables go in the Log.
 
 ### Part 2 Log
 
@@ -289,7 +289,7 @@ One session builds every step, in order: Part 1, then Part 2, then Part 3. The b
 
 ## Merge, checks and going live
 
-- [ ] **M1. Merge** (`merge v21`). Make the contract and the website types again. Run the full backend and website checks, the `merge-check` skill and the `review-agent`. Then move `master` to `plan-v21`.
+- [x] **M1. Merge** (`merge v21`). Done 18 Nov 2026 on Al-khair's word: `master` fast-forwarded to `plan-v21` and pushed to GitHub (he asked for both). Not deployed. Make the contract and the website types again. Run the full backend and website checks, the `merge-check` skill and the `review-agent`. Then move `master` to `plan-v21`.
   - **Done when:** everything passes and `master` has moved.
 - [ ] **M2. The paid checks**, only on Al-khair's word in chat:
   1. the test set at `medium` and at `high` research effort, to pick `claude_effort_research`;
@@ -317,6 +317,9 @@ One session builds every step, in order: Part 1, then Part 2, then Part 3. The b
 
 ## Log
 
+- 18 Nov 2026, M1 (`merge v21`, Al-khair's word, with "push it to the github"): the checks on `plan-v21`. Backend: ruff, ruff format and mypy clean; every test with `RUN_GATES=1`, in four batches because the laptop was short of memory: 4,823 passed, 25 skipped, 0 failed (core 1,098 + 1,165 with the gates, companies and e2e 477, the Lead Finder 2,083; the Companies speed test that failed under load passed). Website: lint 0, typecheck 0, 2,023 tests in 139 files, build passes (all JavaScript 765 kB gzip). Joins: one migration head (`0025_v19_roles_access`), and the contract and types match a fresh run. `scripts/schema_map.py --check` fails on 3 to 4 check constraints (`ck_leads_status`, `ck_leads_origin`, `ck_rivals_status`, `ck_users_hubspot_owner_matched_by`), the same on `master`'s code against a freshly migrated database, so it is older than V21 (PLAN-V19's `SCHEMA-0025.md`); V21 changed no table. To fix later: draw the map again. The independent review (`review-agent`): Not ready at first: the run page hid a run's Discards and excluded leads, and T1-9 and T2-6 were unticked; with three should-fix items (the sweep bar switching to research mid-sweep, a run with no web search topped up past its estimate, Home's results bar leaving Discards out). All fixed in dda3472, then rechecked: the Lead Finder and the gates 2,087 passed, the website 2,025 tests, lint, typecheck and the build. So Ready with notes (below). Then `master` moved from `4af47fd` by fast-forward and was pushed; `origin/master` was `4af47fd` before. Pushing doesn't deploy: `deploy v21` is still to come, with M3's rejudge, settings and refill.
+- 18 Nov 2026, the review's notes, for later: (1) a lead with no researched facts (a failed form or a research error) and one sign from the search can score 58 with half points, Tier B but a Watch with low confidence; good-lead counts go by result, so they are safe, but such leads sit among Tier B on Results. Decide before M2, for example cap a lead with no researched facts at Tier C (TBC with Al-khair and Levi, with W2). (2) Rare edges: a company limit under 5 makes Start send a target the API refuses (5 is the least it takes); a run whose target is above a limit an admin lowered later can't be resumed (`check_target` runs again on resume); `add_search_signs` can put a switched-off tool's item on the card (Why now still filters it). (3) M4 must cover, in `engine/AGENTS.md`: `steps/top_up.py`, `next_sweep` and `settle` in the graph; only HubSpot's own count under 30 stops a company early, and a failed research keeps its sign; Start's 90 days and the automatic runs' 30; Property Daily's new emails first (its "stays off" line is old); the top up as another way HubSpot names reach Claude, behind the same flag; the four new settings. In DESIGN.md, the `OptionCards` line (proposed). And draw the schema map again. (4) The worktree's two untracked logs (`engine/.dev-logs-v21-*.log`) aren't committed.
+- 18 Nov 2026, after Al-khair's test: the run page didn't reconnect after Resume (it kept the old "failed" status, the red box and the Resume button, so the run looked stuck); fixed in `2d5dbe9`. The resumed Brisbane run finished: 20 researched, US$12.79 in all (discovery 24 requests US$3.40, research searches 100 requests US$7.61, the forms 46 requests US$1.71, rivals 1 request US$0.07), so about US$0.64 a company. Tiers: A 2, B 7, C 5, Discard 6 (results: Pass 1, Director review 1, Watch 12, Drop 6).
 - 18 Nov 2026: written from Al-khair's asks and the audit of the same day. No step started.
 - 18 Nov 2026, Al-khair's test on the laptop (real Claude key, worktree app on 8081 and 5251): run `7f523e98`, Brisbane, the 8 main signs, 90 days, target 20 (the laptop's company limit). The sweeps worked: 3 sweeps, 24 searches, 38 finds, 24 companies after merging, 20 chosen, so no fourth sweep. It researched 1 (Mulga, a Watch at 54, US$0.48), then the rivals search for Anglo American got a 400 from Claude ("web_fetch max_uses: Input should be greater than 0": the rivals search allows 0 page reads, and the client always sent the page tool), and the refusal stopped the run at US$4.65. Fixed in `a190dc4` (no page tool when no page may be read). Afterwards Claude Code stopped both app servers because the laptop was critically low on memory; they wait for Al-khair's word to start again.
 - 18 Nov 2026: Al-khair chose one implementation instead of three tracks. The tracks became Parts 1 to 3, built in order by one session, with one go signal (`implement v21`). The steps and choices are unchanged.
