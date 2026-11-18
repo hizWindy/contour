@@ -34,7 +34,7 @@ import { RESULT_ORDER, resultLabel } from '@/lib/labels'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { TONE_CLASSES } from '@/shell/tone'
-import { goodLine, runLine, topSigns, whereWords } from './home-words'
+import { EVERY_LEAD, goodLine, runLine, topSigns, whereWords } from './home-words'
 import { LAST_RUN, TOP_LEADS } from './prefetch'
 
 const TITLE_ID = 'home-lead-finder'
@@ -75,9 +75,9 @@ function Grow({
   )
 }
 
-/** The count of good leads, the results bar and its legend. */
+/** The count of good leads, the results bar and its legend. Every lead, Discards too. */
 function Leads() {
-  const facets = useLeadFacets()
+  const facets = useLeadFacets(EVERY_LEAD)
   if (facets.isPending) return <SkeletonLines count={3} className="max-w-sm" />
   if (facets.isError) return <Quiet>Can't load the leads right now.</Quiet>
   const counts = new Map(facets.data.result.map((facet) => [facet.value, facet.count]))
@@ -151,7 +151,7 @@ function Leads() {
 
 /** The signs most leads show, as short bars. */
 function Signs() {
-  const facets = useLeadFacets()
+  const facets = useLeadFacets(EVERY_LEAD)
   if (facets.isPending) return <SkeletonLines count={4} />
   if (facets.isError) return null
   const signs = topSigns(facets.data.trigger)

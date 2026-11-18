@@ -163,3 +163,15 @@ export const TERMINAL_RUN_STATUSES: readonly RunStatus[] = [
 export function isTerminalRunStatus(status: string | null | undefined): boolean {
   return TERMINAL_RUN_STATUSES.some((terminal) => terminal === status)
 }
+
+/**
+ * Every tier and "no tier yet", for a page that counts or lists every lead: a run's own leads and
+ * Home's bar of results. With no tier asked, the leads API leaves Discards out (PLAN-V21 T2-4).
+ */
+export const EVERY_TIER: ('A' | 'B' | 'C' | 'discard' | 'none')[] = [
+  'A',
+  'B',
+  'C',
+  'discard',
+  'none',
+]

@@ -573,6 +573,19 @@ describe('How many companies and the top up (PLAN-V21 T3-3)', () => {
     })
   })
 
+  it('greys the top up and sends none when the run makes no web search', async () => {
+    const seen = mockApi(withTarget, { ...OPTIONS, top_up: { default: true, allowed: true } })
+    const { user } = renderStart()
+    const look = await screen.findByRole('group', { name: 'Where to look' })
+    await user.click(within(look).getByRole('checkbox', { name: 'The web' }))
+    const topUp = screen.getByRole('switch', { name: 'Top up from the HubSpot watchlist' })
+    expect(topUp).toBeDisabled()
+    expect(topUp).toHaveAccessibleDescription(/Only with the web search/)
+    await waitFor(() => {
+      expect(seen.estimates.at(-1)).toMatchObject({ params: { top_up: false } })
+    })
+  })
+
   it('aims for a lower "Most companies to research" and says so, keeping the form valid', async () => {
     const seen = mockApi(withTarget)
     const { user } = renderStart()

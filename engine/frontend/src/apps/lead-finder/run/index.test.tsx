@@ -69,6 +69,7 @@ function event(seq: number, type: RunEvent['type'], data: Record<string, unknown
 
 interface Seen {
   posts: string[]
+  gets: string[]
 }
 
 function mockApi(
@@ -76,11 +77,14 @@ function mockApi(
   page: Run[] = [current()],
   extra: Record<string, unknown> = {},
 ): Seen {
-  const seen: Seen = { posts: [] }
+  const seen: Seen = { posts: [], gets: [] }
   vi.stubGlobal(
     'fetch',
     vi.fn((request: Request) => {
       const path = new URL(request.url).pathname
+      if (request.method !== 'POST') {
+        seen.gets.push(request.url)
+      }
       if (request.method === 'POST') {
         seen.posts.push(path)
         if (path.endsWith('/cancel')) {
@@ -648,6 +652,26 @@ describe('the sweeps and the top up (PLAN-V21 T3-4)', () => {
       source.emitMessage(
         event(6, 'sweep_started', { sweep: 2, of: 4, label: "Levi's source groups" }),
       )
+      // The backend's totals in the middle of a sweep: nothing chosen yet (it is set after the
+      // last sweep), so the bar keeps the sweep (PLAN-V21 review, M1)
+      source.emitMessage(
+        event(7, 'progress', {
+          cost_usd: '1.20',
+          web_searches: 24,
+          claude_requests: 8,
+          counts: {
+            ...COUNTS,
+            slices: 16,
+            slices_done: 8,
+            candidates: 40,
+            unique: 31,
+            chosen: 0,
+            sweeps: 4,
+            sweeps_done: 1,
+            target: 50,
+          },
+        }),
+      )
     })
 
     expect(await screen.findByText('Sweep 2 of 4: 31 of 50 companies')).toBeInTheDocument()
@@ -666,11 +690,21 @@ describe('the sweeps and the top up (PLAN-V21 T3-4)', () => {
     expect(screen.getByText(/1 of 4 sweeps, .*31 companies after merging/)).toBeInTheDocument()
 
     act(() => {
-      source.emitMessage(event(7, 'merged', { candidates: 52, unique: 44 }))
-      source.emitMessage(event(8, 'sweep_done', { sweep: 2, found: 12, companies: 44, target: 50 }))
+      source.emitMessage(event(8, 'merged', { candidates: 52, unique: 44 }))
+      source.emitMessage(event(9, 'sweep_done', { sweep: 2, found: 12, companies: 44, target: 50 }))
     })
     expect(await screen.findByText('Sweep 2 of 4: 44 of 50 companies')).toBeInTheDocument()
     expect(screen.getByText(/2 of 4 sweeps, .*44 companies after merging/)).toBeInTheDocument()
+  })
+
+  it("asks for every tier of the run's leads, so its Discards and excluded leads show", async () => {
+    const seen = mockApi(() => run({ mode: 'discovery', status: 'done' }))
+    renderRun()
+    await waitFor(() => {
+      expect(seen.gets.some((url) => url.includes('/api/v1/lead-finder/leads?'))).toBe(true)
+    })
+    const asked = seen.gets.find((url) => url.includes('/api/v1/lead-finder/leads?')) ?? ''
+    expect(new URL(asked).searchParams.getAll('tier')).toEqual(['A', 'B', 'C', 'discard', 'none'])
   })
 
   it('marks the companies the top up added "From HubSpot", in the feed and in its tables', async () => {

@@ -20,6 +20,7 @@ import { queryKeys } from '@/api/query'
 import type { QueryOf } from '@/api/types'
 import { canUse, type Feature } from '@/auth/can'
 import type { PrefetchArgs } from '@/shell/crumbs'
+import { EVERY_LEAD } from './home-words'
 import { filterQuery, listQuery, readResults } from './results/params'
 import { FIRST_RUNS_PAGE } from './run/runs-query'
 
@@ -51,7 +52,7 @@ export function prefetchLeadFinderSummary(client: QueryClient): void {
     void client.prefetchQuery(runsQueryOptions(LAST_RUN))
   }
   if (allowed(client, 'lead_finder.results')) {
-    void client.prefetchQuery(leadFacetsQueryOptions())
+    void client.prefetchQuery(leadFacetsQueryOptions(EVERY_LEAD))
     void client.prefetchQuery(leadsQueryOptions(TOP_LEADS))
   }
 }

@@ -208,7 +208,8 @@ export function bodyOf(form: StartForm, options: RunOptions): RunCreate {
     if (target !== null) {
       params.target_companies = target
     }
-    params.top_up = form.topUp && options.top_up.allowed
+    // Only with the web search: without it the run researches just the tools' new items (M1)
+    params.top_up = form.topUp && options.top_up.allowed && form.sources.includes('web')
   } else if (form.mode === 'watchlist') {
     const limit = clean(form.watchLimit)
     params.watchlist = {

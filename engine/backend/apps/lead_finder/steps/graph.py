@@ -463,8 +463,8 @@ async def choose(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
             tasks[company.key] if company.key in tasks else _task_of_merged(company, today, recheck)
             for company in decision.chosen
         ]
-    counts = ctx.totals.counts
-    counts.chosen = len(chosen)  # so far: `settle` has the last word, after any top up
+    # `counts.chosen` is set once, in `settle`, after any top up: the run page reads a count
+    # above 0 as "researching", so a sweep shows its own progress until then
     found: dict[str, Any] = {
         "chosen": chosen,
         "decision": {
@@ -588,6 +588,7 @@ async def _top_up(run: RunCtx, state: State, chosen: list[CompanyTask]) -> list[
     if (
         target is None
         or not person_discovery(ctx)
+        or not web_picked(params)  # its estimate counts only the tools' items (review, M1)
         or not getattr(params, "top_up", False)
         or not ctx.settings.hubspot_names_to_claude_ok
         or run.stop_reason is not None

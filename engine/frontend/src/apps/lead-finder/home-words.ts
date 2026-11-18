@@ -6,6 +6,7 @@
 import type { LeadResult, Run, Schemas } from '@/api/types'
 import { formatDate, formatNumber, melbourneDate } from '@/lib/format'
 import { goodLeads } from './good-leads-data'
+import { EVERY_TIER } from '@/lib/labels'
 
 type TriggerFacet = Schemas['TriggerFacet']
 
@@ -104,3 +105,6 @@ export function topSigns(triggers: readonly TriggerFacet[], shown = SIGNS_SHOWN)
     .slice(0, shown)
     .map(({ trigger }) => trigger)
 }
+
+/** Home's facets: every lead, so "All N leads by result" counts the Discards too (PLAN-V21). */
+export const EVERY_LEAD = { tier: [...EVERY_TIER] }

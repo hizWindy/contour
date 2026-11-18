@@ -17,7 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from apps.lead_finder import run_sources
 from apps.lead_finder.tables import Lead
-from core.config import Settings
+from core.config import ENGINE_DIR, Settings
+from core.hubspot.importer import read_export
+from core.hubspot.service import save_export
 from core.runs.manager import RunManager
 from core.sources import store
 from core.sources.models import SourceState
@@ -30,6 +32,7 @@ from tests.lead_finder.samples import FakeClaude
 
 pytestmark = pytest.mark.integration
 MELBOURNE = ZoneInfo("Australia/Melbourne")
+EXPORT = ENGINE_DIR.parent / "projects" / "leads" / "research" / "COMPANIES.xlsx"
 READY = {
     "property_daily_enabled": True,
     "property_daily_username": "someone",
@@ -182,3 +185,22 @@ async def test_a_failed_read_is_one_line_in_the_feed_and_the_run_goes_on(
     events = await stored_json(session_factory, row.id)
     problems = [e["data"]["message"] for e in events if e["type"] == "problem"]
     assert run_sources.EMAILS_NOT_READ in problems
+
+
+@pytest.mark.skipif(not EXPORT.exists(), reason="the HubSpot export is not in the repo")
+async def test_a_run_with_no_web_search_is_never_topped_up(
+    make_lf_manager: MakeLeadFinderManager,
+    session_factory: async_sessionmaker[AsyncSession],
+    session: AsyncSession,
+    reader: EmailReader,
+) -> None:
+    """Its estimate counts only the tools' new items, so the HubSpot watchlist doesn't fill it to
+    its target (PLAN-V21 review at M1), even with HubSpot names allowed to go to Claude."""
+    await save_export(session, read_export(EXPORT))
+    settings = lf_settings(**READY, hubspot_names_to_claude_ok=True)
+    manager = make_lf_manager(FakeClaude(), settings=settings)
+    row = await run(manager, session_factory, {**BOTH, "sources": ["property_daily"]})
+
+    assert row.status == "done"
+    assert row.counts["topped_up"] == 0
+    assert row.counts["researched"] == 1  # the email's one item

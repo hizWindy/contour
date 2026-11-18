@@ -14,6 +14,7 @@
  *   top up added, in one line. In a discovery run, a company the top up added says "From HubSpot"
  *   under its name in the tables (PLAN-V21 T3-4).
  */
+import { EVERY_TIER } from '@/lib/labels'
 import { createColumnHelper } from '@tanstack/react-table'
 import { useNavigate } from 'react-router'
 import { useLeads, useRunOptions, useSearches } from '@/api/hooks'
@@ -250,7 +251,14 @@ export function RunLeads({
   className?: string
 }) {
   const navigate = useNavigate()
-  const leads = useLeads({ run_id: runId, sort: 'score', order: 'desc', limit: 100 })
+  // Every tier: the run's Discards and excluded leads have groups of their own (PLAN-V20 S4)
+  const leads = useLeads({
+    run_id: runId,
+    sort: 'score',
+    order: 'desc',
+    limit: 100,
+    tier: [...EVERY_TIER],
+  })
   const items = leads.data?.items ?? []
   const groups = groupRunLeads(items)
   const columns = markTopUp ? MARKED_COLUMNS : PLAIN_COLUMNS
