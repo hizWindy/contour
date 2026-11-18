@@ -5,8 +5,8 @@ This plan builds what Levi asked for on 18 Nov: fewer clicks, and voice for the 
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
-- **Last updated:** 19 Nov 2026 (S0 done; the build started on `implement v22`).
-- **Progress:** Before the build: 1 of 2 (S1 waits for Al-khair at the keyboard). Part 1: 0 of 7. Part 2: 0 of 4. Part 3: 0 of 6. M1 to M4: 0 of 4.
+- **Last updated:** 19 Nov 2026 (T1-1, T1-2 and T2-1 done).
+- **Progress:** Before the build: 1 of 2 (S1 waits for Al-khair at the keyboard). Part 1: 2 of 7. Part 2: 1 of 4. Part 3: 0 of 6. M1 to M4: 0 of 4.
 - **Sources:**
   - the meeting with Levi on 18 Nov (Gemini's notes in `minutes of meeting/`, which git ignores);
   - Al-khair's answers in chat (19 Nov);
@@ -360,7 +360,8 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
 
 **Progress:** 0 of 4. Every step is `frontend-agent` work.
 
-- [ ] **T2-1. The Assistant module.** `apps/assistant/module.tsx`. `MODULES` becomes Companies, Assistant, Lead Finder.
+- [x] **T2-1. The Assistant module.** Done 19 Nov 2026 (`d956204`, joined in `68fe1b3`). Today is a placeholder page until T2-2.
+  - `apps/assistant/module.tsx`. `MODULES` becomes Companies, Assistant, Lead Finder.
   - Today, Meetings and Call logs are its pages, at the new addresses (choice 2). The old addresses send you on, with their query.
   - The Companies module keeps only Companies, so it shows as one link under Home.
   - Move from `apps/companies/module.tsx` (and `call-note-links.tsx`) to the new module: the menu entries, the late prefetches, the commands, the account items and the frame. `MEETINGS_PATH`, `CALL_LOGS_PATH` and the links in `home-card.tsx:159` follow.
@@ -383,7 +384,12 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
 
 ### Part 2 Log
 
-- Nothing yet.
+- 19 Nov 2026, T2-1 (`d956204`): built by `frontend-agent` in a second copy, `../contour-v22-web` (branch `plan-v22-web`), while Part 1 was built. Its usage ran out after lint and types passed, so the lead session ran the rest and committed it.
+  - **Checks:** the website's tests, 2,059 of 2,060 passed. The one failure (`mic.test.tsx`, "the voice tool didn't load") passes alone, so it is a timing flake under load. T2-1 changed only a comment there. Lint, types and the build pass. The first visit stays at 241 kB gzip (747 to 749 kB raw).
+  - **Joined** into `plan-v22` as `68fe1b3`. The two copies stay: the backend works in `../contour-v22`, the website in `../contour-v22-web`.
+  - **Where things are:** the addresses in `apps/assistant/paths.ts` (`TODAY_PATH`, `MEETINGS_PATH`, `CALL_LOGS_PATH`), the old ones in `old-addresses.ts` (`/companies/activity?tab=logged` goes to `/assistant/call-logs?tab=history`), and the parts around the app (Ctrl+K, the account menu's "Check my mic", the frame's `MicCheckHost`) in `links.tsx`, loaded late through `parts.ts`. Today is `today/index.tsx`.
+  - **The menu keeps its shape:** Meetings and Call logs stay in it while call notes or pre-meeting forms are off (each page says so). Ctrl+K follows the switches.
+  - **TBC at Al-khair's look:** the Assistant's icon (a headset) and its colour (Companies' Heath).
 
 ## Part 3: the voice and the review card
 
@@ -482,3 +488,5 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
   - The fast backend tests: 3,495 passed, 28 skipped.
   - **The live switches** (read on the live site through Chrome, GET only, 19 Nov): call notes **on**, the AI sort (`call_notes_ai_enabled`) **on**, meeting forms **on**, HubSpot writing **on**, `voice_tool` = `browser_service` with `browser_speech_ok` **on** (so M3's first step is already done live), the key **can read tasks** (`crm.objects.tasks.read`: yes), and email **off** (no sender set up, so a team email gives 409 `email_not_set_up` live until Resend is set up).
   - So the AI sort is already on live, though W1 (Levi's written OK) is still open in this plan. Not confirmed yet whether he gave it. The Assistant follows the same switch (choice 17), so V reads commands live as soon as this ships.
+- 19 Nov 2026: the first account's 5-hour limit stopped both agents at 03:50, after their checks and before their commits. The session went on in the second account at 03:54. It read both agents' work, reran the tests and committed it (`4515649`, `d956204`). From now on, each agent commits each step as soon as its tests pass.
+- 19 Nov 2026: one change to the order. The website builds T3-1 and T3-2 (the V key, the voice bar and its words) next, while the backend builds T1-3 and T1-4. T3-1 and T3-2 need only T1-1's contract, which is in (`4b13c39`), and Today's rows use V (choice 8). T2-2 and T2-3 follow once T1-3's contract is in.
