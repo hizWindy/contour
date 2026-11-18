@@ -39,7 +39,7 @@ export interface NavItem {
   alsoActiveOn?: readonly string[]
   /**
    * Addresses inside this one that are another page of the menu, so this page isn't marked there:
-   * Call logs ("/companies/call-logs") is not Companies.
+   * Meetings ("/assistant/meetings") is not Today ("/assistant").
    */
   notActiveOn?: readonly string[]
   /**

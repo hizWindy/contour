@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { CallNoteOut, CallNotePreview } from '@/api/types'
+import { movedTo } from '@/apps/assistant/old-addresses'
 import { formatDate } from '@/lib/format'
 import { cardCounts, sendCounts, sortForConfirm } from './notes'
-import { movedTo } from './old-address'
 import {
   callLogsHref,
   callLogsQuery,
@@ -113,16 +113,17 @@ describe('the tab in the address', () => {
   })
 
   it('links to a tab, with the company picker open when asked', () => {
-    expect(callLogsHref()).toBe('/companies/call-logs')
-    expect(callLogsHref('history')).toBe('/companies/call-logs?tab=history')
-    expect(callLogsHref('to_confirm', { log: true })).toBe('/companies/call-logs?log=1')
+    expect(callLogsHref()).toBe('/assistant/call-logs')
+    expect(callLogsHref('history')).toBe('/assistant/call-logs?tab=history')
+    expect(callLogsHref('to_confirm', { log: true })).toBe('/assistant/call-logs?log=1')
   })
 
   it('sends an old Activity address on, with its tab and log=1', () => {
-    expect(movedTo('')).toBe('/companies/call-logs')
-    expect(movedTo('?tab=logged')).toBe('/companies/call-logs?tab=history')
-    expect(movedTo('?tab=needs-look&log=1')).toBe('/companies/call-logs?tab=needs-look&log=1')
-    expect(movedTo('?log=1', '#top')).toBe('/companies/call-logs?log=1#top')
+    const old = '/companies/activity'
+    expect(movedTo(old)).toBe('/assistant/call-logs')
+    expect(movedTo(old, '?tab=logged')).toBe('/assistant/call-logs?tab=history')
+    expect(movedTo(old, '?tab=needs-look&log=1')).toBe('/assistant/call-logs?tab=needs-look&log=1')
+    expect(movedTo(old, '?log=1', '#top')).toBe('/assistant/call-logs?log=1#top')
   })
 
   it('asks for the rep own notes', () => {

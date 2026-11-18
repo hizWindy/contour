@@ -19,7 +19,7 @@ describe('a late Home card', () => {
     const queryClient = createTestQueryClient()
     queryClient.setQueryData(queryKeys.auth.me(), { state: 'off' })
     renderWithProviders(<HomePage />, { queryClient })
-    expect(await screen.findByRole('region', { name: 'Relationships' })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Companies' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Runs and cost' })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Upcoming meetings' })).toBeNull()
     // Its place in the grid is empty, so it is taken out of the flow (`empty:hidden`).

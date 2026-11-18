@@ -1,8 +1,9 @@
 /**
- * Call notes around the app (PLAN-V17 T3-7, "The screens" part 4), in the whole app against a fake
- * server: Call logs' count in the menu, Home's quick buttons, Ctrl+K's "Log a call" and "Calls to
- * confirm" (with `?log=1` on Call logs), and a person without the Companies tick, who sees none of
- * it and whose browser asks nothing about call notes. Made-up names only.
+ * Call notes around the app (PLAN-V17 T3-7, "The screens" part 4; the Assistant's since PLAN-V22
+ * T2-1), in the whole app against a fake server: Call logs' count in the menu, Home's quick
+ * buttons, Ctrl+K's "Log a call" and "Calls to confirm" (with `?log=1` on Call logs), and a person
+ * without the Assistant's ticks, who sees none of it and whose browser asks nothing about call
+ * notes. Made-up names only.
  */
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -12,9 +13,9 @@ import type { CallNoteOptions, CallNoteSummary } from '@/api/types'
 import { routes } from '@/router'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import { asLaptop, asPhone } from '@/test/screen'
-import { callLogsHref, readLog, withoutLog } from './call-logs/params'
-import { closeMicCheck } from './call-notes/mic/check-store'
-import { FakeMic } from './call-notes/mic/fake-mic'
+import { callLogsHref, readLog, withoutLog } from '@/apps/companies/call-logs/params'
+import { closeMicCheck } from '@/apps/companies/call-notes/mic/check-store'
+import { FakeMic } from '@/apps/companies/call-notes/mic/fake-mic'
 
 // Pages load lazily. A busy test run can take more than the default second to load one.
 const LAZY = 5000
@@ -131,8 +132,9 @@ function mainMenu() {
   return within(screen.getByRole('navigation', { name: 'Main menu' }))
 }
 
+/** Home's Companies card, which holds Call logs' quick buttons until the Assistant has a card (T2-3). */
 function companiesCard() {
-  return within(screen.getByRole('region', { name: 'Relationships' }))
+  return within(screen.getByRole('region', { name: 'Companies' }))
 }
 
 function callNoteRequests(requests: readonly string[]): string[] {
@@ -147,15 +149,15 @@ describe("Call logs' count in the menu", () => {
     stubBackend()
     renderAt('/')
     await home()
-    const companies = within(mainMenu().getByRole('group', { name: 'Relationships' }))
-    const callLogs = await companies.findByRole('link', { name: 'Call logs, 7 calls to confirm' })
-    expect(callLogs).toHaveAttribute('href', '/companies/call-logs')
+    const assistant = within(mainMenu().getByRole('group', { name: 'Assistant' }))
+    const callLogs = await assistant.findByRole('link', { name: 'Call logs, 7 calls to confirm' })
+    expect(callLogs).toHaveAttribute('href', '/assistant/call-logs')
     expect(callLogs.querySelector('[data-slot=menu-count]')).not.toBeNull()
-    // Home, then the Lead Finder's group, then Companies': the order of MODULES.
+    // Home and Companies, then the Assistant's group, then the Lead Finder's: the order of MODULES.
     const groups = mainMenu()
       .getAllByRole('group')
       .map((group) => group.getAttribute('aria-labelledby'))
-    expect(groups.indexOf('menu-lead-finder')).toBeLessThan(groups.indexOf('menu-companies'))
+    expect(groups.indexOf('menu-assistant')).toBeLessThan(groups.indexOf('menu-lead-finder'))
   })
 
   it('shows no count at 0, and asks for no counts while call notes are off', async () => {
@@ -192,15 +194,15 @@ describe("Home's quick buttons", () => {
     const { user, router } = renderAt('/')
     await home()
     const confirm = await companiesCard().findByRole('link', { name: '7 calls to confirm' })
-    expect(confirm).toHaveAttribute('href', '/companies/call-logs')
+    expect(confirm).toHaveAttribute('href', '/assistant/call-logs')
     const look = companiesCard().getByRole('link', { name: '2 need a look' })
-    expect(look).toHaveAttribute('href', '/companies/call-logs?tab=needs-look')
+    expect(look).toHaveAttribute('href', '/assistant/call-logs?tab=needs-look')
 
     await user.click(look)
     expect(
       await screen.findByRole('tab', { name: 'Needs a look 2' }, { timeout: LAZY }),
     ).toHaveAttribute('aria-selected', 'true')
-    expect(router.state.location.pathname).toBe('/companies/call-logs')
+    expect(router.state.location.pathname).toBe('/assistant/call-logs')
   })
 
   it('show only the work there is, in the right words for one', async () => {
@@ -264,7 +266,7 @@ describe('Ctrl+K', () => {
     await waitFor(() => {
       expect(router.state.location.search).toBe('')
     })
-    expect(router.state.location.pathname).toBe('/companies/call-logs')
+    expect(router.state.location.pathname).toBe('/assistant/call-logs')
     // ...so going back and forward again doesn't open the picker a second time.
     await act(async () => {
       await router.navigate(-1)
@@ -289,7 +291,7 @@ describe('Ctrl+K', () => {
     expect(
       await screen.findByRole('tab', { name: 'To confirm 7' }, { timeout: LAZY }),
     ).toHaveAttribute('aria-selected', 'true')
-    expect(router.state.location.pathname).toBe('/companies/call-logs')
+    expect(router.state.location.pathname).toBe('/assistant/call-logs')
     expect(router.state.location.search).toBe('')
   })
 
@@ -315,7 +317,7 @@ describe('Call logs opened with ?log=1', () => {
   it('opens no picker while call notes are off, and drops log from the address', async () => {
     asLaptop()
     stubBackend({ enabled: false })
-    const { router } = renderAt('/companies/call-logs?log=1&tab=history')
+    const { router } = renderAt('/assistant/call-logs?log=1&tab=history')
     expect(
       await screen.findByText('Call notes are switched off.', undefined, { timeout: LAZY }),
     ).toBeInTheDocument()
@@ -326,9 +328,9 @@ describe('Call logs opened with ?log=1', () => {
   })
 
   it('builds and reads its address', () => {
-    expect(callLogsHref()).toBe('/companies/call-logs')
-    expect(callLogsHref('needs_look')).toBe('/companies/call-logs?tab=needs-look')
-    expect(callLogsHref('to_confirm', { log: true })).toBe('/companies/call-logs?log=1')
+    expect(callLogsHref()).toBe('/assistant/call-logs')
+    expect(callLogsHref('needs_look')).toBe('/assistant/call-logs?tab=needs-look')
+    expect(callLogsHref('to_confirm', { log: true })).toBe('/assistant/call-logs?log=1')
     expect(readLog(new URLSearchParams('log=1'))).toBe(true)
     expect(readLog(new URLSearchParams('log=yes'))).toBe(false)
     expect(withoutLog(new URLSearchParams('log=1&tab=history')).toString()).toBe('tab=history')
@@ -336,19 +338,20 @@ describe('Call logs opened with ?log=1', () => {
 })
 
 describe('who sees it', () => {
-  it('a person without the Companies tick sees none of it, and nothing asks about call notes', async () => {
+  it('a person with none of the ticks sees none of it, and nothing asks about call notes', async () => {
     asLaptop()
     const requests = stubBackend({ user: { role: 'staff', apps: ['lead_finder'] } })
     const { user } = renderAt('/')
     await home()
     expect(await mainMenu().findByRole('group', { name: 'Lead Finder' })).toBeInTheDocument()
 
-    // The menu: no Companies group, so no Meetings, no Call logs and no count.
-    expect(mainMenu().queryByRole('group', { name: 'Relationships' })).toBeNull()
+    // The menu: no Assistant group, so no Meetings, no Call logs and no count.
+    expect(mainMenu().queryByRole('group', { name: 'Assistant' })).toBeNull()
     expect(mainMenu().queryByRole('link', { name: /Meetings/ })).toBeNull()
     expect(mainMenu().queryByRole('link', { name: /Call logs/ })).toBeNull()
-    // Home: no Companies card, so no quick buttons.
-    expect(screen.queryByRole('region', { name: 'Relationships' })).toBeNull()
+    // Home: no Companies card and no Assistant card, so no quick buttons.
+    expect(screen.queryByRole('region', { name: 'Companies' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Assistant' })).toBeNull()
     expect(screen.queryByText(/to confirm|a look/)).toBeNull()
     // Ctrl+K: neither entry.
     await user.keyboard('{Control>}k{/Control}')
@@ -371,7 +374,7 @@ describe('who sees it', () => {
     // Meetings is in the group too (T3-9), with no count of its own.
     expect(mainMenu().getByRole('link', { name: 'Meetings' })).toHaveAttribute(
       'href',
-      '/companies/meetings',
+      '/assistant/meetings',
     )
     expect(
       await companiesCard().findByRole('link', { name: '7 calls to confirm' }),
@@ -437,7 +440,7 @@ describe('Check my mic (PLAN-V18 T3-4)', () => {
       await home()
       await optionsKnown(queryClient)
       await user.click(screen.getByRole('button', { name: 'Account menu, Jo Sample' }))
-      // The row loads late, with the rest of Companies' parts.
+      // The row loads late, with the rest of the Assistant's parts.
       await screen.findByRole('menuitem', { name: 'Check my mic' }, { timeout: LAZY })
       const names = screen.getAllByRole('menuitem').map((item) => item.textContent)
       expect(names).toEqual(['Check my mic', 'Change password', 'Sign out'])

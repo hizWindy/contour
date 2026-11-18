@@ -1,12 +1,15 @@
 /**
- * Call notes around the app (PLAN-V17 T3-7, "The screens" part 4): the count on Call logs' row in
- * the menu, the quick buttons on Home's Companies card, and "Log a call" and "Calls to confirm" in
- * Ctrl+K. Ctrl+K also gains the pre-read's entry here (T3-11, "The screens" part 7): Companies has
- * one place for its own Ctrl+K entries.
+ * The Assistant's parts around the app (PLAN-V22 T2-1; Companies' until then, from PLAN-V17 T3-7,
+ * "The screens" part 4): the count on Call logs' row in the menu, the quick buttons on Home's
+ * Companies card, and the Assistant's own entries in Ctrl+K: "Log a call", "Calls to confirm",
+ * "Check my mic" and "Pre-read for a meeting" (T3-11, "The screens" part 7). The pages they open
+ * keep their code in `apps/companies/` (PLAN-V22 choice 3).
  *
- * - **Only for a person who sees Companies.** The menu, Home and Ctrl+K draw a project's parts only
- *   for the projects this person may use (`useVisibleModules`), so for anyone else none of this is
- *   drawn and no call notes or meetings request is made.
+ * - **Only for a person who sees the Assistant** (the Call logs or the Meetings tick). The menu,
+ *   Home and Ctrl+K draw a project's parts only for the projects this person may use
+ *   (`useVisibleModules`), and each part checks its own tick, so for anyone else none of this is
+ *   drawn and no call notes or meetings request is made. Home's quick buttons sit on the Companies
+ *   card until the Assistant has a Home card of its own (T2-3), and only with the Call logs tick.
  * - **Only while call notes are on**, and a count only above 0, so a button never opens an empty
  *   tab. While the switches or the counts load or fail, nothing shows, and each place looks as it
  *   did before call notes. A 409 while they are off shows nothing either.
@@ -16,8 +19,10 @@
  *   check only mode, from any page, through the part the frame draws (`MicCheckHost`). Only on a
  *   laptop, while call notes are on and the voice tool isn't typing. The card's own code loads the
  *   first time it is asked for.
- * - **Loaded late**, through `call-note-parts.ts`: the menu, Home and Ctrl+K are in the first visit,
- *   and this file, with its hooks, words and icons, is not. Import the parts from there, not here.
+ * - **The old words still find them.** Call logs was Activity, and Meetings and Call logs sat in a
+ *   menu group called Relationships, so those words stay among the entries' keywords.
+ * - **Loaded late**, through `parts.ts`: the menu, Home and Ctrl+K are in the first visit, and this
+ *   file, with its hooks, words and icons, is not. Import the parts from there, not here.
  */
 import { ClipboardCheck, FileText, Mic, NotebookPen, TriangleAlert } from 'lucide-react'
 import { lazy, Suspense, useState } from 'react'
@@ -25,6 +30,21 @@ import { Link } from 'react-router'
 import { useCallNoteCounts, useCallNoteOptions, voiceToolOf } from '@/api/hooks/call-note-counts'
 import { useMeetingSummary } from '@/api/hooks/meeting-summary'
 import type { VoiceToolKind } from '@/api/types'
+import { callLogsHref } from '@/apps/companies/call-logs/params'
+import {
+  closeMicCheck,
+  openMicCheck,
+  useMicCheckOpen,
+} from '@/apps/companies/call-notes/mic/check-store'
+import { CHECK_MY_MIC } from '@/apps/companies/call-notes/mic/words'
+import {
+  CALLS_TO_CONFIRM,
+  LOG_A_CALL,
+  needsLookTail,
+  PRE_READ_FOR_A_MEETING,
+  toConfirmTail,
+  toConfirmWords,
+} from '@/apps/companies/words'
 import { useCan, useCanWrite, useIsViewer } from '@/auth/can'
 import { RollingNumber } from '@/components/motion/rolling-number'
 import { Button } from '@/components/ui/button'
@@ -33,18 +53,8 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { MenuCount } from '@/shell/menu-count'
 import type { CommandsProps } from '@/shell/nav'
-import { callLogsHref } from './call-logs/params'
-import { closeMicCheck, openMicCheck, useMicCheckOpen } from './call-notes/mic/check-store'
-import { CHECK_MY_MIC } from './call-notes/mic/words'
-import { MEETINGS_PATH } from './meetings/params'
-import {
-  CALLS_TO_CONFIRM,
-  LOG_A_CALL,
-  needsLookTail,
-  PRE_READ_FOR_A_MEETING,
-  toConfirmTail,
-  toConfirmWords,
-} from './words'
+import { MEETINGS_PATH } from './paths'
+import { ASSISTANT_KEYWORDS } from './words'
 
 function ToConfirmCountContent() {
   const { counts } = useCallNoteCounts()
@@ -95,9 +105,9 @@ export function CallNoteButtons() {
 }
 
 /**
- * Ctrl+K, under Companies, while call notes are on: "Log a call" opens Call logs with its company
- * picker open (the page takes the focus), and "Calls to confirm" opens To confirm. It needs only
- * the switches, not the counts.
+ * Ctrl+K, under the Assistant, while call notes are on: "Log a call" opens Call logs with its
+ * company picker open (the page takes the focus), and "Calls to confirm" opens To confirm. It needs
+ * only the switches, not the counts.
  */
 function CallNoteCommands({ go }: CommandsProps) {
   const canSeeLogs = useCan('companies.call_logs')
@@ -110,7 +120,14 @@ function CallNoteCommands({ go }: CommandsProps) {
       {!viewer && canCallLogs ? (
         <CommandItem
           value={LOG_A_CALL}
-          keywords={['call notes', 'note', 'call logs', 'activity', 'dictate']}
+          keywords={[
+            'call notes',
+            'note',
+            'call logs',
+            'activity',
+            'dictate',
+            ...ASSISTANT_KEYWORDS,
+          ]}
           onSelect={() => {
             go(callLogsHref('to_confirm', { log: true }))
           }}
@@ -121,7 +138,7 @@ function CallNoteCommands({ go }: CommandsProps) {
       ) : null}
       <CommandItem
         value={CALLS_TO_CONFIRM}
-        keywords={['call notes', 'call logs', 'activity', 'send', 'hubspot']}
+        keywords={['call notes', 'call logs', 'activity', 'send', 'hubspot', ...ASSISTANT_KEYWORDS]}
         onSelect={() => {
           go(callLogsHref('to_confirm'))
         }}
@@ -139,7 +156,15 @@ function PreReadCommandContent({ go }: Pick<CommandsProps, 'go'>) {
   return (
     <CommandItem
       value={PRE_READ_FOR_A_MEETING}
-      keywords={['pre-read', 'pre-meeting form', 'client meeting', 'check and send', 'teams']}
+      keywords={[
+        'pre-read',
+        'pre-meeting form',
+        'meetings',
+        'client meeting',
+        'check and send',
+        'teams',
+        ...ASSISTANT_KEYWORDS,
+      ]}
       onSelect={() => {
         go(MEETINGS_PATH)
       }}
@@ -151,8 +176,8 @@ function PreReadCommandContent({ go }: Pick<CommandsProps, 'go'>) {
 }
 
 /**
- * Ctrl+K, under Companies, while pre-meeting forms are on (T3-11): "Pre-read for a meeting" opens
- * Meetings, upcoming, where each meeting's pre-read is drafted, checked and sent.
+ * Ctrl+K, under the Assistant, while pre-meeting forms are on (T3-11): "Pre-read for a meeting"
+ * opens Meetings, upcoming, where each meeting's pre-read is drafted, checked and sent.
  */
 function PreReadCommand({ go }: Pick<CommandsProps, 'go'>) {
   if (!useCan('companies.meetings')) return null
@@ -207,7 +232,7 @@ export function MicCheckMenuItem() {
   )
 }
 
-const MicCard = lazy(() => import('./call-notes/mic/mic-card'))
+const MicCard = lazy(() => import('@/apps/companies/call-notes/mic/mic-card'))
 
 function MicCheckCard({ open }: { open: boolean }) {
   const canLog = useCanWrite('companies.call_logs')
@@ -236,8 +261,12 @@ export function MicCheckHost() {
   return asked ? <MicCheckCard open={open} /> : null
 }
 
-/** Companies' own entries in Ctrl+K: call notes', the mic check, then the pre-read's. */
-export function CompaniesCommands({ go, run }: CommandsProps) {
+/**
+ * The Assistant's own entries in Ctrl+K, after its pages: call notes', the mic check, then the
+ * pre-read's. The pre-read's comes last because it waits for one more answer (Meetings' counts),
+ * so its coming moves no other entry.
+ */
+export function AssistantCommands({ go, run }: CommandsProps) {
   return (
     <>
       <CallNoteCommands go={go} run={run} />

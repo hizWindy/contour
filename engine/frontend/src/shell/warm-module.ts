@@ -1,6 +1,6 @@
 /**
  * Warming the rest of a project's pages (Improvements 1, #10: "no delay when switching things").
- * A person working in Relationships moves between Companies, Meetings and Call logs all day. Each
+ * A person working in the Assistant moves between Today, Meetings and Call logs all day. Each
  * page is its own file of code and asks the server for its first lists, so the first click on a
  * page waited for both. While someone is on one page of a project that opts in (`AppModule.warm`),
  * this fetches the code and the first reads of its other pages, one page at a time, when the

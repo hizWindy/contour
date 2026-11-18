@@ -9,13 +9,16 @@
  * An old link with `team=1` (PLAN-V17's switch) opens All, which holds the team's meetings and
  * more (PLAN-V18 T2-3). The next change of view drops it from the address.
  *
- * A pre-read has its own address under Meetings, `/companies/meetings/{form_id}` (T3-10), where
- * Track 2's morning email links. The rows, New pre-read and the email open it.
+ * A pre-read has its own address under Meetings, `/assistant/meetings/{form_id}` (T3-10), where
+ * Track 2's morning email links. The rows, New pre-read and the email open it. Meetings sat under
+ * Companies until PLAN-V22 (T2-1); its old addresses send you on with their query
+ * (`apps/assistant/old-addresses.ts`), so an old email's link still opens its pre-read.
  */
 import type { MeetingQuery, MeetingWhen, MeetingWho } from '@/api/types'
+import { MEETINGS_PATH } from '@/apps/assistant/paths'
 
-/** Meetings' address. */
-export const MEETINGS_PATH = '/companies/meetings'
+/** Meetings' address, kept with the Assistant's others. */
+export { MEETINGS_PATH }
 
 /** Upcoming is the next 7 days or so: one page holds them (TBC). */
 export const UPCOMING_LIMIT = 100
@@ -102,7 +105,7 @@ export function writeMeetings(
   return params
 }
 
-/** A link to Meetings with a view, like "/companies/meetings?when=past". */
+/** A link to Meetings with a view, like "/assistant/meetings?when=past". */
 export function meetingsHref(view: Partial<MeetingsView> = {}): string {
   const query = writeMeetings(new URLSearchParams(), view).toString()
   return query ? `${MEETINGS_PATH}?${query}` : MEETINGS_PATH
@@ -125,7 +128,7 @@ export function meetingsQuery(view: MeetingsView): MeetingQuery {
   return query
 }
 
-/** A pre-read's own page, under Meetings, like "/companies/meetings/0f3c9a2e-...". */
+/** A pre-read's own page, under Meetings, like "/assistant/meetings/0f3c9a2e-...". */
 export function preReadHref(formId: string): string {
   return `${MEETINGS_PATH}/${encodeURIComponent(formId)}`
 }

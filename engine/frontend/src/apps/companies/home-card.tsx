@@ -1,20 +1,23 @@
 /**
- * The Relationships card on Home (the "bento" Home, 11 Nov; it was titled Companies until 17 Nov
- * 2026, when the group took the name Relationships, with the handshake icon): how many companies we have and how fresh
- * the HubSpot copy is, a box to find a company, the calls I prepped today, and, while call notes
- * are on (PLAN-V17 T3-7), a quick button for each kind of work waiting: "7 calls to confirm",
- * "2 need a look". Those come last: they arrive after two requests, and at the foot of the card
- * they push nothing inside it. Their code loads late (`call-note-parts.ts`).
+ * The Companies card on Home (the "bento" Home, 11 Nov; titled Relationships, with a handshake,
+ * from 17 Nov 2026 until PLAN-V22 T2-1 took the group apart): how many companies we have and how
+ * fresh the HubSpot copy is, a box to find a company, the calls I prepped today, and, while call
+ * notes are on (PLAN-V17 T3-7), a quick button for each kind of work waiting: "7 calls to
+ * confirm", "2 need a look". Those come last: they arrive after two requests, and at the foot of
+ * the card they push nothing inside it. Their code loads late (`apps/assistant/parts.ts`). They
+ * move to the Assistant's own card in T2-3 (choice 5).
  *
  * The count asks for the Companies page's own first page (the same request), so opening Companies
  * from here shows the list at once. The box opens Companies with the name typed in its search, and
  * a call prepped today opens that company.
  */
-import { ArrowRight, Handshake, Search } from 'lucide-react'
+import { ArrowRight, Building2, Search } from 'lucide-react'
 import { Suspense, useId, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useCompanies, useHubSpotSyncs, useTodayPreps } from '@/api/hooks'
 import type { PrepChip } from '@/api/types'
+import { CallNoteButtons } from '@/apps/assistant/parts'
+import { CALL_LOGS_PATH, MEETINGS_PATH } from '@/apps/assistant/paths'
 import { useCan } from '@/auth/can'
 // By its own file: this card is in the first visit (see the kit's index.ts).
 import { RollingNumber } from '@/components/motion/rolling-number'
@@ -24,7 +27,6 @@ import { Input } from '@/components/ui/input'
 import { formatRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { TONE_CLASSES } from '@/shell/tone'
-import { CallNoteButtons } from './call-note-parts'
 import { HOME_COMPANIES } from './prefetch'
 
 const TITLE_ID = 'home-companies'
@@ -156,9 +158,9 @@ export function CompaniesHomeCard() {
   const openTo = canCompanies
     ? { to: '/companies', label: 'Open Companies' }
     : canCallLogs
-      ? { to: '/companies/call-logs', label: 'Open Call logs' }
+      ? { to: CALL_LOGS_PATH, label: 'Open Call logs' }
       : canMeetings
-        ? { to: '/companies/meetings', label: 'Open Meetings' }
+        ? { to: MEETINGS_PATH, label: 'Open Meetings' }
         : null
   return (
     <Card role="region" aria-labelledby={TITLE_ID} className="h-full gap-5">
@@ -170,10 +172,10 @@ export function CompaniesHomeCard() {
             TONE_CLASSES.companies.tile,
           )}
         >
-          <Handshake className="size-5" />
+          <Building2 className="size-5" />
         </span>
         <h2 id={TITLE_ID} className="flex-1 text-section font-semibold text-foreground">
-          Relationships
+          Companies
         </h2>
         {openTo ? (
           <Link

@@ -26,13 +26,41 @@ export interface FeatureItem {
 }
 
 export interface FeatureGroup {
+  /** A short name for code and tests, like "assistant". */
+  id: 'companies' | 'assistant' | 'lead_finder'
+  /** The backend's project the ticks belong to: the Assistant's are still Companies'. */
   app: 'lead_finder' | 'companies'
   label: string
   features: readonly FeatureItem[]
 }
 
+/**
+ * The ticks on the People tab, grouped as the menu shows the projects: Companies, the Assistant,
+ * then the Lead Finder. Call logs and Meetings are the Assistant's pages, so their ticks sit under
+ * "Assistant", though they keep their names (`companies.*`) and need no change on the server
+ * (PLAN-V22 choice 4).
+ */
 export const FEATURE_GROUPS: readonly FeatureGroup[] = [
   {
+    id: 'companies',
+    app: 'companies',
+    label: 'Companies',
+    features: [
+      { key: 'companies.companies', label: 'Companies' },
+      { key: 'companies.call_prep', label: 'Call prep' },
+    ],
+  },
+  {
+    id: 'assistant',
+    app: 'companies',
+    label: 'Assistant',
+    features: [
+      { key: 'companies.call_logs', label: 'Call logs' },
+      { key: 'companies.meetings', label: 'Meetings' },
+    ],
+  },
+  {
+    id: 'lead_finder',
     app: 'lead_finder',
     label: 'Lead Finder',
     features: [
@@ -40,16 +68,6 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
       { key: 'lead_finder.results', label: 'See results' },
       { key: 'lead_finder.rules', label: 'Rules' },
       { key: 'lead_finder.send_to_hubspot', label: 'Send to HubSpot' },
-    ],
-  },
-  {
-    app: 'companies',
-    label: 'Relationships',
-    features: [
-      { key: 'companies.companies', label: 'Companies' },
-      { key: 'companies.call_logs', label: 'Call logs' },
-      { key: 'companies.meetings', label: 'Meetings' },
-      { key: 'companies.call_prep', label: 'Call prep' },
     ],
   },
 ]

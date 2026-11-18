@@ -1,6 +1,7 @@
 /**
- * Meetings (PLAN-V17 T3-9, "The screens" part 5, and PLAN-V18 T2-3), at /companies/meetings: the
- * client meetings, each with where its pre-read stands, and one button to move it on.
+ * Meetings (PLAN-V17 T3-9, "The screens" part 5, and PLAN-V18 T2-3), at /assistant/meetings (the
+ * Assistant's since PLAN-V22 T2-1; the code stays here, choice 3, and /companies/meetings sends you
+ * on): the client meetings, each with where its pre-read stands, and one button to move it on.
  *
  * - **Upcoming** (grouped Today, Tomorrow, This week, Later, in Melbourne days, as the server
  *   groups them) and **Past**, picked with `Segmented`. **Whose meetings:** All (the default, so

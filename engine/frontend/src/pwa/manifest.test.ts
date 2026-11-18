@@ -52,7 +52,9 @@ describe('the manifest', () => {
   })
 
   it('has shortcuts to the pages used all day, each a real page of the website', () => {
+    // Today first: the Assistant's daily list (PLAN-V22 T2-1). A phone may show only the first 4.
     expect(manifest.shortcuts.map((shortcut) => shortcut.name)).toEqual([
+      'Today',
       'Call logs',
       'Meetings',
       'Companies',

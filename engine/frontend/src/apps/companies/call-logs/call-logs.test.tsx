@@ -503,7 +503,7 @@ function sent(server: Server, method: string, path: string): Sent[] {
   return server.sent.filter((item) => item.method === method && item.path === path)
 }
 
-function renderCallLogs(route = '/companies/call-logs') {
+function renderCallLogs(route = '/assistant/call-logs') {
   return renderWithProviders(<CallLogsPage />, { route })
 }
 
@@ -1083,7 +1083,7 @@ describe('Needs a look', () => {
       ],
       summary: { to_confirm: 0, needs_look: 2, logged_today: 0 },
     })
-    const { user } = renderCallLogs('/companies/call-logs?tab=needs-look')
+    const { user } = renderCallLogs('/assistant/call-logs?tab=needs-look')
     const first = await screen.findByRole('article', { name: 'Sample Logistics Pty Ltd' })
     expect(within(first).getByText('Not sure it reached HubSpot.')).toBeInTheDocument()
     expect(within(first).getByText('Check HubSpot, then tell us:')).toBeInTheDocument()
@@ -1129,7 +1129,7 @@ describe('Needs a look', () => {
         }),
       ],
     })
-    const { user } = renderCallLogs('/companies/call-logs?tab=needs-look')
+    const { user } = renderCallLogs('/assistant/call-logs?tab=needs-look')
     const failed = await screen.findByRole('article', { name: 'Sample Logistics Pty Ltd' })
     await user.click(within(failed).getByRole('button', { name: 'Try again' }))
     await waitFor(() => {
@@ -1151,7 +1151,7 @@ describe('Needs a look', () => {
       ],
       options: options({ sending_ready: false, waiting_for: 'Waiting for HubSpot write access.' }),
     })
-    renderCallLogs('/companies/call-logs?tab=needs-look')
+    renderCallLogs('/assistant/call-logs?tab=needs-look')
     const failed = await screen.findByRole('article', { name: 'Sample Logistics Pty Ltd' })
     const tryAgain = within(failed).getByRole('button', { name: 'Try again' })
     expect(tryAgain).toBeDisabled()
@@ -1174,7 +1174,7 @@ describe('every state', () => {
     ],
   ])('an empty tab speaks in the serif voice (%s)', async (search, title, description) => {
     mockServer()
-    renderCallLogs(`/companies/call-logs${search}`)
+    renderCallLogs(`/assistant/call-logs${search}`)
     const heading = await screen.findByRole('heading', { name: title })
     expect(heading).toHaveClass('font-serif')
     expect(screen.getByText(description)).toBeInTheDocument()
@@ -1317,7 +1317,7 @@ describe('Log call', () => {
       options: options({ ai_enabled: true }),
       user: { role: 'viewer', features: ['companies.call_logs'] },
     })
-    renderCallLogs('/companies/call-logs?log=1')
+    renderCallLogs('/assistant/call-logs?log=1')
     await screen.findByText('Nothing to confirm.')
     expect(screen.queryByRole('button', { name: 'Log call' })).toBeNull()
     expect(screen.queryByRole('dialog', { name: 'Log call' })).toBeNull()
@@ -1416,7 +1416,7 @@ describe('what Call logs asks for first (PLAN-V7 C1)', () => {
     )
     const client = createTestQueryClient()
     client.setQueryData(queryKeys.auth.me(), { state: 'off' })
-    prefetchPage(routes, { pathname: '/companies/call-logs', search: '' }, client)
+    prefetchPage(routes, { pathname: '/assistant/call-logs', search: '' }, client)
     // The prefetch loads its own small file first.
     await waitFor(() => {
       expect(calls.size).toBe(3)
@@ -1426,7 +1426,7 @@ describe('what Call logs asks for first (PLAN-V7 C1)', () => {
       `${NOTES}/summary`,
       `${NOTES}?state=to_confirm&mine=true&limit=100&offset=0`,
     ])
-    renderWithProviders(<CallLogsPage />, { route: '/companies/call-logs', queryClient: client })
+    renderWithProviders(<CallLogsPage />, { route: '/assistant/call-logs', queryClient: client })
     expect(await screen.findByRole('tab', { name: 'To confirm' })).toBeInTheDocument()
     await waitFor(() => {
       expect(
@@ -1492,7 +1492,7 @@ describe('warming the other tabs (Improvements 1, #10)', () => {
     const server = mockServer({ notes: threeNotes() })
     const queryClient = appCache()
     const { user } = renderWithProviders(<CallLogsPage />, {
-      route: '/companies/call-logs',
+      route: '/assistant/call-logs',
       queryClient,
     })
     await afterIdle(browser)
@@ -1513,7 +1513,7 @@ describe('warming the other tabs (Improvements 1, #10)', () => {
   it("asks for History as the address has it when it is the tab on screen, once, and for the others' first lists", async () => {
     const browser = fakeIdle()
     const server = mockServer({ notes: threeNotes() })
-    renderCallLogs('/companies/call-logs?tab=history&q=sample')
+    renderCallLogs('/assistant/call-logs?tab=history&q=sample')
     await screen.findByRole('tab', { name: /^History/ })
     await waitFor(() => {
       expect(browser.waiting()).toBeGreaterThan(0)
@@ -1637,7 +1637,7 @@ describe("a logged meeting's notes (T3-11)", () => {
         }),
       ],
     })
-    const { user } = renderCallLogs('/companies/call-logs?tab=history')
+    const { user } = renderCallLogs('/assistant/call-logs?tab=history')
     const list = await screen.findByRole('group', { name: 'Your calls, newest first' })
     const row = within(list).getByRole('button', { name: /Sample Logistics Pty Ltd/ })
     // Meeting notes say so where a call says how it went.
@@ -1750,7 +1750,7 @@ describe('a call the server leaves out of a send (T3-11)', () => {
       ],
       retryRefused: true,
     })
-    const { user } = renderCallLogs('/companies/call-logs?tab=needs-look')
+    const { user } = renderCallLogs('/assistant/call-logs?tab=needs-look')
     const card = await screen.findByRole('article', { name: 'Sample Logistics Pty Ltd' })
     await user.click(within(card).getByRole('button', { name: 'Try again' }))
     const shown = (await screen.findByText("That didn't go through")).closest('[data-sonner-toast]')

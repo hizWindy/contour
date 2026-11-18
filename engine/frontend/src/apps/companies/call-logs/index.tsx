@@ -1,7 +1,8 @@
 /**
  * Call logs (PLAN-V17 T3-6, "The screens" part 3; called Activity until PLAN-V18 T3-2), at
- * /companies/call-logs: the calls the rep logged, in three tabs with a sliding underline
- * (`TabIndicator`). The old address, /companies/activity, sends you on (`old-route.tsx`).
+ * /assistant/call-logs (the Assistant's since PLAN-V22 T2-1; the code stays here, choice 3): the
+ * calls the rep logged, in three tabs with a sliding underline (`TabIndicator`). The old addresses,
+ * /companies/call-logs and /companies/activity, send you on (`apps/assistant/old-route.tsx`).
  *
  * - **To confirm:** one card per call, to check and fix, then one Navy button sends them all to
  *   HubSpot (`to-confirm.tsx`).

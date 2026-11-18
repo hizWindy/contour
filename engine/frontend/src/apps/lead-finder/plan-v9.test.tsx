@@ -351,7 +351,7 @@ describe('the People tab (PLAN-V9 E1, PLAN-V19 T3-3 & T3-4)', () => {
     })
   })
 
-  it('ticks Relationships features too inside the Relationships group', async () => {
+  it('ticks Companies features too inside the Companies group', async () => {
     const calls = mockApi({
       '/api/v1/auth/me': { auth_required: false, user: null, session: null },
       'GET /api/v1/people': [
@@ -384,7 +384,7 @@ describe('the People tab (PLAN-V9 E1, PLAN-V19 T3-3 & T3-4)', () => {
     await user.click(screen.getByRole('button', { name: 'Edit Al Khair' }))
     const adminDialog = await screen.findByRole('dialog')
     const adminTick = within(
-      within(adminDialog).getByRole('group', { name: 'Relationships' }),
+      within(adminDialog).getByRole('group', { name: 'Companies' }),
     ).getByRole('checkbox', { name: 'Companies' })
     expect(adminTick).toBeChecked()
     expect(adminTick).toBeDisabled()
@@ -392,10 +392,9 @@ describe('the People tab (PLAN-V9 E1, PLAN-V19 T3-3 & T3-4)', () => {
     await user.click(await screen.findByRole('button', { name: 'Edit Marcus Lee' }))
     const marcusDialog = await screen.findByRole('dialog')
     await user.click(
-      within(within(marcusDialog).getByRole('group', { name: 'Relationships' })).getByRole(
-        'checkbox',
-        { name: 'Companies' },
-      ),
+      within(within(marcusDialog).getByRole('group', { name: 'Companies' })).getByRole('checkbox', {
+        name: 'Companies',
+      }),
     )
     await waitFor(() => {
       expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({

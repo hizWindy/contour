@@ -287,11 +287,11 @@ function patches(server: Server): unknown[] {
   return server.calls.filter((call) => call.method === 'PATCH').map((call) => call.body)
 }
 
-function renderPreRead(path = `/companies/meetings/${FORM_ID}`) {
+function renderPreRead(path = `/assistant/meetings/${FORM_ID}`) {
   const router = createMemoryRouter(
     [
-      { path: '/companies/meetings', element: <h1>Client meetings</h1> },
-      { path: '/companies/meetings/:formId', element: <PreReadPage /> },
+      { path: '/assistant/meetings', element: <h1>Client meetings</h1> },
+      { path: '/assistant/meetings/:formId', element: <PreReadPage /> },
       { path: '/companies/:key', element: <h1>Company</h1> },
     ],
     { initialEntries: [path] },
@@ -793,7 +793,7 @@ describe('a save that fails after the rep has left the page', () => {
     })
     // Back to Meetings while it saves: the page that would say so is gone.
     await act(async () => {
-      await router.navigate('/companies/meetings')
+      await router.navigate('/assistant/meetings')
     })
     await screen.findByRole('heading', { level: 1, name: 'Client meetings' })
     server.release()
@@ -811,7 +811,7 @@ describe('a save that fails after the rep has left the page', () => {
       expect(patches(server)).toHaveLength(1)
     })
     await act(async () => {
-      await router.navigate('/companies/meetings')
+      await router.navigate('/assistant/meetings')
     })
     await screen.findByRole('heading', { level: 1, name: 'Client meetings' })
     server.release()
@@ -1074,7 +1074,7 @@ describe('the states', () => {
       ).toBeInTheDocument()
       expect(screen.getByRole('link', { name: 'Back to Meetings' })).toHaveAttribute(
         'href',
-        '/companies/meetings',
+        '/assistant/meetings',
       )
     },
   )
@@ -1088,7 +1088,7 @@ describe('the states', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Pre-read' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Back to Meetings' })).toHaveAttribute(
       'href',
-      '/companies/meetings',
+      '/assistant/meetings',
     )
   })
 
@@ -1103,7 +1103,7 @@ describe('the states', () => {
     const server = mockServer()
     const client = createTestQueryClient()
     client.setQueryData(queryKeys.auth.me(), { state: 'off' })
-    prefetchPage(routes, { pathname: `/companies/meetings/${FORM_ID}`, search: '' }, client)
+    prefetchPage(routes, { pathname: `/assistant/meetings/${FORM_ID}`, search: '' }, client)
     // The prefetch loads its own small file first.
     await waitFor(() => {
       expect(server.calls).toHaveLength(1)

@@ -1,12 +1,12 @@
 /**
  * Whether call notes are on, and the counts (PLAN-V17 T3-7): the part of the call notes hooks the
  * menu, Home and Ctrl+K need on every page. They load with those parts, late and small
- * (`apps/companies/call-note-parts.ts`), and the rest of the call notes hooks (`call-notes.ts`,
- * which re-exports these) load only with the Companies pages.
+ * (`apps/assistant/parts.ts`), and the rest of the call notes hooks (`call-notes.ts`, which
+ * re-exports these) load only with the pages that use them.
  *
- * Who asks: only a person who sees Companies. The menu, Home and Ctrl+K draw a project's parts only
- * for the projects this person may use (`useVisibleModules`), so for anyone else nothing here runs
- * and no call notes request is made. The counts are asked for only once the options say call notes
+ * Who asks: only a person who sees the Assistant. The menu, Home and Ctrl+K draw a project's parts
+ * only for the projects this person may use (`useVisibleModules`), so for anyone else nothing here
+ * runs and no call notes request is made. The counts are asked for only once the options say call notes
  * are on: while they are off the server answers the counts with 409 `call_notes_off`.
  */
 import { queryOptions, useQuery } from '@tanstack/react-query'

@@ -4,11 +4,12 @@
  * one sentence with what needs doing in the next 7 days.
  *
  * - **Who sees it:** only a person who sees Companies (Home draws a project's cards only for
- *   them), and only while pre-meeting forms are on. The counts answer 409 while they are off, and
- *   the card then draws nothing: Home looks as it did before.
+ *   them, and Companies brings this one until the Assistant has a Home card of its own, PLAN-V22
+ *   T2-3) and has the Meetings tick, and only while pre-meeting forms are on. The counts answer 409
+ *   while they are off, and the card then draws nothing: Home looks as it did before.
  * - **It comes late,** after the counts and then the meetings, so Home places it after every other
  *   card (`HomeCard.late`), and its coming moves none of them. It fades and rises once as it comes.
- *   Its code loads late too (`call-note-parts.ts`), so the first visit doesn't grow.
+ *   Its code loads late too (`apps/assistant/parts.ts`), so the first visit doesn't grow.
  * - **The meetings** are the rep's own, upcoming: My meetings on Meetings, which shows everyone's
  *   first (PLAN-V18 T2-3). The card's sentence counts the rep's own, so its rows are the rep's own
  *   too (TBC at Al-khair's look). With sign-in off there is no "me" and the counts cover everyone's,

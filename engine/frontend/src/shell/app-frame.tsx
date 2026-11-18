@@ -33,7 +33,7 @@ const ENTER_MS = 160
 const ENTER_FROM = 0.55
 
 /**
- * The page's own address: its first two parts, so `/companies/meetings` is one page whatever its
+ * The page's own address: its first two parts, so `/assistant/meetings` is one page whatever its
  * tab, search or filter says, and a lead or a run is a page of its own.
  */
 function pageOf(pathname: string): string {
