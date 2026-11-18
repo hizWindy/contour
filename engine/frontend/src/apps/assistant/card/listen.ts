@@ -26,7 +26,10 @@ export interface ListenOptions {
   ms?: number
 }
 
-/** Starts listening. The returned function stops it (any key, any click, the card closing). */
+/**
+ * Starts listening. The returned function stops it: any key or click (the listening is over, and
+ * `onEnd` says so), or `quietly` as the card lets go of it, when nothing more is wanted.
+ */
 export function listenForSendIt({
   onSend,
   onCancel,
@@ -34,7 +37,7 @@ export function listenForSendIt({
   env,
   makeTool,
   ms = LISTEN_MS,
-}: ListenOptions): () => void {
+}: ListenOptions): (quietly?: boolean) => void {
   let over = false
   const mic = new MicSession({
     mode: 'note',
@@ -43,13 +46,13 @@ export function listenForSendIt({
     ...(env ? { env } : {}),
     ...(makeTool === undefined ? {} : { makeTool }),
   })
-  const end = (): void => {
+  const end = (quietly = false): void => {
     if (over) return
     over = true
     window.clearTimeout(timer)
     unsubscribe()
     mic.close()
-    onEnd()
+    if (!quietly) onEnd()
   }
   const unsubscribe = mic.subscribe(() => {
     if (over) return
@@ -65,7 +68,9 @@ export function listenForSendIt({
     if (heard === 'send') onSend()
     else onCancel()
   })
-  const timer = window.setTimeout(end, ms)
+  const timer = window.setTimeout(() => {
+    end()
+  }, ms)
   mic.start()
   return end
 }

@@ -867,6 +867,41 @@ describe('Check and send (V19 T2-3 to T2-5)', () => {
   })
 })
 
+describe('Enter on the page (PLAN-V22 T3-4, choice 24)', () => {
+  it('does Check and send, Send takes the focus once it can send, and Enter again sends', async () => {
+    const server = mockServer()
+    const { user } = renderPreRead()
+    await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
+    // On the page, not in a box and not on a button.
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+    await user.keyboard('{Enter}')
+    const dialog = await screen.findByRole('alertdialog', { name: 'Send the pre-read?' })
+    const send = await within(dialog).findByRole('button', { name: 'Send to 1 person' })
+    await waitFor(() => {
+      expect(send).toHaveFocus()
+    })
+    await user.keyboard('{Enter}')
+    await waitFor(() => {
+      expect(posts(server, SEND)).toHaveLength(1)
+    })
+  })
+
+  it('in a box Enter adds a line, and on a button it presses that button: no dialog', async () => {
+    mockServer()
+    const { user } = renderPreRead()
+    const box = await screen.findByRole('textbox', { name: /Ideal next step/ })
+    await user.click(box)
+    await user.keyboard('{End}{Enter}')
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    screen.getByRole('button', { name: 'Check and send' }).focus()
+    // The button's own press: the dialog opens as it always did, with Cancel first.
+    await user.keyboard('{Enter}')
+    const dialog = await screen.findByRole('alertdialog', { name: 'Send the pre-read?' })
+    await within(dialog).findByRole('region', { name: 'The email as it will arrive' })
+    expect(within(dialog).getByRole('button', { name: /^Send/ })).not.toHaveFocus()
+  })
+})
+
 describe('on a phone', () => {
   it('keeps scroll padding above Check and send, and clears it once sent', async () => {
     asPhone()

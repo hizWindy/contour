@@ -112,7 +112,16 @@ export interface SendDialogProps {
   onOpenChange: (open: boolean) => void
   /** The pre-read went: the page shows who got it. */
   onSent: () => void
+  /**
+   * Opened by Enter on the page (PLAN-V22 T3-4, choice 24): Send takes the focus once it can send,
+   * and not before half a second, so Enter again sends and a held Enter never does. Until then the
+   * dialog itself has the focus, where Enter does nothing.
+   */
+  sendFirst?: boolean
 }
+
+/** How long after opening Send may take the focus (choice 19's half second). */
+const SEND_FIRST_MS = 500
 
 /** The still shape of the task, email and people while the preview comes. */
 function PreviewPending({ label }: { label: string }) {
@@ -444,7 +453,13 @@ function Problem({ error }: { error: unknown }) {
   )
 }
 
-export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps) {
+export function SendDialog({
+  form,
+  open,
+  onOpenChange,
+  onSent,
+  sendFirst = false,
+}: SendDialogProps) {
   const team = useTeam({ enabled: open })
   const preview = useMeetingFormPreview(form.id)
   const send = useSendMeetingForm(form.id)
@@ -614,6 +629,32 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
   const locked = send.isPending
   const busy = preview.isPending || locked || saving
   const canSend = shown !== null && !busy && block === null
+
+  // Enter on the page opened it: Send takes the focus once it can send, half a second on at the
+  // earliest, unless the rep has moved the focus meanwhile (PLAN-V22 T3-4).
+  const sendButton = useRef<HTMLButtonElement>(null)
+  const [armed, setArmed] = useState(false)
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    setArmed(false)
+  }
+  useEffect(() => {
+    if (!open || !sendFirst) return undefined
+    const timer = window.setTimeout(() => {
+      setArmed(true)
+    }, SEND_FIRST_MS)
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [open, sendFirst])
+  useEffect(() => {
+    if (!open || !sendFirst || !armed || !canSend) return
+    const active = document.activeElement
+    if (active === null || active === document.body || active.matches('[role=alertdialog]')) {
+      sendButton.current?.focus()
+    }
+  }, [open, sendFirst, armed, canSend])
 
   const toggleOwner = (ownerId: string, nextTicked: boolean): void => {
     if (locked || sentByOwner.has(ownerId)) return
@@ -922,6 +963,12 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
         onEscapeKeyDown={(event) => {
           if (locked) event.preventDefault()
         }}
+        onOpenAutoFocus={(event) => {
+          if (!sendFirst) return
+          // The dialog itself, where Enter does nothing, until Send can take the focus.
+          event.preventDefault()
+          if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus()
+        }}
         onCloseAutoFocus={(event) => {
           if (!sent.current) return
           const note = document.querySelector<HTMLElement>('[data-slot="sent-note"]')
@@ -949,6 +996,7 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
         <AlertDialogFooter className="shrink-0">
           <AlertDialogCancel disabled={locked}>{CANCEL}</AlertDialogCancel>
           <Button
+            ref={sendButton}
             type="button"
             disabled={!canSend}
             aria-describedby={shown !== null && block !== null ? blockId : undefined}

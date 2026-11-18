@@ -271,14 +271,17 @@ function DraftCard({
 
   const [draft, setDraft] = useState<CardDraft>(first)
   const [inBox, setInBox] = useState(false)
-  // After a spoken command, the card listens for "send it" as it opens (choice 23).
+  // After a spoken command, the card listens for "send it" as it opens (choice 23), once the voice
+  // tool setting is known and it is the speech service.
   const spoken = request.kind === 'command' && request.source === 'mic'
-  const [listening, setListening] = useState(spoken && tool === 'browser_service')
+  const canListen = spoken && !options.isPending && tool === 'browser_service'
+  const [listenOver, setListenOver] = useState(false)
+  const listening = canListen && !listenOver
   const [voice, setVoice] = useState<BarSession | null>(null)
   const [saveProblem, setSaveProblem] = useState<string | null>(null)
   const armed = useRef(false)
   const closing = useRef<'send' | 'cancel' | null>(null)
-  const stopListen = useRef<(() => void) | null>(null)
+  const stopListen = useRef<((quietly?: boolean) => void) | null>(null)
   const card = useRef<HTMLDivElement>(null)
   const sendButton = useRef<HTMLButtonElement>(null)
   const changeLine = useRef<HTMLInputElement>(null)
@@ -479,11 +482,10 @@ function DraftCard({
     cancelRef.current = cancel
   })
 
-  // The listening for "send it", once, as the card opens after a spoken command.
-  const startedListening = useRef(listening)
+  // The listening for "send it", as the card opens after a spoken command, until it is over. The
+  // card letting go (or React trying an effect twice while developing) stops it quietly.
   useEffect(() => {
-    if (!startedListening.current) return undefined
-    startedListening.current = false
+    if (!listening) return undefined
     const stop = listenForSendIt({
       onSend: () => {
         trySendRef.current('voice')
@@ -492,15 +494,17 @@ function DraftCard({
         cancelRef.current()
       },
       onEnd: () => {
-        setListening(false)
+        setListenOver(true)
       },
       env,
       makeTool,
       ms: t.listen,
     })
     stopListen.current = stop
-    return stop
-  }, [env, makeTool, t.listen])
+    return () => {
+      stop(true)
+    }
+  }, [listening, env, makeTool, t.listen])
 
   // V's session goes with the card.
   useEffect(
