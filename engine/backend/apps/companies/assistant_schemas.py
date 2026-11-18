@@ -1,5 +1,5 @@
-"""What the Assistant's command step takes and gives (PLAN-V22 T1-1 and T1-2, the contract's part
-1). The website's types come from these.
+"""What the Assistant takes and gives (PLAN-V22): the command step (T1-1 and T1-2, the contract's
+part 1) and Today (T1-3, part 2). The website's types come from these.
 
 A command is one thing a rep says or types. The server turns it into one action and finds the
 company, the person, the meeting and the teammates in our HubSpot copy. Each thing it looks for
@@ -205,4 +205,111 @@ class AssistantCommand(Out):
     change: AssistantChange | None
     unsure: str | None = Field(
         description="A short line when something wasn't clear or wasn't found, or none"
+    )
+
+
+# --- Today (T1-3, the contract's part 2) ---------------------------------------------------------
+
+# The parts Today shows this person, the most urgent first (choice 6). Tasks and deals: anyone with
+# the Assistant. Meetings: the Meetings tick, while pre-meeting forms are on. Calls: the Call logs
+# tick, while call notes are on.
+TodayPart = Literal["tasks", "meetings", "calls", "deals"]
+# ok: read (or kept from a read under 5 minutes old). no_owner: no HubSpot link (or nobody is
+# signed in). no_access: the HubSpot key can't read tasks. off: HubSpot isn't connected. failed:
+# HubSpot didn't answer, and no earlier read is kept.
+TasksState = Literal["ok", "no_owner", "no_access", "off", "failed"]
+TaskGroup = Literal["overdue", "today", "soon"]
+TaskPriorityName = Literal["low", "medium", "high"]
+MeetingDay = Literal["today", "tomorrow"]
+DealReason = Literal["close_date_passed", "quiet"]
+
+
+class TodayCompany(Out):
+    key: str = Field(description="The company's key: its HubSpot id", examples=["201"])
+    name: str
+
+
+class TodayTask(Out):
+    id: str = Field(description="HubSpot's task id")
+    subject: str = Field(
+        description="One line, with email addresses and phone numbers left out", max_length=300
+    )
+    kind: NoteTaskKind
+    priority: TaskPriorityName | None
+    due: date = Field(description="The day it is due, Melbourne time")
+    due_at: datetime = Field(description="HubSpot's due time")
+    overdue: bool = Field(description="Due before today, Melbourne time")
+    group: TaskGroup = Field(description="overdue, today, or soon (the next 7 days)")
+    company: TodayCompany | None = Field(
+        description="Its company, when it is linked to one in our HubSpot copy"
+    )
+    hubspot_url: str | None = Field(description="The task in HubSpot, when HubSpot gave it")
+
+
+class TodayMeeting(Out):
+    id: str | None = Field(
+        description="HubSpot's meeting id. None for a meeting typed in for a pre-read"
+    )
+    title: str
+    starts_at: datetime
+    ends_at: datetime | None
+    day: MeetingDay = Field(description="today or tomorrow, Melbourne time")
+    company: TodayCompany
+    form: MeetingFormState | None = Field(description="Its pre-read, if it has one")
+    hubspot_url: str | None
+
+
+class TodayCalls(Out):
+    to_confirm: int = Field(description="My call notes waiting for me to confirm them")
+    needs_look: int = Field(description="My call notes that failed, were partly saved, or unsure")
+
+
+class TodayDeal(Out):
+    id: str = Field(description="HubSpot's deal id")
+    name: str
+    company: TodayCompany
+    stage: str | None = Field(description="HubSpot's stage, like Qualified Deal")
+    close_date: date | None
+    last_contact: date | None = Field(
+        description="The last time anyone talked to the company: the newest of its last activity "
+        "and last contacted, and the deal's last contacted. None when there is none"
+    )
+    why: str = Field(
+        description="Why it needs a nudge, like 'Close date passed, 12 Nov' or 'No contact for "
+        "21 days'"
+    )
+    reasons: list[DealReason] = Field(description="close_date_passed, quiet, or both")
+    hubspot_url: str | None
+
+
+class Today(Out):
+    """The Assistant's first page: my day, the most urgent first. Free: no Claude request."""
+
+    parts: list[TodayPart] = Field(
+        description="The parts this person sees, in order. A part left out also comes back empty"
+    )
+    tasks: list[TodayTask] = Field(
+        description="My open HubSpot tasks: overdue first, then today's, then the next 7 days', "
+        "each group soonest due first"
+    )
+    tasks_state: TasksState
+    tasks_sentence: str | None = Field(
+        description="Plain words when the tasks can't show, or show from an earlier read"
+    )
+    tasks_more: int = Field(
+        description="Older overdue tasks HubSpot has beyond the ones listed (100 at most are read)"
+    )
+    meetings: list[TodayMeeting] = Field(
+        description="My meetings today and tomorrow, soonest first"
+    )
+    calls: TodayCalls
+    deals: list[TodayDeal] = Field(
+        description="My open deals that need a nudge: close date passed first, then the longest "
+        "without contact"
+    )
+    deals_more: int = Field(description="More such deals beyond the ones listed (50 at most)")
+    quiet_days: int = Field(description="The days without contact that make a deal quiet")
+    checked_at: datetime = Field(
+        description="When the tasks shown were read from HubSpot. When none could be read: when "
+        "this answer was made"
     )

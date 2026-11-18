@@ -108,6 +108,8 @@ EDITABLE_KEYS: Final[list[str]] = [
     "call_notes_ai_enabled",
     "meeting_forms_enabled",
     "voice_tool",  # PLAN-V18
+    # The Assistant's Today (PLAN-V22 T1-3)
+    "today_quiet_days",
 ]
 
 # Which env-only ceiling caps each editable key.
@@ -523,6 +525,11 @@ class Settings(BaseSettings):
     # Who may get a pre-read: an exact domain match, never a sub-domain (TBC with Levi). A
     # comma-separated list in engine/.env. Env-only.
     internal_email_domains: Annotated[list[str], NoDecode] = ["contourinteriors.com.au"]
+
+    # --- The Assistant (PLAN-V22) ---------------------------------------------------------
+    # Today lists an open deal of mine whose company nobody has talked to for this many days
+    # (TBC with Levi, W3).
+    today_quiet_days: int = Field(14, ge=1, le=365)
 
     # --- Validators --------------------------------------------------------------------
 

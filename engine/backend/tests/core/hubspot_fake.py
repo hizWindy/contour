@@ -23,6 +23,8 @@ touches no real data. It follows the `HubSpot` protocol (core/hubspot/client.py)
   sorts by `sort_by` when it names a field other than `hs_lastmodifieddate` (records without
   it last). Without the meetings scope (`scopes.discard(SCOPE_FOR["meetings"])`) a meetings
   search refuses, like HubSpot's 403.
+- Tasks (PLAN-V22 T1-3): `add_task` makes one with its companies. A search also takes EQ, NEQ,
+  IN and HAS_PROPERTY on any field, and `descending` sorts latest first.
 """
 
 from collections.abc import Mapping, Sequence
@@ -259,6 +261,14 @@ class FakeHubSpot:
         self.meetings[meeting_id] = record
         return record
 
+    def add_task(
+        self, task_id: str, *, companies: Sequence[str] = (), **properties: str | None
+    ) -> FakeRecord:
+        """A task (PLAN-V22 T1-3) linked to `companies`, in that order (the first primary)."""
+        record = FakeRecord(task_id, dict(properties), companies=tuple(companies))
+        self.tasks[task_id] = record
+        return record
+
     def add_owner(
         self,
         owner_id: str,
@@ -358,6 +368,7 @@ class FakeHubSpot:
         filters: Sequence[Filter],
         properties: Sequence[str],
         sort_by: str | None = None,
+        descending: bool = False,
         after: str | None = None,
         limit: int = PAGE_SIZE,
     ) -> Page:
@@ -367,9 +378,9 @@ class FakeHubSpot:
             record.hidden_for = max(0, record.hidden_for - 1)
         for item in filters:
             records = [r for r in records if _passes(r, item)]
-        records.sort(key=lambda r: (r.updated_at, int(r.id)))
+        records.sort(key=lambda r: (r.updated_at, int(r.id)), reverse=descending)
         if sort_by and sort_by != "hs_lastmodifieddate":
-            records.sort(key=lambda r: _sort_key(r.properties.get(sort_by)))
+            records.sort(key=lambda r: _sort_key(r.properties.get(sort_by), descending))
         return self._page(records, properties, after, links=False)
 
     async def get_object(
@@ -541,9 +552,13 @@ def _in_range(moment: int | None, item: Filter) -> bool:
     }[item.operator]
 
 
-def _sort_key(value: str | None) -> tuple[bool, int]:
+def _sort_key(value: str | None, descending: bool = False) -> tuple[bool, int]:
+    """Soonest first, or latest first when `descending`. A record without the field goes last
+    either way (HubSpot's own order for those is TBC)."""
     moment = _ms(value)
-    return (moment is None, moment or 0)
+    if moment is None:
+        return (True, 0)
+    return (False, -moment if descending else moment)
 
 
 def _passes(record: FakeRecord, item: Filter) -> bool:
@@ -556,6 +571,8 @@ def _passes(record: FakeRecord, item: Filter) -> bool:
         return _in_range(_ms(value), item)
     if item.operator == "EQ":
         return (value or "").casefold() == (item.value or "").casefold()
+    if item.operator == "NEQ":  # a record without the field counts as not equal (TBC)
+        return (value or "").casefold() != (item.value or "").casefold()
     if item.operator == "IN":
         return (value or "") in item.values
     if item.operator == "HAS_PROPERTY":

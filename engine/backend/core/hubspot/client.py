@@ -317,9 +317,13 @@ class HubSpot(Protocol):
         filters: Sequence[Filter],
         properties: Sequence[str],
         sort_by: str | None = None,
+        descending: bool = False,
         after: str | None = None,
         limit: int = PAGE_SIZE,
-    ) -> Page: ...
+    ) -> Page:
+        """Records that match every filter, a page at a time, sorted by `sort_by` (newest or
+        largest first with `descending`, PLAN-V22 T1-3)."""
+        ...
 
     async def get_object(
         self, object_type: ObjectType, object_id: str, *, properties: Sequence[str]
@@ -853,6 +857,7 @@ class HttpHubSpot:
         filters: Sequence[Filter],
         properties: Sequence[str],
         sort_by: str | None = None,
+        descending: bool = False,
         after: str | None = None,
         limit: int = PAGE_SIZE,
     ) -> Page:
@@ -863,7 +868,8 @@ class HttpHubSpot:
         if filters:
             body["filterGroups"] = [{"filters": [_filter(item) for item in filters]}]
         if sort_by:
-            body["sorts"] = [{"propertyName": sort_by, "direction": "ASCENDING"}]
+            direction = "DESCENDING" if descending else "ASCENDING"
+            body["sorts"] = [{"propertyName": sort_by, "direction": direction}]
         if after:
             body["after"] = after
         path = self._path("crm/objects", f"/{object_type}/search")

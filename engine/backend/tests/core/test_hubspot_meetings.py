@@ -267,6 +267,7 @@ class Recording(FakeHubSpot):
         filters: Sequence[Filter],
         properties: Sequence[str],
         sort_by: str | None = None,
+        descending: bool = False,
         after: str | None = None,
         limit: int = PAGE_SIZE,
     ) -> Page:
@@ -276,6 +277,7 @@ class Recording(FakeHubSpot):
             filters=filters,
             properties=properties,
             sort_by=sort_by,
+            descending=descending,
             after=after,
             limit=limit,
         )
@@ -668,6 +670,7 @@ class NeverAnswers(FakeHubSpot):
         filters: Sequence[Filter],
         properties: Sequence[str],
         sort_by: str | None = None,
+        descending: bool = False,
         after: str | None = None,
         limit: int = PAGE_SIZE,
     ) -> Page:

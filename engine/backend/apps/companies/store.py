@@ -666,3 +666,81 @@ async def search(
         ],
         companies=hits,
     )
+
+
+# --- Today's deals (PLAN-V22 T1-3) ---------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class DealToNudge:
+    """An open deal that needs a nudge, with its company and when anyone last talked to it."""
+
+    deal_id: str
+    name: str
+    stage: str | None
+    close_date: date | None
+    hubspot_url: str | None
+    company_key: str
+    company_name: str
+    last_contact: date | None
+
+
+async def deals_to_nudge(
+    session: AsyncSession,
+    owner_id: str | None,
+    *,
+    on: date,
+    quiet_days: int,
+    limit: int,
+) -> tuple[list[DealToNudge], int]:
+    """An owner's open deals whose close date is before `on`, or whose company nobody has talked
+    to for `quiet_days` days or more (or ever): close date passed first, the longest passed
+    first, then the longest without contact. With `owner_id` None, everyone's (sign-in off).
+    The last contact is the newest of the company's last activity (as the Companies list has
+    it), its last contacted, and the deal's own last contacted. Also how many there are in all."""
+    deal, company = HubSpotDeal, HubSpotCompany
+    stage = func.lower(func.trim(func.coalesce(deal.stage, "")))
+    last_contact = func.greatest(_last_activity(), deal.last_contacted)
+    passed = deal.close_date < on
+    quiet = or_(last_contact.is_(None), last_contact <= on - timedelta(days=quiet_days))
+    found = (
+        select(
+            deal.hubspot_deal_id,
+            deal.name,
+            deal.stage,
+            deal.close_date,
+            deal.hubspot_url,
+            company.hubspot_id,
+            company.name.label("company_name"),
+            last_contact.label("last_contact"),
+        )
+        .select_from(deal)
+        .join(company, company.hubspot_id == deal.hubspot_company_id)
+        .where(stage.not_in(sorted(CLOSED_STAGES)), or_(passed, quiet))
+    )
+    if owner_id is not None:
+        found = found.where(deal.owner_id == owner_id)
+    total = await session.scalar(select(func.count()).select_from(found.subquery()))
+    rows = await session.execute(
+        found.order_by(
+            case((passed, 0), else_=1),
+            case((passed, deal.close_date), else_=None).asc().nulls_last(),
+            last_contact.asc().nulls_first(),
+            deal.hubspot_deal_id,
+        ).limit(limit)
+    )
+    deals = [
+        DealToNudge(
+            deal_id=row.hubspot_deal_id,
+            name=row.name,
+            stage=row.stage,
+            close_date=row.close_date,
+            hubspot_url=row.hubspot_url,
+            company_key=row.hubspot_id,
+            company_name=row.company_name,
+            last_contact=row.last_contact,
+        )
+        for row in rows
+        if stage_kind(row.stage) == "open"
+    ]
+    return deals, total or 0

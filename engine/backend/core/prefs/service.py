@@ -294,6 +294,11 @@ TEXT: dict[str, tuple[str, str]] = {
         "Shows Meetings and the pre-read: drafted from HubSpot before a client meeting, checked "
         "by the rep, and emailed to the Contour team. About US$0.03 a draft (TBC).",
     ),
+    "today_quiet_days": (
+        "Days before a deal is quiet",
+        "Today lists your open deal when nobody has talked to its company for this many days. "
+        "TBC with Levi.",
+    ),
     "memory_fresh_days": (
         "Days a note stays fresh",
         "Notes and leads younger than this are reused instead of searched again.",

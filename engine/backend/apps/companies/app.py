@@ -25,11 +25,13 @@ HUBSPOT_NEEDS = HubSpotNeeds(
         "crm.objects.deals.read",
         "crm.objects.owners.read",
         "crm.objects.contacts.read",
+        "crm.objects.tasks.read",  # the rep's open tasks on Today (PLAN-V22 T1-3)
     ),
     write=("crm.objects.companies.write", ACTIVITY_WRITE_SCOPE),
     uses=(
         "Reads companies, offices, deals and owners for the list and the company panel, and "
-        "people and their logged calls for the People list, Call history and call prep. Writes "
+        "people and their logged calls for the People list, Call history and call prep, and a "
+        "rep's open tasks for Today. Writes "
         "the calls, tasks and field changes a rep confirms from call notes, and a pre-read's "
         "copy as a note."
     ),
