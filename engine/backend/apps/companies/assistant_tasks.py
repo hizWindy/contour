@@ -11,7 +11,8 @@ routes are in api_assistant.py.
   HubSpot owner). The task is due at 9:00 am on its day, Melbourne time, as a follow-up is. Its
   words are sent with email addresses and phone numbers blanked, as a call note is saved.
 - **Done and reopen** (core's `tasks.set_status`): the task is read again and must be mine (403
-  `not_your_task` otherwise, and nothing is written). Each is a row in `core.hubspot_writes`.
+  `not_your_task` otherwise, and nothing is written; 409 `no_hubspot_link` when my account has no
+  HubSpot owner linked). Each is a row in `core.hubspot_writes`.
   Reopen gives back the status the task had before its last Done here, else Not started.
 - **Writing** is behind `hubspot_write_enabled` and the key's write access (409
   `hubspot_writing_off`, in the task's own words: the call notes' code says calls wait).
@@ -153,16 +154,19 @@ def task_not_found() -> Problem:
     )
 
 
-def not_your_task(asker: str | None = None) -> Problem:
-    """The task isn't mine (403). With `asker`, my account has no HubSpot link at all."""
-    if asker is not None:
-        return Problem(
-            403,
-            "Not your task",
-            f"Your account isn't linked to HubSpot, so your tasks can't be told apart. Ask "
-            f"{asker} to link it.",
-            code="not_your_task",
-        )
+def no_hubspot_link(asker: str) -> Problem:
+    """My account has no HubSpot owner linked, so no task can be told to be mine (409)."""
+    return Problem(
+        409,
+        "Your account isn't linked to HubSpot",
+        f"Your account isn't linked to HubSpot, so your tasks can't be told apart. Ask {asker} "
+        "to link it.",
+        code="no_hubspot_link",
+    )
+
+
+def not_your_task() -> Problem:
+    """The task isn't mine (403)."""
     return Problem(
         403,
         "Not your task",
@@ -368,11 +372,11 @@ async def change_status(
 ) -> None:
     """Ticks my task done (`done`), or opens it again, once HubSpot says it is mine."""
     what = "the task wasn't changed"
-    me = await my_owner(session, auth, source)
-    if me is None:
-        raise not_your_task(await users.platform_admin_name(session) or PLATFORM_ADMIN)
     if not sending_state(app, settings).ready:
         raise writing_off(what)
+    me = await my_owner(session, auth, source)
+    if me is None:
+        raise no_hubspot_link(await users.platform_admin_name(session) or PLATFORM_ADMIN)
     reopen_to = OPEN
     if not done:
         reopen_to = await core_tasks.status_before_done(session, APP, task_id) or OPEN

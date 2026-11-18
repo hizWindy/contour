@@ -233,7 +233,7 @@ async def test_another_persons_task_gives_403_and_changes_nothing(
     assert (missing.status_code, missing.json()["code"]) == (404, "task_not_found")
     async with signed_in(world, "kim", owner=None) as (client, _):
         unlinked = await client.post(f"{TASKS}/601/done")
-    assert (unlinked.status_code, unlinked.json()["code"]) == (403, "not_your_task")
+    assert (unlinked.status_code, unlinked.json()["code"]) == (409, "no_hubspot_link")
     assert unlinked.json()["detail"] == (
         "Your account isn't linked to HubSpot, so your tasks can't be told apart. Ask Al Khair "
         "to link it."

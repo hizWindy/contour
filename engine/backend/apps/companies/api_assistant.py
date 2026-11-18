@@ -260,10 +260,11 @@ async def add_assistant_task(
     summary="Tick a task done",
     description=(
         "Ticks my HubSpot task done at once (choice 7: Undo is reopen). HubSpot is read first: "
-        "a task that isn't mine is never changed (403 `not_your_task`, also when my account has "
-        "no HubSpot link). A task done already sends nothing. Each change is a row in HubSpot's "
-        "write log. Today shows it at once. 404 `task_not_found`. 409 `hubspot_writing_off` "
-        "while HubSpot can't be written. 502 `task_not_changed` when HubSpot didn't take it "
+        "a task that isn't mine is never changed (403 `not_your_task`). A task done already "
+        "sends nothing. Each change is a row in HubSpot's write log. Today shows it at once. 404 "
+        "`task_not_found`. 409 `hubspot_writing_off` while HubSpot can't be written, "
+        "`no_hubspot_link` when my account has no HubSpot owner linked. 502 `task_not_changed` "
+        "when HubSpot didn't take it "
         "(trying again is safe). 503 `hubspot_unavailable`. A Viewer gets 403 "
         "`viewer_read_only`."
     ),
@@ -302,8 +303,8 @@ async def tick_assistant_task_done(
         "its last Done here, like In progress, else Not started. HubSpot is read first: a task "
         "that isn't mine is never changed (403 `not_your_task`). A task open already sends "
         "nothing. Each change is a row in HubSpot's write log. 404 `task_not_found`. 409 "
-        "`hubspot_writing_off`. 502 `task_not_changed`. 503 `hubspot_unavailable`. A Viewer "
-        "gets 403 `viewer_read_only`."
+        "`hubspot_writing_off`, `no_hubspot_link`. 502 `task_not_changed`. 503 "
+        "`hubspot_unavailable`. A Viewer gets 403 `viewer_read_only`."
     ),
 )
 async def reopen_assistant_task(
