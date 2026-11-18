@@ -5,8 +5,8 @@ This plan builds what Levi asked for on 18 Nov: fewer clicks, and voice for the 
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
-- **Last updated:** 19 Nov 2026 (written; nothing built).
-- **Progress:** Before the build: 0 of 2. Part 1: 0 of 7. Part 2: 0 of 4. Part 3: 0 of 6. M1 to M4: 0 of 4.
+- **Last updated:** 19 Nov 2026 (S0 done; the build started on `implement v22`).
+- **Progress:** Before the build: 1 of 2 (S1 waits for Al-khair at the keyboard). Part 1: 0 of 7. Part 2: 0 of 4. Part 3: 0 of 6. M1 to M4: 0 of 4.
 - **Sources:**
   - the meeting with Levi on 18 Nov (Gemini's notes in `minutes of meeting/`, which git ignores);
   - Al-khair's answers in chat (19 Nov);
@@ -232,7 +232,7 @@ One session builds every step, in order: S0, Part 1, Part 2, then Part 3. S1 can
 
 ## Before the build starts
 
-- [ ] **S0. The branch, the copy and the live switches.**
+- [x] **S0. The branch, the copy and the live switches.** Done 19 Nov 2026 (`f6ac4f0`).
   - Make `plan-v22` from `master` in the worktree `../contour-v22`. Don't switch the main folder's branch.
   - Its first commit holds this plan and its line in `CLAUDE.md`. Both were written in the main folder on 19 Nov and not committed. Copy them in. Then remove the main folder's copies, so `master` can move later: delete the untracked `plan/PLAN-V22.md`, and put `CLAUDE.md` back with `git checkout -- CLAUDE.md` only if it has no other uncommitted edit (if it has, leave it and say so in the Log).
   - In `plan/PLAN-V18.md`, add one line under T3-3 and one under T3-5: "Moved to PLAN-V22 (S1 and T3-2)."
@@ -240,7 +240,7 @@ One session builds every step, in order: S0, Part 1, Part 2, then Part 3. S1 can
   - Check `git log` and the worktrees for open work on the same files (PLAN-V17's and V19's open steps).
   - Ask Al-khair, or look at Admin's Settings and HubSpot pages on the live site (looking only). Write in the Log: whether call notes, the AI sort, meeting forms and HubSpot writing are on; `voice_tool`; whether the key can read tasks; and whether email is set up.
   - **Done when:** `git branch --list plan-v22` shows it, it holds `plan/PLAN-V22.md`, the fast backend tests pass on it, and the Log has the live switches.
-- [ ] **S1. The voice test** (moved from PLAN-V18 T3-3). Needs Al-khair at the keyboard, about 20 minutes. Free.
+- [ ] **S1. The voice test** (moved from PLAN-V18 T3-3). Needs Al-khair at the keyboard, about 20 minutes. Free. Waits for Al-khair at the keyboard. Until then, choice 11 stands: the speech service.
   - Read the current Web Speech API docs first. Don't build from memory.
   - A throwaway test page, never merged: the speech service's live words, then `name-fix.ts` and the company matching against our copy. No Claude.
   - Al-khair says 10 commands with real Australian company and people names, in Chrome and in Edge, and on a phone if one is at hand.
@@ -465,3 +465,12 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
 ## Log
 
 - 19 Nov 2026: written from the meeting with Levi on 18 Nov and Al-khair's answers in chat on 19 Nov. Nothing built.
+- 19 Nov 2026: Al-khair said `implement v22` and asked for the whole plan, stopping to save to the AI Brain if usage nears its end. The session leads and gives each part to its agent (`backend-agent` for Part 1, `frontend-agent` for Parts 2 and 3), as "Who builds it" says. Steps that need Al-khair (S1, each look, M2, M3) are marked waiting, and the work carries on around them. No merge, push or deploy without his word.
+- 19 Nov 2026, S0:
+  - The worktree `../contour-v22` on `plan-v22` (from `master` `8a28be1`), with its own `.venv`, `node_modules`, `COMPANIES.xlsx` and an `engine/.env` that holds the `POSTGRES_*` lines only. The first commit (`f6ac4f0`) holds this plan, its `CLAUDE.md` line and PLAN-V18's two "Moved to PLAN-V22" lines. The main folder's `CLAUDE.md` had only this plan's line, so it was put back with `git checkout`, and its untracked `plan/PLAN-V22.md` was deleted. Its `.claude/launch.json` edit isn't this plan's, so it was left.
+  - The database `leadfinder_v22`: a `TEMPLATE` copy of `leadfinder`, migrated from `0024` to `0025_v19_roles_access`.
+  - Open work on the same files: none. The branches not in `master` are old (`agents-design`, `plan-v13*`, backups). The other worktrees have no code edits (only `contour-v19-imp2` has an uncommitted `PLAN-V19.md`).
+  - No migration is planned: `today_quiet_days` goes in the settings table, and Today's copy, the 20 a minute limit and the 30 a day email limit are kept in memory (they start again when the backend restarts, **TBC** if that is enough). Drafts stay in the browser.
+  - The fast backend tests: 3,495 passed, 28 skipped.
+  - **The live switches** (read on the live site through Chrome, GET only, 19 Nov): call notes **on**, the AI sort (`call_notes_ai_enabled`) **on**, meeting forms **on**, HubSpot writing **on**, `voice_tool` = `browser_service` with `browser_speech_ok` **on** (so M3's first step is already done live), the key **can read tasks** (`crm.objects.tasks.read`: yes), and email **off** (no sender set up, so a team email gives 409 `email_not_set_up` live until Resend is set up).
+  - So the AI sort is already on live, though W1 (Levi's written OK) is still open in this plan. Not confirmed yet whether he gave it. The Assistant follows the same switch (choice 17), so V reads commands live as soon as this ships.
