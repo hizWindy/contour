@@ -15,7 +15,8 @@
  * - **Not a dialog that holds the page:** the page behind still works, so a rep can read it while
  *   speaking. The bar is a dialog only for the keys: other keys of the page wait while it is open.
  *
- * Its code loads late (`key.tsx`), so the first visit doesn't carry it.
+ * Its code loads late (`key.tsx`), so the first visit doesn't carry it. The review card a command
+ * opens (`card/`) sits beside it, and its own code loads later still.
  */
 import { CircleAlert, RotateCcw } from 'lucide-react'
 import { AnimatePresence, m } from 'motion/react'
@@ -53,6 +54,8 @@ import { Input } from '@/components/ui/input'
 import { Kbd } from '@/components/ui/kbd'
 import { isTyping } from '@/lib/is-typing'
 import { useBarRoom } from '@/lib/use-bar-room'
+import { CardHost } from '../card/host'
+import { preloadCard } from '../card/load'
 import { BarSession, MAX_CHARS, type BarProblem, type BarSnapshot, type Times } from './bar-session'
 import { handOver } from './hand-over'
 import { isPlainV, somethingElseOpen, VOICE_BAR } from './keys'
@@ -255,6 +258,8 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   })
   useEffect(() => {
     if (!open || !session || !toolKnown) return undefined
+    // The review card's code, while the rep speaks: it is there by the time the answer is.
+    preloadCard()
     begin(session)
     return () => {
       session.dispose()
@@ -334,186 +339,190 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   }
 
   return (
-    <AnimatePresence>
-      {open ? (
-        <m.div
-          key="voice-bar"
-          ref={setBar}
-          role="dialog"
-          aria-label={VOICE_BAR_NAME}
-          data-slot="voice-bar"
-          data-phase={phase}
-          tabIndex={-1}
-          className="fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 mx-auto flex w-[min(40rem,calc(100vw-2rem))] flex-col gap-3 rounded-lg border bg-popover p-4 text-ui text-popover-foreground shadow-float outline-none"
-          initial={still ? false : { opacity: 0, y: RISE }}
-          animate={{ opacity: 1, y: 0, transition: still ? INSTANT : springs.smooth }}
-          exit={{ opacity: 0, y: RISE / 2, transition: still ? INSTANT : springs.exit }}
-        >
-          <p role="status" className="sr-only">
-            {statusOf(snapshot)}
-          </p>
-
-          <div className="flex min-h-6 items-center gap-3">
-            <p
-              data-slot="voice-title"
-              className="min-w-0 flex-1 truncate font-semibold text-foreground"
-            >
-              {title}
+    <>
+      <AnimatePresence>
+        {open ? (
+          <m.div
+            key="voice-bar"
+            ref={setBar}
+            role="dialog"
+            aria-label={VOICE_BAR_NAME}
+            data-slot="voice-bar"
+            data-phase={phase}
+            tabIndex={-1}
+            className="fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 mx-auto flex w-[min(40rem,calc(100vw-2rem))] flex-col gap-3 rounded-lg border bg-popover p-4 text-ui text-popover-foreground shadow-float outline-none"
+            initial={still ? false : { opacity: 0, y: RISE }}
+            animate={{ opacity: 1, y: 0, transition: still ? INSTANT : springs.smooth }}
+            exit={{ opacity: 0, y: RISE / 2, transition: still ? INSTANT : springs.exit }}
+          >
+            <p role="status" className="sr-only">
+              {statusOf(snapshot)}
             </p>
-            {listening ? (
-              // With reduced motion: one still bar beside the word above.
-              <FrequencyBars source={snapshot.mic?.bars ?? null} label="" className="h-6" />
-            ) : null}
-          </div>
 
-          {phase === 'typing' ? (
-            <form
-              className="flex items-center gap-2"
-              onSubmit={(event) => {
-                event.preventDefault()
-                session?.sendTyped()
-              }}
-            >
-              <Input
-                ref={line}
-                value={snapshot.draft}
-                maxLength={MAX_CHARS}
-                aria-label={TYPE_WHAT}
-                placeholder={TYPE_WHAT}
-                autoComplete="off"
-                onChange={(event) => {
-                  session?.setDraft(event.target.value)
-                }}
-              />
-              <Button
-                type="submit"
-                size="sm"
-                className="touch:h-11"
-                aria-keyshortcuts="Enter"
-                disabled={snapshot.draft.trim() === ''}
-              >
-                {SEND}
-                <KeyHint>Enter</KeyHint>
-              </Button>
-            </form>
-          ) : phase === 'answer' ? (
-            <div data-slot="voice-answer" className="flex flex-col gap-1">
-              <p className="text-body text-pretty text-foreground">{snapshot.answer?.line}</p>
-              {snapshot.answer?.unsure ? (
-                <p className="text-pretty text-muted-foreground">{snapshot.answer.unsure}</p>
-              ) : null}
-            </div>
-          ) : (
-            <div
-              data-slot="voice-words"
-              className="max-h-32 min-h-12 overflow-y-auto text-body text-foreground"
-            >
-              {listening ? (
-                <LiveWords
-                  chunks={snapshot.mic?.chunks ?? []}
-                  hearing={snapshot.mic?.hearing ?? ''}
-                />
-              ) : snapshot.words ? (
-                <p className="text-pretty">{snapshot.words}</p>
-              ) : null}
-            </div>
-          )}
-
-          {fixes.length > 0 && phase !== 'answer' ? (
-            <p data-slot="voice-fixes" className="text-caption text-muted-foreground">
-              {fixedWords(fixes)}
-            </p>
-          ) : null}
-
-          {problem ? (
-            isQuiet(problem) ? (
-              <p data-slot="voice-problem" className="text-pretty text-muted-foreground">
-                {problemLine(problem)}
-              </p>
-            ) : (
+            <div className="flex min-h-6 items-center gap-3">
               <p
-                role="alert"
-                data-slot="voice-problem"
-                className="flex items-start gap-2 text-pretty text-destructive-ink"
+                data-slot="voice-title"
+                className="min-w-0 flex-1 truncate font-semibold text-foreground"
               >
-                <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                <span>{problemLine(problem)}</span>
+                {title}
               </p>
-            )
-          ) : null}
+              {listening ? (
+                // With reduced motion: one still bar beside the word above.
+                <FrequencyBars source={snapshot.mic?.bars ?? null} label="" className="h-6" />
+              ) : null}
+            </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {listening ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="-ml-2 touch:h-11"
-                onClick={() => {
-                  session?.typeInstead()
+            {phase === 'typing' ? (
+              <form
+                className="flex items-center gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  session?.sendTyped()
                 }}
               >
-                {TYPE_INSTEAD}
-              </Button>
+                <Input
+                  ref={line}
+                  value={snapshot.draft}
+                  maxLength={MAX_CHARS}
+                  aria-label={TYPE_WHAT}
+                  placeholder={TYPE_WHAT}
+                  autoComplete="off"
+                  onChange={(event) => {
+                    session?.setDraft(event.target.value)
+                  }}
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="touch:h-11"
+                  aria-keyshortcuts="Enter"
+                  disabled={snapshot.draft.trim() === ''}
+                >
+                  {SEND}
+                  <KeyHint>Enter</KeyHint>
+                </Button>
+              </form>
+            ) : phase === 'answer' ? (
+              <div data-slot="voice-answer" className="flex flex-col gap-1">
+                <p className="text-body text-pretty text-foreground">{snapshot.answer?.line}</p>
+                {snapshot.answer?.unsure ? (
+                  <p className="text-pretty text-muted-foreground">{snapshot.answer.unsure}</p>
+                ) : null}
+              </div>
+            ) : (
+              <div
+                data-slot="voice-words"
+                className="max-h-32 min-h-12 overflow-y-auto text-body text-foreground"
+              >
+                {listening ? (
+                  <LiveWords
+                    chunks={snapshot.mic?.chunks ?? []}
+                    hearing={snapshot.mic?.hearing ?? ''}
+                  />
+                ) : snapshot.words ? (
+                  <p className="text-pretty">{snapshot.words}</p>
+                ) : null}
+              </div>
+            )}
+
+            {fixes.length > 0 && phase !== 'answer' ? (
+              <p data-slot="voice-fixes" className="text-caption text-muted-foreground">
+                {fixedWords(fixes)}
+              </p>
             ) : null}
-            {others.map((action) => (
-              <Button
-                key={action}
-                type="button"
-                variant="outline"
-                size="sm"
-                className="touch:h-11"
-                onClick={() => {
-                  act(action)
-                }}
-              >
-                {ACTION_LABELS[action]}
-              </Button>
-            ))}
-            <div className="ml-auto flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="touch:h-11"
-                aria-keyshortcuts="Escape"
-                onClick={() => {
-                  session?.cancel()
-                }}
-              >
-                {phase === 'problem' || phase === 'answer' ? CLOSE : CANCEL}
-                <KeyHint>Esc</KeyHint>
-              </Button>
+
+            {problem ? (
+              isQuiet(problem) ? (
+                <p data-slot="voice-problem" className="text-pretty text-muted-foreground">
+                  {problemLine(problem)}
+                </p>
+              ) : (
+                <p
+                  role="alert"
+                  data-slot="voice-problem"
+                  className="flex items-start gap-2 text-pretty text-destructive-ink"
+                >
+                  <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                  <span>{problemLine(problem)}</span>
+                </p>
+              )
+            ) : null}
+
+            <div className="flex flex-wrap items-center gap-2">
               {listening ? (
                 <Button
                   type="button"
+                  variant="ghost"
                   size="sm"
-                  className="touch:h-11"
-                  aria-keyshortcuts="V"
+                  className="-ml-2 touch:h-11"
                   onClick={() => {
-                    session?.done()
+                    session?.typeInstead()
                   }}
                 >
-                  {DONE}
-                  <KeyHint>V</KeyHint>
-                </Button>
-              ) : main ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  className="touch:h-11"
-                  onClick={() => {
-                    act(main)
-                  }}
-                >
-                  {main === 'try_again' ? <RotateCcw aria-hidden="true" /> : null}
-                  {ACTION_LABELS[main]}
+                  {TYPE_INSTEAD}
                 </Button>
               ) : null}
+              {others.map((action) => (
+                <Button
+                  key={action}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="touch:h-11"
+                  onClick={() => {
+                    act(action)
+                  }}
+                >
+                  {ACTION_LABELS[action]}
+                </Button>
+              ))}
+              <div className="ml-auto flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="touch:h-11"
+                  aria-keyshortcuts="Escape"
+                  onClick={() => {
+                    session?.cancel()
+                  }}
+                >
+                  {phase === 'problem' || phase === 'answer' ? CLOSE : CANCEL}
+                  <KeyHint>Esc</KeyHint>
+                </Button>
+                {listening ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="touch:h-11"
+                    aria-keyshortcuts="V"
+                    onClick={() => {
+                      session?.done()
+                    }}
+                  >
+                    {DONE}
+                    <KeyHint>V</KeyHint>
+                  </Button>
+                ) : main ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="touch:h-11"
+                    onClick={() => {
+                      act(main)
+                    }}
+                  >
+                    {main === 'try_again' ? <RotateCcw aria-hidden="true" /> : null}
+                    {ACTION_LABELS[main]}
+                  </Button>
+                ) : null}
+              </div>
             </div>
-          </div>
-        </m.div>
-      ) : null}
-    </AnimatePresence>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
+      {/* The review card a command opens, after the bar closes (T3-3). */}
+      <CardHost env={env} makeTool={makeTool} read={read} />
+    </>
   )
 }

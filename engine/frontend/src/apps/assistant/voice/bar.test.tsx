@@ -2,8 +2,8 @@
  * The voice bar on screen (PLAN-V22 T3-1), with a fake mic and voice tool and a fake server: it
  * rises and listens, V keeps the words, a held V does nothing more, Esc throws them away and gives
  * the focus back, a typed command works, V in the text line types a "v", the text line works with
- * no mic, and the answer goes to the seam (a page opens, or the read-back shows until the review
- * card). Made-up names only: Sample Logistics Pty Ltd, Jo Sample.
+ * no mic, and the answer goes to the seam (a page opens, the review card opens, or the read-back
+ * shows). Made-up names only: Sample Logistics Pty Ltd, Jo Sample.
  */
 import type { QueryClient } from '@tanstack/react-query'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
@@ -23,6 +23,7 @@ import { mockApi, type Answer } from '@/test/mock-api'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import VoiceBar from './bar'
 import type { Times } from './bar-session'
+import { closeCard } from '../card/store'
 import { closeVoiceBar, isVoiceBarOpen, openVoiceBar } from './store'
 
 const OPTIONS = '/api/v1/companies/call-notes/options'
@@ -132,6 +133,8 @@ async function listening() {
 afterEach(() => {
   act(() => {
     closeVoiceBar()
+    // A task's answer opens the review card (T3-3): it closes with the test.
+    closeCard()
   })
 })
 
@@ -244,14 +247,15 @@ describe('the voice bar', () => {
     })
   })
 
-  it('an answer that is not a page shows its read-back (until the review card), and Close closes', async () => {
-    const { mic, user } = openBar()
+  it('an answer that is no action shows its read-back, and Close closes', async () => {
+    const line =
+      'The Assistant can make a pre-read, log a call, add a task, email teammates or open a page.'
+    const { mic, user } = openBar({ answer: command({ action: 'unknown', read_back: line }) })
     const found = await listening()
     act(() => {
       mic.say(SAID)
     })
     await user.keyboard('v')
-    const line = 'Add a task for you: send Sample Logistics the quote, due Mon 24 Nov.'
     await waitFor(() => {
       expect(found.querySelector('[data-slot=voice-answer]')).toHaveTextContent(line)
     })
@@ -441,7 +445,10 @@ describe('what each state shows (T3-2)', () => {
     const { mic, commands, user } = openBar({
       answer: (call) => {
         tries += 1
-        return tries === 1 ? refusal(503, 'claude_unavailable')(call) : Response.json(command({}))
+        // The second answer is no action, so the bar shows it (a task would open the card).
+        return tries === 1
+          ? refusal(503, 'claude_unavailable')(call)
+          : Response.json(command({ action: 'unknown' }))
       },
     })
     const found = await listening()

@@ -1,17 +1,29 @@
 /**
- * Where the voice bar hands what it heard (PLAN-V22 T3-1 and T3-2). This is the one seam the
- * review card fills (T3-3), with dictation into Log call (T3-5). The bar knows nothing of either:
- * it calls `handOver` with the command step's answer, and does what comes back.
+ * Where the voice bar hands what it heard (PLAN-V22 T3-1 to T3-3). This is the one seam between the
+ * bar and what a command does. The bar knows nothing of either: it calls `handOver` with the
+ * command step's answer, and does what comes back.
  *
- * Until then (a placeholder, marked for T3-3):
- * - `open` goes to its page, and the bar closes (no card: choice 24);
- * - `unknown` shows its read-back (what the Assistant can do), with Try again;
- * - every other action shows its read-back in the bar, and nothing is sent;
- * - with the AI that reads commands off (409 `assistant_off`), the bar says so. T3-5 opens Log
+ * - `open` goes to its page, and the bar closes (no card: choice 24).
+ * - `log_call`, `task` and `email` open the review card (`card/`), and the bar closes. Nothing is
+ *   sent from here: the card does that, after the rep's check.
+ * - `pre_read`: its card is the pre-read's own page (choice 24). With the meeting found, the page
+ *   opens, after the pre-read starts if it has none yet ("Working it out" stays on meanwhile).
+ *   With two or more meetings, or none ahead, the card asks.
+ * - `unknown` shows its read-back (what the Assistant can do), with Try again.
+ * - `change`, `send` and `cancel` only mean something on an open card, which reads them itself.
+ * - With the AI that reads commands off (409 `assistant_off`), the bar says so. T3-5 opens Log
  *   call with the words instead (choice 17).
  */
-import type { AssistantCommand, AssistantOpen, CommandSource } from '@/api/types'
+import { api, toApiProblem, unwrap } from '@/api/client'
+import type {
+  AssistantCommand,
+  AssistantMeetingHit,
+  AssistantOpen,
+  CommandSource,
+} from '@/api/types'
+import { openCard } from '../card/store'
 import { CALL_LOGS_PATH, MEETINGS_PATH, TODAY_PATH } from '../paths'
+import { isVoiceBarOpen } from './store'
 import { CANT_READ_YET } from './words'
 
 /**
@@ -30,15 +42,25 @@ export type Heard =
 
 /** What the bar does next. */
 export type AfterAnswer =
-  /** The answer went where it belongs (a page, or from T3-3 the review card): the bar closes. */
+  /** The answer went where it belongs (a page, or the review card): the bar closes. */
   | { kind: 'close' }
   /** The bar shows this line. `again`: it offers Try again (say it another way). */
   | { kind: 'show'; line: string; unsure: string | null; again: boolean }
 
+/** Starts a meeting's pre-read, as Meetings' "Draft it" does. Answers with its id. */
+export type StartPreRead = (meetingId: string) => Promise<{ id: string }>
+
 export interface HandOverTools {
   /** Opens a page of the app. */
   go: (to: string) => void
+  /** For tests: starts a pre-read. */
+  start?: StartPreRead
 }
+
+/** The actions whose card is the review card. */
+const CARD_ACTIONS: ReadonlySet<AssistantCommand['action']> = new Set(['log_call', 'task', 'email'])
+
+const CLOSE: AfterAnswer = { kind: 'close' }
 
 /** The address of a page the command step names. */
 export function pageFor(open: AssistantOpen): string {
@@ -60,7 +82,54 @@ export function pageFor(open: AssistantOpen): string {
   }
 }
 
-export function handOver(heard: Heard, { go }: HandOverTools): AfterAnswer {
+/** A pre-read's page (Meetings' `preReadHref`, written here for the same reason as above). */
+export function preReadPath(formId: string): string {
+  return `${MEETINGS_PATH}/${encodeURIComponent(formId)}`
+}
+
+/** POST /meetings/forms for a HubSpot meeting: the server reads its own place. */
+export const startPreRead: StartPreRead = async (meetingId) =>
+  unwrap(
+    await api.POST('/companies/meetings/forms', {
+      body: { meeting_id: meetingId, where: 'unknown' },
+    }),
+  )
+
+/**
+ * A meeting's pre-read opens: its page at once if it has one, else once it has started. A failed
+ * start says why in the bar. If the rep closed the bar meanwhile, the page doesn't open.
+ */
+export function openMeeting(
+  meeting: AssistantMeetingHit,
+  go: (to: string) => void,
+  start: StartPreRead = startPreRead,
+): AfterAnswer | Promise<AfterAnswer> {
+  if (meeting.form) {
+    go(preReadPath(meeting.form.id))
+    return CLOSE
+  }
+  const meetingId = meeting.id
+  if (meetingId === null) {
+    // A typed meeting always has its pre-read: nothing to start.
+    go(MEETINGS_PATH)
+    return CLOSE
+  }
+  return start(meetingId).then(
+    (form): AfterAnswer => {
+      if (isVoiceBarOpen()) go(preReadPath(form.id))
+      return CLOSE
+    },
+    (error: unknown): AfterAnswer => {
+      const problem = toApiProblem(error)
+      return { kind: 'show', line: problem.title, unsure: problem.detail, again: false }
+    },
+  )
+}
+
+export function handOver(
+  heard: Heard,
+  { go, start = startPreRead }: HandOverTools,
+): AfterAnswer | Promise<AfterAnswer> {
   if (heard.kind === 'dictation') {
     // T3-5: Log call opens, with these words in a new call note.
     return { kind: 'show', line: CANT_READ_YET, unsure: null, again: false }
@@ -68,9 +137,15 @@ export function handOver(heard: Heard, { go }: HandOverTools): AfterAnswer {
   const { command } = heard
   if (command.action === 'open' && command.open) {
     go(pageFor(command.open))
-    return { kind: 'close' }
+    return CLOSE
   }
-  // T3-3: the review card opens here, with a layout for each action (choice 24).
+  if (command.action === 'pre_read' && command.meeting?.found) {
+    return openMeeting(command.meeting.found, go, start)
+  }
+  if (CARD_ACTIONS.has(command.action) || command.action === 'pre_read') {
+    openCard({ kind: 'command', command, words: heard.words, source: heard.source })
+    return CLOSE
+  }
   return {
     kind: 'show',
     line: command.read_back,

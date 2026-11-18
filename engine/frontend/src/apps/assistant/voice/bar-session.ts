@@ -20,6 +20,7 @@
  */
 import { isAbort, toApiProblem } from '@/api/client'
 import type {
+  AssistantCardIn,
   AssistantCommand,
   AssistantCommandIn,
   AssistantOnPage,
@@ -105,8 +106,16 @@ export interface BarSessionOptions {
   names?: readonly string[]
   /** Reads a command: the command step, or a test's fake. */
   read: (body: AssistantCommandIn, signal: AbortSignal) => Promise<AssistantCommand>
-  /** Where an answer goes (`handOver`). */
-  hand: (heard: Heard) => AfterAnswer
+  /**
+   * Where an answer goes (`handOver`, or the review card's own). A promise keeps "Working it out"
+   * on until it settles, like a pre-read that has to start first.
+   */
+  hand: (heard: Heard) => AfterAnswer | Promise<AfterAnswer>
+  /**
+   * The review card that is open, while the rep speaks a change to it (T3-3): its action and the
+   * names of its boxes go with the words, so the command step answers change, send or cancel.
+   */
+  card?: AssistantCardIn | null
   /** The bar is done with: it closes. */
   onClose: () => void
   /** For tests: the browser, the voice tool and the clock's waits. */
@@ -139,6 +148,7 @@ type Listener = () => void
 
 export class BarSession {
   private readonly onPage: AssistantOnPage | null
+  private readonly card: AssistantCardIn | null
   private readonly names: readonly string[]
   private readonly read: BarSessionOptions['read']
   private readonly hand: BarSessionOptions['hand']
@@ -163,6 +173,7 @@ export class BarSession {
 
   constructor(options: BarSessionOptions) {
     this.onPage = options.onPage ?? null
+    this.card = options.card ?? null
     this.names = options.names ?? []
     this.read = options.read
     this.hand = options.hand
@@ -435,9 +446,12 @@ export class BarSession {
     this.request = request
     this.source = source
     this.set({ phase: 'working', mic: null, words: text, problem: null, answer: null })
-    const body: AssistantCommandIn = this.onPage
-      ? { text, source, on_page: this.onPage }
-      : { text, source }
+    const body: AssistantCommandIn = {
+      text,
+      source,
+      ...(this.onPage ? { on_page: this.onPage } : {}),
+      ...(this.card ? { card: this.card } : {}),
+    }
     this.read(body, request.signal).then(
       (command) => {
         if (this.request !== request || this.over) return
@@ -454,6 +468,21 @@ export class BarSession {
 
   private answered(heard: Heard): void {
     const after = this.hand(heard)
+    if (after instanceof Promise) {
+      // Still working: the words stay, and nothing spins, until it settles.
+      const request = new AbortController()
+      this.request = request
+      void after.then((settled) => {
+        if (this.request !== request || this.over) return
+        this.request = null
+        this.settle(settled)
+      })
+      return
+    }
+    this.settle(after)
+  }
+
+  private settle(after: AfterAnswer): void {
     if (after.kind === 'close') {
       this.cancel()
       return
