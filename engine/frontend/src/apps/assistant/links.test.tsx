@@ -1,7 +1,8 @@
 /**
  * Call notes around the app (PLAN-V17 T3-7, "The screens" part 4; the Assistant's since PLAN-V22
- * T2-1), in the whole app against a fake server: Call logs' count in the menu, Home's quick
- * buttons, Ctrl+K's "Log a call" and "Calls to confirm" (with `?log=1` on Call logs), and a person
+ * T2-1), in the whole app against a fake server: Call logs' count in the menu, Home's Companies
+ * card without the quick buttons (they are on the Assistant's own card since T2-3, tested in
+ * `home-card.test.tsx`), Ctrl+K's "Log a call" and "Calls to confirm" (with `?log=1` on Call logs), and a person
  * without the Assistant's ticks, who sees none of it and whose browser asks nothing about call
  * notes. Made-up names only.
  */
@@ -132,7 +133,7 @@ function mainMenu() {
   return within(screen.getByRole('navigation', { name: 'Main menu' }))
 }
 
-/** Home's Companies card, which holds Call logs' quick buttons until the Assistant has a card (T2-3). */
+/** Home's Companies card. */
 function companiesCard() {
   return within(screen.getByRole('region', { name: 'Companies' }))
 }
@@ -187,58 +188,17 @@ describe("Call logs' count in the menu", () => {
   })
 })
 
-describe("Home's quick buttons", () => {
-  it('give each kind of work its count, and open its tab on Call logs', async () => {
+describe("Home's Companies card", () => {
+  it("keeps the count and the search, and Call logs' quick buttons went to the Assistant's card", async () => {
     asLaptop()
     stubBackend()
-    const { user, router } = renderAt('/')
-    await home()
-    const confirm = await companiesCard().findByRole('link', { name: '7 calls to confirm' })
-    expect(confirm).toHaveAttribute('href', '/assistant/call-logs')
-    const look = companiesCard().getByRole('link', { name: '2 need a look' })
-    expect(look).toHaveAttribute('href', '/assistant/call-logs?tab=needs-look')
-
-    await user.click(look)
-    expect(
-      await screen.findByRole('tab', { name: 'Needs a look 2' }, { timeout: LAZY }),
-    ).toHaveAttribute('aria-selected', 'true')
-    expect(router.state.location.pathname).toBe('/assistant/call-logs')
-  })
-
-  it('show only the work there is, in the right words for one', async () => {
-    asLaptop()
-    stubBackend({ summary: { to_confirm: 1, needs_look: 0, logged_today: 0 } })
     renderAt('/')
     await home()
     expect(
-      await companiesCard().findByRole('link', { name: '1 call to confirm' }),
+      await screen.findByRole('region', { name: 'Assistant' }, { timeout: LAZY }),
     ).toBeInTheDocument()
-    expect(companiesCard().queryByRole('link', { name: /a look/ })).toBeNull()
-  })
-
-  it.each<[string, Backend]>([
-    ['call notes are off', { enabled: false }],
-    ['the counts fail (409)', { summary: 'off' }],
-  ])('leave the card as it was when %s, with no error', async (_, backend) => {
-    asLaptop()
-    stubBackend(backend)
-    const { queryClient } = renderAt('/')
-    await home()
-    await waitFor(() => {
-      expect(queryClient.getQueryState(queryKeys.companies.callNoteOptions())?.status).toBe(
-        'success',
-      )
-    })
-    if (backend.summary === 'off') {
-      await waitFor(() => {
-        expect(queryClient.getQueryState(queryKeys.companies.callNoteSummary())?.status).toBe(
-          'error',
-        )
-      })
-    }
     expect(companiesCard().getByRole('searchbox')).toBeInTheDocument()
     expect(companiesCard().queryByRole('link', { name: /to confirm|a look/ })).toBeNull()
-    expect(companiesCard().queryByText(/call notes|couldn't/i)).toBeNull()
   })
 })
 
@@ -377,7 +337,7 @@ describe('who sees it', () => {
       '/assistant/meetings',
     )
     expect(
-      await companiesCard().findByRole('link', { name: '7 calls to confirm' }),
+      await screen.findByRole('region', { name: 'Assistant' }, { timeout: LAZY }),
     ).toBeInTheDocument()
     await user.keyboard('{Control>}k{/Control}')
     expect(await screen.findByRole('option', { name: 'Log a call' })).toBeInTheDocument()
@@ -469,9 +429,10 @@ describe('Check my mic (PLAN-V18 T3-4)', () => {
       stubBackend(backend)
       const { user, queryClient } = renderAt('/')
       await home()
-      await optionsKnown(queryClient)
+      // Ctrl+K asks for the switches itself: once they are known, the entry would be there.
       await user.keyboard('{Control>}k{/Control}')
       const menu = await screen.findByRole('dialog', { name: 'Go to a page' })
+      await optionsKnown(queryClient)
       await within(menu).findByRole('option', { name: 'Call logs' })
       expect(within(menu).queryByRole('option', { name: 'Check my mic' })).toBeNull()
     },

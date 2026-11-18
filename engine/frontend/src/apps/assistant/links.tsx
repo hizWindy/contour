@@ -1,15 +1,15 @@
 /**
  * The Assistant's parts around the app (PLAN-V22 T2-1; Companies' until then, from PLAN-V17 T3-7,
- * "The screens" part 4): the count on Call logs' row in the menu, the quick buttons on Home's
- * Companies card, and the Assistant's own entries in Ctrl+K: "Log a call", "Calls to confirm",
+ * "The screens" part 4): the count on Call logs' row in the menu, and the Assistant's own entries
+ * in Ctrl+K: "Log a call", "Calls to confirm",
  * "Check my mic" and "Pre-read for a meeting" (T3-11, "The screens" part 7). The pages they open
  * keep their code in `apps/companies/` (PLAN-V22 choice 3).
  *
  * - **Only for a person who sees the Assistant** (the Call logs or the Meetings tick). The menu,
  *   Home and Ctrl+K draw a project's parts only for the projects this person may use
  *   (`useVisibleModules`), and each part checks its own tick, so for anyone else none of this is
- *   drawn and no call notes or meetings request is made. Home's quick buttons sit on the Companies
- *   card until the Assistant has a Home card of its own (T2-3), and only with the Call logs tick.
+ *   drawn and no call notes or meetings request is made. Home's quick buttons are on the
+ *   Assistant's own card since PLAN-V22 T2-3 (`home-card.tsx`).
  * - **Only while call notes are on**, and a count only above 0, so a button never opens an empty
  *   tab. While the switches or the counts load or fail, nothing shows, and each place looks as it
  *   did before call notes. A 409 while they are off shows nothing either.
@@ -25,9 +25,8 @@
  * - **Loaded late**, through `parts.ts`: the menu, Home and Ctrl+K are in the first visit, and this
  *   file, with its hooks, words and icons, is not. Import the parts from there, not here.
  */
-import { ClipboardCheck, FileText, Mic, NotebookPen, TriangleAlert } from 'lucide-react'
+import { ClipboardCheck, FileText, Mic, NotebookPen } from 'lucide-react'
 import { lazy, Suspense, useState } from 'react'
-import { Link } from 'react-router'
 import { useCallNoteCounts, useCallNoteOptions, voiceToolOf } from '@/api/hooks/call-note-counts'
 import { useMeetingSummary } from '@/api/hooks/meeting-summary'
 import type { VoiceToolKind } from '@/api/types'
@@ -41,13 +40,10 @@ import { CHECK_MY_MIC } from '@/apps/companies/call-notes/mic/words'
 import {
   CALLS_TO_CONFIRM,
   LOG_A_CALL,
-  needsLookTail,
   PRE_READ_FOR_A_MEETING,
-  toConfirmTail,
   toConfirmWords,
 } from '@/apps/companies/words'
 import { useCan, useCanWrite, useIsViewer } from '@/auth/can'
-import { RollingNumber } from '@/components/motion/rolling-number'
 import { Button } from '@/components/ui/button'
 import { CommandItem } from '@/components/ui/command'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
@@ -70,42 +66,6 @@ function ToConfirmCountContent() {
 export function ToConfirmCount() {
   if (!useCan('companies.call_logs')) return null
   return <ToConfirmCountContent />
-}
-
-/**
- * Home's Companies card: a button for each kind of work waiting, with its count. Each opens its
- * tab on Call logs: "7 calls to confirm" To confirm, "2 need a look" Needs a look.
- */
-export function CallNoteButtons() {
-  const { counts } = useCallNoteCounts()
-  const toConfirm = counts?.to_confirm ?? 0
-  const needsLook = counts?.needs_look ?? 0
-  if (toConfirm <= 0 && needsLook <= 0) return null
-  return (
-    <div data-slot="call-note-buttons" className="flex flex-wrap gap-2">
-      {/* 44px on a touch screen (DESIGN.md "Touch"), as Call logs' buttons are. */}
-      {toConfirm > 0 ? (
-        <Button asChild variant="outline" size="sm" className="touch:h-11">
-          <Link to={callLogsHref('to_confirm')}>
-            <ClipboardCheck aria-hidden="true" />
-            <span>
-              <RollingNumber value={toConfirm} /> {toConfirmTail(toConfirm)}
-            </span>
-          </Link>
-        </Button>
-      ) : null}
-      {needsLook > 0 ? (
-        <Button asChild variant="outline" size="sm" className="touch:h-11">
-          <Link to={callLogsHref('needs_look')}>
-            <TriangleAlert aria-hidden="true" />
-            <span>
-              <RollingNumber value={needsLook} /> {needsLookTail(needsLook)}
-            </span>
-          </Link>
-        </Button>
-      ) : null}
-    </div>
-  )
 }
 
 /**

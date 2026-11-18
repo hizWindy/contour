@@ -30,7 +30,13 @@ import type { AppModule } from '@/shell/nav'
 import { page } from '@/shell/page-route'
 import { AssistantFrame } from './frame'
 import { MovedAddress } from './old-route'
-import { AssistantCommands, MicCheckMenuItem, SpeakButton, ToConfirmCount } from './parts'
+import {
+  AssistantCommands,
+  AssistantHomeCard,
+  MicCheckMenuItem,
+  SpeakButton,
+  ToConfirmCount,
+} from './parts'
 import { CALL_LOGS_PATH, MEETINGS_PATH, TODAY_PATH } from './paths'
 import { ASSISTANT_KEYWORDS, ASSISTANT_NAME, TODAY, TODAY_PURPOSE } from './words'
 
@@ -74,6 +80,9 @@ export const ASSISTANT: AppModule = {
   warm: true,
   description:
     'Your work for the day: tasks and meetings, the pre-read for each client meeting, and the calls you logged.',
+  // Today's counts and "Press V to speak" (PLAN-V22 T2-3, choice 5). It comes late, after the other
+  // cards, where "Upcoming meetings" was, and its code loads late too.
+  homeCards: [{ id: 'assistant', component: AssistantHomeCard, late: true }],
   pages: [
     {
       to: TODAY_PATH,

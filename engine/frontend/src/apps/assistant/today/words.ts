@@ -113,3 +113,35 @@ export const TASK_GONE = "That task isn't in HubSpot any more. Today is read aga
 
 export const LOADING_TODAY = 'Loading your day.'
 export const TODAY_FAILED = "Today couldn't be loaded."
+
+// --- Home's Assistant card (T2-3, choice 5) -----------------------------------------------------------
+
+export const OPEN_TODAY = 'Open Today'
+
+/** "3 tasks due, 1 overdue", "1 task due today", "No tasks due today". */
+export function tasksDueWords(due: number, overdue: number): string {
+  if (due === 0) return 'No tasks due today'
+  const tasks = pluralise(due, 'task')
+  return overdue > 0 ? `${tasks} due, ${String(overdue)} overdue` : `${tasks} due today`
+}
+
+/** "2 meetings today", "No meetings today". */
+export function meetingsTodayWords(count: number): string {
+  return count === 0 ? 'No meetings today' : `${pluralise(count, 'meeting')} today`
+}
+
+/** "4 calls to confirm", "No calls to confirm". */
+export function callsWaitingWords(count: number): string {
+  return count === 0 ? 'No calls to confirm' : `${pluralise(count, 'call')} to confirm`
+}
+
+/** "2 need a look", "1 needs a look". */
+export function needLookWords(count: number): string {
+  return `${String(count)} ${count === 1 ? 'needs' : 'need'} a look`
+}
+
+/** On a laptop: "Press V to speak", with V as a key. On a touch screen, the Speak button. */
+export const PRESS = 'Press'
+export const TO_SPEAK = 'to speak, on any page.'
+export const LOADING_COUNTS = "Loading today's counts."
+export const COUNTS_FAILED = "Today's counts couldn't be loaded right now."

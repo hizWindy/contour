@@ -411,24 +411,25 @@ describe('the People tab (choice 4)', () => {
   })
 })
 
-describe('Home, for now (T2-3 gives the Assistant its own card)', () => {
-  it('keeps the Lead Finder card first, then Companies, then the Assistant with its pages', async () => {
+describe('Home (T2-3 gives the Assistant its own card)', () => {
+  it('keeps the Lead Finder card first, then Companies, and the Assistant’s card comes last', async () => {
     mockApi({})
     const queryClient = createTestQueryClient()
     queryClient.setQueryData(queryKeys.auth.me(), { state: 'off' })
     renderWithProviders(<HomePage />, { queryClient })
-    const assistant = await screen.findByRole('region', { name: 'Assistant' })
+    const assistant = await screen.findByRole('region', { name: 'Assistant' }, { timeout: LAZY })
     const companies = screen.getByRole('region', { name: 'Companies' })
     const leadFinder = screen.getByRole('region', { name: 'Lead Finder' })
+    const runsCost = screen.getByRole('region', { name: 'Runs and cost' })
     const after = (one: HTMLElement, other: HTMLElement) =>
       Boolean(one.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING)
     expect(after(leadFinder, companies)).toBe(true)
-    expect(after(companies, assistant)).toBe(true)
-    expect(
-      within(assistant)
-        .getAllByRole('link')
-        .map((link) => link.getAttribute('href')),
-    ).toEqual([TODAY_PATH, MEETINGS_PATH, CALL_LOGS_PATH])
+    // It comes late, where "Upcoming meetings" was, so its coming moves no other card.
+    expect(after(runsCost, assistant)).toBe(true)
+    expect(within(assistant).getByRole('link', { name: 'Open Today' })).toHaveAttribute(
+      'href',
+      TODAY_PATH,
+    )
   })
 })
 
