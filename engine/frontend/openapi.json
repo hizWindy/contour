@@ -77,6 +77,694 @@
         "title": "AreaOption",
         "type": "object"
       },
+      "AssistantCardIn": {
+        "additionalProperties": false,
+        "description": "The review card that is open, while the rep speaks a change to it.",
+        "properties": {
+          "action": {
+            "description": "What the card is for",
+            "enum": [
+              "pre_read",
+              "log_call",
+              "task",
+              "email"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "boxes": {
+            "description": "The names of its boxes, like subject or due: letters, digits, spaces, _ and -, up to 40 characters each. Claude gets them, and a change names one of them",
+            "examples": [
+              [
+                "subject",
+                "due",
+                "owner"
+              ]
+            ],
+            "items": {
+              "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,39}$",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Boxes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "action",
+          "boxes"
+        ],
+        "title": "AssistantCardIn",
+        "type": "object"
+      },
+      "AssistantChange": {
+        "properties": {
+          "box": {
+            "description": "One of the card's boxes, spelled as the card sent it",
+            "title": "Box",
+            "type": "string"
+          },
+          "day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The value as a day, when it reads as one",
+            "title": "Day"
+          },
+          "value": {
+            "description": "The new value, as said",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "box",
+          "value",
+          "day"
+        ],
+        "title": "AssistantChange",
+        "type": "object"
+      },
+      "AssistantCommand": {
+        "description": "What a command would do. Nothing is written or sent: the review card does that.",
+        "properties": {
+          "action": {
+            "enum": [
+              "pre_read",
+              "log_call",
+              "task",
+              "email",
+              "open",
+              "change",
+              "send",
+              "cancel",
+              "unknown"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistantChange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "company": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistantCompany"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a pre-read, a call, a task, a company page, or an email that names one"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistantEmail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "meeting": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistantMeeting"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a pre-read"
+          },
+          "note_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a call: the note, word for word as said, without the command words at its start",
+            "title": "Note Text"
+          },
+          "open": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistantOpen"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "person": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistantPerson"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a call"
+          },
+          "read_back": {
+            "description": "The card's first line, like 'Log a call with James Sample at Sample Logistics. Follow-up task on Fri 21 Nov.'",
+            "title": "Read Back",
+            "type": "string"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistantTask"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unsure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A short line when something wasn't clear or wasn't found, or none",
+            "title": "Unsure"
+          }
+        },
+        "required": [
+          "action",
+          "read_back",
+          "company",
+          "person",
+          "meeting",
+          "note_text",
+          "task",
+          "email",
+          "open",
+          "change",
+          "unsure"
+        ],
+        "title": "AssistantCommand",
+        "type": "object"
+      },
+      "AssistantCommandIn": {
+        "additionalProperties": false,
+        "properties": {
+          "card": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistantCardIn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The open review card, if any. Then the only actions are change, send and cancel, and anything else comes back as unknown"
+          },
+          "on_page": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistantOnPage"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What is on screen, if anything"
+          },
+          "source": {
+            "description": "mic (said out loud) or typed",
+            "enum": [
+              "mic",
+              "typed"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "text": {
+            "description": "What was said or typed, 1 to 2,000 characters once trimmed. 422 `command_empty` or `command_too_long` otherwise",
+            "examples": [
+              "Log a call with James from Sample Logistics, follow up Friday"
+            ],
+            "maxLength": 20000,
+            "pattern": "^[^\\x00]*$",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "source"
+        ],
+        "title": "AssistantCommandIn",
+        "type": "object"
+      },
+      "AssistantCompany": {
+        "properties": {
+          "choices": {
+            "description": "Two or more that match, best first",
+            "items": {
+              "$ref": "#/components/schemas/CompanyHit"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "found": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompanyHit"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one company that matches"
+          },
+          "from_page": {
+            "description": "True when it is the company on screen: none was named, or the one named is close to it, or it is one of several that match",
+            "title": "From Page",
+            "type": "boolean"
+          },
+          "heard": {
+            "description": "The company as heard. Empty when the command named none",
+            "title": "Heard",
+            "type": "string"
+          }
+        },
+        "required": [
+          "heard",
+          "from_page",
+          "found",
+          "choices"
+        ],
+        "title": "AssistantCompany",
+        "type": "object"
+      },
+      "AssistantEmail": {
+        "properties": {
+          "body": {
+            "description": "The rep's words, tidied by Claude, up to 4,000 characters",
+            "title": "Body",
+            "type": "string"
+          },
+          "subject": {
+            "description": "Up to 120 characters. Empty when none could be made",
+            "title": "Subject",
+            "type": "string"
+          },
+          "to": {
+            "description": "At most 20, in the order said",
+            "items": {
+              "$ref": "#/components/schemas/AssistantRecipient"
+            },
+            "title": "To",
+            "type": "array"
+          }
+        },
+        "required": [
+          "to",
+          "subject",
+          "body"
+        ],
+        "title": "AssistantEmail",
+        "type": "object"
+      },
+      "AssistantMeeting": {
+        "properties": {
+          "choices": {
+            "description": "Two or more that match, soonest first, or the company's next ones when none is on the day said",
+            "items": {
+              "$ref": "#/components/schemas/AssistantMeetingHit"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "found": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistantMeetingHit"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one meeting that matches"
+          },
+          "from_page": {
+            "description": "True when it is the meeting or pre-read on screen",
+            "title": "From Page",
+            "type": "boolean"
+          },
+          "heard": {
+            "description": "The words that named the meeting, like Thursday's meeting. Empty if none",
+            "title": "Heard",
+            "type": "string"
+          }
+        },
+        "required": [
+          "heard",
+          "from_page",
+          "found",
+          "choices"
+        ],
+        "title": "AssistantMeeting",
+        "type": "object"
+      },
+      "AssistantMeetingHit": {
+        "properties": {
+          "company_key": {
+            "title": "Company Key",
+            "type": "string"
+          },
+          "company_name": {
+            "title": "Company Name",
+            "type": "string"
+          },
+          "form": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MeetingFormState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its pre-read, if it has one"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HubSpot's meeting id. None for a meeting typed in",
+            "title": "Id"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "starts_at",
+          "company_key",
+          "company_name",
+          "form"
+        ],
+        "title": "AssistantMeetingHit",
+        "type": "object"
+      },
+      "AssistantOnPage": {
+        "additionalProperties": false,
+        "description": "What is on screen when the rep speaks. A command that names no company uses this one.",
+        "properties": {
+          "company_key": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The company on screen: a HubSpot id, or lead:<id>",
+            "examples": [
+              "201"
+            ],
+            "title": "Company Key"
+          },
+          "form_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The pre-read on screen",
+            "title": "Form Id"
+          },
+          "meeting_id": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The HubSpot meeting on screen",
+            "title": "Meeting Id"
+          },
+          "note_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The call note on screen",
+            "title": "Note Id"
+          }
+        },
+        "title": "AssistantOnPage",
+        "type": "object"
+      },
+      "AssistantOpen": {
+        "properties": {
+          "company_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For the company page: the company, once found",
+            "title": "Company Key"
+          },
+          "page": {
+            "enum": [
+              "home",
+              "today",
+              "meetings",
+              "call_logs",
+              "companies",
+              "company",
+              "lead_finder"
+            ],
+            "title": "Page",
+            "type": "string"
+          }
+        },
+        "required": [
+          "page",
+          "company_key"
+        ],
+        "title": "AssistantOpen",
+        "type": "object"
+      },
+      "AssistantPerson": {
+        "properties": {
+          "choices": {
+            "description": "Two or more at the company who match, best first, each with a job title",
+            "items": {
+              "$ref": "#/components/schemas/PrepPerson"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "found": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrepPerson"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one person at the company who matches"
+          },
+          "heard": {
+            "description": "The client person as heard, like James. Empty if none",
+            "title": "Heard",
+            "type": "string"
+          }
+        },
+        "required": [
+          "heard",
+          "found",
+          "choices"
+        ],
+        "title": "AssistantPerson",
+        "type": "object"
+      },
+      "AssistantRecipient": {
+        "description": "A teammate or a Contour address, as a command named them.",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A Contour address, typed in full",
+            "title": "Address"
+          },
+          "choices": {
+            "description": "Two or more teammates who match, best first",
+            "items": {
+              "$ref": "#/components/schemas/TeamMember"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "found": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeamMember"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one teammate on the team list who matches"
+          },
+          "heard": {
+            "description": "The name or address as heard",
+            "title": "Heard",
+            "type": "string"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why this one can't be sent to yet, in plain words: not on the team list, no Contour account, or not a Contour address. None when it can",
+            "title": "Problem"
+          }
+        },
+        "required": [
+          "heard",
+          "found",
+          "address",
+          "choices",
+          "problem"
+        ],
+        "title": "AssistantRecipient",
+        "type": "object"
+      },
+      "AssistantTask": {
+        "properties": {
+          "due": {
+            "description": "A Melbourne working day, today or later",
+            "format": "date",
+            "title": "Due",
+            "type": "string"
+          },
+          "due_words": {
+            "description": "When, in the rep's own words. Empty when none was said",
+            "title": "Due Words",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "call",
+              "email",
+              "todo"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistantRecipient"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who it is for, when the command named a teammate. None: the rep"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The teammate's HubSpot owner id. None: the rep, or a teammate still to pick (see `owner`)",
+            "title": "Owner Id"
+          },
+          "subject": {
+            "description": "What to do, up to 200 characters. Empty when none was said",
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject",
+          "due",
+          "due_words",
+          "kind",
+          "owner_id",
+          "owner"
+        ],
+        "title": "AssistantTask",
+        "type": "object"
+      },
       "Blocked": {
         "description": "Why a run can't start. The Start button shows `message`.",
         "properties": {
@@ -20551,6 +21239,153 @@
           }
         ],
         "summary": "List companies",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/assistant/command": {
+      "post": {
+        "description": "Turns one thing a rep said or typed into one action for the review card: `pre_read`, `log_call`, `task`, `email` or `open`, or on an open card (`card`) `change`, `send` or `cancel`. Anything else is `unknown`, and `read_back` lists what the Assistant can do. One small Claude request, on the call notes' model and within their cap for one note; a card's plain 'send it' or 'cancel' needs none. Claude gets only the words (emails and phone numbers blanked), today's date and an open card's box names. Code finds the company, the person, the meeting and the teammates in our HubSpot copy: each comes back as `heard`, then `found` (one match) or `choices` (two or more, best first). With no company named, the one on screen (`on_page`). It writes nothing, sends nothing and keeps no copy of the words; its cost goes to the search log. Behind the Call logs or the Meetings tick; a Viewer gets 403 `viewer_read_only`. 409 `assistant_off` while call notes or their AI sort are off, or Claude isn't set up. 422 `command_empty`, or `command_too_long` over 2,000 characters. 429 `too_many_commands` over 20 in a minute for one person, with `Retry-After`. 503 `claude_unavailable` when Claude takes over 15 seconds, is down, or today's limit is reached, with `Retry-After`.",
+        "operationId": "read_assistant_command",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantCommandIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantCommand"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Read a command",
         "tags": [
           "Companies"
         ]

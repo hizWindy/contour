@@ -177,6 +177,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/assistant/command": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read a command
+         * @description Turns one thing a rep said or typed into one action for the review card: `pre_read`, `log_call`, `task`, `email` or `open`, or on an open card (`card`) `change`, `send` or `cancel`. Anything else is `unknown`, and `read_back` lists what the Assistant can do. One small Claude request, on the call notes' model and within their cap for one note; a card's plain 'send it' or 'cancel' needs none. Claude gets only the words (emails and phone numbers blanked), today's date and an open card's box names. Code finds the company, the person, the meeting and the teammates in our HubSpot copy: each comes back as `heard`, then `found` (one match) or `choices` (two or more, best first). With no company named, the one on screen (`on_page`). It writes nothing, sends nothing and keeps no copy of the words; its cost goes to the search log. Behind the Call logs or the Meetings tick; a Viewer gets 403 `viewer_read_only`. 409 `assistant_off` while call notes or their AI sort are off, or Claude isn't set up. 422 `command_empty`, or `command_too_long` over 2,000 characters. 429 `too_many_commands` over 20 in a minute for one person, with `Retry-After`. 503 `claude_unavailable` when Claude takes over 15 seconds, is down, or today's limit is reached, with `Retry-After`.
+         */
+        post: operations["read_assistant_command"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/call-notes": {
         parameters: {
             query?: never;
@@ -2132,6 +2152,294 @@ export interface components {
              * @description The suburbs searched. Empty for the whole city.
              */
             suburbs: string[];
+        };
+        /**
+         * AssistantCardIn
+         * @description The review card that is open, while the rep speaks a change to it.
+         */
+        AssistantCardIn: {
+            /**
+             * Action
+             * @description What the card is for
+             * @enum {string}
+             */
+            action: "pre_read" | "log_call" | "task" | "email";
+            /**
+             * Boxes
+             * @description The names of its boxes, like subject or due: letters, digits, spaces, _ and -, up to 40 characters each. Claude gets them, and a change names one of them
+             * @example [
+             *       "subject",
+             *       "due",
+             *       "owner"
+             *     ]
+             */
+            boxes: string[];
+        };
+        /** AssistantChange */
+        AssistantChange: {
+            /**
+             * Box
+             * @description One of the card's boxes, spelled as the card sent it
+             */
+            box: string;
+            /**
+             * Day
+             * @description The value as a day, when it reads as one
+             */
+            day: string | null;
+            /**
+             * Value
+             * @description The new value, as said
+             */
+            value: string;
+        };
+        /**
+         * AssistantCommand
+         * @description What a command would do. Nothing is written or sent: the review card does that.
+         */
+        AssistantCommand: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "pre_read" | "log_call" | "task" | "email" | "open" | "change" | "send" | "cancel" | "unknown";
+            change: components["schemas"]["AssistantChange"] | null;
+            /** @description For a pre-read, a call, a task, a company page, or an email that names one */
+            company: components["schemas"]["AssistantCompany"] | null;
+            email: components["schemas"]["AssistantEmail"] | null;
+            /** @description For a pre-read */
+            meeting: components["schemas"]["AssistantMeeting"] | null;
+            /**
+             * Note Text
+             * @description For a call: the note, word for word as said, without the command words at its start
+             */
+            note_text: string | null;
+            open: components["schemas"]["AssistantOpen"] | null;
+            /** @description For a call */
+            person: components["schemas"]["AssistantPerson"] | null;
+            /**
+             * Read Back
+             * @description The card's first line, like 'Log a call with James Sample at Sample Logistics. Follow-up task on Fri 21 Nov.'
+             */
+            read_back: string;
+            task: components["schemas"]["AssistantTask"] | null;
+            /**
+             * Unsure
+             * @description A short line when something wasn't clear or wasn't found, or none
+             */
+            unsure: string | null;
+        };
+        /** AssistantCommandIn */
+        AssistantCommandIn: {
+            /** @description The open review card, if any. Then the only actions are change, send and cancel, and anything else comes back as unknown */
+            card?: components["schemas"]["AssistantCardIn"] | null;
+            /** @description What is on screen, if anything */
+            on_page?: components["schemas"]["AssistantOnPage"] | null;
+            /**
+             * Source
+             * @description mic (said out loud) or typed
+             * @enum {string}
+             */
+            source: "mic" | "typed";
+            /**
+             * Text
+             * @description What was said or typed, 1 to 2,000 characters once trimmed. 422 `command_empty` or `command_too_long` otherwise
+             * @example Log a call with James from Sample Logistics, follow up Friday
+             */
+            text: string;
+        };
+        /** AssistantCompany */
+        AssistantCompany: {
+            /**
+             * Choices
+             * @description Two or more that match, best first
+             */
+            choices: components["schemas"]["CompanyHit"][];
+            /** @description The one company that matches */
+            found: components["schemas"]["CompanyHit"] | null;
+            /**
+             * From Page
+             * @description True when it is the company on screen: none was named, or the one named is close to it, or it is one of several that match
+             */
+            from_page: boolean;
+            /**
+             * Heard
+             * @description The company as heard. Empty when the command named none
+             */
+            heard: string;
+        };
+        /** AssistantEmail */
+        AssistantEmail: {
+            /**
+             * Body
+             * @description The rep's words, tidied by Claude, up to 4,000 characters
+             */
+            body: string;
+            /**
+             * Subject
+             * @description Up to 120 characters. Empty when none could be made
+             */
+            subject: string;
+            /**
+             * To
+             * @description At most 20, in the order said
+             */
+            to: components["schemas"]["AssistantRecipient"][];
+        };
+        /** AssistantMeeting */
+        AssistantMeeting: {
+            /**
+             * Choices
+             * @description Two or more that match, soonest first, or the company's next ones when none is on the day said
+             */
+            choices: components["schemas"]["AssistantMeetingHit"][];
+            /** @description The one meeting that matches */
+            found: components["schemas"]["AssistantMeetingHit"] | null;
+            /**
+             * From Page
+             * @description True when it is the meeting or pre-read on screen
+             */
+            from_page: boolean;
+            /**
+             * Heard
+             * @description The words that named the meeting, like Thursday's meeting. Empty if none
+             */
+            heard: string;
+        };
+        /** AssistantMeetingHit */
+        AssistantMeetingHit: {
+            /** Company Key */
+            company_key: string;
+            /** Company Name */
+            company_name: string;
+            /** @description Its pre-read, if it has one */
+            form: components["schemas"]["MeetingFormState"] | null;
+            /**
+             * Id
+             * @description HubSpot's meeting id. None for a meeting typed in
+             */
+            id: string | null;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * AssistantOnPage
+         * @description What is on screen when the rep speaks. A command that names no company uses this one.
+         */
+        AssistantOnPage: {
+            /**
+             * Company Key
+             * @description The company on screen: a HubSpot id, or lead:<id>
+             * @example 201
+             */
+            company_key?: string | null;
+            /**
+             * Form Id
+             * @description The pre-read on screen
+             */
+            form_id?: string | null;
+            /**
+             * Meeting Id
+             * @description The HubSpot meeting on screen
+             */
+            meeting_id?: string | null;
+            /**
+             * Note Id
+             * @description The call note on screen
+             */
+            note_id?: string | null;
+        };
+        /** AssistantOpen */
+        AssistantOpen: {
+            /**
+             * Company Key
+             * @description For the company page: the company, once found
+             */
+            company_key: string | null;
+            /**
+             * Page
+             * @enum {string}
+             */
+            page: "home" | "today" | "meetings" | "call_logs" | "companies" | "company" | "lead_finder";
+        };
+        /** AssistantPerson */
+        AssistantPerson: {
+            /**
+             * Choices
+             * @description Two or more at the company who match, best first, each with a job title
+             */
+            choices: components["schemas"]["PrepPerson"][];
+            /** @description The one person at the company who matches */
+            found: components["schemas"]["PrepPerson"] | null;
+            /**
+             * Heard
+             * @description The client person as heard, like James. Empty if none
+             */
+            heard: string;
+        };
+        /**
+         * AssistantRecipient
+         * @description A teammate or a Contour address, as a command named them.
+         */
+        AssistantRecipient: {
+            /**
+             * Address
+             * @description A Contour address, typed in full
+             */
+            address: string | null;
+            /**
+             * Choices
+             * @description Two or more teammates who match, best first
+             */
+            choices: components["schemas"]["TeamMember"][];
+            /** @description The one teammate on the team list who matches */
+            found: components["schemas"]["TeamMember"] | null;
+            /**
+             * Heard
+             * @description The name or address as heard
+             */
+            heard: string;
+            /**
+             * Problem
+             * @description Why this one can't be sent to yet, in plain words: not on the team list, no Contour account, or not a Contour address. None when it can
+             */
+            problem: string | null;
+        };
+        /** AssistantTask */
+        AssistantTask: {
+            /**
+             * Due
+             * Format: date
+             * @description A Melbourne working day, today or later
+             */
+            due: string;
+            /**
+             * Due Words
+             * @description When, in the rep's own words. Empty when none was said
+             */
+            due_words: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "call" | "email" | "todo";
+            /** @description Who it is for, when the command named a teammate. None: the rep */
+            owner: components["schemas"]["AssistantRecipient"] | null;
+            /**
+             * Owner Id
+             * @description The teammate's HubSpot owner id. None: the rep, or a teammate still to pick (see `owner`)
+             */
+            owner_id: string | null;
+            /**
+             * Subject
+             * @description What to do, up to 200 characters. Empty when none was said
+             */
+            subject: string;
         };
         /**
          * Blocked
@@ -11264,6 +11572,129 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompanyPage"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    read_assistant_command: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantCommandIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantCommand"];
                 };
             };
             /** @description The request can't be understood */
