@@ -5,8 +5,8 @@ This plan builds what Levi asked for on 18 Nov: fewer clicks, and voice for the 
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
-- **Last updated:** 19 Nov 2026 (T1-1, T1-2 and T2-1 done).
-- **Progress:** Before the build: 1 of 2 (S1 waits for Al-khair at the keyboard). Part 1: 2 of 7. Part 2: 1 of 4. Part 3: 0 of 6. M1 to M4: 0 of 4.
+- **Last updated:** 19 Nov 2026 (T1-3, T1-4 and T3-1 done, T3-2 built).
+- **Progress:** Before the build: 1 of 2 (S1 waits for Al-khair at the keyboard). Part 1: 4 of 7. Part 2: 1 of 4. Part 3: 1 of 6 (T3-2 built, waiting for Al-khair's one real command). M1 to M4: 0 of 4.
 - **Sources:**
   - the meeting with Levi on 18 Nov (Gemini's notes in `minutes of meeting/`, which git ignores);
   - Al-khair's answers in chat (19 Nov);
@@ -274,13 +274,13 @@ All new routes sit under `/api/v1/companies/assistant/`, behind the Call logs or
 
 `GET /assistant/today`, with `fresh=true` for Sync.
 - `tasks`: mine and open, overdue or due in the next 7 days. Each has `id`, `subject`, `kind` (call, email or to-do), `due`, `overdue`, `company` (key and name, or null) and `hubspot_url`.
-- `tasks_state`: `ok`, `no_owner` (no HubSpot link), `no_access` (the key can't read tasks) or `off` (HubSpot isn't connected).
+- `tasks_state`: `ok`, `no_owner` (no HubSpot link), `no_access` (the key can't read tasks), `off` (HubSpot isn't connected) or `failed` (the read failed, and there was no earlier copy to show; added at T1-3).
 - `meetings`: mine, today and tomorrow. Each has `id`, `title`, `starts_at`, `company`, and the pre-read's `form_id` and `status`, or null.
 - `calls`: `to_confirm` and `needs_look`.
 - `deals`: mine and open, that need a nudge. Each has `id`, `name`, `company`, `stage`, `close_date`, `last_contact` and `why` (like "Close date passed, 12 Nov" or "No contact for 21 days").
 - `checked_at`.
 
-`POST /assistant/tasks/{task_id}/done` and `POST /assistant/tasks/{task_id}/reopen`: 204, or 403 `not_your_task`, or 409 `hubspot_writing_off`.
+`POST /assistant/tasks/{task_id}/done` and `POST /assistant/tasks/{task_id}/reopen`: 204, or 403 `not_your_task`, or 409 `hubspot_writing_off`, or 409 `no_hubspot_link` (the account isn't linked to a HubSpot user; added at T1-4).
 
 ### 3. A task on its own (T1-4 builds, T3-3 reads)
 
@@ -310,7 +310,7 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
 
 ## Part 1: the backend
 
-**Progress:** 0 of 7. Every step is `backend-agent` work.
+**Progress:** 4 of 7. Every step is `backend-agent` work.
 
 - [x] **T1-1. The command step.** Done 19 Nov 2026 (`4515649`). The route, the prompt, the form and the limits, with a test for each line of "Done when".
   - `apps/companies/assistant.py`, with its prompt inline as `notes.py` has it, and the route in `api_assistant.py`.
@@ -326,12 +326,12 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
   - **Dates:** `note_dates.read_when` and `task_day`.
   - Two matches or more give `choices`, best first. No match gives none, with the words as heard. For a call, `note_text` follows choice 16.
   - **Done when:** tests with made-up companies pass: "Sample Logistic" finds Sample Logistics Pty Ltd; two people named James give two choices; an unknown name gives none; "Thursday's meeting" and "next meeting" find the right one; and a call note that Claude changed falls back to the whole words.
-- [ ] **T1-3. Today.** `apps/companies/today.py`, with the task read in `core/hubspot/tasks.py`.
+- [x] **T1-3. Today.** Done 19 Nov 2026 (`0d528f5`). `apps/companies/today.py`, with the task read in `core/hubspot/tasks.py`.
   - First find out how to read a task's company in one or two requests. HubSpot's search may not return a task's links to other records (**TBC**).
   - **Tasks:** mine (my `hubspot_owner_id`), not done, overdue or due in 7 days. Kept for 5 minutes a person. `fresh=true` reads again, at most once a minute.
   - **Meetings** from our copy. **The calls' counts** as `GET /call-notes/summary` gives them. **Deals** from `HubSpotDeal` with `stage_kind`, and the company's last activity against `today_quiet_days`.
   - **Done when:** tests with a fake HubSpot pass: overdue comes first; another rep's task never shows; no link gives `no_owner`; a refused read gives `no_access` and the rest still shows; and a repeat inside 5 minutes makes no HubSpot request.
-- [ ] **T1-4. Tasks: add one, tick it done, open it again.**
+- [x] **T1-4. Tasks: add one, tick it done, open it again.** Done 19 Nov 2026 (`8c0bb7d`, `c529901`).
   - Adding goes through the activity writer (`TaskIn`, `ActivityRequest`), behind `hubspot_write_enabled`, with an Idempotency-Key.
   - Done and reopen set the task's status in HubSpot, after reading it again to check it is mine. Each write is a row in `core.hubspot_writes`, as every write is.
   - **Done when:** tests pass: a task for me and one for a teammate; writing off gives 409 with its words; done, then reopen; another person's task gives 403; and a repeated key adds one task.
@@ -340,7 +340,7 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
   - The email has the subject, the body (every value HTML escaped), "Sent by {name} from Contour HQ", and the company's link if given. A reply goes to the rep's own address, if our sender can set it (**TBC**).
   - At most 30 sends a day a person (**TBC**).
   - **Done when:** tests pass: an outside address refuses the send; a teammate with no account can't be picked, with why; a repeated key sends once; no sender set up gives 409; and the limit holds.
-- [ ] **T1-6. The changes to what exists.** `voice_tool`'s default, the morning email's link, `today_quiet_days` with its Settings help, the words for every new error (each file's words block), and the new routes in `test_contract_routes.py`.
+- [ ] **T1-6. The changes to what exists.** `voice_tool`'s default, the morning email's link, `today_quiet_days`'s Settings help (the setting itself came with T1-3), the words for every new error (each file's words block), the new routes in `test_contract_routes.py`, and at most 20 tasks added a minute a person (**TBC**, as for commands; found at T1-4).
   - **Done when:** the settings, words and route tests pass.
 - [ ] **T1-7. Check.** ruff, ruff format, mypy, the fast tests, the Companies and core tests, and the contract gate (`RUN_GATES=1`). Then make the contract and the website's types again for Part 2.
   - **Done when:** all pass, and the numbers are in the Log.
@@ -355,10 +355,17 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
   - **The answer:** each thing it finds comes back as `heard`, then `found` (one match) or `choices` (two or more, best first). An email's people are teammates with an account, or Contour addresses, each with a `problem` line when it can't be sent to. `open` pages: `home`, `today`, `meetings`, `call_logs`, `companies`, `company` (with its `company_key`) and `lead_finder`.
   - **Access:** the Call logs tick alone can't make a pre-read. That needs the Meetings tick and meeting forms on.
   - **The 20 a minute limit** is kept in memory, so it starts again when the backend restarts (**TBC**).
+- 19 Nov 2026, T1-3 and T1-4 (`0d528f5`, `8c0bb7d`, `c529901`, then the contract and the website's types in `4a70341`): built by `backend-agent`. The fast tests: 3,537 passed, 28 skipped. The Companies tests: 553 passed. The other HubSpot tests: 99 passed. ruff, ruff format and mypy (419 files) clean. The contract gates: 3 passed. The `security-check` skill on T1-4: no blockers. Not run: the full core suite.
+  - **How Today reads tasks:** 2 free HubSpot requests. One search for my open tasks due by the end of day 7, latest due first, 100 at most, then one read of their companies. Inside 5 minutes it asks HubSpot nothing, and it reads at most once a minute a person, Sync included. A failed read keeps the last good copy. Meetings, calls and deals come from our copy. Done or reopen is 2 requests: a read to check it is mine, then the change.
+  - **Rules it chose:** overdue means due before today. Today keeps today's earlier meetings and leaves out cancelled ones. Reopen gives back the status before the last Done. A Done or a new task shows on Today at once, and stays on top of HubSpot's slower search for 2 minutes. Today's per-person memory has a cap.
+  - **Writes:** each Done, reopen and new task is a row in `core.hubspot_writes`, a new kind `task` that the other writers refuse. A repeated Idempotency-Key gives back the first write. Emails and phone numbers in a task's words go out blanked, as the command step's do (**TBC** at Al-khair's look: so a rep can't put a number in a task).
+  - **The contract gained** `tasks_state: failed` and 409 `no_hubspot_link` (both now in "The contract"). A 403 there broke the test that says the Companies tick opens every route. The task routes keep the contract's `hubspot_writing_off`; call notes use `hubspot_writes_off`, so the website gives each its own words.
+  - Companies' list of HubSpot permissions now includes reading tasks.
+  - **TBC, checked live at M3** (the agent had no web access): that HubSpot's search gives no links to other records, sorts by latest due as asked, and gives each task its own link (`url`); the task statuses (`COMPLETED`, `NOT_STARTED` and the rest); the 2-minute overlay and the 10-second read limit. Today should hide "Open in HubSpot" when a task has no link.
 
 ## Part 2: the Assistant tab and Today
 
-**Progress:** 0 of 4. Every step is `frontend-agent` work.
+**Progress:** 1 of 4. Every step is `frontend-agent` work.
 
 - [x] **T2-1. The Assistant module.** Done 19 Nov 2026 (`d956204`, joined in `68fe1b3`). Today is a placeholder page until T2-2.
   - `apps/assistant/module.tsx`. `MODULES` becomes Companies, Assistant, Lead Finder.
@@ -393,9 +400,9 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
 
 ## Part 3: the voice and the review card
 
-**Progress:** 0 of 6. Every step is `frontend-agent` work.
+**Progress:** 1 of 6. Every step is `frontend-agent` work.
 
-- [ ] **T3-1. The V key and the voice bar.** In `apps/assistant/voice/`, mounted on every page through the module's frame, as `MicCheckHost` is.
+- [x] **T3-1. The V key and the voice bar.** Done 19 Nov 2026 (`da2d840` on `plan-v22-web`, not joined yet). In `apps/assistant/voice/`, mounted on every page through the module's frame, as `MicCheckHost` is.
   - A shared `isTyping(event)` in `src/lib/`, for V. The five old copies stay as they are.
   - V starts the bar only when: no Ctrl, Cmd, Alt or Shift is held; it isn't a held key's repeat; nobody is typing in a box or through an input method; and no other dialog or menu is open.
   - The bar reuses `session.ts` (the mic check on first use, the bars, the voice tool) and `FrequencyBars`. It has a text line, so a rep can type instead.
@@ -403,7 +410,7 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
   - The top bar's mic button: "Speak (V)", 44px on a touch screen.
   - Only the small key listener is in the first visit. The bar's code loads after the page is idle, or on the first V.
   - **Done when:** tests with a fake mic and a fake voice tool pass: V starts the bar; V in a box types a "v"; Ctrl+V pastes; Shift+V and a held V do nothing more; V with a dialog open does nothing; silence ends it; V keeps; Esc throws away; a typed command works; and with no mic the text line still works. The first visit grows by 1 kB at most.
-- [ ] **T3-2. Voice to text in the bar** (the tool S1 picked; moved from PLAN-V18 T3-5).
+- [ ] **T3-2. Voice to text in the bar** (the tool S1 picked; moved from PLAN-V18 T3-5). Built 19 Nov 2026 (`8c4e4e2` on `plan-v22-web`), waiting for Al-khair's one real command.
   - The speech service's live words, in chunks that fade in, then `name-fix.ts`.
   - Whisper only if S1 picked it, with PLAN-V18 T3-5 (a)'s rules.
   - The audio is never stored.
@@ -425,7 +432,12 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
 
 ### Part 3 Log
 
-- Nothing yet.
+- 19 Nov 2026, T3-1 and T3-2 (`da2d840`, `8c4e4e2` on `plan-v22-web`): built by `frontend-agent`. The website's tests: 2,187 passed, 0 failed, in 149 files (the `mic.test.tsx` flake didn't fail). Lint, types and the build pass. The first visit: 247,028 to 247,788 bytes gzip (+760, under the 1 kB budget), still 39 files. Its first try was +3,458 bytes, because the late bar imported first-visit files and the bundler split them out; removing those imports fixed it. No browser look yet: no widths, no dark mode, no 4x CPU.
+  - **Where things are:** the shared `isTyping` in `src/lib/is-typing.ts`; in `apps/assistant/voice/`: `keys.ts` (when a V counts), `key.tsx` (the small listener in the first visit), `bar-session.ts` (the logic and its timings), `bar.tsx` (the screen), `hand-over.ts` (the seam), `on-page.ts` and `names.ts`. "Speak (V)" sits in a new optional `topBar` slot of a module (`shell/nav.ts`, `shell/top-bar.tsx`). The mic card's words view is now `call-notes/mic/live-words.tsx`, shared with the bar.
+  - **The seam T3-3 fills:** `handOver(heard, { go })` in `voice/hand-over.ts` gets the command step's answer, the words and whether they were said or typed. Until T3-3, an `open` answer goes to its page, any other answer shows its read-back in the bar, and 409 `assistant_off` says "The Assistant can't read commands yet." (T3-5 opens Log call there.) The bar doesn't send `card` yet: T3-3 adds it.
+  - **V and open things:** V does nothing while any dialog, menu or list box is open. So Today's rows must not be a list box, or V stops working on Today.
+  - **TBC at Al-khair's look:** the timings (6 seconds to wait for the first word, 60 seconds at most, 1.5 seconds of silence); new words ("Speak to the Assistant", "Type what to do", and "Turning speech into words isn't set up here yet. Type what to do."); where the voice can't work (no Whisper, or Firefox), the bar opens on its text line and never opens the mic; the bar's look (centred at the bottom, 40rem wide, rising 24px on `smooth`).
+  - **For Al-khair:** V does nothing while call prep's panel is open, because it counts as a dialog ("Speak (V)" in the top bar still works there). Should V work over call prep on a laptop? And three of PLAN-V18's mic messages end "type the note", kept word for word as the plan says; "type what to do" may read better in the bar.
 
 ## Merge, checks and going live
 
@@ -490,3 +502,4 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
   - So the AI sort is already on live, though W1 (Levi's written OK) is still open in this plan. Not confirmed yet whether he gave it. The Assistant follows the same switch (choice 17), so V reads commands live as soon as this ships.
 - 19 Nov 2026: the first account's 5-hour limit stopped both agents at 03:50, after their checks and before their commits. The session went on in the second account at 03:54. It read both agents' work, reran the tests and committed it (`4515649`, `d956204`). From now on, each agent commits each step as soon as its tests pass.
 - 19 Nov 2026: one change to the order. The website builds T3-1 and T3-2 (the V key, the voice bar and its words) next, while the backend builds T1-3 and T1-4. T3-1 and T3-2 need only T1-1's contract, which is in (`4b13c39`), and Today's rows use V (choice 8). T2-2 and T2-3 follow once T1-3's contract is in.
+- 19 Nov 2026, after T1-4 and T3-2: the safety check refused joining `plan-v22-web` into `plan-v22`, because the `git-workflow` skill says a merge needs Al-khair's own word. So the copies stay apart until he says so. The website copy got the same two generated files as `4a70341` instead (`474a41a` on `plan-v22-web`, types and lint pass), so it can build Today and the tasks. Both sides match, so the join stays clean. Each later contract change is copied the same way. The website copy reads this plan from `../contour-v22`. Next: the backend builds T1-5, T1-6 and T1-7, and the website builds T2-2 and T2-3.
