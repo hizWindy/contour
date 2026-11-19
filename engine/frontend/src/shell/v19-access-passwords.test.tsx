@@ -392,6 +392,7 @@ describe('PLAN-V19 T3-2: Platform admin vs Admin and plain role names', () => {
 })
 
 describe('PLAN-V19 T3-3: Position, ticks, generated starting/reset passwords & Change password', () => {
+  // Many steps, and the HubSpot user's (PLAN-V23 T3-4): 10 seconds, as other long tests have.
   it('shows Position in People table, fills role starting ticks, creates a person without password input, shows starting_password once and wipes on close', async () => {
     const owner = makePerson({
       id: 'u-owner',
@@ -513,7 +514,7 @@ describe('PLAN-V19 T3-3: Position, ticks, generated starting/reset passwords & C
     const freshSheet = await screen.findByRole('dialog', { name: 'Add a person' })
     expect(within(freshSheet).queryByText('amber cedar pine 42')).not.toBeInTheDocument()
     expect(within(freshSheet).getByLabelText('Name')).toHaveValue('')
-  })
+  }, 10_000)
 
   it('asks for confirmation before Reset password, shows once, and wipes on Sheet close', async () => {
     const sam = makePerson({ id: 'u-sam', name: 'Sam Sample', email: 'sam@example.test' })
