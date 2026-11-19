@@ -228,6 +228,16 @@ export type AssistantTaskIn = Schemas['AssistantTaskIn']
 export type AssistantEmailIn = Schemas['AssistantEmailIn']
 export type TeamEmail = Schemas['TeamEmail']
 
+// The Assistant's names (PLAN-V23 Part 1): the hint list, learned names and adding a company
+export type AssistantName = Schemas['AssistantName']
+export type AssistantNames = Schemas['AssistantNames']
+export type LearnedNameIn = Schemas['LearnedNameIn']
+export type LearnedName = Schemas['LearnedNameOut']
+export type LearnedNamePage = Schemas['LearnedNamePage']
+export type AssistantCompanyIn = Schemas['AssistantCompanyIn']
+export type AssistantCompanyPreview = Schemas['AssistantCompanyPreview']
+export type AssistantCompanyAdded = Schemas['AssistantCompanyAdded']
+
 // The Assistant (PLAN-V22): Today (T1-3, the contract part 2) and its tasks (T1-4)
 export type Today = Schemas['Today']
 export type TodayPart = Today['parts'][number]
