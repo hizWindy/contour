@@ -93,6 +93,8 @@ import {
   NO_PRE_READS,
   NO_TASKS,
   NOTHING_DUE,
+  NOTHING_DUE_CALL,
+  NOTHING_DUE_CALL_TOUCH,
   NOTHING_DUE_NEXT,
   NOTHING_DUE_NEXT_TOUCH,
   OPEN,
@@ -548,6 +550,11 @@ function TodayParts({
     </>
   )
 
+  // No HubSpot user (PLAN-V23 choice 16): no tasks of their own, so the next step is a call.
+  const noUser = today.tasks_state === 'none'
+  const next = noUser ? NOTHING_DUE_CALL : NOTHING_DUE_NEXT
+  const nextTouch = noUser ? NOTHING_DUE_CALL_TOUCH : NOTHING_DUE_NEXT_TOUCH
+
   return (
     <>
       {nothingToday(today) ? (
@@ -556,12 +563,12 @@ function TodayParts({
           description={
             viewer ? undefined : vOn ? (
               <>
-                <span className="touch:hidden">{NOTHING_DUE_NEXT}</span>
-                <span className="hidden touch:inline">{NOTHING_DUE_NEXT_TOUCH}</span>
+                <span className="touch:hidden">{next}</span>
+                <span className="hidden touch:inline">{nextTouch}</span>
               </>
             ) : (
               // "Use V to speak" off (PLAN-V23 T4-1): the words name the Speak button instead.
-              NOTHING_DUE_NEXT_TOUCH
+              nextTouch
             )
           }
         />
@@ -628,6 +635,8 @@ function TodayContent() {
   const sync = useTodaySync(today.data, day)
   // Whoever may send from the Assistant: the Call logs or Meetings tick, and not a Viewer.
   const canSend = useCanWrite('companies.call_logs', 'companies.meetings')
+  // Sync reads HubSpot tasks: none for someone with no HubSpot user (PLAN-V23 choice 16).
+  const syncs = today.data !== undefined && today.data.tasks_state !== 'none'
   const header = (
     <PageHeader
       icon={ListTodo}
@@ -635,10 +644,10 @@ function TodayContent() {
       title={TODAY}
       description={TODAY_PURPOSE}
       actions={
-        canSend || today.data ? (
+        canSend || syncs ? (
           <>
             {canSend ? <CardButtons /> : null}
-            {today.data ? <SyncButton sync={sync} note={SYNC_TASKS_NOTE} /> : null}
+            {syncs ? <SyncButton sync={sync} note={SYNC_TASKS_NOTE} /> : null}
           </>
         ) : null
       }

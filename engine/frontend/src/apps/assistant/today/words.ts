@@ -41,6 +41,9 @@ export const NOTHING_DUE = 'Nothing due today.'
 export const NOTHING_DUE_NEXT = 'Press V to log a call or add a task.'
 /** On a touch screen there is no V (TBC). */
 export const NOTHING_DUE_NEXT_TOUCH = 'Tap Speak to log a call or add a task.'
+/** Someone with no HubSpot user has no tasks of their own (PLAN-V23 choice 16). */
+export const NOTHING_DUE_CALL = 'Press V to log a call.'
+export const NOTHING_DUE_CALL_TOUCH = 'Tap Speak to log a call.'
 export const NO_TASKS = 'No tasks due in the next 7 days.'
 export const NO_MEETINGS = 'No meetings today or tomorrow.'
 export const NO_PRE_READS = 'No pre-reads sent to you.'
