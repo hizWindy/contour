@@ -397,6 +397,7 @@ async def test_admin_creates_and_resets_passphrases_without_logging_secrets(
                 "position": "Sales Rep",
                 "role": "staff",
                 "features": ["companies.call_logs"],
+                "no_hubspot_user": True,  # PLAN-V23 T3-1: a new person needs a HubSpot choice
             },
         )
         assert created.status_code == 201, created.text
@@ -454,7 +455,12 @@ async def test_self_service_password_change_ends_other_sessions_and_throttles_wr
         created = (
             await boss.post(
                 "/api/v1/people",
-                json={"name": "Jo", "email": "jo@example.test", "role": "staff"},
+                json={
+                    "name": "Jo",
+                    "email": "jo@example.test",
+                    "role": "staff",
+                    "no_hubspot_user": True,
+                },
             )
         ).json()
         start_pw = created["starting_password"]

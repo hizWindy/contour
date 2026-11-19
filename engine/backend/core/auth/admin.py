@@ -82,8 +82,12 @@ async def create_person(
     features: Sequence[str] | None = None,
     hasher: Hasher | None = None,
     by: str = BY_COMMAND,
+    hubspot_owner_id: str | None = None,
+    no_hubspot_user: bool = False,
 ) -> User:
-    """Makes an account with a role, optional position, and ticks (`PLAN-V19 T1-4, T1-5`)."""
+    """Makes an account with a role, optional position, and ticks (`PLAN-V19 T1-4, T1-5`). It may
+    start linked to a HubSpot owner the caller has checked (set by hand), or marked "No HubSpot
+    user" (PLAN-V23 T3-1), in the same transaction."""
     email = clean.email(email)
     username = clean.username(username)
     cleaned_position = clean.position(position)
@@ -111,13 +115,15 @@ async def create_person(
         password_hash=password_hash,
         now=now,
     )
-    audit.add_entry(
-        db,
-        "account_created",
-        user_id=user.id,
-        details={"by": by, "role": user.role},
-        at=now,
-    )
+    if hubspot_owner_id is not None:
+        user.hubspot_owner_id = hubspot_owner_id
+        user.hubspot_owner_matched_by = "person"  # an Admin picked it: the sync never changes it
+    else:
+        user.no_hubspot_user = no_hubspot_user
+    details: dict[str, object] = {"by": by, "role": user.role}
+    if hubspot_owner_id is not None or no_hubspot_user:
+        details["hubspot"] = "linked" if hubspot_owner_id is not None else "none"
+    audit.add_entry(db, "account_created", user_id=user.id, details=details, at=now)
     await db.commit()
     return user
 

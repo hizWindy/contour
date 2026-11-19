@@ -23,6 +23,11 @@ owner's id, and how it was matched. Never the owner's email.
   and its own address, for Track 2's Meetings).
 - **Teams** (PLAN-V18 T1-3, T1-4): `teams_of` gives an owner's HubSpot teams and the owners in
   them, from `core.hubspot_owner_teams` (the sync fills it), for Meetings' "My team".
+- **The HubSpot user mark** (PLAN-V23 T3-1, decision 4): an account is `linked` (an owner is
+  set), `none` (marked "No HubSpot user", like a designer: their calls go to HubSpot with no
+  owner, and they get no HubSpot tasks) or `not_set` (nobody has picked yet), as `hubspot_user`
+  says. Linking clears the mark and the mark clears the link, so it is never both. The sync's
+  email match never links a marked account.
 """
 
 import logging
@@ -43,6 +48,14 @@ from core.hubspot.models import HubSpotOwner, HubSpotOwnerTeam
 log = logging.getLogger(__name__)
 
 MatchedBy = Literal["email", "person"]
+# Where a person's work lands in HubSpot (PLAN-V23 T3-1): under their owner (linked), with no owner
+# (none: "No HubSpot user"), or not picked yet (not_set).
+HubSpotUser = Literal["linked", "none", "not_set"]
+HUBSPOT_USER_HELP = (
+    "linked: their HubSpot user is set, so their calls and tasks land under it. none: marked "
+    "No HubSpot user, so their calls go to HubSpot with no owner, signed in the call's text, and "
+    "they get no HubSpot tasks. not_set: nobody has picked yet"
+)
 BY_EMAIL: MatchedBy = "email"
 BY_PERSON: MatchedBy = "person"
 OWNERS_CAP = 500  # the most owners the pick list sends. Contour has a few dozen.
@@ -98,6 +111,14 @@ class OwnerNotActive(ValueError):
     """The owner id isn't an active owner in our copy of HubSpot."""
 
 
+def hubspot_user(user: User) -> HubSpotUser:
+    """Where this person's work lands in HubSpot (PLAN-V23 T3-1). A link wins over the mark, but
+    each change clears the other, so an account never has both."""
+    if user.hubspot_owner_id is not None:
+        return "linked"
+    return "none" if user.no_hubspot_user else "not_set"
+
+
 # --- The sync's match by email ---------------------------------------------------------------
 
 
@@ -109,6 +130,7 @@ class Account:
     email: str
     owner_id: str | None
     matched_by: str | None
+    no_hubspot_user: bool = False  # marked "No HubSpot user" (PLAN-V23 T3-1): never linked
 
 
 def plan_links(
@@ -123,8 +145,8 @@ def plan_links(
     """
     changes: dict[uuid.UUID, str | None] = {}
     for account in accounts:
-        if account.matched_by == BY_PERSON:
-            continue  # set by hand: the sync never changes it
+        if account.matched_by == BY_PERSON or account.no_hubspot_user:
+            continue  # set by hand, or marked No HubSpot user: the sync never changes it
         key = email_key(account.email)
         found = owners_by_email.get(key) if key is not None else None
         if found is not None and found not in active:
@@ -143,10 +165,15 @@ async def match_accounts(sessions: async_sessionmaker[AsyncSession], hubspot: Hu
     try:
         async with sessions() as session:
             wanted = await session.scalar(
-                select(exists().where(User.hubspot_owner_matched_by.is_distinct_from(BY_PERSON)))
+                select(
+                    exists().where(
+                        User.hubspot_owner_matched_by.is_distinct_from(BY_PERSON),
+                        User.no_hubspot_user.is_(False),
+                    )
+                )
             )
         if not wanted:
-            return []  # no account, or every link was set by hand: HubSpot isn't asked
+            return []  # no account, or each was set by hand or marked: HubSpot isn't asked
         # No database connection is held while HubSpot answers.
         owners_by_email = await hubspot.owner_emails()
         async with sessions() as session:
@@ -170,18 +197,35 @@ async def _save_links(session: AsyncSession, owners_by_email: Mapping[str, str])
         await session.scalars(select(HubSpotOwner.owner_id).where(HubSpotOwner.archived.is_(False)))
     )
     rows = await session.execute(
-        select(User.id, User.email, User.hubspot_owner_id, User.hubspot_owner_matched_by)
+        select(
+            User.id,
+            User.email,
+            User.hubspot_owner_id,
+            User.hubspot_owner_matched_by,
+            User.no_hubspot_user,
+        )
     )
     accounts = [
-        Account(id=account_id, email=email, owner_id=owner_id, matched_by=matched_by)
-        for account_id, email, owner_id, matched_by in rows
+        Account(
+            id=account_id,
+            email=email,
+            owner_id=owner_id,
+            matched_by=matched_by,
+            no_hubspot_user=mark,
+        )
+        for account_id, email, owner_id, matched_by, mark in rows
     ]
     changes = plan_links(accounts, owners_by_email, active)
     for account_id, owner_id in changes.items():
-        # A link an Admin sets while the sync runs wins: only one that isn't by hand changes.
+        # A link an Admin sets, or a mark, while the sync runs wins: only one that isn't by hand
+        # and isn't marked changes.
         await session.execute(
             update(User)
-            .where(User.id == account_id, User.hubspot_owner_matched_by.is_distinct_from(BY_PERSON))
+            .where(
+                User.id == account_id,
+                User.hubspot_owner_matched_by.is_distinct_from(BY_PERSON),
+                User.no_hubspot_user.is_(False),
+            )
             .values(
                 hubspot_owner_id=owner_id,
                 hubspot_owner_matched_by=None if owner_id is None else BY_EMAIL,
@@ -194,6 +238,7 @@ async def _save_links(session: AsyncSession, owners_by_email: Mapping[str, str])
         "linked": linked,
         "cleared": len(changes) - linked,
         "by_hand": sum(account.matched_by == BY_PERSON for account in accounts),
+        "no_hubspot_user": sum(account.no_hubspot_user for account in accounts),
     }
 
 
@@ -201,31 +246,46 @@ async def _save_links(session: AsyncSession, owners_by_email: Mapping[str, str])
 
 
 async def set_by_hand(
-    session: AsyncSession, user_id: uuid.UUID, owner_id: str | None
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    owner_id: str | None,
+    *,
+    no_hubspot_user: bool = False,
 ) -> User | None:
     """Sets one account's owner by hand (`person`), or clears the link with None, so the next
-    sync may match the email again. The account's row stays locked until the caller commits.
+    sync may match the email again; or, with `no_hubspot_user` (and no owner), marks the account
+    "No HubSpot user" (PLAN-V23 T3-1). Linking clears the mark and the mark clears the link; a
+    clear clears both (not set). The account's row stays locked until the caller commits.
 
     Returns None when there is no such account. Raises `OwnerNotActive` for an owner id that
-    isn't an active owner in our copy.
+    isn't an active owner in our copy, and `ValueError` for both an owner and the mark.
     """
+    if owner_id is not None and no_hubspot_user:
+        raise ValueError("an owner or No HubSpot user, not both")
     user = await session.get(User, user_id, with_for_update=True)
     if user is None:
         return None
     if owner_id is None:
         user.hubspot_owner_id = None
         user.hubspot_owner_matched_by = None
+        user.no_hubspot_user = no_hubspot_user
         return user
-    active = await session.scalar(
+    if not await is_active(session, owner_id):
+        raise OwnerNotActive(owner_id)
+    user.hubspot_owner_id = owner_id
+    user.hubspot_owner_matched_by = BY_PERSON
+    user.no_hubspot_user = False
+    return user
+
+
+async def is_active(session: AsyncSession, owner_id: str) -> bool:
+    """Whether `owner_id` is an active owner in our copy of HubSpot."""
+    found = await session.scalar(
         select(HubSpotOwner.owner_id).where(
             HubSpotOwner.owner_id == owner_id, HubSpotOwner.archived.is_(False)
         )
     )
-    if active is None:
-        raise OwnerNotActive(owner_id)
-    user.hubspot_owner_id = owner_id
-    user.hubspot_owner_matched_by = BY_PERSON
-    return user
+    return found is not None
 
 
 # --- Reads -----------------------------------------------------------------------------------

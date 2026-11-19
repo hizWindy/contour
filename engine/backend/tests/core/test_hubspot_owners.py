@@ -488,8 +488,8 @@ async def test_an_admin_sees_sets_and_clears_who_a_person_is_in_hubspot(
             )
         )
     assert [entry.details for entry in entries] == [
-        {"fields": ["hubspot_owner"], "hubspot_owner_id": "301"},
-        {"fields": ["hubspot_owner"], "hubspot_owner_id": None},
+        {"fields": ["hubspot_owner"], "hubspot_owner_id": "301", "hubspot": "linked"},
+        {"fields": ["hubspot_owner"], "hubspot_owner_id": None, "hubspot": "not_set"},
     ]
 
 

@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from core.api.deps import SessionDep
 from core.api.errors import Problem, ProblemDetails, ValidationProblem
-from core.api.models import OFFSET_MAX, OutModel, SafeText
+from core.api.models import OFFSET_MAX, OutModel, SafeText, optional_in_types
 from core.api.signin import (
     AuthSettingsDep,
     HasherDep,
@@ -37,6 +37,7 @@ from core.auth.passwords import PasswordRefused
 from core.auth.sessions import Limits
 from core.auth.throttle import Rules
 from core.config import Settings
+from core.hubspot.owners import HUBSPOT_USER_HELP, HubSpotUser, hubspot_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -79,6 +80,10 @@ class ChangePasswordIn(BaseModel):
 
 
 class UserOut(OutModel):
+    # `hubspot` came in PLAN-V23 T3-1: the API always sends it, and the website's types leave it
+    # optional, so older test data still type-checks.
+    model_config = ConfigDict(json_schema_extra=optional_in_types("hubspot"))
+
     id: uuid.UUID
     email: str
     username: str | None = Field(description="The second way to sign in, if the account has one")
@@ -92,6 +97,9 @@ class UserOut(OutModel):
     features: list[str] = Field(
         default_factory=list,
         description="The ticks this account may use across Lead Finder and Relationships",
+    )
+    hubspot: HubSpotUser = Field(
+        description="Where my work lands in HubSpot (PLAN-V23 T3-1). " + HUBSPOT_USER_HELP
     )
 
 
@@ -178,6 +186,7 @@ def user_out(user: User) -> UserOut:
         role=cast(Role, user.role),
         apps=resolved_apps,
         features=resolved_features,
+        hubspot=hubspot_user(user),
     )
 
 

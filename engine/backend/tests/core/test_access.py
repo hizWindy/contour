@@ -141,6 +141,7 @@ async def test_an_admin_adds_a_person_with_the_tick_and_they_can_sign_in(world: 
                 "position": "Sales Rep",
                 "role": "staff",
                 "features": ["lead_finder.rules", "lead_finder.results"],
+                "no_hubspot_user": True,  # PLAN-V23 T3-1: a new person needs a HubSpot choice
             },
         )
         assert added.status_code == 201, added.text
@@ -161,7 +162,7 @@ async def test_an_admin_adds_a_person_with_the_tick_and_they_can_sign_in(world: 
 
         again = await admin_browser.post(
             PEOPLE,
-            json={"name": "Again", "email": "marcus@example.test"},
+            json={"name": "Again", "email": "marcus@example.test", "no_hubspot_user": True},
         )
         assert again.status_code == 422 and again.json()["errors"][0]["field"] == "body.email"
         unknown = await admin_browser.post(

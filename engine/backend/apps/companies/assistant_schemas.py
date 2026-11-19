@@ -26,9 +26,8 @@ from apps.companies.schemas import (
     OwnerId,
     PrepPerson,
     TeamMember,
-    optional_in_types,
 )
-from core.api.models import SafeText
+from core.api.models import SafeText, optional_in_types
 
 # unclear (PLAN-V23 choice 4): the words are too unclear to make a command. The bar stops before
 # the card, with the words in `read_back`.

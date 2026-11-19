@@ -1,6 +1,11 @@
 """The Platform admin's People tab (PLAN-V9 E1, PLAN-V19 T1-3 to T1-5).
 
 All routes here require `PlatformAdminDep` (`403 platform_admin_only` for any other role).
+
+PLAN-V23 T3-1: each person's HubSpot user (`hubspot`: linked, none or not_set). Add person needs
+one choice, their HubSpot user or "No HubSpot user" (422 `hubspot_choice_missing` for neither); a
+new "No HubSpot user" person starts with the Call logs tick only, unless ticks are sent. The link
+change also takes "No HubSpot user".
 """
 
 import uuid
@@ -14,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.api.deps import SessionDep
 from core.api.errors import Problem
-from core.api.models import OutModel, SafeText
+from core.api.models import OutModel, SafeText, optional_in_types
 from core.api.signin import HasherDep, NowDep, PlatformAdminDep
 from core.auth import audit, clean, sessions
 from core.auth.admin import BY_COMMAND, create_person, reset_password
@@ -35,14 +40,22 @@ from core.auth.models import User
 from core.auth.passphrase import generate_password
 from core.auth.users import LoginTaken
 from core.hubspot import owners
-from core.hubspot.owners import HubSpotOwnerLink
+from core.hubspot.owners import HUBSPOT_USER_HELP, HubSpotOwnerLink, HubSpotUser
 
 router = APIRouter(prefix="/people", tags=["people"])
 
 BY_ADMIN = "admin"  # what the sign-in log says made an account from the People tab
+# A new person with "No HubSpot user" starts with this tick only (PLAN-V23 choice 13): Meetings
+# can be added, for someone who writes pre-reads.
+NO_HUBSPOT_USER_TICKS: tuple[Feature, ...] = ("companies.call_logs",)
+BOTH_CHOICES = "Pick one: their HubSpot user, or No HubSpot user."
 
 
 class PersonOut(OutModel):
+    # `hubspot` came in PLAN-V23 T3-1: the API always sends it, and the website's types leave it
+    # optional, so older test data still type-checks.
+    model_config = ConfigDict(json_schema_extra=optional_in_types("hubspot"))
+
     id: uuid.UUID
     name: str
     email: str
@@ -60,6 +73,7 @@ class PersonOut(OutModel):
             "link, so HubSpot shows their calls as unassigned"
         )
     )
+    hubspot: HubSpotUser = Field(description="Their HubSpot user (PLAN-V23). " + HUBSPOT_USER_HELP)
 
 
 class PersonCreatedOut(PersonOut):
@@ -89,13 +103,37 @@ class PersonIn(BaseModel):
     features: list[Feature] | None = Field(
         None,
         max_length=20,
-        description="Ticks for this account. Left out: the role's starting ticks.",
+        description=(
+            "Ticks for this account. Left out: the role's starting ticks, or the Call logs tick "
+            "only for No HubSpot user."
+        ),
+    )
+    hubspot_owner_id: SafeText | None = Field(
+        None,
+        max_length=32,
+        description=(
+            "Their HubSpot user: an active owner's id from GET /hubspot/owners. A new person "
+            "needs this or `no_hubspot_user` (422 `hubspot_choice_missing` for neither)"
+        ),
+        examples=["301"],
+    )
+    no_hubspot_user: bool = Field(
+        False,
+        description=(
+            "true: this person has no HubSpot login, like a designer (PLAN-V23 T3-1). Their calls "
+            "go to HubSpot with no owner, and they get no HubSpot tasks"
+        ),
     )
 
     @field_validator("features")
     @classmethod
     def _clean_features(cls, value: list[Feature] | None) -> list[Feature] | None:
         return None if value is None else _dedupe_features(value)
+
+    @field_validator("hubspot_owner_id")
+    @classmethod
+    def _owner_trimmed(cls, value: str | None) -> str | None:
+        return (value or "").strip() or None
 
 
 class PersonPatch(BaseModel):
@@ -115,7 +153,8 @@ class PersonPatch(BaseModel):
 
 
 class HubSpotOwnerIn(BaseModel):
-    """Who a person is in HubSpot, chosen by hand. null clears it."""
+    """Who a person is in HubSpot, chosen by hand. null clears it; null with `no_hubspot_user`
+    marks the person "No HubSpot user"."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -123,6 +162,13 @@ class HubSpotOwnerIn(BaseModel):
         max_length=32,
         description="An active owner's id from GET /hubspot/owners, or null to clear the link",
         examples=["301"],
+    )
+    no_hubspot_user: bool = Field(
+        False,
+        description=(
+            "true, with owner_id null: mark the person No HubSpot user (PLAN-V23 T3-1). It clears "
+            "any link, and a link clears it"
+        ),
     )
 
     @field_validator("owner_id")
@@ -147,6 +193,7 @@ def _out_fields(user: User, hubspot_owner: HubSpotOwnerLink | None = None) -> di
         "created_at": user.created_at,
         "last_signed_in_at": user.last_signed_in_at,
         "hubspot_owner": hubspot_owner,
+        "hubspot": owners.hubspot_user(user),
     }
 
 
@@ -168,6 +215,26 @@ def _invalid(field: str, message: str) -> Problem:
     )
 
 
+def hubspot_choice_missing() -> Problem:
+    """A new person needs their HubSpot user, or "No HubSpot user" (PLAN-V23 T3-1)."""
+    return Problem(
+        422,
+        "Pick their HubSpot user",
+        "Pick this person's HubSpot user from the list, or pick No HubSpot user.",
+        code="hubspot_choice_missing",
+        errors=[
+            {
+                "field": "body.hubspot_owner_id",
+                "message": "Pick their HubSpot user, or No HubSpot user.",
+            }
+        ],
+    )
+
+
+def owner_not_active() -> Problem:
+    return _invalid("owner_id", "This isn't an active HubSpot owner. Pick one from the list.")
+
+
 @router.get("", response_model=list[PersonOut], summary="Everyone with an account")
 async def list_people(session: SessionDep, admin: PlatformAdminDep) -> list[PersonOut]:
     users = list(await session.scalars(select(User).order_by(func.lower(User.name), User.email)))
@@ -181,8 +248,12 @@ async def list_people(session: SessionDep, admin: PlatformAdminDep) -> list[Pers
     response_model=PersonCreatedOut,
     summary="Add a person",
     description=(
-        "A new account with a generated starting password shown once in this answer. "
-        "Platform admin only."
+        "A new account with a generated starting password shown once in this answer. It needs "
+        "one HubSpot choice: `hubspot_owner_id` (their HubSpot user, an active owner from GET "
+        "/hubspot/owners) or `no_hubspot_user: true` (PLAN-V23 T3-1). 422 "
+        "`hubspot_choice_missing` for neither, and a field error for both or an owner that isn't "
+        "active. A No HubSpot user person starts with the Call logs tick only, unless `features` "
+        "are sent. Platform admin only."
     ),
 )
 async def add_person(
@@ -205,13 +276,24 @@ async def add_person(
         cleaned_position = clean.position(body.position)
     except ValueError as error:
         raise _invalid("position", str(error)) from None
+    if body.hubspot_owner_id is None and not body.no_hubspot_user:
+        raise hubspot_choice_missing()
+    if body.hubspot_owner_id is not None and body.no_hubspot_user:
+        raise _invalid("no_hubspot_user", BOTH_CHOICES)
+    if body.hubspot_owner_id is not None and not await owners.is_active(
+        session, body.hubspot_owner_id
+    ):
+        raise _invalid(
+            "hubspot_owner_id", "This isn't an active HubSpot owner. Pick one from the list."
+        )
 
     starting = generate_password(email=cleaned_email, username=cleaned_username)
-    chosen_features = (
-        default_features(body.role)
-        if body.features is None
-        else [str(feature) for feature in body.features]
-    )
+    if body.features is not None:
+        chosen_features = [str(feature) for feature in body.features]
+    elif body.no_hubspot_user:
+        chosen_features = list(NO_HUBSPOT_USER_TICKS)
+    else:
+        chosen_features = default_features(body.role)
     try:
         user = await create_person(
             session,
@@ -225,11 +307,14 @@ async def add_person(
             now=now,
             hasher=hasher,
             by=BY_ADMIN if admin is not None else BY_COMMAND,
+            hubspot_owner_id=body.hubspot_owner_id,
+            no_hubspot_user=body.no_hubspot_user,
         )
     except LoginTaken as taken:
         raise _invalid(taken.field, f"This {taken.field} already has an account.") from None
     response.headers["Cache-Control"] = "no-store"
-    return PersonCreatedOut.model_validate(_out_fields(user) | {"starting_password": starting})
+    created = await _out_with_owner(session, user)
+    return PersonCreatedOut.model_validate(created.model_dump() | {"starting_password": starting})
 
 
 @router.patch(
@@ -331,8 +416,11 @@ async def reset_person_password(
         "Links the account to a HubSpot owner by hand, so the calls, tasks and notes this person "
         "logs land under that owner in HubSpot. `owner_id` is an active owner from GET "
         "/hubspot/owners. The HubSpot sync never changes a link set by hand. "
-        '`{"owner_id": null}` clears the link, and the next sync may then match the person by '
-        "email again. Platform admin only."
+        '`{"owner_id": null}` clears the link (and the mark: `hubspot` not_set), and the next '
+        "sync may then match the person by email again. "
+        '`{"owner_id": null, "no_hubspot_user": true}` marks the person No HubSpot user '
+        "(PLAN-V23 T3-1): it clears any link, the sync never links them, and a link set later "
+        "clears the mark. Both an owner and the mark is a field error. Platform admin only."
     ),
 )
 async def set_hubspot_owner(
@@ -342,19 +430,25 @@ async def set_hubspot_owner(
     admin: PlatformAdminDep,
     now: NowDep,
 ) -> PersonOut:
+    if body.owner_id is not None and body.no_hubspot_user:
+        raise _invalid("no_hubspot_user", BOTH_CHOICES)
     try:
-        user = await owners.set_by_hand(session, user_id, body.owner_id)
+        user = await owners.set_by_hand(
+            session, user_id, body.owner_id, no_hubspot_user=body.no_hubspot_user
+        )
     except owners.OwnerNotActive:
-        raise _invalid(
-            "owner_id", "This isn't an active HubSpot owner. Pick one from the list."
-        ) from None
+        raise owner_not_active() from None
     if user is None:
         raise Problem(404, "No such person", "The account may have been removed.")
     audit.add_entry(
         session,
         "account_changed",
         user_id=user.id,
-        details={"fields": ["hubspot_owner"], "hubspot_owner_id": user.hubspot_owner_id},
+        details={
+            "fields": ["hubspot_owner"],
+            "hubspot_owner_id": user.hubspot_owner_id,
+            "hubspot": owners.hubspot_user(user),
+        },
         at=now,
     )
     await session.commit()

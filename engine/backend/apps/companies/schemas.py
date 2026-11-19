@@ -1,16 +1,14 @@
 """What the Companies routes take and give (PLAN-V10). The website's types come from these."""
 
 import uuid
-from collections.abc import Callable
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, model_validator
-from pydantic.config import JsonDict
 
 from apps.companies.deals import DealState, StageKind
-from core.api.models import SafeText
+from core.api.models import SafeText, optional_in_types
 from core.config import VoiceTool
 from core.hubspot.meetings import Meeting, MeetingsState, MeetingWhere
 
@@ -27,18 +25,6 @@ ToneKey = Literal["friendly", "direct", "consultative", "formal"]  # the tone pr
 
 class Out(BaseModel):
     model_config = ConfigDict(json_schema_serialization_defaults_required=True)
-
-
-def optional_in_types(*names: str) -> Callable[[JsonDict], None]:
-    """Leaves these fields out of `required` in the website's types, so test data written before
-    they existed still type-checks. The API always sends them (PLAN-V14)."""
-
-    def drop(schema: JsonDict) -> None:
-        required = schema.get("required")
-        if isinstance(required, list):
-            schema["required"] = [name for name in required if name not in names]
-
-    return drop
 
 
 # --- The list ----------------------------------------------------------------------------------

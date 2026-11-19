@@ -13,9 +13,11 @@ refuses it at the edge, with a 422 that names the field.
 to skip rows of, a database column. Above them PostgreSQL says "out of range" (a 500).
 """
 
+from collections.abc import Callable
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic.config import JsonDict
 
 NO_NUL_PATTERN = r"^[^\x00]*$"
 SafeText = Annotated[str, StringConstraints(pattern=NO_NUL_PATTERN)]
@@ -26,3 +28,16 @@ OFFSET_MAX = 1_000_000  # nobody pages past a million rows, and huge offsets are
 
 class OutModel(BaseModel):
     model_config = ConfigDict(json_schema_serialization_defaults_required=True)
+
+
+def optional_in_types(*names: str) -> Callable[[JsonDict], None]:
+    """Leaves these fields out of `required` in the website's types, so test data written before
+    they existed still type-checks. The API always sends them (PLAN-V14; in core since PLAN-V23,
+    for the signed-in answer and the People tab)."""
+
+    def drop(schema: JsonDict) -> None:
+        required = schema.get("required")
+        if isinstance(required, list):
+            schema["required"] = [name for name in required if name not in names]
+
+    return drop
