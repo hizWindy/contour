@@ -1222,6 +1222,14 @@ class FormEmailPreview(Out):
             "(a HubSpot meeting, and that switch on); none when Send won't touch the meeting"
         ),
     )
+    task_alert: str | None = Field(
+        None,
+        description=(
+            "PLAN-V23 choice 11: 'Each gets a HubSpot task and a HubSpot alert.' when Send gives "
+            "anyone a HubSpot task (each task carries a reminder); none when nobody gets one"
+        ),
+        examples=["Each gets a HubSpot task and a HubSpot alert."],
+    )
 
 
 TRANSCRIPT_MAX_CHARS = 200_000  # the most a transcript can ever send; the setting is less

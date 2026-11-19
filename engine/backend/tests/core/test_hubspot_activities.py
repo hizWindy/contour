@@ -94,6 +94,7 @@ STAFF = "number_of_staff_melbourne_office_"
 EMPLOYEES = "numberofemployees"
 QUALITY = "quality_of_office_melbourne_"
 AT = datetime(2026, 11, 16, 9, 30, tzinfo=MELBOURNE)  # a Monday
+SENT = datetime(2026, 11, 19, 15, 0, tzinfo=MELBOURNE)  # when a test's write is sent: a Thursday
 CONNECTED = "f240bbac-87c9-4f6e-bf70-924b57d47db7"  # HubSpot's id for "Connected"
 TIMED_OUT = HubSpotWriteUncertain("HubSpot didn't answer", "It timed out.")
 REFUSED = HubSpotRejected("HubSpot didn't accept the request", "It answered 400 VALIDATION_ERROR.")
@@ -429,7 +430,7 @@ async def test_each_step_goes_in_order_with_its_fields_and_links(session: AsyncS
     fake = contour()
     await add_owners(session)
     out = await preview_activity(session, fake, a_request())
-    done = await apply_activity(session, fake, out.id, pause=Waits())
+    done = await apply_activity(session, fake, out.id, pause=Waits(), clock=lambda: SENT)
 
     assert done.status == "done"
     assert [(step.step, step.status) for step in done.steps] == [
@@ -466,9 +467,11 @@ async def test_each_step_goes_in_order_with_its_fields_and_links(session: AsyncS
         "hs_task_priority": "HIGH",
         "hs_task_type": "EMAIL",
         "hubspot_owner_id": REP,  # the rep's, as the task names nobody
+        "hs_task_reminders": due_ms(date(2026, 11, 20)),  # the rep's own: when it is due
     }
     assert (first.companies, first.contacts, first.deals) == ((COMPANY,), (PERSON,), (DEAL,))
     assert second.properties["hubspot_owner_id"] == OTHER_REP  # the task's own owner
+    assert second.properties["hs_task_reminders"] == ms(SENT + timedelta(minutes=2))  # theirs
     assert "hs_task_body" not in second.properties  # never an empty text
     (note,) = fake.notes.values()
     assert note.properties["hs_note_body"] == "<p>Pre-read for Sample Logistics Pty Ltd</p>"

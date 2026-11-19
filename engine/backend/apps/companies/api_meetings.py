@@ -342,7 +342,9 @@ async def redraft_form(
     description=(
         "What Send will do: the HubSpot task subject and working-day due date, email preview, "
         "and each person with whether they get a task and/or email (and if they already got it). "
-        "Nothing is sent. 404 `form_not_found`. 409 `meeting_forms_off`."
+        "`task_alert` is the line 'Each gets a HubSpot task and a HubSpot alert.' when anyone "
+        "gets a task: each task carries a reminder, 2 minutes after the send for someone else "
+        "(PLAN-V23 T2-1). Nothing is sent. 404 `form_not_found`. 409 `meeting_forms_off`."
     ),
 )
 async def preview_form(

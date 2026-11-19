@@ -15,7 +15,7 @@ import dataclasses
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -44,12 +44,18 @@ from tests.companies.test_call_notes_api import a_company, notes_settings
 from tests.companies.test_call_notes_batch import out_of, plan_of, status_of, step
 from tests.companies.test_meeting_form import WALK_THROUGH, Meetings, melbourne
 from tests.core.auth_world import World, sign_in
+from tests.core.hubspot_fake import FakeHubSpot as CoreHubSpot
 
 pytestmark = pytest.mark.integration
 FORMS = f"{API}/meetings/forms"
 SITE = "https://hq.contour.example"
 LEE = "lee@contour.example"
 SAM = "sam@contour.example"
+
+
+def ms_of(moment: datetime) -> int:
+    """HubSpot's form of a time: milliseconds since 1970."""
+    return int(moment.timestamp() * 1000)
 
 
 class FakeHubSpot:
@@ -303,6 +309,7 @@ async def test_the_preview_shows_the_email_and_who_would_get_it(
         == "Pre-read: Fit-out walk-through with Sample Logistics Pty Ltd, Thu 5 Nov"
     )
     assert found["task_due"] == "2026-11-04"
+    assert found["task_alert"] == "Each gets a HubSpot task and a HubSpot alert."  # Lee's task
     text = found["text"]
     assert "What they do (Written by AI)\nThey move freight." in text
     assert "What we know about the project\nThe Perth lease ends in 2028." in text  # the rep's
@@ -316,6 +323,47 @@ async def test_the_preview_shows_the_email_and_who_would_get_it(
     assert "The Perth lease ends in 2028.<br>They want more room." in page
     assert f'href="{SITE}/companies/201"' in page
     assert sending.emails.sent == []  # a preview sends nothing
+
+
+async def test_the_preview_says_nothing_of_alerts_when_nobody_gets_a_task(
+    world: World, sending: Sending
+) -> None:
+    """PLAN-V23 choice 11: the line is there only when Send gives someone a HubSpot task."""
+    form = await a_saved_draft(world)
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        response = await client.post(
+            f"{FORMS}/{form.id}/preview", json={"owner_ids": [], "emails": [SAM]}
+        )
+    assert response.status_code == 200, response.text
+    assert [person["task"] for person in response.json()["people"]] == [False]
+    assert response.json()["task_alert"] is None
+
+
+async def test_each_pre_read_task_alerts_its_person_2_minutes_after_the_send(
+    world: World, sending: Sending
+) -> None:
+    """PLAN-V23 T2-1, with core's real writer and a fake HubSpot: the task each person gets
+    carries a reminder 2 minutes after the send, in place of HubSpot's own alert."""
+    hubspot = CoreHubSpot()
+    hubspot.grant_writes()
+    hubspot.add_company("201", name="Sample Logistics Pty Ltd")
+    world.app.state.hubspot_provider = lambda: hubspot
+    world.app.state.activity_writer = ActivityWriter()
+    await a_company(world)
+    form = a_draft()
+    await add(world, form)
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        before = datetime.now(UTC)
+        response = await send(client, form, owner_ids=["o1"])
+        after = datetime.now(UTC)
+    assert response.status_code == 200, response.text
+    assert [(r["owner_id"], r["task"]) for r in response.json()["sent_to"]] == [("o1", "sent")]
+    (task,) = hubspot.tasks.values()
+    assert task.properties["hubspot_owner_id"] == "o1"
+    reminder = int(task.properties["hs_task_reminders"] or "0")
+    soon = timedelta(minutes=2)
+    assert ms_of(before + soon) - 1 <= reminder <= ms_of(after + soon) + 1
+    assert sending.emails.sent == []  # tasks only
 
 
 # --- Refusals -------------------------------------------------------------------------------------

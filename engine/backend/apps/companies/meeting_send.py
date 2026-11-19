@@ -83,6 +83,9 @@ PICKED = "picked by you"
 ADDED = "added by you"
 # The preview's line when Send also adds the copy to the meeting (Track 3's Send dialog).
 MEETING_NOTE = "The copy also goes at the end of the meeting's internal notes in HubSpot."
+# The preview's line when Send gives anyone a HubSpot task: each task carries a reminder, HubSpot's
+# own alert (PLAN-V23 choice 11, T2-1).
+TASK_ALERT = "Each gets a HubSpot task and a HubSpot alert."
 
 # --- The words (PLAN-V15 "Words for errors") ---------------------------------------------------
 
@@ -589,6 +592,7 @@ async def preview(
         add_address(None, raw, ADDED)
 
     await session.commit()
+    gets_task = not form.company_key.startswith("lead:") and any(item.task for item in people)
     return FormEmailPreview(
         subject=email.subject,
         text=email.text,
@@ -597,6 +601,7 @@ async def preview(
         task_due=task_due(form, preview_now),
         people=people,
         meeting_note=MEETING_NOTE if goes_on_meeting(form, settings) else None,
+        task_alert=TASK_ALERT if gets_task else None,
     )
 
 

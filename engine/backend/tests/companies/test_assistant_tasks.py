@@ -15,8 +15,9 @@ Made-up companies and people only (Sample Logistics Pty Ltd, Jo Sample).
 """
 
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -142,6 +143,27 @@ async def test_a_task_for_me_and_one_for_a_teammate_and_today_shows_them_at_once
     assert first["hs_timestamp"] == ms(melbourne(6, 9))  # 9 am on its day, Melbourne time
     assert all(r.companies == ("201",) for i, r in hubspot.tasks.items() if i not in ("601", "602"))
     assert len(await all_rows(world, HubSpotWrite)) == 2  # one write each, in the log
+
+
+async def test_a_task_for_sam_alerts_him_2_minutes_after_the_send_and_mine_at_9_on_its_day(
+    world: World, settings: dict[str, Any], hubspot: FakeHubSpot
+) -> None:
+    """PLAN-V23 T2-1: "add a task for Sam" carries a reminder 2 minutes after the send (HubSpot
+    sends no alert of its own for a task made this way); my own task, 9:00 am on its day."""
+    await a_copy(world)
+    async with signed_in(world, "mia", owner="o1") as (client, _):
+        before = datetime.now(UTC)
+        for_sam = await post(client, TASKS, a_task(owner_id="o2"))
+        after = datetime.now(UTC)
+        for_me = await post(client, TASKS, a_task(due="2099-03-06"), key="card-2")
+    assert (for_sam.status_code, for_me.status_code) == (201, 201)
+    sams, mine = made(hubspot)
+    assert (sams["hubspot_owner_id"], mine["hubspot_owner_id"]) == ("o2", "o1")
+    soon = timedelta(minutes=2)
+    reminder = int(sams["hs_task_reminders"] or "0")
+    assert int(ms(before + soon)) - 1 <= reminder <= int(ms(after + soon)) + 1
+    nine = datetime(2099, 3, 6, 9, 0, tzinfo=ZoneInfo("Australia/Melbourne"))
+    assert mine["hs_task_reminders"] == mine["hs_timestamp"] == ms(nine)
 
 
 async def test_a_repeated_key_adds_one_task(

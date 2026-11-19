@@ -60,6 +60,14 @@ link to a HubSpot owner, or None, and HubSpot then shows the call as unassigned)
    switch turned off since the preview: skipped, and nothing is sent. A meeting not in HubSpot:
    failed, and the note on the company still counts. HubSpot doesn't document a note linked to
    a meeting, so the note itself is never linked to one.
+7. **A reminder on every task** (PLAN-V23 T2-1, choice 7). HubSpot sends no "assigned to you"
+   alert for a task made through its API, so each task carries one reminder
+   (`hs_task_reminders`: milliseconds since 1970, as text), worked out in `task_reminders` only.
+   A task for someone else (its owner isn't the rep's): 2 minutes after the send, in place of the
+   alert HubSpot won't send. The rep's own task: 9:00 am on its due day, the time it is due. A
+   reminder never falls in the past: once that time has passed (or is under 2 minutes away), 2
+   minutes after the send. Whether HubSpot takes a second time, and whether it alerts at all, is
+   S2's test (TBC). The send's time comes from `clock` (tests give a fixed one).
 
 Log lines hold ids, step names and states only: never a call's text, a field's value, an email
 or a phone number.
@@ -137,6 +145,7 @@ TaskKind = Literal["call", "email", "todo"]
 TaskPriority = Literal["low", "medium", "high"]
 FieldKind = Literal["choice", "date", "number", "text"]
 Pause = Callable[[float], Awaitable[None]]
+Clock = Callable[[], datetime]
 
 # HubSpot's six standard call outcomes, by name (people.py has their ids).
 OUTCOME_NAMES: tuple[str, ...] = tuple(OUTCOMES.values())
@@ -164,6 +173,9 @@ LOOKS = 3  # a create that timed out is looked for this many times,
 LOOK_GAP_SECONDS = 15.0  # this far apart: about 30 seconds in all, as HubSpot's search lags
 SETTLE_SECONDS = 5.0  # the most a cut-off apply waits to settle its write
 TASK_DUE_TIME = time(9, 0)  # TBC: a task is due at 9:00 am on its day, Contour's time
+# A task for someone else alerts them this long after the send (PLAN-V23 choice 7, TBC: S2).
+REMINDER_AFTER_SEND = timedelta(minutes=2)
+TASK_REMINDERS = "hs_task_reminders"  # HubSpot's field for a task's reminder
 CONTOUR_ZONE = ZoneInfo(DEFAULT_TIME_ZONE)
 EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -590,6 +602,32 @@ def _due_at(day: date) -> datetime:
     return datetime.combine(day, TASK_DUE_TIME, tzinfo=CONTOUR_ZONE)
 
 
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def task_reminders(due: date, *, someone_else: bool, sent_at: datetime) -> tuple[datetime, ...]:
+    """When HubSpot alerts a task's owner (PLAN-V23 choice 7): the one place that decides, so
+    S2's answer (a second time, or none) changes only this. Each time is in UTC.
+
+    - For someone else (a pre-read's task, a teammate's follow-up, "add a task for Sam", an FYI
+      task): 2 minutes after the send, in place of the "you have a task" alert HubSpot won't send.
+    - For the rep: 9:00 am on its due day (the time it is due), Contour's time.
+
+    Never in the past: once 9:00 am on the due day has passed (or is under 2 minutes away), 2
+    minutes after the send."""
+    soon = _utc(sent_at) + REMINDER_AFTER_SEND
+    if someone_else:
+        return (soon,)
+    return (max(_due_at(due).astimezone(UTC), soon),)
+
+
+def _reminders_text(times: Sequence[datetime]) -> str | None:
+    """`hs_task_reminders` as HubSpot takes it: milliseconds since 1970, as text. Two or more
+    are joined with ";" (TBC: S2 checks whether HubSpot takes more than one). None for none."""
+    return ";".join(_ms(moment) for moment in times) or None
+
+
 def _day_words(day: date) -> str:
     return f"{WEEKDAYS[day.weekday()]} {day.day} {MONTHS[day.month - 1]} {day.year}"
 
@@ -642,6 +680,7 @@ class _Run:
     # The step whose create or change may be on its way to HubSpot. Each save keeps it in the
     # plan (`SENDING`), so a takeover knows it too.
     sending: str | None = None
+    clock: Clock = _utc_now  # the send's time, for a task's reminder (tests give a fixed one)
 
     @classmethod
     def of(cls, row: HubSpotWrite) -> "_Run":
@@ -742,13 +781,15 @@ async def apply_activity(
     *,
     on_written: OnWritten | None = None,
     pause: Pause = asyncio.sleep,
+    clock: Clock = _utc_now,
 ) -> WriteOut:
     """Writes a previewed activity, step by step (`call`, `fields`, `task:1` ..., `note`,
     `meeting`), each step saved as it lands. A finished write is returned as it is. Raises
     `WriteInProgress` while it is being written (unless that stopped 5 minutes ago: then it is
     taken over), and `HubSpotWritesOff` while writing is off, before anything is claimed.
     `pause` waits between the looks for a create that timed out (tests give one that doesn't
-    wait). `on_written` runs when the write is done."""
+    wait). `clock` gives the send's time, for a task's reminder (tests give a fixed one).
+    `on_written` runs when the write is done."""
     row = await get_write(session, write_id)
     if not is_activity(row):  # a Lead Finder write: `writer.apply_write` writes it
         raise WriteNotFound(str(write_id))
@@ -761,6 +802,7 @@ async def apply_activity(
         raise HubSpotWritesOff
     _Run.of(row)  # a plan that can't be read stops here, before anything is claimed
     run = await _claim(session, row, taken_over=taken_over)
+    run.clock = clock
     try:
         await run.prepare(session, taken_over=taken_over)
         await _write_steps(session, hubspot, run, pause)
@@ -943,6 +985,9 @@ def _create_of(run: _Run, name: str) -> _Create:
         }
         _put(properties, "hs_task_body", note_html(task.body))
         _put(properties, "hubspot_owner_id", owner)
+        someone_else = task.owner_id is not None and task.owner_id != request.owner_id
+        reminders = task_reminders(task.due, someone_else=someone_else, sent_at=run.clock())
+        _put(properties, TASK_REMINDERS, _reminders_text(reminders))
         filters = [*_found_by(at, owner), Filter("hs_task_subject", "EQ", task.subject)]
         links = _links(request, company, person=True)
         return _Create("tasks", properties, links, filters, "Added the task.")
