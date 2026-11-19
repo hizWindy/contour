@@ -163,11 +163,13 @@ class HubSpotOwnerIn(BaseModel):
         description="An active owner's id from GET /hubspot/owners, or null to clear the link",
         examples=["301"],
     )
-    no_hubspot_user: bool = Field(
-        False,
+    # Nullable with no default value, so a call written before PLAN-V23 (`{"owner_id": ...}`)
+    # still fits the website's types: null and false both mean "not marked".
+    no_hubspot_user: bool | None = Field(
+        None,
         description=(
             "true, with owner_id null: mark the person No HubSpot user (PLAN-V23 T3-1). It clears "
-            "any link, and a link clears it"
+            "any link, and a link clears it. Left out, null or false: the link changes as before"
         ),
     )
 
@@ -430,12 +432,11 @@ async def set_hubspot_owner(
     admin: PlatformAdminDep,
     now: NowDep,
 ) -> PersonOut:
-    if body.owner_id is not None and body.no_hubspot_user:
+    mark = body.no_hubspot_user is True
+    if body.owner_id is not None and mark:
         raise _invalid("no_hubspot_user", BOTH_CHOICES)
     try:
-        user = await owners.set_by_hand(
-            session, user_id, body.owner_id, no_hubspot_user=body.no_hubspot_user
-        )
+        user = await owners.set_by_hand(session, user_id, body.owner_id, no_hubspot_user=mark)
     except owners.OwnerNotActive:
         raise owner_not_active() from None
     if user is None:
