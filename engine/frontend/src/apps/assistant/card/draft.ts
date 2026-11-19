@@ -412,6 +412,12 @@ function namesOf(to: readonly Recipient[]): string {
   return to.map((one) => one.found?.name ?? one.address ?? one.heard).join(', ')
 }
 
+/** "Mon 30 Nov", as the server's read-back says a day; with its year only when that isn't this one. */
+function readBackDay(date: string, today: string): string {
+  const text = dueDateText(date)
+  return date.slice(0, 4) === today.slice(0, 4) ? text.replace(/ \d{4}$/, '') : text
+}
+
 /**
  * The card's first line: the server's, or the card's own once the rep has changed something. A
  * call's comes from the picks and, once sorted, the note's first follow-up (`note`).
@@ -428,12 +434,12 @@ export function readBackOf(
       const who = draft.person.found?.name
       const call = who ? `Log a call with ${who} at ${company}.` : `Log a call with ${company}.`
       const first = note?.tasks[0]
-      return first ? `${call} Follow-up task on ${dueDateText(first.due)}.` : call
+      return first ? `${call} Follow-up task on ${readBackDay(first.due, today)}.` : call
     }
     case 'task': {
       const due = dueOf(draft, today)
       const who = draft.forWhom?.found?.name ?? 'you'
-      const day = due.kind === 'date' ? `, due ${dueDateText(due.date)}` : ''
+      const day = due.kind === 'date' ? `, due ${readBackDay(due.date, today)}` : ''
       return `Add a task for ${who}: ${draft.subject.trim()}${day}.`
     }
     case 'email':

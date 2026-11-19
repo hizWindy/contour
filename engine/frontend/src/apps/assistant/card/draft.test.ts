@@ -130,7 +130,12 @@ describe('a change by voice', () => {
     const changed = applyChange(taskDraft(), { box: 'due', value: 'Monday', day: '2099-11-30' })
     expect(changed).toMatchObject({ when: 'Monday', due: '2099-11-30', edited: true })
     expect(changed && readBackOf(changed, TODAY)).toBe(
-      'Add a task for you: Send Sample Logistics the quote, due Mon 30 Nov 2099.',
+      'Add a task for you: Send Sample Logistics the quote, due Mon 30 Nov.',
+    )
+    // A day in another year says its year.
+    const later = applyChange(taskDraft(), { box: 'due', value: '4 Jan', day: '2100-01-04' })
+    expect(later && readBackOf(later, TODAY)).toBe(
+      'Add a task for you: Send Sample Logistics the quote, due Mon 4 Jan 2100.',
     )
     expect(
       applyChange(taskDraft(), { box: 'kind', value: 'a phone call', day: null }),
@@ -144,7 +149,7 @@ describe('a change by voice', () => {
     expect(readBackOf(call, TODAY, note())).toBe(call.readBack)
     const moved = note({ tasks: [{ ...note().tasks[0], due: '2099-11-30' }] })
     expect(readBackOf({ ...call, edited: true }, TODAY, moved)).toBe(
-      'Log a call with Jo Sample at Sample Logistics Pty Ltd. Follow-up task on Mon 30 Nov 2099.',
+      'Log a call with Jo Sample at Sample Logistics Pty Ltd. Follow-up task on Mon 30 Nov.',
     )
     expect(
       readBackOf({ ...call, edited: true, person: { found: null, choices: [], heard: '' } }, TODAY),
