@@ -1209,6 +1209,9 @@ class FormPerson(Out):
 class FormEmailPreview(Out):
     """The email and HubSpot task as they would arrive, and who would get them."""
 
+    # Added in PLAN-V23 T2-1: the API always sends it, and the website's types leave it optional.
+    model_config = ConfigDict(json_schema_extra=optional_in_types("task_alert"))
+
     subject: str
     text: str = Field(description="The plain text version")
     html: str = Field(description="The HTML version, with every value escaped")

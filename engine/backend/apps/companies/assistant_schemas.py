@@ -343,6 +343,9 @@ class TodayDeal(Out):
 class Today(Out):
     """The Assistant's first page: my day, the most urgent first. Free: no Claude request."""
 
+    # Added in PLAN-V23 T2-3: the API always sends it, and the website's types leave it optional.
+    model_config = ConfigDict(json_schema_extra=optional_in_types("pre_reads"))
+
     parts: list[TodayPart] = Field(
         description="The parts this person sees, in order. A part left out also comes back empty"
     )
