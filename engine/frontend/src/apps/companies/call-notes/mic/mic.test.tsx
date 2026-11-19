@@ -311,6 +311,10 @@ describe('what can go wrong (the plan’s table, the mic)', () => {
   it('the voice tool didn’t load: says so, with Try again and Type instead', async () => {
     const { mic } = openCard({ toolNeverReady: true })
     await screen.findByText('Getting voice to text ready')
+    // That line shows from the start. The tool fails once the mic is heard: the hear check
+    // passing clears a problem before it, which a busy run could let happen.
+    await screen.findByText('We can hear you')
+    expect(mic.tools.at(-1)?.started).toBe(true)
     act(() => {
       mic.fail('tool_failed')
     })
