@@ -513,9 +513,12 @@ describe('what each state shows (T3-2)', () => {
     openBar({ voiceTool: 'browser_model' })
     const found = await bar()
     await within(found).findByRole('textbox', { name: 'Type what to do' })
-    expect(
-      within(found).getByText("Turning speech into words isn't set up here yet. Type what to do."),
-    ).toBeInTheDocument()
+    expect(within(found).getByText("Speaking isn't available here yet.")).toBeInTheDocument()
+    // The hint is an example, so "Type what to do" isn't said three times.
+    expect(within(found).getByRole('textbox', { name: 'Type what to do' })).toHaveAttribute(
+      'placeholder',
+      'Like: add a task to send the quote on Friday',
+    )
   })
 
   it('with the AI off and call notes off: says the Assistant can’t read commands yet', async () => {

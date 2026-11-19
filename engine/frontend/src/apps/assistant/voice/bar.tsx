@@ -78,6 +78,7 @@ import {
   TOO_MANY,
   TOO_SLOW,
   TRY_AGAIN,
+  TYPE_EXAMPLE,
   TYPE_INSTEAD,
   TYPE_WHAT,
   VOICE_BAR_NAME,
@@ -408,7 +409,7 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
                   value={snapshot.draft}
                   maxLength={MAX_CHARS}
                   aria-label={TYPE_WHAT}
-                  placeholder={TYPE_WHAT}
+                  placeholder={TYPE_EXAMPLE}
                   autoComplete="off"
                   onChange={(event) => {
                     session?.setDraft(event.target.value)

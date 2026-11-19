@@ -17,8 +17,10 @@ export const VOICE_BAR_NAME = 'Speak to the Assistant'
 export const LISTENING = 'Listening'
 /** While the command step reads the words: the words stay, and nothing spins. */
 export const WORKING = 'Working it out'
-/** The text line. */
+/** The text line: its name, and the bar's title while typing. */
 export const TYPE_WHAT = 'Type what to do'
+/** The text line's hint: an example, so it doesn't repeat the title (TBC). */
+export const TYPE_EXAMPLE = 'Like: add a task to send the quote on Friday'
 
 // --- The keys and buttons --------------------------------------------------------------------------
 
@@ -45,7 +47,7 @@ export const TOO_SLOW = 'That took too long. Your words are kept. Try again.'
  * With the voice tool not built here (Whisper waits for S1), the bar is the text line only. The mic
  * card says "Your mic works" here, after its check; the bar opens no mic, so it says less.
  */
-export const VOICE_NOT_SET_UP = "Turning speech into words isn't set up here yet. Type what to do."
+export const VOICE_NOT_SET_UP = "Speaking isn't available here yet."
 
 /**
  * Until the review card (T3-3) and dictation into Log call (T3-5) are built: the AI that reads
