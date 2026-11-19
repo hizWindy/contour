@@ -20,7 +20,7 @@
  *   hold (`hold.tsx`), with Undo. After a spoken command, the card listens 5 seconds for "send it"
  *   or "cancel" (`listen.ts`); any key or click stops it.
  *
- * Its code loads late, when a card first opens (`host.tsx`), never in the first visit.
+ * Its code loads with the voice bar's, late, never in the first visit (`host.tsx`).
  */
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { Send } from 'lucide-react'
@@ -62,7 +62,6 @@ import { MicSheet, MicSheetTitle } from '@/components/motion/mic-sheet'
 import { Button } from '@/components/ui/button'
 import { useDebounced } from '@/hooks/useDebounced'
 import { melbourneDate } from '@/lib/format'
-import { isTyping } from '@/lib/is-typing'
 import { toastProblem } from '@/lib/problems'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { CALL_LOGS_PATH, MEETINGS_PATH } from '../paths'
@@ -83,6 +82,7 @@ import {
   type CardDraft,
 } from './draft'
 import { keepCardDraft } from './drafts'
+import { inTextBox, typingKey } from './keys'
 import { startHold } from './hold'
 import { CallLayout, EmailLayout, PreReadLayout, TaskLayout } from './layouts'
 import { listenForSendIt } from './listen'
@@ -150,11 +150,6 @@ function stripProblem(problem: BarProblem): string {
     case 'other':
       return problem.title
   }
-}
-
-/** A key that types (a text box, or an input method), not one the card takes. */
-function inTextBox(element: EventTarget | null): boolean {
-  return isTyping({ target: element, isComposing: false, key: '' })
 }
 
 /** A refusal the preview gives (a 4xx): the send would be refused too, so it waits. */
@@ -610,7 +605,7 @@ function DraftCard({
     stopListening()
     // The card's keys stay in the card. Esc is the dialog's own (`onEscape`).
     if (event.key !== 'Escape') event.stopPropagation()
-    const typing = isTyping(event.nativeEvent)
+    const typing = typingKey(event.nativeEvent)
     if (event.key === 'Enter') {
       const withCtrl = event.ctrlKey || event.metaKey
       // In a box, Enter adds a line, or does the box's own job (Add someone).

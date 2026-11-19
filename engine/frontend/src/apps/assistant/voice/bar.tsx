@@ -16,7 +16,7 @@
  *   speaking. The bar is a dialog only for the keys: other keys of the page wait while it is open.
  *
  * Its code loads late (`key.tsx`), so the first visit doesn't carry it. The review card a command
- * opens (`card/`) sits beside it, and its own code loads later still.
+ * opens (`card/`) sits beside it and comes with it.
  */
 import { CircleAlert, RotateCcw } from 'lucide-react'
 import { AnimatePresence, m } from 'motion/react'
@@ -58,7 +58,6 @@ import { isTyping } from '@/lib/is-typing'
 import { useBarRoom } from '@/lib/use-bar-room'
 import { CardHost } from '../card/host'
 import { openCard } from '../card/store'
-import { preloadCard } from '../card/load'
 import { BarSession, MAX_CHARS, type BarProblem, type BarSnapshot, type Times } from './bar-session'
 import { handOver } from './hand-over'
 import { isPlainV, somethingElseOpen, VOICE_BAR } from './keys'
@@ -278,8 +277,6 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   })
   useEffect(() => {
     if (!open || !session || !toolKnown) return undefined
-    // The review card's code, while the rep speaks: it is there by the time the answer is.
-    preloadCard()
     begin(session)
     return () => {
       session.dispose()

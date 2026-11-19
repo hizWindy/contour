@@ -15,6 +15,8 @@ import {
   taskBodyOf,
   type TaskDraft,
 } from './draft'
+import { isTyping } from '@/lib/is-typing'
+import { inTextBox } from './keys'
 import { cardDrafts, cutHolds, dropCardDraft, keepCardDraft } from './drafts'
 import { callCommand, emailCommand, JAMES, JAMES_TOO, note, SAM, taskCommand } from './fixtures'
 
@@ -208,5 +210,23 @@ describe('drafts kept in this browser (choice 22)', () => {
     // Before its note is saved (no company picked yet), it is kept.
     keepCardDraft(call)
     expect(cardDrafts('person-call')).toHaveLength(1)
+  })
+})
+
+describe('the card’s own box check (T3-6)', () => {
+  it('agrees with the shared one on every part the card has', () => {
+    const parts: HTMLElement[] = [
+      document.createElement('input'),
+      Object.assign(document.createElement('input'), { type: 'search' }),
+      Object.assign(document.createElement('input'), { type: 'email' }),
+      Object.assign(document.createElement('input'), { type: 'checkbox' }),
+      document.createElement('textarea'),
+      document.createElement('button'),
+      Object.assign(document.createElement('button'), { role: 'radio' }),
+      document.createElement('div'),
+    ]
+    for (const part of parts) {
+      expect(inTextBox(part)).toBe(isTyping({ target: part, isComposing: false, key: 'v' }))
+    }
   })
 })

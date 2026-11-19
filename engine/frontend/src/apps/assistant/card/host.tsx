@@ -1,7 +1,9 @@
 /**
  * Where the review card shows (PLAN-V22 T3-3): beside the voice bar, so it is on every page the bar
- * is. The card's code loads the first time a card opens, or ahead of that while the bar works a
- * command out (`preloadCard`), never in the first visit.
+ * is. Its code comes with the bar's, which loads late (after the page is idle, or on the first V),
+ * never in the first visit. As a file of its own it split two small first-visit files out of the
+ * main one (PLAN-V22 T3-6): the bar already uses the parts that did it, so with the bar it doesn't.
+ * The dictation panel (Log call, with the AI off) loads on its own, only when it is needed.
  *
  * A closed card stays drawn, closed, until the next one opens, so it can shrink away (150ms). Each
  * opening is a new card, with its own draft. A draft a closed page cut off in its hold is offered
@@ -12,13 +14,11 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import type { SignIn } from '@/api/hooks/auth'
 import { queryKeys } from '@/api/query'
-import type { ReviewCardProps } from './card'
+import ReviewCard, { type ReviewCardProps } from './card'
 import { cutHolds } from './drafts'
-import { loadCard } from './load'
 import { closeCard, openCard, useOpenCard, type CardRequest } from './store'
 import { draftsLeftWords, OPEN } from './words'
 
-const ReviewCard = lazy(loadCard)
 const Dictation = lazy(() => import('./dictation'))
 
 /** For tests: what the card is handed (the fake mic, the waits). */
@@ -66,14 +66,12 @@ export function CardHost(props: CardHostProps) {
     )
   }
   return (
-    <Suspense fallback={null}>
-      <ReviewCard
-        key={shown.id}
-        {...props}
-        request={shown}
-        open={request?.id === shown.id}
-        onClose={closeCard}
-      />
-    </Suspense>
+    <ReviewCard
+      key={shown.id}
+      {...props}
+      request={shown}
+      open={request?.id === shown.id}
+      onClose={closeCard}
+    />
   )
 }
