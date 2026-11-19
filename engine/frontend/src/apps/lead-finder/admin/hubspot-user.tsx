@@ -62,8 +62,7 @@ const TRY_AGAIN = 'Try again'
 const LINKED_LINE = 'Their calls and tasks land under this user in HubSpot.'
 const NONE_LINE =
   'Their calls go to HubSpot with no owner, signed with their name. They get no HubSpot tasks.'
-const NOT_SET_LINE = 'Not set yet. Pick their HubSpot user, or No HubSpot user.'
-/** A new person with no choice yet (PLAN-V23 choice 12: one is needed). */
+/** A new person with no choice yet (PLAN-V23 choice 12: one is needed), and "Not set"'s line. */
 export const PICK_A_CHOICE = 'Pick their HubSpot user, or No HubSpot user.'
 /** Choice 13: someone with no HubSpot user starts with the Call logs tick only. */
 export const NONE_TICKS_LINE =
@@ -266,6 +265,7 @@ function Closest({
         type="button"
         variant="outline"
         size="xs"
+        className="touch:h-11"
         disabled={disabled}
         onClick={() => {
           onUse(closest)
@@ -309,6 +309,10 @@ export function NewHubSpotUserField({
         describedBy={lineId}
         onPick={onPick}
       />
+      <FieldDescription id={lineId}>
+        {value?.kind === 'none' ? `${NONE_LINE} ${NONE_TICKS_LINE}` : LINKED_LINE}
+      </FieldDescription>
+      {error ? <FieldError>{error}</FieldError> : null}
       {value === null ? (
         <Closest
           name={name}
@@ -318,10 +322,6 @@ export function NewHubSpotUserField({
           }}
         />
       ) : null}
-      <FieldDescription id={lineId}>
-        {value?.kind === 'none' ? `${NONE_LINE} ${NONE_TICKS_LINE}` : LINKED_LINE}
-      </FieldDescription>
-      {error ? <FieldError>{error}</FieldError> : null}
     </Field>
   )
 }
@@ -372,7 +372,7 @@ export function HubSpotUserField({
 
   const line =
     shown === null
-      ? NOT_SET_LINE
+      ? PICK_A_CHOICE
       : shown.kind === 'none'
         ? NONE_LINE
         : how
@@ -392,6 +392,7 @@ export function HubSpotUserField({
         describedBy={lineId}
         onPick={pick}
       />
+      <FieldDescription id={lineId}>{line}</FieldDescription>
       {shown === null ? (
         <Closest
           name={person.name}
@@ -402,7 +403,6 @@ export function HubSpotUserField({
           }}
         />
       ) : null}
-      <FieldDescription id={lineId}>{line}</FieldDescription>
     </Field>
   )
 }

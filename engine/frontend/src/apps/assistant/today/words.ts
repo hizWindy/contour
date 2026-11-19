@@ -5,7 +5,7 @@
  * sentence about the tasks (`tasks_sentence`) shows as it comes. The wording is Al-khair's to
  * change.
  */
-import type { TodayTask } from '@/api/types'
+import type { TodayPart, TodayTask } from '@/api/types'
 import { pluralise } from '@/lib/format'
 
 // --- The four parts, the most urgent first (choice 6) ----------------------------------------------
@@ -16,6 +16,27 @@ export const MEETINGS = 'Your meetings today and tomorrow'
 export const PRE_READS = 'Pre-reads for you'
 export const CALLS = 'Calls to confirm'
 export const DEALS = 'Deals that need a nudge'
+
+/** Each part in the line under the page's title. */
+const PART_WORDS: Readonly<Record<TodayPart, string>> = {
+  tasks: 'your HubSpot tasks',
+  meetings: 'meetings',
+  pre_reads: 'pre-reads sent to you',
+  calls: 'calls to confirm',
+  deals: 'deals that need a nudge',
+}
+
+/**
+ * The line under the page's title, naming only the parts this person sees (PLAN-V23 choice 16):
+ * "Pre-reads sent to you and calls to confirm, the most urgent first." Null when they see none.
+ */
+export function purposeWords(parts: readonly TodayPart[]): string | null {
+  const said = parts.map((part) => PART_WORDS[part])
+  const last = said.pop()
+  if (last === undefined) return null
+  const list = said.length > 0 ? `${said.join(', ')} and ${last}` : last
+  return `${list.charAt(0).toUpperCase()}${list.slice(1)}, the most urgent first.`
+}
 
 /** The tasks' groups: overdue, then today's, then the next 7 days' (folded). */
 export const TASK_GROUPS: Readonly<Record<TodayTask['group'], string>> = {

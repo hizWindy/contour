@@ -19,6 +19,7 @@ import { showOnScreen } from '../voice/on-screen'
 import { closeVoiceBar } from '../voice/store'
 import { SAMPLE, TEST_NOW, today } from './fixtures'
 import TodayPage from './index'
+import { purposeWords } from './words'
 
 const TODAY = '/api/v1/companies/assistant/today'
 const OPTIONS = '/api/v1/companies/call-notes/options'
@@ -120,8 +121,14 @@ describe.each([
     // No link message, and nothing about HubSpot tasks.
     expect(screen.queryByText(/linked to HubSpot/)).toBeNull()
     expect(document.querySelector('[data-slot=tasks-sentence]')).toBeNull()
-    // Sync reads HubSpot tasks: they have none to read.
+    // Sync reads HubSpot tasks: they have none to read, so no Sync and no empty Checked line.
     expect(screen.queryByRole('button', { name: /^Sync/ })).toBeNull()
+    expect(document.querySelector('[data-slot=sync-line]')).toBeNull()
+    // The line under the title names only their parts.
+    expect(
+      screen.getByText('Pre-reads sent to you and calls to confirm, the most urgent first.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/HubSpot tasks/)).toBeNull()
     // They can still give a task to a teammate.
     expect(screen.getByRole('button', { name: 'Add task' })).toBeInTheDocument()
   })
@@ -153,5 +160,18 @@ describe.each([
     ).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Your HubSpot tasks' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Sync/ })).toBeInTheDocument()
+  })
+})
+
+describe('the line under the title', () => {
+  it('names the parts a person sees, in their order', () => {
+    expect(purposeWords(['tasks', 'meetings', 'pre_reads', 'calls', 'deals'])).toBe(
+      'Your HubSpot tasks, meetings, pre-reads sent to you, calls to confirm and deals that need a nudge, the most urgent first.',
+    )
+    expect(purposeWords(['pre_reads', 'calls'])).toBe(
+      'Pre-reads sent to you and calls to confirm, the most urgent first.',
+    )
+    expect(purposeWords(['calls'])).toBe('Calls to confirm, the most urgent first.')
+    expect(purposeWords([])).toBeNull()
   })
 })

@@ -226,8 +226,10 @@ describe('no HubSpot user, the details', () => {
       })
     })
 
-    // Change picks someone else.
-    await user.click(within(found).getByRole('button', { name: /^Change/ }))
+    // Change picks someone else. Like every button on a touch screen, it is 44px tall there.
+    const change = within(found).getByRole('button', { name: /^Change/ })
+    expect(change).toHaveClass('touch:h-11')
+    await user.click(change)
     await user.click(
       within(await within(found).findByRole('group', { name: WHO })).getByRole('button', {
         name: 'Sam Sample',

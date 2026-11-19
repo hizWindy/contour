@@ -100,6 +100,7 @@ import {
   OPEN,
   OPEN_IN_HUBSPOT,
   PRE_READS,
+  purposeWords,
   soonWords,
   SYNC_TASKS_NOTE,
   TASK_GROUPS,
@@ -642,7 +643,8 @@ function TodayContent() {
       icon={ListTodo}
       tone="companies"
       title={TODAY}
-      description={TODAY_PURPOSE}
+      // Only the parts this person sees, once Today has said which (PLAN-V23 choice 16).
+      description={(today.data && purposeWords(today.data.parts)) ?? TODAY_PURPOSE}
       actions={
         canSend || syncs ? (
           <>
@@ -676,7 +678,8 @@ function TodayContent() {
   return (
     <>
       {header}
-      <SyncLine line={sync.line} />
+      {/* No Sync, no Checked line: an empty one would leave a gap. */}
+      {syncs ? <SyncLine line={sync.line} /> : null}
       <TodayParts today={today.data} day={day} onRetryTasks={sync.press} />
     </>
   )

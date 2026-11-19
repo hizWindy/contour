@@ -202,9 +202,7 @@ describe.each([
     const { user, sheet } = await openEdit('Alex Sample')
     const field = sheet.getByRole('combobox', { name: 'HubSpot user' })
     expect(field).toHaveTextContent('Not set')
-    expect(field).toHaveAccessibleDescription(
-      'Not set yet. Pick their HubSpot user, or No HubSpot user.',
-    )
+    expect(field).toHaveAccessibleDescription('Pick their HubSpot user, or No HubSpot user.')
     expect(await sheet.findByText('Closest name in HubSpot: Alexandra Sample.')).toBeInTheDocument()
     await user.click(sheet.getByRole('button', { name: 'Use Alexandra Sample' }))
     await waitFor(() => {
@@ -327,9 +325,13 @@ describe.each([
     expect(field).toHaveAttribute('aria-invalid', 'true')
     expect(server.posts).toEqual([])
 
-    // "Jo" starts "Joanne": the closest name, offered and not picked.
-    expect(sheet.getByText('Closest name in HubSpot: Joanne Example.')).toBeInTheDocument()
-    await user.click(sheet.getByRole('button', { name: 'Use Joanne Example' }))
+    // "Jo" starts "Joanne": the closest name, offered and not picked, under what is wrong.
+    const closest = sheet.getByText('Closest name in HubSpot: Joanne Example.')
+    const wrong = sheet.getByText('Pick their HubSpot user, or No HubSpot user.')
+    expect(wrong.compareDocumentPosition(closest) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const use = sheet.getByRole('button', { name: 'Use Joanne Example' })
+    expect(use).toHaveClass('touch:h-11')
+    await user.click(use)
     expect(field).toHaveTextContent('Joanne Example')
     expect(sheet.queryByText('Pick their HubSpot user, or No HubSpot user.')).toBeNull()
 

@@ -147,6 +147,7 @@ export function FollowUpFor({
           type="button"
           variant="ghost"
           size="xs"
+          className="touch:h-11"
           onClick={() => {
             setChanging(true)
           }}
