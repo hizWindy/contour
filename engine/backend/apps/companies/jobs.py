@@ -26,6 +26,7 @@ from sqlalchemy import exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from apps.companies.calls_nudge import JOB as CALLS_NUDGE_JOB
 from apps.companies.deals import CLOSED_STAGES
 from apps.companies.meeting_job import DEFAULT as MEETING_FORMS_DEFAULT
 from apps.companies.meeting_job import (
@@ -359,4 +360,6 @@ JOBS = (
         describe=describe_meeting_forms,
         check_settings=check_meeting_forms_settings,
     ),
+    # The afternoon reminder about calls not sent yet (PLAN-V23 T2-3): calls_nudge.py.
+    CALLS_NUDGE_JOB,
 )

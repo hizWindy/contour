@@ -9,11 +9,13 @@ the tasks and made-up meetings in place of core's reads:
   minute;
 - no HubSpot link gives `no_owner`, a refused read `no_access`, no HubSpot `off`, and a failed
   read keeps the last good one; the rest still shows each time;
-- the parts follow the ticks and the switches; sign-in, a tick, and a Viewer may read.
+- the parts follow the ticks and the switches; sign-in, a tick, and a Viewer may read;
+- the pre-reads sent to me (PLAN-V23 T2-3): by my HubSpot user or my address, from today on.
 
 Made-up companies and people only (Sample Logistics Pty Ltd, Jo Sample).
 """
 
+import uuid
 from collections.abc import AsyncIterator, Iterator, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -201,7 +203,7 @@ async def test_today_shows_my_tasks_overdue_first_then_meetings_calls_and_deals(
     async with signed_in(world, "mia", owner="o1") as (client, mia):
         await a_day(world, mia)
         found = await today(client)
-    assert found["parts"] == ["tasks", "meetings", "calls", "deals"]
+    assert found["parts"] == ["tasks", "meetings", "pre_reads", "calls", "deals"]
     assert (found["tasks_state"], found["tasks_sentence"], found["tasks_more"]) == ("ok", None, 0)
     tasks = found["tasks"]
     assert [(task["id"], task["group"], task["overdue"]) for task in tasks] == [
@@ -390,16 +392,18 @@ async def test_the_parts_follow_the_ticks_and_the_switches(
         calls_only = await today(client)
     assert calls_only["parts"] == ["tasks", "calls", "deals"]
     assert calls_only["meetings"] == [] and calls_only["calls"]["to_confirm"] == 2
+    assert calls_only["pre_reads"] == []  # a pre-read opens only with the Meetings tick
 
     async with signed_in(world, "lee", owner="o2", features=["companies.meetings"]) as (client, _):
         meetings_only = await today(client)
         settings["meeting_forms_enabled"] = False
         forms_off = await today(client)
-    assert meetings_only["parts"] == ["tasks", "meetings", "deals"]
+    assert meetings_only["parts"] == ["tasks", "meetings", "pre_reads", "deals"]
     assert meetings_only["calls"] == {"to_confirm": 0, "needs_look": 0}
     assert [m["id"] for m in meetings_only["meetings"]] == ["9204"]  # Lee's own
     assert [task["id"] for task in meetings_only["tasks"]] == ["504"]
     assert forms_off["parts"] == ["tasks", "deals"] and forms_off["meetings"] == []
+    assert forms_off["pre_reads"] == []
 
 
 async def test_today_needs_sign_in_and_a_tick_and_a_viewer_may_read(
@@ -418,3 +422,85 @@ async def test_today_needs_sign_in_and_a_tick_and_a_viewer_may_read(
 
     async with signed_in(world, "vic", owner="o1", role="viewer") as (client, _):
         assert (await today(client))["tasks_state"] == "ok"
+
+
+# --- Pre-reads sent to me (PLAN-V23 T2-3) --------------------------------------------------------
+
+
+def sent_to(**person: Any) -> dict[str, Any]:
+    """One person a pre-read went to, as `sent_to` keeps them."""
+    return {
+        "owner_id": None,
+        "name": None,
+        "address": None,
+        "task": "none",
+        "email": False,
+    } | person
+
+
+async def test_pre_reads_sent_to_me_by_hubspot_user_or_my_address_show_from_today_on(
+    world: World, settings: dict[str, Any], hubspot: FakeHubSpot, meetings: DayMeetings
+) -> None:
+    lee = await account(world, "lee", owner="o2")
+    lease_review = uuid.uuid4()
+    async with signed_in(world, "mia", owner="o1") as (client, _):
+        await add(
+            world,
+            form(
+                "9301",
+                "sent",
+                id=lease_review,
+                title="Lease review",
+                company_key="202",
+                company_name="Sample Freight Pty Ltd",
+                starts_at=melbourne(5, 10),
+                sent_by=lee.id,
+                sent_to=[sent_to(owner_id="o1", name="Mia Sample", task="sent")],
+            ),
+            form(  # earlier today, to my address only
+                "9302",
+                "sent",
+                title="Walk-through",
+                starts_at=melbourne(4, 14),
+                sent_by=lee.id,
+                sent_to=[sent_to(address="mia@example.test", email=True)],
+            ),
+            form(  # a meeting gone by
+                "9303",
+                "sent",
+                title="Last week's",
+                starts_at=melbourne(2, 10),
+                sent_by=lee.id,
+                sent_to=[sent_to(owner_id="o1")],
+            ),
+            form(  # Lee's own
+                "9304",
+                "sent",
+                title="Lee's own",
+                starts_at=melbourne(6, 9),
+                sent_by=lee.id,
+                sent_to=[sent_to(owner_id="o2", address="lee@example.test", email=True)],
+            ),
+            form("9305", "draft", title="Not sent yet", starts_at=melbourne(6, 9)),
+            form(  # an older row keeps the address under "email"; nobody signed in sent it
+                None,
+                "sent",
+                title="Typed visit",
+                starts_at=melbourne(9, 9),
+                sent_to=[{"email": "mia@example.test"}],
+            ),
+        )
+        found = await today(client)
+    assert found["parts"] == ["tasks", "meetings", "pre_reads", "calls", "deals"]
+    assert [(item["title"], item["sent_by"]) for item in found["pre_reads"]] == [
+        ("Walk-through", "Lee Sample"),
+        ("Lease review", "Lee Sample"),
+        ("Typed visit", None),
+    ]  # soonest first; the one gone by, Lee's own and the draft never show
+    assert found["pre_reads"][1] == {
+        "form_id": str(lease_review),
+        "title": "Lease review",
+        "starts_at": "2026-11-04T23:00:00Z",
+        "company": {"key": "202", "name": "Sample Freight Pty Ltd"},
+        "sent_by": "Lee Sample",
+    }

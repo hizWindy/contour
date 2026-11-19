@@ -253,9 +253,9 @@ class AssistantCommand(Out):
 # --- Today (T1-3, the contract's part 2) ---------------------------------------------------------
 
 # The parts Today shows this person, the most urgent first (choice 6). Tasks and deals: anyone with
-# the Assistant. Meetings: the Meetings tick, while pre-meeting forms are on. Calls: the Call logs
-# tick, while call notes are on.
-TodayPart = Literal["tasks", "meetings", "calls", "deals"]
+# the Assistant. Meetings, and the pre-reads sent to me (PLAN-V23 T2-3): the Meetings tick, while
+# pre-meeting forms are on. Calls: the Call logs tick, while call notes are on.
+TodayPart = Literal["tasks", "meetings", "pre_reads", "calls", "deals"]
 # ok: read (or kept from a read under 5 minutes old). no_owner: no HubSpot link (or nobody is
 # signed in). no_access: the HubSpot key can't read tasks. off: HubSpot isn't connected. failed:
 # HubSpot didn't answer, and no earlier read is kept.
@@ -301,6 +301,22 @@ class TodayMeeting(Out):
     hubspot_url: str | None
 
 
+class TodayPreRead(Out):
+    """A pre-read sent to me (PLAN-V23 T2-3, choice 9), with or without a HubSpot user."""
+
+    form_id: uuid.UUID = Field(
+        description="The pre-read's id: its page is /assistant/meetings/<form_id>"
+    )
+    title: str = Field(description="The meeting's title")
+    starts_at: datetime = Field(description="When the meeting starts")
+    company: TodayCompany = Field(
+        description="The meeting's company. Its key is lead:<id> for a Lead Finder company"
+    )
+    sent_by: str | None = Field(
+        description="Who sent it, by name. None when that account is gone, or nobody signed in"
+    )
+
+
 class TodayCalls(Out):
     to_confirm: int = Field(description="My call notes waiting for me to confirm them")
     needs_look: int = Field(description="My call notes that failed, were partly saved, or unsure")
@@ -343,6 +359,10 @@ class Today(Out):
     )
     meetings: list[TodayMeeting] = Field(
         description="My meetings today and tomorrow, soonest first"
+    )
+    pre_reads: list[TodayPreRead] = Field(
+        description="The pre-reads sent to me, for meetings from today on (Melbourne), soonest "
+        "first, at most 20: found by my HubSpot user, and by my own address"
     )
     calls: TodayCalls
     deals: list[TodayDeal] = Field(

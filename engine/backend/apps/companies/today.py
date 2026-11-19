@@ -15,8 +15,13 @@ urgent first. It makes no Claude request, so it is free. The route is in api_ass
 - **Calls:** my notes to confirm and those that need a look, as `GET /call-notes/summary` counts.
 - **Deals:** my open deals (`stage_kind`) whose close date has passed, or whose company nobody has
   talked to for `today_quiet_days` days (14, TBC with Levi), at most 50 (`store.deals_to_nudge`).
-- **Who sees what** (`parts`): tasks and deals, anyone with the Assistant; meetings, the Meetings
-  tick while pre-meeting forms are on; calls, the Call logs tick while call notes are on.
+- **Pre-reads sent to me** (PLAN-V23 T2-3, choice 9): sent pre-reads for meetings from today on
+  (Melbourne), soonest first, at most 20, each with the meeting, its company and who sent it.
+  Found in each pre-read's list of who got it (`sent_to`): by my HubSpot user, and by my own
+  address (the only way for someone without a HubSpot user). Nobody signed in: none.
+- **Who sees what** (`parts`): tasks and deals, anyone with the Assistant; meetings and pre-reads,
+  the Meetings tick while pre-meeting forms are on (a pre-read opens only with that tick); calls,
+  the Call logs tick while call notes are on.
 - With sign-in off nobody is "me": no tasks, and everyone's meetings and deals (as Home does).
 - No database connection is held while HubSpot answers. Log lines hold counts and states only.
 """
@@ -26,9 +31,10 @@ import logging
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
-from typing import Final, Literal
+from typing import Any, Final, Literal
 
 from fastapi import FastAPI
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies import note_store, store
@@ -41,6 +47,7 @@ from apps.companies.assistant_schemas import (
     TodayDeal,
     TodayMeeting,
     TodayPart,
+    TodayPreRead,
     TodayTask,
 )
 from apps.companies.meeting_store import (
@@ -55,8 +62,10 @@ from apps.companies.meeting_store import (
 )
 from apps.companies.notes import MELBOURNE
 from apps.companies.schemas import MeetingFormState
+from apps.companies.tables import MeetingForm
 from core.api.access import can_feature
 from core.auth import users
+from core.auth.models import User
 from core.auth.sessions import AuthContext
 from core.config import Settings
 from core.hubspot.client import HubSpotError, HubSpotMissingScope, HubSpotUnavailable
@@ -72,6 +81,7 @@ CHANGES_HOLD: Final = timedelta(minutes=2)  # a change made here is laid over re
 READ_SECONDS: Final = 10.0  # the longest wait for HubSpot's tasks (TBC)
 SOON_DAYS: Final = 7  # tasks due in the next 7 days show, folded (choice 6)
 DEALS_CAP: Final = 50
+PRE_READS_CAP: Final = 20  # the most pre-reads sent to me that Today lists
 MEETING_DAYS_READ: Final = 3  # read ahead, then only today and tomorrow (Melbourne) are kept
 BEFORE_CAP: Final = 200  # the most tasks a person's copy remembers as they were before
 MONTHS: Final = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
@@ -248,7 +258,7 @@ class TaskCopy:
 def parts_of(auth: AuthContext | None, settings: Settings) -> list[TodayPart]:
     parts: list[TodayPart] = ["tasks"]
     if settings.meeting_forms_enabled and can_feature(auth, "companies.meetings"):
-        parts.append("meetings")
+        parts += ["meetings", "pre_reads"]
     if settings.call_notes_enabled and can_feature(auth, "companies.call_logs"):
         parts.append("calls")
     parts.append("deals")
@@ -382,6 +392,43 @@ async def my_meetings(
     ]
 
 
+async def my_pre_reads(
+    session: AsyncSession, auth: AuthContext | None, *, me: str | None, now: datetime
+) -> list[TodayPreRead]:
+    """The pre-reads sent to me, for meetings from today on (Melbourne), soonest first, at most
+    20 (PLAN-V23 T2-3): by my HubSpot user, and by my own address. An older pre-read kept its
+    address under `email` (see `FormRecipient`), so that is looked at too. None with sign-in
+    off."""
+    if auth is None:
+        return []
+    address = auth.user.email  # kept in lower case, as each pre-read's addresses are
+    wanted: list[list[dict[str, Any]]] = [[{"address": address}], [{"email": address}]]
+    if me is not None:
+        wanted.append([{"owner_id": me}])
+    start = datetime.combine(day_of(now), time(0), tzinfo=MELBOURNE)
+    rows = await session.execute(
+        select(MeetingForm, User.name)
+        .outerjoin(User, User.id == MeetingForm.sent_by)
+        .where(
+            MeetingForm.status == "sent",
+            MeetingForm.starts_at >= start,
+            or_(*(MeetingForm.sent_to.contains(item) for item in wanted)),
+        )
+        .order_by(MeetingForm.starts_at, MeetingForm.id)
+        .limit(PRE_READS_CAP)
+    )
+    return [
+        TodayPreRead(
+            form_id=form.id,
+            title=form.title,
+            starts_at=form.starts_at,
+            company=TodayCompany(key=form.company_key, name=form.company_name),
+            sent_by=sent_by,
+        )
+        for form, sent_by in rows.all()
+    ]
+
+
 async def my_deals(
     session: AsyncSession,
     auth: AuthContext | None,
@@ -454,6 +501,7 @@ async def build_today(
         if "meetings" in parts
         else []
     )
+    pre_reads = await my_pre_reads(session, auth, me=me, now=now) if "pre_reads" in parts else []
     calls = TodayCalls(to_confirm=0, needs_look=0)
     if "calls" in parts:
         counted = await note_store.summary(session, auth, now)
@@ -474,6 +522,7 @@ async def build_today(
             "tasks_state": kept.state,
             "tasks": len(tasks),
             "meetings": len(meetings),
+            "pre_reads": len(pre_reads),
             "deals": len(deals),
         },
     )
@@ -484,6 +533,7 @@ async def build_today(
         tasks_sentence=sentence,
         tasks_more=kept.more,
         meetings=meetings,
+        pre_reads=pre_reads,
         calls=calls,
         deals=deals,
         deals_more=deals_more,
