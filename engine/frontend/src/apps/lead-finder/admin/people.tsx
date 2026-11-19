@@ -1,11 +1,11 @@
 /**
  * Admin, People (PLAN-V9 E1, PLAN-V17 T3-7, PLAN-V19 T3-2..T3-4): who has an account, their
  * role, optional position, feature ticks in three groups (Companies, Assistant and Lead Finder,
- * PLAN-V22 choice 4), HubSpot owner, and starting/reset passwords.
+ * PLAN-V22 choice 4), HubSpot user (PLAN-V23 T3-4, `hubspot-user.tsx`: a HubSpot user, "No
+ * HubSpot user", or "Not set" for an older account), and starting/reset passwords.
  */
 import {
   Check,
-  ChevronsUpDown,
   Copy,
   Eye,
   KeyRound,
@@ -26,8 +26,6 @@ import {
   useResetPersonPassword,
   type Person,
 } from '@/api/hooks'
-import { ownerOf, useHubSpotOwners, useSetHubSpotOwner } from '@/api/hooks/hubspot-owners'
-import type { HubSpotOwnerLink, HubSpotOwnerOption } from '@/api/types'
 import {
   ALL_FEATURES,
   DEFAULT_FEATURES_BY_ROLE,
@@ -59,17 +57,8 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Select,
   SelectContent,
@@ -96,9 +85,16 @@ import {
 } from '@/components/ui/table'
 import { formatRelative } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
-import { cn } from '@/lib/utils'
 import { firstName } from '@/shell/home-words'
 import { ROLE_NAMES, roleName } from '@/shell/roles'
+import { takenUsers, type HubSpotChoice } from './hubspot-choice'
+import {
+  HUBSPOT_USER,
+  HubSpotUserCell,
+  HubSpotUserField,
+  NewHubSpotUserField,
+  PICK_A_CHOICE,
+} from './hubspot-user'
 
 const ROLES = [
   { id: 'admin', label: ROLE_NAMES.admin },
@@ -272,147 +268,26 @@ function MadePasswordBox({
   )
 }
 
-// --- The HubSpot owner (PLAN-V17 T3-7) ---------------------------------------------------------
-
-const NO_OWNER = 'No HubSpot owner'
-const OWNER_PURPOSE = 'The calls they send to HubSpot go in under this owner.'
-const OWNERS_LOADING = 'Loading the HubSpot owners.'
-const OWNERS_FAILED = "The HubSpot owners couldn't be loaded."
-const OWNERS_EMPTY = 'No HubSpot owners to pick from yet.'
-const NO_SUCH_OWNER = 'No owner by that name.'
-
-/** How a person's owner was found, in words, or null when the server doesn't say. */
-function howFound(owner: HubSpotOwnerLink): string | null {
-  if (owner.matched_by === 'email') return 'Matched by email'
-  if (owner.matched_by === 'person') return 'Set by hand'
-  return null
+/** The ticks a new person starts with: the role's, or Call logs only with no HubSpot user. */
+function startingTicks(role: AssignableRole, noHubSpotUser: boolean): readonly Feature[] {
+  if (role === 'admin') return ALL_FEATURES
+  // PLAN-V23 choice 13: "No HubSpot user" starts on the Call logs tick only.
+  return noHubSpotUser ? ['companies.call_logs'] : DEFAULT_FEATURES_BY_ROLE[role]
 }
 
-/** The owner in the table: the name and how it was found, or that there is none. */
-function OwnerCell({ person }: { person: Person }) {
-  const owner = ownerOf(person)
-  if (!owner) return <span className="text-muted-foreground">{NO_OWNER}</span>
-  const how = howFound(owner)
-  return (
-    <span className="flex flex-col">
-      <span>{owner.name}</span>
-      {how ? <span className="text-caption text-muted-foreground">{how}</span> : null}
-    </span>
-  )
-}
-
-function OwnerField({ person }: { person: Person }) {
-  const id = useId()
-  const [open, setOpen] = useState(false)
-  const owners = useHubSpotOwners()
-  const setOwner = useSetHubSpotOwner()
-  const current = ownerOf(person)
-  const saving = setOwner.isPending ? setOwner.variables : undefined
-  const shown: HubSpotOwnerOption | null = saving ? saving.owner : current
-  const how = saving || !current ? null : howFound(current)
-  const list = owners.data ?? []
-
-  const pick = (owner: HubSpotOwnerOption | null): void => {
-    setOpen(false)
-    if ((owner?.id ?? null) === (current?.id ?? null)) return
-    setOwner.mutate(
-      { userId: person.id, owner },
-      {
-        onSuccess: () => {
-          toast(
-            owner
-              ? `${person.name}'s HubSpot owner is ${owner.name} now.`
-              : `${person.name} has no HubSpot owner now.`,
-          )
-        },
-        onError: toastProblem,
-      },
-    )
-  }
-
-  return (
-    <Field>
-      <FieldLabel htmlFor={`${id}-owner`}>HubSpot owner</FieldLabel>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            id={`${id}-owner`}
-            type="button"
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            aria-describedby={`${id}-owner-line`}
-            disabled={setOwner.isPending}
-            className="w-full justify-between font-normal"
-          >
-            <span className={cn('truncate', shown ? undefined : 'text-muted-foreground')}>
-              {shown?.name ?? NO_OWNER}
-            </span>
-            <ChevronsUpDown aria-hidden="true" className="opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-(--radix-popover-trigger-width) gap-0 p-0">
-          <Command label="Find a HubSpot owner">
-            <CommandInput placeholder="Find an owner" className="touch:text-body" />
-            <CommandList>
-              <CommandEmpty>{NO_SUCH_OWNER}</CommandEmpty>
-              <CommandGroup>
-                <CommandItem
-                  value="none"
-                  keywords={['clear', 'no owner']}
-                  data-checked={shown === null}
-                  onSelect={() => {
-                    pick(null)
-                  }}
-                >
-                  None
-                </CommandItem>
-                {list.map((owner) => (
-                  <CommandItem
-                    key={owner.id}
-                    value={owner.id}
-                    keywords={[owner.name]}
-                    data-checked={owner.id === shown?.id}
-                    onSelect={() => {
-                      pick(owner)
-                    }}
-                  >
-                    <span className="truncate">{owner.name}</span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-              {owners.isPending ? (
-                <p role="status" className="px-3 pb-3 text-ui text-muted-foreground">
-                  {OWNERS_LOADING}
-                </p>
-              ) : owners.isError ? (
-                <div role="alert" className="flex flex-col items-start gap-2 px-3 pb-3 text-ui">
-                  <p>{OWNERS_FAILED}</p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void owners.refetch()}
-                  >
-                    Try again
-                  </Button>
-                </div>
-              ) : list.length === 0 ? (
-                <p className="px-3 pb-3 text-ui text-muted-foreground">{OWNERS_EMPTY}</p>
-              ) : null}
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-      <FieldDescription id={`${id}-owner-line`}>
-        {how ? `${how}. ${OWNER_PURPOSE}` : OWNER_PURPOSE}
-      </FieldDescription>
-    </Field>
-  )
-}
-
-/** Edits to one person, applied at once: role, position, ticks, owner, sign-in and password reset. */
-function EditPerson({ person, self }: { person: Person; self: boolean }) {
+/**
+ * Edits to one person, applied at once: role, position, ticks, HubSpot user, sign-in and password
+ * reset. `taken`: the HubSpot users linked to someone, and to whom.
+ */
+function EditPerson({
+  person,
+  self,
+  taken,
+}: {
+  person: Person
+  self: boolean
+  taken: ReadonlyMap<string, string>
+}) {
   const change = useChangePerson()
   const resetPassword = useResetPersonPassword()
   const id = useId()
@@ -603,7 +478,7 @@ function EditPerson({ person, self }: { person: Person; self: boolean }) {
             />
           </div>
 
-          <OwnerField person={person} />
+          <HubSpotUserField id={`${id}-hubspot`} person={person} taken={taken} />
 
           <label
             htmlFor={`${id}-active`}
@@ -683,6 +558,7 @@ function EditPerson({ person, self }: { person: Person; self: boolean }) {
 }
 
 function PeopleTable({ people, myId }: { people: Person[]; myId: string | null }) {
+  const taken = takenUsers(people)
   return (
     <Table compact aria-label="People">
       <TableHeader>
@@ -690,7 +566,7 @@ function PeopleTable({ people, myId }: { people: Person[]; myId: string | null }
           <TableHead>Name</TableHead>
           <TableHead>Role</TableHead>
           <TableHead className="max-md:hidden">Access</TableHead>
-          <TableHead className="max-lg:hidden">HubSpot owner</TableHead>
+          <TableHead className="max-lg:hidden">{HUBSPOT_USER}</TableHead>
           <TableHead className="max-sm:hidden">Last signed in</TableHead>
           <TableHead>
             <span className="sr-only">Edit</span>
@@ -728,13 +604,13 @@ function PeopleTable({ people, myId }: { people: Person[]; myId: string | null }
               </TableCell>
               <TableCell className="max-md:hidden">{accessOf(person)}</TableCell>
               <TableCell className="max-lg:hidden">
-                <OwnerCell person={person} />
+                <HubSpotUserCell person={person} />
               </TableCell>
               <TableCell className="text-muted-foreground max-sm:hidden">
                 {person.last_signed_in_at ? formatRelative(person.last_signed_in_at) : 'Not yet'}
               </TableCell>
               <TableCell className="text-right">
-                <EditPerson person={person} self={self} />
+                <EditPerson person={person} self={self} taken={taken} />
               </TableCell>
             </TableRow>
           )
@@ -744,7 +620,10 @@ function PeopleTable({ people, myId }: { people: Person[]; myId: string | null }
   )
 }
 
-function AddPerson() {
+/** The server's field names for the HubSpot choice, and its code for neither (PLAN-V23 T3-1). */
+const HUBSPOT_FIELDS = new Set(['hubspot_owner_id', 'no_hubspot_user'])
+
+function AddPerson({ taken }: { taken: ReadonlyMap<string, string> }) {
   const add = useAddPerson()
   const id = useId()
   const [open, setOpen] = useState(false)
@@ -752,6 +631,8 @@ function AddPerson() {
   const [email, setEmail] = useState('')
   const [position, setPosition] = useState('')
   const [role, setRole] = useState<AssignableRole>('staff')
+  // PLAN-V23 choice 12: a new person needs their HubSpot user, or "No HubSpot user".
+  const [hubspot, setHubspot] = useState<HubSpotChoice | null>(null)
   const [picked, setPicked] = useState<ReadonlySet<Feature>>(
     () => new Set(DEFAULT_FEATURES_BY_ROLE.staff),
   )
@@ -763,8 +644,22 @@ function AddPerson() {
     setEmail('')
     setPosition('')
     setRole('staff')
+    setHubspot(null)
     setPicked(new Set(DEFAULT_FEATURES_BY_ROLE.staff))
     setErrors({})
+  }
+
+  const pickHubspot = (choice: HubSpotChoice): void => {
+    const wasNone = hubspot?.kind === 'none'
+    const isNone = choice.kind === 'none'
+    setHubspot(choice)
+    setErrors((now) => {
+      const next = { ...now }
+      delete next.hubspot
+      return next
+    })
+    // Into or out of "No HubSpot user", the ticks start again, as a role change does.
+    if (wasNone !== isNone) setPicked(new Set(startingTicks(role, isNone)))
   }
 
   const handleOpenChange = (nextOpen: boolean): void => {
@@ -780,8 +675,9 @@ function AddPerson() {
     const missing: Record<string, string> = {}
     if (name.trim() === '') missing.name = 'Give a name.'
     if (email.trim() === '') missing.email = 'Give an email.'
+    if (hubspot === null) missing.hubspot = PICK_A_CHOICE
     setErrors(missing)
-    if (Object.keys(missing).length > 0) return
+    if (Object.keys(missing).length > 0 || hubspot === null) return
     const features =
       role === 'admin' ? [...ALL_FEATURES] : ALL_FEATURES.filter((feature) => picked.has(feature))
     const trimmedPosition = position.trim()
@@ -791,6 +687,9 @@ function AddPerson() {
         email: email.trim(),
         role,
         ...(trimmedPosition ? { position: trimmedPosition } : {}),
+        ...(hubspot.kind === 'none'
+          ? { no_hubspot_user: true }
+          : { hubspot_owner_id: hubspot.owner.id, no_hubspot_user: false }),
         features,
       },
       {
@@ -800,10 +699,15 @@ function AddPerson() {
           resetForm()
         },
         onError: (error) => {
+          if (isApiProblem(error) && error.code === 'hubspot_choice_missing') {
+            setErrors({ hubspot: PICK_A_CHOICE })
+            return
+          }
           if (isApiProblem(error) && error.errors.length > 0) {
             const found: Record<string, string> = {}
             for (const item of error.errors) {
-              found[item.field.replace(/^body\./, '')] = item.message
+              const field = item.field.replace(/^body\./, '')
+              found[HUBSPOT_FIELDS.has(field) ? 'hubspot' : field] = item.message
             }
             setErrors(found)
             return
@@ -899,7 +803,7 @@ function AddPerson() {
                 onValueChange={(value) => {
                   const nextRole = value as AssignableRole
                   setRole(nextRole)
-                  setPicked(new Set(DEFAULT_FEATURES_BY_ROLE[nextRole]))
+                  setPicked(new Set(startingTicks(nextRole, hubspot?.kind === 'none')))
                 }}
               >
                 <SelectTrigger id={`${id}-role`} className="w-full">
@@ -914,6 +818,14 @@ function AddPerson() {
                 </SelectContent>
               </Select>
             </Field>
+            <NewHubSpotUserField
+              id={`${id}-hubspot`}
+              name={name}
+              value={hubspot}
+              error={errors.hubspot}
+              taken={taken}
+              onPick={pickHubspot}
+            />
             <FeatureGroups
               idPrefix={id}
               role={role}
@@ -966,7 +878,7 @@ export default function AdminPeopleTab() {
             Turn ticks on or off for each person, or reset their password.
           </CardDescription>
           <CardAction>
-            <AddPerson />
+            <AddPerson taken={takenUsers(people.data)} />
           </CardAction>
         </CardHeader>
         <CardContent>

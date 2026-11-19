@@ -479,6 +479,9 @@ describe('PLAN-V19 T3-3: Position, ticks, generated starting/reset passwords & C
     await user.click(within(sheet).getByRole('combobox', { name: 'Role' }))
     expect(screen.queryByRole('option', { name: 'Platform admin' })).not.toBeInTheDocument()
     await user.click(await screen.findByRole('option', { name: 'Staff' }))
+    // PLAN-V23 T3-4: a new person needs a HubSpot choice.
+    await user.click(within(sheet).getByRole('combobox', { name: 'HubSpot user' }))
+    await user.click(await screen.findByRole('option', { name: /^No HubSpot user/ }))
 
     await user.click(within(sheet).getByRole('button', { name: 'Add the person' }))
 

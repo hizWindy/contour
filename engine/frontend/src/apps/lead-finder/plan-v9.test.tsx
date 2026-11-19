@@ -413,6 +413,7 @@ describe('the People tab (PLAN-V9 E1, PLAN-V19 T3-3 & T3-4)', () => {
     const calls = mockApi({
       '/api/v1/auth/me': { auth_required: false, user: null, session: null },
       'GET /api/v1/people': [ADMIN],
+      'GET /api/v1/hubspot/owners': { owners: [{ id: '301', name: 'Marcus Lee' }] },
       'POST /api/v1/people': {
         ...MARCUS,
         apps: ['lead_finder', 'companies'],
@@ -425,12 +426,16 @@ describe('the People tab (PLAN-V9 E1, PLAN-V19 T3-3 & T3-4)', () => {
     await screen.findByRole('dialog')
     await user.type(screen.getByLabelText('Name'), 'Marcus Lee')
     await user.type(screen.getByLabelText('Email'), 'marcus@example.test')
+    // PLAN-V23 T3-4: a new person needs their HubSpot user, here the closest name.
+    await user.click(await screen.findByRole('button', { name: 'Use Marcus Lee' }))
     await user.click(screen.getByRole('button', { name: 'Add the person' }))
     await waitFor(() => {
       expect(calls.find((call) => call.method === 'POST')?.body).toEqual({
         name: 'Marcus Lee',
         email: 'marcus@example.test',
         role: 'staff',
+        hubspot_owner_id: '301',
+        no_hubspot_user: false,
         features: [
           'lead_finder.start_run',
           'lead_finder.results',

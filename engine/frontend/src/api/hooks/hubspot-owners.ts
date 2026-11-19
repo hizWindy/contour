@@ -38,20 +38,26 @@ export interface SetOwnerVariables {
   userId: string
   /** The owner picked, or null to clear it. */
   owner: HubSpotOwnerOption | null
+  /** With no owner: mark the person "No HubSpot user" instead of "Not set" (PLAN-V23 T3-1). */
+  noHubSpotUser?: boolean
 }
 
 /**
- * PUT /people/{user_id}/hubspot-owner (Admin): sets a person's owner, or clears it. The person comes
- * back with the new link, so the row changes at once, before the list is read again.
+ * PUT /people/{user_id}/hubspot-owner (Admin): sets a person's owner, marks them "No HubSpot user",
+ * or clears it. The person comes back with the new link, so the row changes at once, before the
+ * list is read again.
  */
 export function useSetHubSpotOwner() {
   const queryClient = useQueryClient()
   return useMutation<Person, ApiProblem, SetOwnerVariables>({
-    mutationFn: async ({ userId, owner }) =>
+    mutationFn: async ({ userId, owner, noHubSpotUser = false }) =>
       unwrap(
         await api.PUT('/people/{user_id}/hubspot-owner', {
           params: { path: { user_id: userId } },
-          body: { owner_id: owner?.id ?? null },
+          body:
+            owner === null && noHubSpotUser
+              ? { owner_id: null, no_hubspot_user: true }
+              : { owner_id: owner?.id ?? null },
         }),
       ),
     onSuccess: (saved) => {
