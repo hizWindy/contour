@@ -287,10 +287,12 @@ class AccountInfo:
 
 @dataclass(frozen=True)
 class Filter:
-    """One search filter, like hs_lastmodifieddate GTE <milliseconds>."""
+    """One search filter, like hs_lastmodifieddate GTE <milliseconds>. CONTAINS_TOKEN (PLAN-V23
+    T1-3): a word of the field is the value, where * stands for any letters (sample* finds
+    Sample Logistics); how HubSpot splits a field into words is TBC."""
 
     property: str
-    operator: Literal["EQ", "NEQ", "GT", "GTE", "LT", "LTE", "HAS_PROPERTY", "IN"]
+    operator: Literal["EQ", "NEQ", "GT", "GTE", "LT", "LTE", "HAS_PROPERTY", "IN", "CONTAINS_TOKEN"]
     value: str | None = None
     values: tuple[str, ...] = ()
 

@@ -25,8 +25,13 @@ touches no real data. It follows the `HubSpot` protocol (core/hubspot/client.py)
   search refuses, like HubSpot's 403.
 - Tasks (PLAN-V22 T1-3): `add_task` makes one with its companies. A search also takes EQ, NEQ,
   IN and HAS_PROPERTY on any field, and `descending` sorts latest first.
+- A company search by name (PLAN-V23 T1-3): CONTAINS_TOKEN matches a word of the field (letters
+  and digits, any case), with * for any letters, as HubSpot's docs say (its own word rules are
+  TBC).
 """
 
+import fnmatch
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -577,4 +582,8 @@ def _passes(record: FakeRecord, item: Filter) -> bool:
         return (value or "") in item.values
     if item.operator == "HAS_PROPERTY":
         return bool(value)
+    if item.operator == "CONTAINS_TOKEN":
+        wanted = (item.value or "").casefold()
+        words = re.findall(r"[^\W_]+", (value or "").casefold())
+        return any(fnmatch.fnmatchcase(word, wanted) for word in words)
     return True

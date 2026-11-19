@@ -55,9 +55,9 @@ from core.hubspot.client import (
     PropertyInfo,
 )
 from core.hubspot.importer import normalize_domain
-from core.hubspot.mapping import Converter, Lookups, Problems, company_rows, load_field_map
-from core.hubspot.models import HubSpotOwner, HubSpotWrite
-from core.hubspot.service import replace_offices, upsert_companies
+from core.hubspot.live import save_records
+from core.hubspot.mapping import load_field_map
+from core.hubspot.models import HubSpotWrite
 from core.logs import scrub
 
 log = logging.getLogger(__name__)
@@ -782,8 +782,9 @@ def note_html(text: str) -> str:
 
 
 async def refresh_copy(session: AsyncSession, hubspot: HubSpot, company_id: str) -> None:
-    """Saves HubSpot's record of the company into our copy at once. A failure here is logged,
-    never raised: the write itself landed, and the next sync catches up."""
+    """Saves HubSpot's record of the company into our copy at once, with the sync's own code
+    (`live.save_records`). A failure here is logged, never raised: the write itself landed, and
+    the next sync catches up."""
     try:
         fields = load_field_map()
         record = await hubspot.get_object(
@@ -792,20 +793,7 @@ async def refresh_copy(session: AsyncSession, hubspot: HubSpot, company_id: str)
         if record is None:
             return
         definitions = await hubspot.properties("companies")
-        owners = (await session.execute(select(HubSpotOwner.owner_id, HubSpotOwner.name))).all()
-        convert = Converter(
-            Lookups.build(
-                owners=[(row[0], row[1]) for row in owners],
-                pipelines=[],
-                company_fields=[d for d in definitions if d.choices],
-                time_zone=None,
-            ),
-            Problems(),
-        )
-        rows = company_rows(record, fields, convert)
-        await upsert_companies(session, [rows.company], source="api")
-        await replace_offices(session, [company_id], rows.offices)
-        await session.commit()
+        await save_records(session, [record], definitions)
     except (HubSpotError, HubSpotNotFound):
         log.warning("hubspot_copy_not_refreshed", extra={"company_id": company_id})
         await session.rollback()
