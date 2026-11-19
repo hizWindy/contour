@@ -23,7 +23,8 @@ urgent first. It makes no Claude request, so it is free. The route is in api_ass
 - **Pre-reads sent to me** (PLAN-V23 T2-3, choice 9): sent pre-reads for meetings from today on
   (Melbourne), soonest first, at most 20, each with the meeting, its company and who sent it.
   Found in each pre-read's list of who got it (`sent_to`): by my HubSpot user, and by my own
-  address (the only way for someone without a HubSpot user). Nobody signed in: none.
+  address (the only way for someone without a HubSpot user). Nobody signed in: none. One on a
+  Lead Finder lead shows only to those who may see the lead, as its page does.
 - **Who sees what** (`parts`): tasks and deals, anyone with the Assistant; meetings and pre-reads,
   the Meetings tick while pre-meeting forms are on (a pre-read opens only with that tick); calls,
   the Call logs tick while call notes are on.
@@ -33,7 +34,7 @@ urgent first. It makes no Claude request, so it is free. The route is in api_ass
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
 from typing import Any, Final, Literal
@@ -72,6 +73,7 @@ from core.api.access import can_feature
 from core.auth import users
 from core.auth.models import User
 from core.auth.sessions import AuthContext
+from core.company_leads import CompanyLeads
 from core.config import Settings
 from core.hubspot.client import HubSpotError, HubSpotMissingScope, HubSpotUnavailable
 from core.hubspot.connection import hubspot_set_up, open_hubspot
@@ -410,12 +412,18 @@ async def my_meetings(
 
 
 async def my_pre_reads(
-    session: AsyncSession, auth: AuthContext | None, *, me: str | None, now: datetime
+    session: AsyncSession,
+    auth: AuthContext | None,
+    *,
+    me: str | None,
+    now: datetime,
+    leads: Sequence[CompanyLeads] = (),
 ) -> list[TodayPreRead]:
     """The pre-reads sent to me, for meetings from today on (Melbourne), soonest first, at most
     20 (PLAN-V23 T2-3): by my HubSpot user, and by my own address. An older pre-read kept its
-    address under `email` (see `FormRecipient`), so that is looked at too. None with sign-in
-    off."""
+    address under `email` (see `FormRecipient`), so that is looked at too. One on a Lead Finder
+    lead only when I may see the lead (`leads`: the projects whose companies I may see), as its
+    page (`meeting_form.read_form`) does. None with sign-in off."""
     if auth is None:
         return []
     address = auth.user.email  # kept in lower case, as each pre-read's addresses are
@@ -423,27 +431,35 @@ async def my_pre_reads(
     if me is not None:
         wanted.append([{"owner_id": me}])
     start = datetime.combine(day_of(now), time(0), tzinfo=MELBOURNE)
+    where = [
+        MeetingForm.status == "sent",
+        MeetingForm.starts_at >= start,
+        or_(*(MeetingForm.sent_to.contains(item) for item in wanted)),
+    ]
+    if not leads:  # no project's companies to see: no pre-read on a lead
+        where.append(MeetingForm.company_key.not_like("lead:%"))
     rows = await session.execute(
         select(MeetingForm, User.name)
         .outerjoin(User, User.id == MeetingForm.sent_by)
-        .where(
-            MeetingForm.status == "sent",
-            MeetingForm.starts_at >= start,
-            or_(*(MeetingForm.sent_to.contains(item) for item in wanted)),
-        )
+        .where(*where)
         .order_by(MeetingForm.starts_at, MeetingForm.id)
         .limit(PRE_READS_CAP)
     )
-    return [
-        TodayPreRead(
-            form_id=form.id,
-            title=form.title,
-            starts_at=form.starts_at,
-            company=TodayCompany(key=form.company_key, name=form.company_name),
-            sent_by=sent_by,
+    found: list[TodayPreRead] = []
+    for form, sent_by in rows.all():
+        key = form.company_key
+        if key.startswith("lead:") and await note_store.company_named(session, key, leads) is None:
+            continue  # a lead I may not see: its page would answer "not found"
+        found.append(
+            TodayPreRead(
+                form_id=form.id,
+                title=form.title,
+                starts_at=form.starts_at,
+                company=TodayCompany(key=key, name=form.company_name),
+                sent_by=sent_by,
+            )
         )
-        for form, sent_by in rows.all()
-    ]
+    return found
 
 
 async def my_deals(
@@ -511,9 +527,10 @@ async def build_today(
     copy: TaskCopy,
     now: datetime,
     fresh: bool,
+    leads: Sequence[CompanyLeads] = (),
 ) -> Today:
     """Today, from our copy and HubSpot's tasks. The database is read first, and its connection
-    let go, before HubSpot is asked."""
+    let go, before HubSpot is asked. `leads`: the projects whose companies this person may see."""
     parts = parts_of(auth, settings)
     none = no_hubspot_user(auth)  # no HubSpot user: HubSpot isn't asked at all
     me = None if none else await my_owner(session, auth, source)
@@ -522,7 +539,11 @@ async def build_today(
         if "meetings" in parts
         else []
     )
-    pre_reads = await my_pre_reads(session, auth, me=me, now=now) if "pre_reads" in parts else []
+    pre_reads = (
+        await my_pre_reads(session, auth, me=me, now=now, leads=leads)
+        if "pre_reads" in parts
+        else []
+    )
     calls = TodayCalls(to_confirm=0, needs_look=0)
     if "calls" in parts:
         counted = await note_store.summary(session, auth, now)

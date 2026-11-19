@@ -215,7 +215,8 @@ async def read_assistant_command(
         "cancelled, each with its pre-read (`form`), and my typed-in pre-reads. `pre_reads` "
         "(PLAN-V23 T2-3): the pre-reads sent to me, by my HubSpot user or my own address, for "
         "meetings from today on, soonest first, at most 20, each with the meeting's title and "
-        "time, its company, who sent it and `form_id`. `calls`: my "
+        "time, its company, who sent it and `form_id` (one on a Lead Finder lead only for "
+        "those who may see the lead). `calls`: my "
         "notes to confirm and those that need a look. `deals`: my open deals whose close date "
         "has passed or whose company nobody has talked to for `quiet_days` days, at most 50 "
         "(`deals_more`). `checked_at`: when the tasks were read. No Claude request: it is free. "
@@ -231,6 +232,7 @@ async def read_today(
     source: SourceDep,
     copy: TaskCopyDep,
     now: NowDep,
+    leads: LeadsDep,
     fresh: Annotated[
         bool,
         Query(description="Sync: read the tasks from HubSpot again (at most once a minute)"),
@@ -245,6 +247,7 @@ async def read_today(
         copy=copy,
         now=now,
         fresh=fresh,
+        leads=leads,
     )
 
 

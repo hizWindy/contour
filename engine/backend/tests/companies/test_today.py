@@ -42,6 +42,7 @@ from tests.companies.test_call_notes_history import a_note
 from tests.companies.test_meetings_api import form, meeting, melbourne
 from tests.core.auth_world import START, World, make_platform_admin, sign_in
 from tests.core.hubspot_fake import SCOPE_FOR, FakeHubSpot
+from tests.lead_finder.factories import make_lead
 
 pytestmark = pytest.mark.integration
 TODAY = f"{API}/assistant/today"
@@ -537,3 +538,37 @@ async def test_today_with_no_hubspot_user_asks_hubspot_nothing_and_shows_calls_a
     assert (found["meetings"], found["deals"]) == ([], [])  # those go by HubSpot user
     assert found["calls"] == {"to_confirm": 2, "needs_look": 1}
     assert [item["title"] for item in found["pre_reads"]] == ["Site visit"]
+
+
+async def test_a_pre_read_on_a_lead_shows_only_to_those_who_may_see_the_lead(
+    world: World, settings: dict[str, Any], hubspot: FakeHubSpot, meetings: DayMeetings
+) -> None:
+    """Its page answers "not found" to anyone without the Lead Finder's tick, so Today doesn't
+    name the lead to them either."""
+    delta = make_lead("Delta Freight", result="pass", score=82, city="Perth")
+    key = f"lead:{delta.id}"
+    await add(
+        world,
+        delta,
+        form(
+            None,
+            "sent",
+            title="Intro meeting",
+            company_key=key,
+            company_name="Delta Freight",
+            starts_at=melbourne(5, 11),
+            sent_to=[
+                sent_to(address="mia@example.test", email=True),
+                sent_to(address="lee@example.test", email=True),
+            ],
+        ),
+    )
+    async with signed_in(world, "mia", owner="o1") as (client, _):  # the Companies ticks only
+        mias = await today(client)
+    finder = [*COMPANIES, "lead_finder.results"]
+    async with signed_in(world, "lee", owner="o2", features=finder) as (client, _):
+        lees = await today(client)
+    assert mias["pre_reads"] == []
+    assert [(item["title"], item["company"]) for item in lees["pre_reads"]] == [
+        ("Intro meeting", {"key": key, "name": "Delta Freight"})
+    ]
