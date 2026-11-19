@@ -22,10 +22,14 @@
  *   serif voice, and the errors in plain words.
  * - **The layout:** two columns on a laptop, the tasks first; one column on a phone, with "Speak"
  *   pinned at the bottom (choice 13).
+ * - **"Add task" and "Email the team"** (PLAN-V23 T4-3) open the review card empty. No AI reads
+ *   anything, so they work while the AI is off or busy; Ctrl+K has them too.
+ * - **After L** (or a row's "Log a call"), as the Log call panel closes, the focus goes back to the
+ *   row it came from (PLAN-V23 T4-3), so J and K carry on from there by keyboard.
  */
-import { ChevronRight, ListTodo, RotateCcw } from 'lucide-react'
+import { ChevronRight, ListPlus, ListTodo, Mail, RotateCcw } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
-import { lazy, Suspense, useEffect, useId, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { todayKey, useToday } from '@/api/hooks/assistant'
 import { useCallNoteOptions } from '@/api/hooks/call-note-counts'
@@ -51,9 +55,10 @@ import { melbourneDate } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
 import { safeHref } from '@/lib/safe-href'
 import { cn } from '@/lib/utils'
+import { openCard } from '../card/store'
 import { showOnScreen } from '../voice/on-screen'
 import { useVKeyOn } from '../voice/v-switch'
-import { TODAY, TODAY_PURPOSE } from '../words'
+import { ADD_TASK, EMAIL_THE_TEAM, TODAY, TODAY_PURPOSE } from '../words'
 import {
   callsRows,
   companyOf,
@@ -225,6 +230,8 @@ function TodayParts({
   const [activeId, setActiveId] = useState<string | null>(null)
   const [logging, setLogging] = useState<LogTarget | null>(null)
   const [logAsked, setLogAsked] = useState(false)
+  // The row Log call was opened from: the focus goes back to it as the panel closes.
+  const logRow = useRef<string | null>(null)
 
   const rows = rowsOf(today, { soonOpen })
   const ids = rows.map((row) => row.id)
@@ -251,9 +258,20 @@ function TodayParts({
     }
   }, [companyKey, meetingId, formId, shownName])
 
-  const logWith = (company: TodayCompany): void => {
+  const logWith = (company: TodayCompany, rowId: string): void => {
+    logRow.current = rowId
     setLogAsked(true)
     setLogging({ companyKey: company.key, companyName: company.name })
+  }
+
+  /** As Log call closes: back to its row, if the row is still there (PLAN-V23 T4-3). */
+  const backToRow = (): boolean => {
+    const id = logRow.current
+    logRow.current = null
+    if (!id || !document.querySelector(rowSelector(id))) return false
+    setActiveId(id)
+    focusRow(id)
+    return true
   }
 
   const draft = (meeting: TodayMeeting): void => {
@@ -293,7 +311,7 @@ function TodayParts({
           return {
             label: LOG_A_CALL,
             run: () => {
-              logWith(company)
+              logWith(company, row.id)
             },
             shortcut: 'L',
           }
@@ -362,7 +380,7 @@ function TodayParts({
       },
       l: (id) => {
         const company = companyOf(rowById(id))
-        if (company && logOn) logWith(company)
+        if (company && logOn) logWith(company, id)
       },
     },
   })
@@ -546,6 +564,7 @@ function TodayParts({
             onClose={() => {
               setLogging(null)
             }}
+            focusBack={backToRow}
           />
         </Suspense>
       ) : null}
@@ -554,17 +573,59 @@ function TodayParts({
   )
 }
 
+/**
+ * "Add task" and "Email the team" (PLAN-V23 T4-3): the review card, empty, for the rep to fill in.
+ * Not for a Viewer, who sends nothing.
+ */
+function CardButtons() {
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        className="touch:h-11"
+        onClick={() => {
+          openCard({ kind: 'empty', action: 'task' })
+        }}
+      >
+        <ListPlus aria-hidden="true" />
+        {ADD_TASK}
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        className="touch:h-11"
+        onClick={() => {
+          openCard({ kind: 'empty', action: 'email' })
+        }}
+      >
+        <Mail aria-hidden="true" />
+        {EMAIL_THE_TEAM}
+      </Button>
+    </>
+  )
+}
+
 function TodayContent() {
   const today = useToday()
   const day = melbourneDate()
   const sync = useTodaySync(today.data, day)
+  // Whoever may send from the Assistant: the Call logs or Meetings tick, and not a Viewer.
+  const canSend = useCanWrite('companies.call_logs', 'companies.meetings')
   const header = (
     <PageHeader
       icon={ListTodo}
       tone="companies"
       title={TODAY}
       description={TODAY_PURPOSE}
-      actions={today.data ? <SyncButton sync={sync} note={SYNC_TASKS_NOTE} /> : null}
+      actions={
+        canSend || today.data ? (
+          <>
+            {canSend ? <CardButtons /> : null}
+            {today.data ? <SyncButton sync={sync} note={SYNC_TASKS_NOTE} /> : null}
+          </>
+        ) : null
+      }
     />
   )
   if (!today.data) {

@@ -50,6 +50,7 @@ export function LogCallSheet({
   onPickCompany,
   onBackToList,
   onClose,
+  focusBack,
 }: {
   state: LogCallState | null
   options: CallNoteOptions | undefined
@@ -57,6 +58,11 @@ export function LogCallSheet({
   onPickCompany: (target: LogTarget) => void
   onBackToList: () => void
   onClose: () => void
+  /**
+   * As it closes, the page that opened it puts the focus back where it belongs (Today: the row it
+   * came from, PLAN-V23 T4-3), and says whether it could. Else Call logs' own Log call button.
+   */
+  focusBack?: () => boolean
 }) {
   // While the panel slides shut, it keeps showing what it had.
   const [shown, setShown] = useState(state)
@@ -125,6 +131,10 @@ export function LogCallSheet({
           panel.current?.querySelector('textarea')?.focus()
         }}
         onCloseAutoFocus={(event) => {
+          if (focusBack?.()) {
+            event.preventDefault()
+            return
+          }
           const button = document.querySelector<HTMLElement>('[data-slot="log-call"]')
           if (button) {
             event.preventDefault()

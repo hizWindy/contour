@@ -301,7 +301,7 @@ describe('Ctrl+K (choice 2: found by the old words)', () => {
     return { ...rendered, menu: within(menu) }
   }
 
-  it('lists Today, the pages and the five entries under the Assistant', async () => {
+  it('lists Today, the pages and the seven entries under the Assistant', async () => {
     const { menu } = await openCtrlK()
     // The pre-read's entry comes last: it waits for Meetings' counts.
     await menu.findByRole('option', { name: 'Pre-read for a meeting' }, { timeout: LAZY })
@@ -312,6 +312,9 @@ describe('Ctrl+K (choice 2: found by the old words)', () => {
       'Call logs',
       'Log a call',
       'Calls to confirm',
+      // The review card, empty (PLAN-V23 T4-3).
+      'Add task',
+      'Email the team',
       'Check my mic',
       'Pre-read for a meeting',
     ])

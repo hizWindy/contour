@@ -19,3 +19,7 @@ export const TODAY = 'Today'
 /** What Today is for (choice 6), under its name on Home and on the page. */
 export const TODAY_PURPOSE =
   'Your HubSpot tasks, meetings, calls to confirm and deals that need a nudge, the most urgent first.'
+
+/** Open the review card empty, on Today and in Ctrl+K (PLAN-V23 T4-3, the plan's words). */
+export const ADD_TASK = 'Add task'
+export const EMAIL_THE_TEAM = 'Email the team'

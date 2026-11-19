@@ -220,6 +220,41 @@ export function draftOf(
   }
 }
 
+/**
+ * An empty task or email card (PLAN-V23 T4-3), from Today's "Add task" and "Email the team" or
+ * Ctrl+K. No AI read anything, so the card says its read-back from the boxes from the start.
+ */
+export function emptyDraftOf(
+  action: 'task' | 'email',
+  by: string | null,
+  now: Date = new Date(),
+): TaskDraft | EmailDraft {
+  const base: Base = {
+    key: newIdempotencyKey(),
+    by,
+    readBack: '',
+    unsure: null,
+    spoken: false,
+    edited: true,
+    startedAt: now.toISOString(),
+  }
+  if (action === 'email') {
+    return { ...base, action: 'email', to: [], subject: '', body: '', company: null }
+  }
+  return {
+    ...base,
+    action: 'task',
+    company: { found: null, choices: [], heard: '' },
+    subject: '',
+    when: '',
+    whenStart: '',
+    due: null,
+    kind: 'todo',
+    forWhom: null,
+    body: '',
+  }
+}
+
 // --- What blocks a send ---------------------------------------------------------------------------
 
 /** A choice is still to make: two or more matched, and none is picked yet. */
@@ -452,9 +487,15 @@ export function readBackOf(
       const due = dueOf(draft, today)
       const who = draft.forWhom?.found?.name ?? 'you'
       const day = due.kind === 'date' ? `, due ${readBackDay(due.date, today)}` : ''
-      return `Add a task for ${who}: ${draft.subject.trim()}${day}.`
+      // An empty card (PLAN-V23 T4-3) has no words yet: "Add a task for you."
+      const what = draft.subject.trim()
+      return what ? `Add a task for ${who}: ${what}${day}.` : `Add a task for ${who}${day}.`
     }
-    case 'email':
-      return `Email ${namesOf(draft.to)}: ${draft.subject.trim()}.`
+    case 'email': {
+      // An empty card has no one and no subject yet: "Email the team."
+      const to = namesOf(draft.to) || 'the team'
+      const about = draft.subject.trim()
+      return about ? `Email ${to}: ${about}.` : `Email ${to}.`
+    }
   }
 }

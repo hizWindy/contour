@@ -2,9 +2,14 @@
  * Which review card is open (PLAN-V22 T3-3). The voice bar's hand-over opens one for a command,
  * and Undo or a kept draft opens one again. One small store in the page, like the bar's own
  * (`voice/store.ts`): it loads with the bar, and the card's code loads only when a card opens.
+ *
+ * A card can also open empty, from Today's "Add task" and "Email the team" or Ctrl+K (PLAN-V23
+ * T4-3): no AI reads anything, so it works while the AI is off or busy. The card is drawn with the
+ * voice bar's code, so opening one asks for that code too.
  */
 import { useSyncExternalStore } from 'react'
 import type { AssistantCommand, CommandSource } from '@/api/types'
+import { wantVoiceCode } from '../voice/store'
 import type { CardDraft } from './draft'
 
 export type CardRequest =
@@ -17,11 +22,14 @@ export type CardRequest =
    * opens for the rep to pick the company (T3-5).
    */
   | { id: number; kind: 'dictation'; words: string; source: CommandSource }
+  /** An empty task or email card, from a button or Ctrl+K (PLAN-V23 T4-3). */
+  | { id: number; kind: 'empty'; action: 'task' | 'email' }
 
 type Opening =
   | Omit<Extract<CardRequest, { kind: 'command' }>, 'id'>
   | Omit<Extract<CardRequest, { kind: 'draft' }>, 'id'>
   | Omit<Extract<CardRequest, { kind: 'dictation' }>, 'id'>
+  | Omit<Extract<CardRequest, { kind: 'empty' }>, 'id'>
 
 let current: CardRequest | null = null
 let opened = 0
@@ -42,6 +50,7 @@ function subscribe(listener: () => void): () => void {
 export function openCard(opening: Opening): void {
   opened += 1
   current = { ...opening, id: opened }
+  wantVoiceCode()
   tell()
 }
 

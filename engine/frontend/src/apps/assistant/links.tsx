@@ -23,10 +23,11 @@
  *   menu group called Relationships, so those words stay among the entries' keywords.
  * - **"Speak (V)"** (PLAN-V22 T3-1) in the top bar opens the voice bar, as V does. "Use V to
  *   speak" in the account menu switches the V key off and on (PLAN-V23 T4-1).
+ * - **"Add task" and "Email the team"** in Ctrl+K open the review card empty (PLAN-V23 T4-3).
  * - **Loaded late**, through `parts.ts`: the menu, Home and Ctrl+K are in the first visit, and this
  *   file, with its hooks, words and icons, is not. Import the parts from there, not here.
  */
-import { ClipboardCheck, FileText, Keyboard, Mic, NotebookPen } from 'lucide-react'
+import { ClipboardCheck, FileText, ListPlus, Mail, Mic, NotebookPen, Speech } from 'lucide-react'
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui'
 import { lazy, Suspense, useState } from 'react'
 import { useCallNoteCounts, useCallNoteOptions, voiceToolOf } from '@/api/hooks/call-note-counts'
@@ -54,11 +55,12 @@ import { SwitchMark } from '@/components/ui/switch'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { MenuCount } from '@/shell/menu-count'
 import type { CommandsProps } from '@/shell/nav'
+import { openCard } from './card/store'
 import { MEETINGS_PATH } from './paths'
 import { openVoiceBar } from './voice/store'
 import { setVKeyOn, useVKeyOn } from './voice/v-switch'
 import { SPEAK, SPEAK_KEY, USE_V } from './voice/words'
-import { ASSISTANT_KEYWORDS } from './words'
+import { ADD_TASK, ASSISTANT_KEYWORDS, EMAIL_THE_TEAM } from './words'
 
 function ToConfirmCountContent() {
   const { counts } = useCallNoteCounts()
@@ -288,7 +290,7 @@ export function VKeyMenuItem() {
       }}
       className="relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-ui outline-hidden select-none focus:bg-accent focus:text-accent-foreground touch:min-h-11 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0"
     >
-      <Keyboard aria-hidden="true" />
+      <Speech aria-hidden="true" />
       <span className="flex-1">{USE_V}</span>
       <SwitchMark checked={on} />
     </DropdownMenuPrimitive.CheckboxItem>
@@ -306,14 +308,53 @@ export function AssistantAccountItems() {
 }
 
 /**
- * The Assistant's own entries in Ctrl+K, after its pages: call notes', the mic check, then the
- * pre-read's. The pre-read's comes last because it waits for one more answer (Meetings' counts),
- * so its coming moves no other entry.
+ * Ctrl+K, under the Assistant: "Add task" and "Email the team" open the review card empty, as
+ * Today's buttons do (PLAN-V23 T4-3). No AI reads anything, so they work while it is off or busy.
+ * Not for a Viewer, who sends nothing.
+ */
+function CardCommands({ run }: Pick<CommandsProps, 'run'>) {
+  // Whoever may send from the Assistant: the Call logs or Meetings tick, and not a Viewer.
+  if (!useCanWrite('companies.call_logs', 'companies.meetings')) return null
+  return (
+    <>
+      <CommandItem
+        value={ADD_TASK}
+        keywords={['task', 'to do', 'todo', 'hubspot task', 'reminder', ...ASSISTANT_KEYWORDS]}
+        onSelect={() => {
+          run(() => {
+            openCard({ kind: 'empty', action: 'task' })
+          })
+        }}
+      >
+        <ListPlus aria-hidden="true" />
+        <span>{ADD_TASK}</span>
+      </CommandItem>
+      <CommandItem
+        value={EMAIL_THE_TEAM}
+        keywords={['email', 'mail', 'message', 'teammate', ...ASSISTANT_KEYWORDS]}
+        onSelect={() => {
+          run(() => {
+            openCard({ kind: 'empty', action: 'email' })
+          })
+        }}
+      >
+        <Mail aria-hidden="true" />
+        <span>{EMAIL_THE_TEAM}</span>
+      </CommandItem>
+    </>
+  )
+}
+
+/**
+ * The Assistant's own entries in Ctrl+K, after its pages: call notes', the empty cards, the mic
+ * check, then the pre-read's. The pre-read's comes last because it waits for one more answer
+ * (Meetings' counts), so its coming moves no other entry.
  */
 export function AssistantCommands({ go, run }: CommandsProps) {
   return (
     <>
       <CallNoteCommands go={go} run={run} />
+      <CardCommands run={run} />
       <MicCheckCommand run={run} />
       <PreReadCommand go={go} />
     </>

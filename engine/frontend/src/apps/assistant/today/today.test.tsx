@@ -14,6 +14,9 @@ import type { CallNoteOptions, Today } from '@/api/types'
 import { mockApi, type Answer, type Call } from '@/test/mock-api'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import { asPhone } from '@/test/screen'
+import { write } from '../card/fixtures'
+import { closeCard } from '../card/store'
+import { VoiceKey } from '../voice/key'
 import { onScreen, showOnScreen } from '../voice/on-screen'
 import { closeVoiceBar, isVoiceBarOpen } from '../voice/store'
 import { TEST_NOW, today } from './fixtures'
@@ -23,6 +26,9 @@ const TODAY = '/api/v1/companies/assistant/today'
 const TASKS = '/api/v1/companies/assistant/tasks'
 const OPTIONS = '/api/v1/companies/call-notes/options'
 const FORMS = '/api/v1/companies/meetings/forms'
+const COMMAND = '/api/v1/companies/assistant/command'
+const TASK_PREVIEW = '/api/v1/companies/assistant/tasks/preview'
+const SEARCH = '/api/v1/companies/search'
 
 function options(): CallNoteOptions {
   return {
@@ -95,15 +101,26 @@ interface Open {
   /** More answers by path. */
   more?: Record<string, unknown>
   signIn?: SignIn
+  /** The call notes switches. */
+  switches?: CallNoteOptions
+  /** With the V key and its bar, which holds the review card, as the app frame has them. */
+  withVoice?: boolean
 }
 
-function openToday({ answer = today(), more = {}, signIn = { state: 'off' } }: Open = {}) {
-  const calls = mockApi({ [TODAY]: answer, [OPTIONS]: options(), ...more })
+function openToday({
+  answer = today(),
+  more = {},
+  signIn = { state: 'off' },
+  switches = options(),
+  withVoice = false,
+}: Open = {}) {
+  const calls = mockApi({ [TODAY]: answer, [OPTIONS]: switches, ...more })
   const queryClient = createTestQueryClient()
   queryClient.setQueryData(queryKeys.auth.me(), signIn)
   const view = renderWithProviders(
     <>
       <TodayPage />
+      {withVoice ? <VoiceKey /> : null}
       <Where />
     </>,
     { queryClient, route: '/assistant' },
@@ -132,6 +149,7 @@ afterEach(() => {
   showOnScreen(null)
   act(() => {
     closeVoiceBar()
+    closeCard()
   })
 })
 
@@ -426,6 +444,38 @@ describe('the keys (choice 8)', () => {
     expect(within(panel).getAllByText(/Sample Logistics Pty Ltd/).length).toBeGreaterThan(0)
   })
 
+  it('after L, the focus goes back to the row as the panel closes (PLAN-V23 T4-3)', async () => {
+    const { user } = openToday({ answer: today({ parts: ['deals'] }) })
+    await part('Deals that need a nudge')
+    await user.keyboard('j')
+    await user.keyboard('l')
+    const panel = await screen.findByRole('dialog', {}, { timeout: 5000 })
+    expect(panel).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+    await waitFor(() => {
+      expect(document.activeElement).toHaveAttribute('data-row', 'deal:d1')
+    })
+    expect(document.activeElement).toHaveAttribute('aria-current', 'true')
+    // J and K carry on from there.
+    await user.keyboard('k')
+    expect(document.activeElement).toHaveAttribute('data-row', 'deal:d1')
+  })
+
+  it('after a row’s "Log a call", the focus goes back to that row too', async () => {
+    const { user } = openToday({ answer: today({ parts: ['tasks'] }) })
+    const tasks = await part('Your HubSpot tasks')
+    // The button comes once the call notes switches are in.
+    await user.click(await tasks.findByRole('button', { name: /^Log a call/ }))
+    await screen.findByRole('dialog', {}, { timeout: 5000 })
+    await user.keyboard('{Escape}')
+    await waitFor(() => {
+      expect(document.activeElement).toHaveAttribute('data-row', 'task:t1')
+    })
+  })
+
   it('V on a row that names no company uses the row’s company', async () => {
     const { user } = openToday({ answer: today({ parts: ['meetings'] }) })
     await part('Your meetings today and tomorrow')
@@ -458,5 +508,80 @@ describe('on a phone (choice 13)', () => {
     await part('Your HubSpot tasks')
     await user.click(screen.getByRole('button', { name: 'Speak' }))
     expect(isVoiceBarOpen()).toBe(true)
+  })
+})
+
+describe('"Add task" and "Email the team" (PLAN-V23 T4-3)', () => {
+  /** The AI that reads commands is off: the command step says so. */
+  const aiOff = (): Pick<Open, 'switches' | 'more'> => ({
+    switches: { ...options(), ai_enabled: false },
+    more: {
+      [COMMAND]: () => refusal(409, 'assistant_off'),
+      [TASK_PREVIEW]: write(),
+      [SEARCH]: {
+        companies: [
+          {
+            key: '201',
+            name: 'Sample Logistics Pty Ltd',
+            city: 'Perth',
+            industry: 'Logistics',
+            source: 'hubspot',
+          },
+        ],
+        people: [],
+      },
+    },
+  })
+
+  it('"Add task" opens the card empty with the AI off, in its first box, and it works', async () => {
+    const { user, calls } = openToday({ withVoice: true, ...aiOff() })
+    await part('Your HubSpot tasks')
+    await user.click(screen.getByRole('button', { name: 'Add task' }))
+    const card = await screen.findByRole(
+      'dialog',
+      { name: 'Add a task for you.' },
+      { timeout: 5000 },
+    )
+    const company = within(card).getByRole('textbox', { name: 'Find a company' })
+    await waitFor(() => {
+      expect(company).toHaveFocus()
+    })
+    await user.type(company, 'sample')
+    await user.click(await within(card).findByRole('button', { name: /Sample Logistics Pty Ltd/ }))
+    await user.type(within(card).getByRole('textbox', { name: 'What to do' }), 'Send the quote')
+    await user.type(within(card).getByRole('textbox', { name: 'When' }), '27/11/2099')
+    // The read-back follows the boxes.
+    await waitFor(() => {
+      expect(card).toHaveAccessibleName('Add a task for you: Send the quote, due Fri 27 Nov 2099.')
+    })
+    // The card asks the server to check the task: no AI is asked anything.
+    await waitFor(() => {
+      expect(calls.some((call) => call.path === TASK_PREVIEW)).toBe(true)
+    })
+    expect(calls.find((call) => call.path === TASK_PREVIEW)?.body).toMatchObject({
+      company_key: '201',
+      subject: 'Send the quote',
+      due: '2099-11-27',
+    })
+    expect(calls.filter((call) => call.path === COMMAND)).toEqual([])
+  })
+
+  it('"Email the team" opens the card empty, in its To box', async () => {
+    const { user, calls } = openToday({ withVoice: true, ...aiOff() })
+    await part('Your HubSpot tasks')
+    await user.click(screen.getByRole('button', { name: 'Email the team' }))
+    const card = await screen.findByRole('dialog', { name: 'Email the team.' }, { timeout: 5000 })
+    await waitFor(() => {
+      expect(within(card).getByRole('textbox', { name: 'Add someone' })).toHaveFocus()
+    })
+    expect(within(card).getByRole('textbox', { name: 'Subject' })).toHaveValue('')
+    expect(calls.filter((call) => call.path === COMMAND)).toEqual([])
+  })
+
+  it('a Viewer has neither', async () => {
+    openToday({ signIn: VIEWER })
+    await part('Your HubSpot tasks')
+    expect(screen.queryByRole('button', { name: 'Add task' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Email the team' })).toBeNull()
   })
 })

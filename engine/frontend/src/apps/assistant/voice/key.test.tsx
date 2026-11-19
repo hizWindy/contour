@@ -13,7 +13,7 @@ import { queryKeys } from '@/api/query'
 import { fakeIdle } from '@/test/fake-idle'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import { VoiceKey } from './key'
-import { closeVoiceBar, isVoiceBarOpen } from './store'
+import { closeVoiceBar, isVoiceBarOpen, wantVoiceCode } from './store'
 import { setVKeyOn } from './v-switch'
 
 vi.mock('./bar', async () => {
@@ -257,5 +257,21 @@ describe('the bar’s code', () => {
     renderKey({ signIn: VIEWER })
     expect(idle.waiting()).toBe(0)
     expect(screen.queryByTestId('bar-code')).toBeNull()
+  })
+})
+
+// Last in the file: once wanted, the bar's code stays wanted for the page's life.
+describe('the bar’s code, wanted by a review card (PLAN-V23 T4-3)', () => {
+  it('loads when a card opens from a button or Ctrl+K, before any V, and the bar stays shut', async () => {
+    fakeIdle()
+    renderKey()
+    expect(screen.queryByTestId('bar-code')).toBeNull()
+    act(() => {
+      wantVoiceCode()
+    })
+    await waitFor(() => {
+      expect(screen.getByTestId('bar-code')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('The bar is open')).toBeNull()
   })
 })

@@ -17,6 +17,7 @@ import { asLaptop, asPhone } from '@/test/screen'
 import { callLogsHref, readLog, withoutLog } from '@/apps/companies/call-logs/params'
 import { closeMicCheck } from '@/apps/companies/call-notes/mic/check-store'
 import { FakeMic } from '@/apps/companies/call-notes/mic/fake-mic'
+import { closeCard } from './card/store'
 import { closeVoiceBar } from './voice/store'
 import { setVKeyOn } from './voice/v-switch'
 
@@ -241,6 +242,30 @@ describe('Ctrl+K', () => {
     await screen.findByRole('button', { name: 'Log call' })
     expect(screen.queryByRole('combobox', { name: PICKER })).toBeNull()
   })
+
+  it.each([
+    ['add task', 'Add task', 'Add a task for you.'],
+    ['email', 'Email the team', 'Email the team.'],
+  ])(
+    'finds "%s" and opens the review card empty (PLAN-V23 T4-3)',
+    async (typed, entry, card) => {
+      asLaptop()
+      stubBackend()
+      const { user } = renderAt('/')
+      await home()
+      await user.keyboard('{Control>}k{/Control}')
+      const menu = await screen.findByRole('dialog', { name: 'Go to a page' })
+      await user.keyboard(typed)
+      await user.click(await within(menu).findByRole('option', { name: entry }))
+      expect(
+        await screen.findByRole('dialog', { name: card }, { timeout: LAZY }),
+      ).toBeInTheDocument()
+      act(() => {
+        closeCard()
+      })
+    },
+    LAZY * 4,
+  )
 
   it('"Calls to confirm" opens To confirm', async () => {
     asLaptop()

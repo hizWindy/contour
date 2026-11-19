@@ -80,6 +80,7 @@ import {
   callPatchOf,
   draftOf,
   emailBodyOf,
+  emptyDraftOf,
   missingOf,
   noteBodyOf,
   readBackOf,
@@ -786,8 +787,14 @@ function DraftCard({
       onEscapeKeyDown={onEscape}
       describedBy={listening ? listenId : undefined}
       onOpenAutoFocus={(event) => {
-        // The focus starts on Send (choice 19).
         event.preventDefault()
+        // An empty card (PLAN-V23 T4-3) starts in its first box: there is nothing to send yet.
+        const box = request.kind === 'empty' ? missingOf(draft, today) : null
+        if (box) {
+          focusBox(box)
+          return
+        }
+        // The focus starts on Send (choice 19).
         sendButton.current?.focus()
       }}
     >
@@ -870,7 +877,9 @@ export default function ReviewCard(props: ReviewCardProps) {
       ? request.draft
       : request.kind === 'command'
         ? draftOf(request, signedInAs(client))
-        : null,
+        : request.kind === 'empty'
+          ? emptyDraftOf(request.action, signedInAs(client))
+          : null,
   )
   const preRead = request.kind === 'command' && request.command.action === 'pre_read'
   useEffect(() => {
