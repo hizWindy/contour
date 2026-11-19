@@ -9,6 +9,11 @@ urgent first. It makes no Claude request, so it is free. The route is in api_ass
   seconds (TBC). A Done, a reopen or a new task (T1-4) changes the kept copy at once, and is laid
   over the reads of the next 2 minutes, as HubSpot's search lags behind a change (TBC).
 - **No HubSpot link, no tasks** (choice 9): Today says so, and the rest still shows.
+- **No HubSpot user** (PLAN-V23 T3-3, choice 16): for an account marked "No HubSpot user",
+  `tasks_state` is `none`, with no words and no HubSpot request at all. Tasks, meetings and deals
+  go by HubSpot user, so the parts are only the pre-reads sent to them and their calls (to
+  confirm, and those that need a look). An account not linked yet (`not_set`) keeps the link
+  message.
 - **Meetings** come from our copy of HubSpot (core's meeting reads, as Meetings has them): the
   ones I own or am on, today and tomorrow (Melbourne), not cancelled, with a client company in
   our copy, each with its pre-read; and my own pre-reads for meetings typed in on those days.
@@ -71,6 +76,7 @@ from core.config import Settings
 from core.hubspot.client import HubSpotError, HubSpotMissingScope, HubSpotUnavailable
 from core.hubspot.connection import hubspot_set_up, open_hubspot
 from core.hubspot.meetings import Meeting
+from core.hubspot.owners import hubspot_user
 from core.hubspot.tasks import OpenTask, TaskRead, open_tasks
 
 log = logging.getLogger(__name__)
@@ -255,12 +261,23 @@ class TaskCopy:
 # --- Today ---------------------------------------------------------------------------------------
 
 
+def no_hubspot_user(auth: AuthContext | None) -> bool:
+    """The signed-in account is marked "No HubSpot user" (PLAN-V23 T3-1)."""
+    return auth is not None and hubspot_user(auth.user) == "none"
+
+
 def parts_of(auth: AuthContext | None, settings: Settings) -> list[TodayPart]:
-    parts: list[TodayPart] = ["tasks"]
-    if settings.meeting_forms_enabled and can_feature(auth, "companies.meetings"):
-        parts += ["meetings", "pre_reads"]
-    if settings.call_notes_enabled and can_feature(auth, "companies.call_logs"):
-        parts.append("calls")
+    meetings = settings.meeting_forms_enabled and can_feature(auth, "companies.meetings")
+    calls = settings.call_notes_enabled and can_feature(auth, "companies.call_logs")
+    parts: list[TodayPart] = []
+    if no_hubspot_user(auth):
+        # Tasks, meetings and deals go by HubSpot user (PLAN-V23 choice 16).
+        parts += ["pre_reads"] if meetings else []
+        parts += ["calls"] if calls else []
+        return parts
+    parts.append("tasks")
+    parts += ["meetings", "pre_reads"] if meetings else []
+    parts += ["calls"] if calls else []
     parts.append("deals")
     return parts
 
@@ -467,7 +484,10 @@ async def my_deals(
 async def tasks_sentence(
     session: AsyncSession, kept: KeptTasks, auth: AuthContext | None, now: datetime
 ) -> str | None:
-    """The tasks' plain words when they can't show, or show from an earlier read."""
+    """The tasks' plain words when they can't show, or show from an earlier read. None for
+    someone with no HubSpot user: they have no HubSpot tasks, and nothing to fix."""
+    if kept.state == "none":
+        return None
     if kept.state == "ok":
         if kept.from_earlier and kept.read_at is not None:
             return FROM_EARLIER.format(time=clock_words(kept.read_at, now))
@@ -495,7 +515,8 @@ async def build_today(
     """Today, from our copy and HubSpot's tasks. The database is read first, and its connection
     let go, before HubSpot is asked."""
     parts = parts_of(auth, settings)
-    me = await my_owner(session, auth, source)
+    none = no_hubspot_user(auth)  # no HubSpot user: HubSpot isn't asked at all
+    me = None if none else await my_owner(session, auth, source)
     meetings = (
         await my_meetings(session, auth, me=me, source=source, now=now)
         if "meetings" in parts
@@ -506,10 +527,16 @@ async def build_today(
     if "calls" in parts:
         counted = await note_store.summary(session, auth, now)
         calls = TodayCalls(to_confirm=counted.to_confirm, needs_look=counted.needs_look)
-    deals, deals_more = await my_deals(session, auth, me=me, settings=settings, now=now)
+    deals, deals_more = (
+        ([], 0) if none else await my_deals(session, auth, me=me, settings=settings, now=now)
+    )
     if session.in_transaction():
         await session.rollback()  # it only read: no connection waits on HubSpot
-    kept = await my_tasks(app, copy, auth=auth, me=me, now=now, fresh=fresh)
+    kept = (
+        KeptTasks(state="none")
+        if none
+        else await my_tasks(app, copy, auth=auth, me=me, now=now, fresh=fresh)
+    )
     names = await company_names(session, (task.company_id for task in kept.tasks))
     today = day_of(now)
     tasks = in_order(task_out(task, names, today) for task in kept.tasks)

@@ -257,8 +257,9 @@ class AssistantCommand(Out):
 TodayPart = Literal["tasks", "meetings", "pre_reads", "calls", "deals"]
 # ok: read (or kept from a read under 5 minutes old). no_owner: no HubSpot link (or nobody is
 # signed in). no_access: the HubSpot key can't read tasks. off: HubSpot isn't connected. failed:
-# HubSpot didn't answer, and no earlier read is kept.
-TasksState = Literal["ok", "no_owner", "no_access", "off", "failed"]
+# HubSpot didn't answer, and no earlier read is kept. none (PLAN-V23 T3-3): my account has no
+# HubSpot user, so I have no HubSpot tasks, and HubSpot isn't asked.
+TasksState = Literal["ok", "no_owner", "no_access", "off", "failed", "none"]
 TaskGroup = Literal["overdue", "today", "soon"]
 TaskPriorityName = Literal["low", "medium", "high"]
 MeetingDay = Literal["today", "tomorrow"]

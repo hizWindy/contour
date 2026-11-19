@@ -10,7 +10,9 @@ the tasks and made-up meetings in place of core's reads:
 - no HubSpot link gives `no_owner`, a refused read `no_access`, no HubSpot `off`, and a failed
   read keeps the last good one; the rest still shows each time;
 - the parts follow the ticks and the switches; sign-in, a tick, and a Viewer may read;
-- the pre-reads sent to me (PLAN-V23 T2-3): by my HubSpot user or my address, from today on.
+- the pre-reads sent to me (PLAN-V23 T2-3): by my HubSpot user or my address, from today on;
+- no HubSpot user (PLAN-V23 T3-3): `tasks_state` none, no HubSpot request, and only my calls and
+  the pre-reads sent to me.
 
 Made-up companies and people only (Sample Logistics Pty Ltd, Jo Sample).
 """
@@ -24,6 +26,7 @@ from typing import Any
 
 import httpx
 import pytest
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies.meeting_store import MeetingSource
@@ -504,3 +507,33 @@ async def test_pre_reads_sent_to_me_by_hubspot_user_or_my_address_show_from_toda
         "company": {"key": "202", "name": "Sample Freight Pty Ltd"},
         "sent_by": "Lee Sample",
     }
+
+
+# --- No HubSpot user (PLAN-V23 T3-3) -----------------------------------------------------------
+
+
+async def test_today_with_no_hubspot_user_asks_hubspot_nothing_and_shows_calls_and_pre_reads(
+    world: World, settings: dict[str, Any], hubspot: FakeHubSpot, meetings: DayMeetings
+) -> None:
+    async with signed_in(world, "josie", owner=None) as (client, jo):
+        async with world.factory() as db:
+            await db.execute(update(User).where(User.id == jo.id).values(no_hubspot_user=True))
+            await db.commit()
+        await a_day(world, jo)
+        await add(
+            world,
+            form(  # sent to Josie's own address: no HubSpot user to find it by
+                "9401",
+                "sent",
+                title="Site visit",
+                starts_at=melbourne(5, 9),
+                sent_to=[sent_to(address="josie@example.test", email=True)],
+            ),
+        )
+        found = await today(client)
+    assert found["parts"] == ["pre_reads", "calls"]
+    assert (found["tasks_state"], found["tasks_sentence"], found["tasks"]) == ("none", None, [])
+    assert hubspot.calls == []  # HubSpot isn't asked at all
+    assert (found["meetings"], found["deals"]) == ([], [])  # those go by HubSpot user
+    assert found["calls"] == {"to_confirm": 2, "needs_look": 1}
+    assert [item["title"] for item in found["pre_reads"]] == ["Site visit"]
