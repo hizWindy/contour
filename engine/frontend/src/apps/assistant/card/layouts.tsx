@@ -288,7 +288,13 @@ export function CallLayout({
             {preview && !preview.sending_ready ? (
               <div className="flex flex-col items-start gap-2">
                 <PartProblem>{HUBSPOT_OFF}</PartProblem>
-                <Button type="button" variant="outline" size="sm" onClick={onOpenCallLogs}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="touch:h-11"
+                  onClick={onOpenCallLogs}
+                >
                   {OPEN_CALL_LOGS}
                 </Button>
               </div>
@@ -344,6 +350,7 @@ function RecipientPart({
           type="button"
           variant="ghost"
           size="icon-sm"
+          className="touch:size-11"
           aria-label={`${REMOVE} ${name}`}
           data-box={one.problem ? (label === FOR_WHOM ? 'for-whom' : 'to') : undefined}
           onClick={onRemove}

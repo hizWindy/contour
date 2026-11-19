@@ -37,6 +37,8 @@ export const KIND_WORDS: Readonly<Record<TodayTask['kind'], string>> = {
 /** Nothing in any part (T2-2). */
 export const NOTHING_DUE = 'Nothing due today.'
 export const NOTHING_DUE_NEXT = 'Press V to log a call or add a task.'
+/** On a touch screen there is no V (TBC). */
+export const NOTHING_DUE_NEXT_TOUCH = 'Tap Speak to log a call or add a task.'
 export const NO_TASKS = 'No tasks due in the next 7 days.'
 export const NO_MEETINGS = 'No meetings today or tomorrow.'
 export const NO_CALLS = 'No calls to confirm.'

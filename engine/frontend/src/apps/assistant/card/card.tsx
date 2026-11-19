@@ -26,6 +26,7 @@ import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-quer
 import { Send } from 'lucide-react'
 import {
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -280,6 +281,8 @@ function DraftCard({
   const card = useRef<HTMLDivElement>(null)
   const sendButton = useRef<HTMLButtonElement>(null)
   const changeLine = useRef<HTMLInputElement>(null)
+  // A screen reader hears "Say 'send it' or press Enter" with the read-back as the card opens.
+  const listenId = useId()
 
   // --- A call: saved once its company is known, then read until sorted, then previewed ---------
   const noteBody = draft.action === 'log_call' && draft.noteId === null ? noteBodyOf(draft) : null
@@ -700,6 +703,7 @@ function DraftCard({
       }}
       onKeyDown={onKeyDown}
       onEscapeKeyDown={onEscape}
+      describedBy={listening ? listenId : undefined}
       onOpenAutoFocus={(event) => {
         // The focus starts on Send (choice 19).
         event.preventDefault()
@@ -739,7 +743,7 @@ function DraftCard({
               }}
             />
           ) : listening ? (
-            <ListenStrip ms={t.listen} />
+            <ListenStrip id={listenId} ms={t.listen} />
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
             <HintBar inBox={inBox} />
@@ -757,7 +761,7 @@ function DraftCard({
                 ref={sendButton}
                 type="button"
                 size="sm"
-                className="touch:h-11"
+                className="touch:h-11 aria-disabled:opacity-50"
                 aria-keyshortcuts="Enter"
                 aria-disabled={ready ? undefined : true}
                 onClick={() => {

@@ -24,6 +24,7 @@ import {
   useCallback,
   useEffect,
   useEffectEvent,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -72,6 +73,7 @@ import {
   DONE,
   LISTENING,
   NOTHING_HEARD,
+  NOTHING_HEARD_TOUCH,
   SEND,
   TOO_MANY,
   TOO_SLOW,
@@ -312,6 +314,7 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
 
   // The focus: into the bar as it opens (the text line, when typing), and back as it closes.
   const returnTo = useRef<HTMLElement | null>(null)
+  const whyId = useId()
   const bar = useRef<HTMLDivElement | null>(null)
   const line = useRef<HTMLInputElement | null>(null)
   const room = useBarRoom(open)
@@ -400,6 +403,8 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
                 <Input
                   ref={line}
                   className="touch:text-body"
+                  // Why the voice can't work here, read with the line.
+                  aria-describedby={problem && isQuiet(problem) ? whyId : undefined}
                   value={snapshot.draft}
                   maxLength={MAX_CHARS}
                   aria-label={TYPE_WHAT}
@@ -451,7 +456,11 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
 
             {problem ? (
               isQuiet(problem) ? (
-                <p data-slot="voice-problem" className="text-pretty text-muted-foreground">
+                <p
+                  id={whyId}
+                  data-slot="voice-problem"
+                  className="text-pretty text-muted-foreground"
+                >
                   {problemLine(problem)}
                 </p>
               ) : (
@@ -461,7 +470,14 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
                   className="flex items-start gap-2 text-pretty text-destructive-ink"
                 >
                   <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                  <span>{problemLine(problem)}</span>
+                  {problem.kind === 'nothing_heard' ? (
+                    <span>
+                      <span className="touch:hidden">{NOTHING_HEARD}</span>
+                      <span className="hidden touch:inline">{NOTHING_HEARD_TOUCH}</span>
+                    </span>
+                  ) : (
+                    <span>{problemLine(problem)}</span>
+                  )}
                 </p>
               )
             ) : null}

@@ -36,6 +36,8 @@ export const CARRY_ON = 'Carry on'
 // --- What can go wrong (the plan's table) ----------------------------------------------------------
 
 export const NOTHING_HEARD = "We didn't hear anything. Press V and speak, or type what to do."
+/** On a touch screen there is no V (TBC). */
+export const NOTHING_HEARD_TOUCH = "We didn't hear anything. Tap Speak, or type what to do."
 export const TOO_MANY = "That's a lot of commands in one minute. Wait a moment, then try again."
 export const TOO_SLOW = 'That took too long. Your words are kept. Try again.'
 

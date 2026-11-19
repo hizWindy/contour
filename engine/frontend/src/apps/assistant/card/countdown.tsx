@@ -23,8 +23,9 @@ export function CountdownBar({ ms }: { ms: number }) {
       <m.span
         data-slot="countdown-bar"
         className="block h-full w-full origin-left bg-progress"
-        initial={{ scaleX: 1 }}
-        animate={{ scaleX: 0 }}
+        // As a whole transform, so the browser runs it, not a script every frame.
+        initial={{ transform: 'scaleX(1)' }}
+        animate={{ transform: 'scaleX(0)' }}
         transition={{ duration: ms / 1000, ease: 'linear' }}
       />
     </span>

@@ -142,14 +142,17 @@ function Counts({ today }: { today: Today }) {
 function CountsPending() {
   const shown = useAfter()
   return (
-    <div role="status" className="flex flex-col gap-3 border-y px-6 py-3">
+    <div role="status" className="flex flex-col divide-y border-y">
       <span className="sr-only">{LOADING_COUNTS}</span>
+      {/* As tall as the rows that come: 44px each, 48px on a touch screen. */}
       {[0, 1, 2].map((index) => (
         <span
           key={index}
           aria-hidden="true"
-          className={cn('block h-5 w-2/3 rounded-sm', shown ? 'bg-muted' : 'invisible')}
-        />
+          className="flex min-h-11 items-center px-6 touch:min-h-12"
+        >
+          <span className={cn('block h-5 w-2/3 rounded-sm', shown ? 'bg-muted' : 'invisible')} />
+        </span>
       ))}
     </div>
   )

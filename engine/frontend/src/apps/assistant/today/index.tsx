@@ -83,6 +83,7 @@ import {
   NO_TASKS,
   NOTHING_DUE,
   NOTHING_DUE_NEXT,
+  NOTHING_DUE_NEXT_TOUCH,
   OPEN,
   OPEN_IN_HUBSPOT,
   soonWords,
@@ -510,7 +511,17 @@ function TodayParts({
   return (
     <>
       {nothingToday(today) ? (
-        <EmptyState title={NOTHING_DUE} description={viewer ? undefined : NOTHING_DUE_NEXT} />
+        <EmptyState
+          title={NOTHING_DUE}
+          description={
+            viewer ? undefined : (
+              <>
+                <span className="touch:hidden">{NOTHING_DUE_NEXT}</span>
+                <span className="hidden touch:inline">{NOTHING_DUE_NEXT_TOUCH}</span>
+              </>
+            )
+          }
+        />
       ) : tasksPart ? (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           {tasksPart}
@@ -558,7 +569,11 @@ function TodayContent() {
             onRetry={() => void today.refetch()}
           />
         ) : (
-          <TodayPending />
+          <>
+            {/* The Checked line's room, so the parts don't move when it comes. */}
+            <div aria-hidden="true" className="min-h-5" />
+            <TodayPending />
+          </>
         )}
       </>
     )

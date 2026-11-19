@@ -214,7 +214,8 @@ export const BoxField = forwardRef<HTMLTextAreaElement | HTMLInputElement, BoxFi
           )}
           {mic ? (
             <NoteMic
-              className={cn('absolute right-1 size-8', lines ? 'bottom-1' : 'top-0.5')}
+              // Nested corners: inside the box's 10px corner, 2 to 4px in, a smaller one.
+              className={cn('absolute right-1 size-8 rounded-sm', lines ? 'bottom-1' : 'top-0.5')}
               tool={mic}
               box={own}
               names={names}
@@ -252,6 +253,7 @@ export function HintBar({ inBox }: { inBox: boolean }) {
   return (
     <div
       data-slot="card-hints"
+      role="group"
       aria-label={KEYS_NAME}
       className="flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-muted-foreground touch:hidden"
     >
@@ -274,10 +276,12 @@ export function HintBar({ inBox }: { inBox: boolean }) {
 // --- The strips at the card's foot --------------------------------------------------------------
 
 /** While the card listens for "send it" (choice 23): the words, and a bar that empties once. */
-export function ListenStrip({ ms }: { ms: number }) {
+export function ListenStrip({ id, ms }: { id: string; ms: number }) {
   return (
     <div data-slot="card-listen" className="flex flex-col gap-2">
-      <p className="text-ui text-muted-foreground">{SAY_SEND_IT}</p>
+      <p id={id} className="text-ui text-muted-foreground">
+        {SAY_SEND_IT}
+      </p>
       <CountdownBar ms={ms} />
     </div>
   )

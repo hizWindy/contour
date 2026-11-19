@@ -113,7 +113,7 @@ describe("Home's Assistant card", () => {
     queryClient.setQueryData(queryKeys.auth.me(), { state: 'off' })
     renderWithProviders(<AssistantHomeCard />, { queryClient })
     const label = screen.getByText("Loading today's counts.")
-    const block = label.parentElement?.querySelector('[aria-hidden="true"]')
+    const block = label.parentElement?.querySelector('[aria-hidden="true"] > span')
     expect(block).toHaveClass('invisible')
     await waitFor(() => {
       expect(block).toHaveClass('bg-muted')

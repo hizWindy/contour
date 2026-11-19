@@ -49,6 +49,8 @@ export interface MicSheetProps {
   onCloseAutoFocus?: (event: Event) => void
   /** Esc, before the sheet closes: `preventDefault` keeps it open (the review card's boxes). */
   onEscapeKeyDown?: (event: KeyboardEvent) => void
+  /** The id of what describes the card, read with its title (the review card's "send it" line). */
+  describedBy?: string
 }
 
 export function MicSheet({
@@ -61,6 +63,7 @@ export function MicSheet({
   onOpenAutoFocus,
   onCloseAutoFocus,
   onEscapeKeyDown,
+  describedBy,
 }: MicSheetProps) {
   const still = useStill()
   // Where the focus was as it opened: it goes back there (Radix only returns it to a Trigger).
@@ -92,7 +95,7 @@ export function MicSheet({
               <DialogPrimitive.Content
                 asChild
                 forceMount
-                aria-describedby={undefined}
+                aria-describedby={describedBy}
                 onOpenAutoFocus={onOpenAutoFocus}
                 onEscapeKeyDown={onEscapeKeyDown}
                 onCloseAutoFocus={(event) => {
