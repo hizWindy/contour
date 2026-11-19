@@ -430,7 +430,7 @@ export interface paths {
         };
         /**
          * Today
-         * @description The Assistant's first page, the most urgent first (`parts` says which this person sees). `tasks`: my open HubSpot tasks, overdue first, then today's, then the next 7 days' (Melbourne days), at most 100, latest due kept (`tasks_more` counts older overdue ones). They are read from HubSpot (two free requests: the tasks, then their companies) and kept for 5 minutes a person; `fresh=true` (Sync) reads them again, but HubSpot is asked at most once a minute a person. `tasks_state`: `ok`, `no_owner` (no HubSpot link: the rest still shows), `no_access` (HubSpot won't let the key read tasks), `off` (HubSpot isn't connected) or `failed` (HubSpot didn't answer and no earlier read is kept), with `tasks_sentence` in plain words; a read that fails after a good one keeps the good one, and the sentence says from when. `meetings`: mine today and tomorrow, not cancelled, each with its pre-read (`form`), and my typed-in pre-reads. `pre_reads` (PLAN-V23 T2-3): the pre-reads sent to me, by my HubSpot user or my own address, for meetings from today on, soonest first, at most 20, each with the meeting's title and time, its company, who sent it and `form_id`. `calls`: my notes to confirm and those that need a look. `deals`: my open deals whose close date has passed or whose company nobody has talked to for `quiet_days` days, at most 50 (`deals_more`). `checked_at`: when the tasks were read. No Claude request: it is free. Behind the Call logs or the Meetings tick (403 `feature_not_allowed`); a Viewer may read it.
+         * @description The Assistant's first page, the most urgent first (`parts` says which this person sees). `tasks`: my open HubSpot tasks, overdue first, then today's, then the next 7 days' (Melbourne days), at most 100, latest due kept (`tasks_more` counts older overdue ones). They are read from HubSpot (two free requests: the tasks, then their companies) and kept for 5 minutes a person; `fresh=true` (Sync) reads them again, but HubSpot is asked at most once a minute a person. `tasks_state`: `ok`, `no_owner` (no HubSpot link: the rest still shows), `no_access` (HubSpot won't let the key read tasks), `off` (HubSpot isn't connected), `failed` (HubSpot didn't answer and no earlier read is kept) or `none` (PLAN-V23 T3-3: my account has no HubSpot user, so HubSpot isn't asked and `parts` is only `pre_reads` and `calls`), with `tasks_sentence` in plain words (none for `none`); a read that fails after a good one keeps the good one, and the sentence says from when. `meetings`: mine today and tomorrow, not cancelled, each with its pre-read (`form`), and my typed-in pre-reads. `pre_reads` (PLAN-V23 T2-3): the pre-reads sent to me, by my HubSpot user or my own address, for meetings from today on, soonest first, at most 20, each with the meeting's title and time, its company, who sent it and `form_id` (one on a Lead Finder lead only for those who may see the lead). `calls`: my notes to confirm and those that need a look. `deals`: my open deals whose close date has passed or whose company nobody has talked to for `quiet_days` days, at most 50 (`deals_more`). `checked_at`: when the tasks were read. No Claude request: it is free. Behind the Call logs or the Meetings tick (403 `feature_not_allowed`); a Viewer may read it.
          */
         get: operations["read_today"];
         put?: never;
@@ -476,7 +476,7 @@ export interface paths {
         put?: never;
         /**
          * Send notes to HubSpot
-         * @description Sends my notes to HubSpot, one after another, in the background, in the order given, each as one record (one failure never fails the rest). It answers at once: `sending` is how many started. While a batch is being sent, a second press starts nothing and says so (`already_sending`, still 202). A note left out, not mine, not waiting to be sent, or for a company not in HubSpot yet is in `skipped`, with why. When a call is on a company someone else owns, the owner gets one FYI task in HubSpot once the call is there, with an alert (PLAN-V23 T2-2; Settings can switch it off). 409 `hubspot_writes_off` while sending waits for HubSpot write access: nothing is sent. 409 `call_notes_off`.
+         * @description Sends my notes to HubSpot, one after another, in the background, in the order given, each as one record (one failure never fails the rest). It answers at once: `sending` is how many started. While a batch is being sent, a second press starts nothing and says so (`already_sending`, still 202). A note left out, not mine, not waiting to be sent, or for a company not in HubSpot yet is in `skipped`, with why. When a call is on a company someone else owns, the owner gets one FYI task in HubSpot once the call is there, with an alert (PLAN-V23 T2-2; Settings can switch it off). A call by someone with no HubSpot user has no owner, and its text starts 'Logged by {name}, {position}, in Contour.' (PLAN-V23 T3-2); their follow-up needs a teammate in its For box: 409 `no_hubspot_user` otherwise, and nothing is sent. 409 `hubspot_writes_off` while sending waits for HubSpot write access: nothing is sent. 409 `call_notes_off`.
          */
         post: operations["confirm_call_notes"];
         delete?: never;
@@ -604,7 +604,7 @@ export interface paths {
         put?: never;
         /**
          * Send a note again
-         * @description Sends what didn't land, for my note that failed or was partly saved: a field held because HubSpot's value changed goes with the value now shown. It answers at once with the note being sent. 409 `note_uncertain` until I say whether HubSpot has an unsure step, `nothing_to_retry` for a note that didn't fail, `already_sending` while a batch is being sent, and `hubspot_writes_off` while sending waits for HubSpot write access. 422 `change_off_the_list` for a change that isn't one a call may change. 403 `not_your_note`, 404 `note_not_found`, 409 `call_notes_off`.
+         * @description Sends what didn't land, for my note that failed or was partly saved: a field held because HubSpot's value changed goes with the value now shown. It answers at once with the note being sent. 409 `note_uncertain` until I say whether HubSpot has an unsure step, `nothing_to_retry` for a note that didn't fail, `already_sending` while a batch is being sent, and `hubspot_writes_off` while sending waits for HubSpot write access. 409 `no_hubspot_user` for a follow-up with nobody in its For box, from someone with no HubSpot user (PLAN-V23 T3-2). 422 `change_off_the_list` for a change that isn't one a call may change. 403 `not_your_note`, 404 `note_not_found`, 409 `call_notes_off`.
          */
         post: operations["retry_call_note"];
         delete?: never;
@@ -1926,7 +1926,7 @@ export interface paths {
         put?: never;
         /**
          * Add a person
-         * @description A new account with a generated starting password shown once in this answer. Platform admin only.
+         * @description A new account with a generated starting password shown once in this answer. It needs one HubSpot choice: `hubspot_owner_id` (their HubSpot user, an active owner from GET /hubspot/owners) or `no_hubspot_user: true` (PLAN-V23 T3-1). 422 `hubspot_choice_missing` for neither, and a field error for both or an owner that isn't active. A No HubSpot user person starts with the Call logs tick only, unless `features` are sent. Platform admin only.
          */
         post: operations["add_person"];
         delete?: never;
@@ -1962,7 +1962,7 @@ export interface paths {
         get?: never;
         /**
          * Set or clear who a person is in HubSpot
-         * @description Links the account to a HubSpot owner by hand, so the calls, tasks and notes this person logs land under that owner in HubSpot. `owner_id` is an active owner from GET /hubspot/owners. The HubSpot sync never changes a link set by hand. `{"owner_id": null}` clears the link, and the next sync may then match the person by email again. Platform admin only.
+         * @description Links the account to a HubSpot owner by hand, so the calls, tasks and notes this person logs land under that owner in HubSpot. `owner_id` is an active owner from GET /hubspot/owners. The HubSpot sync never changes a link set by hand. `{"owner_id": null}` clears the link (and the mark: `hubspot` not_set), and the next sync may then match the person by email again. `{"owner_id": null, "no_hubspot_user": true}` marks the person No HubSpot user (PLAN-V23 T3-1): it clears any link, the sync never links them, and a link set later clears the mark. Both an owner and the mark is a field error. Platform admin only.
          */
         put: operations["set_hubspot_owner"];
         post?: never;
@@ -5153,9 +5153,15 @@ export interface components {
         };
         /**
          * HubSpotOwnerIn
-         * @description Who a person is in HubSpot, chosen by hand. null clears it.
+         * @description Who a person is in HubSpot, chosen by hand. null clears it; null with `no_hubspot_user`
+         *     marks the person "No HubSpot user".
          */
         HubSpotOwnerIn: {
+            /**
+             * No Hubspot User
+             * @description true, with owner_id null: mark the person No HubSpot user (PLAN-V23 T3-1). It clears any link, and a link clears it. Left out, null or false: the link changes as before
+             */
+            no_hubspot_user?: boolean | null;
             /**
              * Owner Id
              * @description An active owner's id from GET /hubspot/owners, or null to clear the link
@@ -7042,6 +7048,12 @@ export interface components {
              * @description The feature ticks enabled on this account
              */
             features: string[];
+            /**
+             * Hubspot
+             * @description Their HubSpot user (PLAN-V23). linked: their HubSpot user is set, so their calls and tasks land under it. none: marked No HubSpot user, so their calls go to HubSpot with no owner, signed in the call's text, and they get no HubSpot tasks. not_set: nobody has picked yet
+             * @enum {string}
+             */
+            hubspot?: "linked" | "none" | "not_set";
             /** @description Who this person is in HubSpot: the calls they log land under this owner. null: no link, so HubSpot shows their calls as unassigned */
             hubspot_owner: components["schemas"]["HubSpotOwnerLink"] | null;
             /**
@@ -7093,14 +7105,26 @@ export interface components {
             email: string;
             /**
              * Features
-             * @description Ticks for this account. Left out: the role's starting ticks.
+             * @description Ticks for this account. Left out: the role's starting ticks, or the Call logs tick only for No HubSpot user.
              */
             features?: ("lead_finder.start_run" | "lead_finder.results" | "lead_finder.rules" | "lead_finder.send_to_hubspot" | "companies.companies" | "companies.call_logs" | "companies.meetings" | "companies.call_prep")[] | null;
+            /**
+             * Hubspot Owner Id
+             * @description Their HubSpot user: an active owner's id from GET /hubspot/owners. A new person needs this or `no_hubspot_user` (422 `hubspot_choice_missing` for neither)
+             * @example 301
+             */
+            hubspot_owner_id?: string | null;
             /**
              * Name
              * @example Marcus Lee
              */
             name: string;
+            /**
+             * No Hubspot User
+             * @description true: this person has no HubSpot login, like a designer (PLAN-V23 T3-1). Their calls go to HubSpot with no owner, and they get no HubSpot tasks
+             * @default false
+             */
+            no_hubspot_user: boolean;
             /** Position */
             position?: string | null;
             /**
@@ -7136,6 +7160,12 @@ export interface components {
              * @description The feature ticks enabled on this account
              */
             features: string[];
+            /**
+             * Hubspot
+             * @description Their HubSpot user (PLAN-V23). linked: their HubSpot user is set, so their calls and tasks land under it. none: marked No HubSpot user, so their calls go to HubSpot with no owner, signed in the call's text, and they get no HubSpot tasks. not_set: nobody has picked yet
+             * @enum {string}
+             */
+            hubspot?: "linked" | "none" | "not_set";
             /** @description Who this person is in HubSpot: the calls they log land under this owner. null: no link, so HubSpot shows their calls as unassigned */
             hubspot_owner: components["schemas"]["HubSpotOwnerLink"] | null;
             /**
@@ -10532,7 +10562,7 @@ export interface components {
              * Tasks State
              * @enum {string}
              */
-            tasks_state: "ok" | "no_owner" | "no_access" | "off" | "failed";
+            tasks_state: "ok" | "no_owner" | "no_access" | "off" | "failed" | "none";
         };
         /** TodayCalls */
         TodayCalls: {
@@ -10990,6 +11020,12 @@ export interface components {
              * @description The ticks this account may use across Lead Finder and Relationships
              */
             features: string[];
+            /**
+             * Hubspot
+             * @description Where my work lands in HubSpot (PLAN-V23 T3-1). linked: their HubSpot user is set, so their calls and tasks land under it. none: marked No HubSpot user, so their calls go to HubSpot with no owner, signed in the call's text, and they get no HubSpot tasks. not_set: nobody has picked yet
+             * @enum {string}
+             */
+            hubspot?: "linked" | "none" | "not_set";
             /**
              * Id
              * Format: uuid
