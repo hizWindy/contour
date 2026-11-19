@@ -107,6 +107,21 @@ describe('the 5 second hold (choice 22)', () => {
     )
   })
 
+  it('Esc undoes a running hold once the card has gone, and the card opens again (TBC)', async () => {
+    vi.useFakeTimers(CLOCK)
+    const { user, of } = show(taskCommand())
+    await ready()
+    await user.keyboard('{Enter}')
+    await screen.findByText('Adding the task in HubSpot')
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+    await user.keyboard('{Escape}')
+    await wait(HOLD)
+    expect(of(API.tasks)).toHaveLength(0)
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  })
+
   it('after the 5 seconds it sends once, with the card’s key, and says so', async () => {
     vi.useFakeTimers(CLOCK)
     const { user, of } = show(taskCommand())

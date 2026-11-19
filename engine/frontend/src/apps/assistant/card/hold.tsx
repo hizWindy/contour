@@ -19,7 +19,11 @@
 import { toast } from 'sonner'
 import { HoldCountdown } from './countdown'
 import type { CardAction } from './draft'
+import { inTextBox } from './keys'
 import { HOLD_TITLES, UNDO } from './words'
+
+/** Things that keep Esc for themselves while they are open: a dialog, a menu or a list. */
+const OVERLAY = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]'
 
 /** How long a send waits (choice 22). */
 export const HOLD_MS = 5000
@@ -55,20 +59,28 @@ export function startHold({
     over = true
     window.clearTimeout(timer)
     window.removeEventListener('pagehide', onPageHide)
+    document.removeEventListener('keydown', onKey, true)
     toast.dismiss(id)
+  }
+  function undo(): void {
+    if (over) return
+    stop()
+    if (stillSignedIn()) onUndo()
+  }
+  // Esc undoes it from the keyboard (TBC at Al-khair's look): only while it runs, not in a box,
+  // and not while a dialog, a menu or a list is open, whose own Esc it is.
+  function onKey(event: KeyboardEvent): void {
+    if (event.key !== 'Escape' || event.defaultPrevented || inTextBox(event.target)) return
+    if (document.querySelector(OVERLAY) !== null) return
+    event.preventDefault()
+    event.stopPropagation()
+    undo()
   }
   id = toast(HOLD_TITLES[action], {
     description: <HoldCountdown ms={ms} />,
     // The hold keeps its own time: a toast's own timer stops while it is pointed at.
     duration: Infinity,
-    action: {
-      label: UNDO,
-      onClick: () => {
-        if (over) return
-        stop()
-        if (stillSignedIn()) onUndo()
-      },
-    },
+    action: { label: UNDO, onClick: undo },
   })
   timer = window.setTimeout(() => {
     if (over) return
@@ -76,5 +88,6 @@ export function startHold({
     if (stillSignedIn()) send()
   }, ms)
   window.addEventListener('pagehide', onPageHide)
+  document.addEventListener('keydown', onKey, true)
   return stop
 }
