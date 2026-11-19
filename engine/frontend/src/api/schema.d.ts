@@ -430,7 +430,7 @@ export interface paths {
         };
         /**
          * Today
-         * @description The Assistant's first page, the most urgent first (`parts` says which this person sees). `tasks`: my open HubSpot tasks, overdue first, then today's, then the next 7 days' (Melbourne days), at most 100, latest due kept (`tasks_more` counts older overdue ones). They are read from HubSpot (two free requests: the tasks, then their companies) and kept for 5 minutes a person; `fresh=true` (Sync) reads them again, but HubSpot is asked at most once a minute a person. `tasks_state`: `ok`, `no_owner` (no HubSpot link: the rest still shows), `no_access` (HubSpot won't let the key read tasks), `off` (HubSpot isn't connected) or `failed` (HubSpot didn't answer and no earlier read is kept), with `tasks_sentence` in plain words; a read that fails after a good one keeps the good one, and the sentence says from when. `meetings`: mine today and tomorrow, not cancelled, each with its pre-read (`form`), and my typed-in pre-reads. `calls`: my notes to confirm and those that need a look. `deals`: my open deals whose close date has passed or whose company nobody has talked to for `quiet_days` days, at most 50 (`deals_more`). `checked_at`: when the tasks were read. No Claude request: it is free. Behind the Call logs or the Meetings tick (403 `feature_not_allowed`); a Viewer may read it.
+         * @description The Assistant's first page, the most urgent first (`parts` says which this person sees). `tasks`: my open HubSpot tasks, overdue first, then today's, then the next 7 days' (Melbourne days), at most 100, latest due kept (`tasks_more` counts older overdue ones). They are read from HubSpot (two free requests: the tasks, then their companies) and kept for 5 minutes a person; `fresh=true` (Sync) reads them again, but HubSpot is asked at most once a minute a person. `tasks_state`: `ok`, `no_owner` (no HubSpot link: the rest still shows), `no_access` (HubSpot won't let the key read tasks), `off` (HubSpot isn't connected) or `failed` (HubSpot didn't answer and no earlier read is kept), with `tasks_sentence` in plain words; a read that fails after a good one keeps the good one, and the sentence says from when. `meetings`: mine today and tomorrow, not cancelled, each with its pre-read (`form`), and my typed-in pre-reads. `pre_reads` (PLAN-V23 T2-3): the pre-reads sent to me, by my HubSpot user or my own address, for meetings from today on, soonest first, at most 20, each with the meeting's title and time, its company, who sent it and `form_id`. `calls`: my notes to confirm and those that need a look. `deals`: my open deals whose close date has passed or whose company nobody has talked to for `quiet_days` days, at most 50 (`deals_more`). `checked_at`: when the tasks were read. No Claude request: it is free. Behind the Call logs or the Meetings tick (403 `feature_not_allowed`); a Viewer may read it.
          */
         get: operations["read_today"];
         put?: never;
@@ -476,7 +476,7 @@ export interface paths {
         put?: never;
         /**
          * Send notes to HubSpot
-         * @description Sends my notes to HubSpot, one after another, in the background, in the order given, each as one record (one failure never fails the rest). It answers at once: `sending` is how many started. While a batch is being sent, a second press starts nothing and says so (`already_sending`, still 202). A note left out, not mine, not waiting to be sent, or for a company not in HubSpot yet is in `skipped`, with why. 409 `hubspot_writes_off` while sending waits for HubSpot write access: nothing is sent. 409 `call_notes_off`.
+         * @description Sends my notes to HubSpot, one after another, in the background, in the order given, each as one record (one failure never fails the rest). It answers at once: `sending` is how many started. While a batch is being sent, a second press starts nothing and says so (`already_sending`, still 202). A note left out, not mine, not waiting to be sent, or for a company not in HubSpot yet is in `skipped`, with why. When a call is on a company someone else owns, the owner gets one FYI task in HubSpot once the call is there, with an alert (PLAN-V23 T2-2; Settings can switch it off). 409 `hubspot_writes_off` while sending waits for HubSpot write access: nothing is sent. 409 `call_notes_off`.
          */
         post: operations["confirm_call_notes"];
         delete?: never;
@@ -708,7 +708,7 @@ export interface paths {
         put?: never;
         /**
          * See the pre-read's HubSpot tasks and email
-         * @description What Send will do: the HubSpot task subject and working-day due date, email preview, and each person with whether they get a task and/or email (and if they already got it). Nothing is sent. 404 `form_not_found`. 409 `meeting_forms_off`.
+         * @description What Send will do: the HubSpot task subject and working-day due date, email preview, and each person with whether they get a task and/or email (and if they already got it). `task_alert` is the line 'Each gets a HubSpot task and a HubSpot alert.' when anyone gets a task: each task carries a reminder, 2 minutes after the send for someone else (PLAN-V23 T2-1). Nothing is sent. 404 `form_not_found`. 409 `meeting_forms_off`.
          */
         post: operations["preview_form"];
         delete?: never;
@@ -4767,6 +4767,12 @@ export interface components {
             people: components["schemas"]["FormPerson"][];
             /** Subject */
             subject: string;
+            /**
+             * Task Alert
+             * @description PLAN-V23 choice 11: 'Each gets a HubSpot task and a HubSpot alert.' when Send gives anyone a HubSpot task (each task carries a reminder); none when nobody gets one
+             * @example Each gets a HubSpot task and a HubSpot alert.
+             */
+            task_alert?: string | null;
             /**
              * Task Due
              * Format: date
@@ -9867,7 +9873,7 @@ export interface components {
             status: "done" | "failed" | "uncertain" | "skipped";
             /**
              * Step
-             * @description company, note or list (the Lead Finder); call, fields, task:1, task:2 ..., note or meeting (an activity); status (a task ticked done or opened again)
+             * @description company, note or list (the Lead Finder); call, fields, task:1, task:2 ..., note, meeting or fyi (an activity: fyi is the FYI task for the company's owner, made once the call is in HubSpot); status (a task ticked done or opened again)
              * @example task:1
              */
             step: string;
@@ -10496,7 +10502,12 @@ export interface components {
              * Parts
              * @description The parts this person sees, in order. A part left out also comes back empty
              */
-            parts: ("tasks" | "meetings" | "calls" | "deals")[];
+            parts: ("tasks" | "meetings" | "pre_reads" | "calls" | "deals")[];
+            /**
+             * Pre Reads
+             * @description The pre-reads sent to me, for meetings from today on (Melbourne), soonest first, at most 20: found by my HubSpot user, and by my own address
+             */
+            pre_reads?: components["schemas"]["TodayPreRead"][];
             /**
              * Quiet Days
              * @description The days without contact that make a deal quiet
@@ -10608,6 +10619,36 @@ export interface components {
              */
             starts_at: string;
             /** Title */
+            title: string;
+        };
+        /**
+         * TodayPreRead
+         * @description A pre-read sent to me (PLAN-V23 T2-3, choice 9), with or without a HubSpot user.
+         */
+        TodayPreRead: {
+            /** @description The meeting's company. Its key is lead:<id> for a Lead Finder company */
+            company: components["schemas"]["TodayCompany"];
+            /**
+             * Form Id
+             * Format: uuid
+             * @description The pre-read's id: its page is /assistant/meetings/<form_id>
+             */
+            form_id: string;
+            /**
+             * Sent By
+             * @description Who sent it, by name. None when that account is gone, or nobody signed in
+             */
+            sent_by: string | null;
+            /**
+             * Starts At
+             * Format: date-time
+             * @description When the meeting starts
+             */
+            starts_at: string;
+            /**
+             * Title
+             * @description The meeting's title
+             */
             title: string;
         };
         /** TodayTask */
