@@ -517,6 +517,8 @@ function DraftCard({
     if (!patch) return false
     patchNote(saved.id, patch).then((updated) => {
       client.setQueryData(queryKeys.companies.callNote(updated.id), updated)
+      // The read-back follows the change.
+      setDraft((now) => (now.action === 'log_call' ? { ...now, edited: true } : now))
       void client.invalidateQueries({
         queryKey: queryKeys.companies.callNotePreview([updated.id]),
       })
@@ -714,7 +716,7 @@ function DraftCard({
       >
         <div className="flex flex-col gap-4 p-5">
           <MicSheetTitle data-slot="read-back" className="text-body">
-            {readBackOf(draft, today)}
+            {readBackOf(draft, today, note.data)}
           </MicSheetTitle>
           {draft.unsure && !draft.edited ? (
             <p className="text-ui text-pretty text-muted-foreground">{draft.unsure}</p>

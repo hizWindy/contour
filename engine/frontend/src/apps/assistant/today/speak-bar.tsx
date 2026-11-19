@@ -19,15 +19,23 @@ export function SpeakBar() {
   const barRoom = useBarRoom(shown)
   if (!shown) return null
   return (
-    <div
-      ref={barRoom}
-      data-slot="speak-bar"
-      className="fixed inset-x-0 bottom-0 z-20 flex border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
-    >
-      <Button type="button" size="lg" className="flex-1" onClick={openVoiceBar}>
-        <Mic aria-hidden="true" />
-        {SPEAK}
-      </Button>
-    </div>
+    <>
+      {/* The page ends above the bar, as the company page's does, with the phone's safe area. */}
+      <div
+        aria-hidden="true"
+        data-slot="speak-room"
+        className="h-[calc(5rem+env(safe-area-inset-bottom))]"
+      />
+      <div
+        ref={barRoom}
+        data-slot="speak-bar"
+        className="fixed inset-x-0 bottom-0 z-20 flex border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+      >
+        <Button type="button" size="lg" className="flex-1" onClick={openVoiceBar}>
+          <Mic aria-hidden="true" />
+          {SPEAK}
+        </Button>
+      </div>
+    </>
   )
 }

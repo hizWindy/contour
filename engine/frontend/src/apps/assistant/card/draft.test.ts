@@ -138,6 +138,19 @@ describe('a change by voice', () => {
     expect(applyChange(taskDraft(), { box: 'owner', value: 'Sam', day: null })).toBeNull()
   })
 
+  it('a call’s read-back follows the picks and the note’s follow-up once changed', () => {
+    const call = draftOf({ command: callCommand(), words: '', source: 'mic' }, null)
+    if (call?.action !== 'log_call') throw new Error('not a call')
+    expect(readBackOf(call, TODAY, note())).toBe(call.readBack)
+    const moved = note({ tasks: [{ ...note().tasks[0], due: '2099-11-30' }] })
+    expect(readBackOf({ ...call, edited: true }, TODAY, moved)).toBe(
+      'Log a call with Jo Sample at Sample Logistics Pty Ltd. Follow-up task on Mon 30 Nov 2099.',
+    )
+    expect(
+      readBackOf({ ...call, edited: true, person: { found: null, choices: [], heard: '' } }, TODAY),
+    ).toBe('Log a call with Sample Logistics Pty Ltd.')
+  })
+
   it('makes a call’s change a PATCH: the follow-up’s day, how it went, or the summary', () => {
     const outcomes = ['Connected', 'No answer']
     expect(

@@ -681,6 +681,12 @@ describe('a change by voice (choice 19)', () => {
     expect(of(API.command)[0]?.body).toMatchObject({
       card: { action: 'log_call', boxes: ['follow-up', 'outcome', 'summary'] },
     })
+    // The read-back follows: the follow-up is on Monday now.
+    await waitFor(() => {
+      expect(found).toHaveAccessibleName(
+        'Log a call with Jo Sample at Sample Logistics Pty Ltd. Follow-up task on Mon 30 Nov 2099.',
+      )
+    })
   })
 
   it('a change the card can’t make says what it can do, and V listens again', async () => {

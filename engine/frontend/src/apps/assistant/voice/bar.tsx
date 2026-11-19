@@ -399,6 +399,7 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
               >
                 <Input
                   ref={line}
+                  className="touch:text-body"
                   value={snapshot.draft}
                   maxLength={MAX_CHARS}
                   aria-label={TYPE_WHAT}

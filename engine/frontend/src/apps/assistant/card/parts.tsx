@@ -331,6 +331,7 @@ export const VoiceStrip = forwardRef<HTMLInputElement, VoiceStripProps>(function
         >
           <Input
             ref={ref}
+            className="touch:text-body"
             value={snapshot.draft}
             aria-label={TYPE_CHANGE}
             placeholder={TYPE_CHANGE}

@@ -412,12 +412,24 @@ function namesOf(to: readonly Recipient[]): string {
   return to.map((one) => one.found?.name ?? one.address ?? one.heard).join(', ')
 }
 
-/** The card's first line: the server's, or the card's own once the rep has changed something. */
-export function readBackOf(draft: CardDraft, today: string): string {
+/**
+ * The card's first line: the server's, or the card's own once the rep has changed something. A
+ * call's comes from the picks and, once sorted, the note's first follow-up (`note`).
+ */
+export function readBackOf(
+  draft: CardDraft,
+  today: string,
+  note?: Pick<CallNoteOut, 'tasks'>,
+): string {
   if (!draft.edited) return draft.readBack
   switch (draft.action) {
-    case 'log_call':
-      return draft.readBack
+    case 'log_call': {
+      const company = draft.company.found?.name ?? draft.company.heard
+      const who = draft.person.found?.name
+      const call = who ? `Log a call with ${who} at ${company}.` : `Log a call with ${company}.`
+      const first = note?.tasks[0]
+      return first ? `${call} Follow-up task on ${dueDateText(first.due)}.` : call
+    }
     case 'task': {
       const due = dueOf(draft, today)
       const who = draft.forWhom?.found?.name ?? 'you'
