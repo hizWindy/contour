@@ -9,7 +9,10 @@ with core's real writer and a fake HubSpot (what HubSpot gets):
   second one;
 - PLAN-V23 T3-2, staff with no HubSpot user: a follow-up with nobody in "For" is refused (409
   `no_hubspot_user`) and nothing is sent; their call has no owner and starts "Logged by Jo
-  Sample, Designer, in Contour."; a linked account's call has no such line.
+  Sample, Designer, in Contour."; a linked account's call has no such line;
+- each follow-up says whose it is (`owner_id`), so the website sends the list back as it came:
+  two teammates with one name stay apart, and a change to one follow-up leaves the other's
+  teammate alone.
 
 Made-up companies and people only (Sample Logistics Pty Ltd, Mia Sample, Sam Sample).
 """
@@ -27,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies.note_batch import ActivityWriter, Caller, NoteSender, logged_by
 from apps.companies.notes import CardCall, CardTask, NoteCard
+from apps.companies.schemas import CallNoteTaskIn
 from core.api.deps import settings_dependency
 from core.auth import admin
 from core.config import Settings
@@ -318,6 +322,54 @@ async def test_a_follow_up_with_nobody_in_for_is_refused_for_someone_with_no_hub
         assert answer.json()["detail"] == "Who should do this follow-up? Pick a teammate."
     (request,) = fake.previews  # once a teammate is in For, it goes
     assert [task.owner_id for task in request.tasks] == ["o2"]
+
+
+def as_it_came(task: dict[str, Any]) -> dict[str, Any]:
+    """A follow-up from a note's answer, sent back as the website sends it when another one on the
+    card changes: every field the edit takes, as it came."""
+    return {name: task[name] for name in CallNoteTaskIn.model_fields}
+
+
+async def test_two_teammates_with_one_name_stay_apart_when_one_follow_up_changes(
+    world: World, fake: FakeWriter, sender: NoteSender
+) -> None:
+    """The website sends a card's whole follow-up list back when one changes, and each follow-up
+    says whose it is (`owner_id`). Jo's follow-ups for two Sam Samples stay apart, a change to
+    one leaves the other's teammate alone, and the send has a teammate for each."""
+    await a_copy(world)  # Sam Sample is o2
+    await add(world, HubSpotOwner(owner_id="o3", name="Sam Sample"))  # a second Sam Sample
+    async with as_jo(world) as client:
+        note = await log_call(client)
+        path = f"{NOTES}/{note['id']}"
+        made = await client.patch(
+            path,
+            json={
+                "tasks": [
+                    {"subject": "Send the floor plan", "due": "2026-11-06", "owner_id": "o2"},
+                    {"subject": "Book a site visit", "due": "2026-11-09", "owner_id": "o3"},
+                ]
+            },
+        )
+        assert made.status_code == 200, made.text
+        sent_back = [as_it_came(task) for task in made.json()["tasks"]]
+        sent_back[0]["subject"] = "Send the floor plan and the lease"
+        edited = await client.patch(path, json={"tasks": sent_back})
+        assert edited.status_code == 200, edited.text
+        await confirm(client, note)
+        await sender.wait()
+
+    before = [(task["owner"], task["owner_id"]) for task in made.json()["tasks"]]
+    assert before == [("Sam Sample", "o2"), ("Sam Sample", "o3")]
+    after = [(task["id"], task["subject"], task["owner_id"]) for task in edited.json()["tasks"]]
+    assert after == [
+        ("t1", "Send the floor plan and the lease", "o2"),
+        ("t2", "Book a site visit", "o3"),
+    ]
+    (request,) = fake.previews  # no 409 `no_hubspot_user`: each still has its teammate
+    assert [(task.subject, task.owner_id) for task in request.tasks] == [
+        ("Send the floor plan and the lease", "o2"),
+        ("Book a site visit", "o3"),
+    ]
 
 
 async def test_a_call_by_someone_with_no_hubspot_user_has_no_owner_and_says_who_logged_it(

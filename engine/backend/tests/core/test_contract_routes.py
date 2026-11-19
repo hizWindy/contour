@@ -572,6 +572,19 @@ def test_a_notes_list_says_which_days_it_takes(schema: dict[str, Any]) -> None:
         assert "from 2000-01-01 to 2100-12-31" in days[name], name
 
 
+def test_a_call_cards_lists_can_go_back_as_they_came(schema: dict[str, Any]) -> None:
+    """An edit sends a card's whole list of changes or follow-ups back, so each one in the answer
+    holds every field the edit takes. A follow-up sent back without `owner_id` lost its teammate
+    (PLAN-V23 T3-4)."""
+    components = schema["components"]["schemas"]
+    for answer, edit in (
+        ("CallNoteChange", "CallNoteChangeIn"),
+        ("CallNoteTask", "CallNoteTaskIn"),
+    ):
+        missing = set(components[edit]["properties"]) - set(components[answer]["properties"])
+        assert missing == set(), (answer, missing)
+
+
 def test_run_days_are_melbourne_dates_and_the_run_filters_use_the_same_kind_of_date(
     schema: dict[str, Any],
 ) -> None:

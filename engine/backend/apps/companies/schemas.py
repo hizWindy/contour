@@ -640,7 +640,9 @@ class CallNoteChange(Out):
 
 
 class CallNoteTask(Out):
-    model_config = ConfigDict(json_schema_extra=optional_in_types("in_hubspot"))
+    # owner_id was added in PLAN-V23: the API always sends it, and the website's types leave it
+    # optional.
+    model_config = ConfigDict(json_schema_extra=optional_in_types("in_hubspot", "owner_id"))
 
     id: str = Field(description="Like t1")
     subject: str
@@ -648,6 +650,12 @@ class CallNoteTask(Out):
     due_words: str = Field(description="When, in the rep's own words. Empty when a date was typed")
     kind: NoteTaskKind
     owner: str | None = Field(description="Who it is for. None: the rep who logged the call")
+    owner_id: str | None = Field(
+        None,
+        description="Their HubSpot owner id, so two people with one name stay apart. Send it "
+        "back with the follow-up when the list changes: a follow-up sent without it goes to the "
+        "rep. None: the rep who logged the call",
+    )
     in_hubspot: bool = Field(
         False, description="True once it is in HubSpot: it can't change here any more"
     )
@@ -727,7 +735,10 @@ class CallNoteTaskIn(BaseModel):
     )
     kind: NoteTaskKind = "todo"
     owner_id: SafeText | None = Field(
-        None, max_length=32, description="The HubSpot owner it is for. None: the rep"
+        None,
+        max_length=32,
+        description="The HubSpot owner it is for: the follow-up's `owner_id` as it came, or a "
+        "teammate's from GET /companies/team. Left out or None: the rep",
     )
 
 

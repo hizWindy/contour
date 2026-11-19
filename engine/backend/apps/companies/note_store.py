@@ -307,6 +307,7 @@ def note_out(
                 due_words=task.due_words,
                 kind=task.kind,
                 owner=owners.get(task.owner_id) if task.owner_id else None,
+                owner_id=task.owner_id or None,
                 in_hubspot=task.state == "landed",
             )
             for task in card.tasks

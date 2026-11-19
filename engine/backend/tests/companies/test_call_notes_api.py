@@ -476,6 +476,7 @@ async def test_the_reps_edits_are_checked_as_the_sorter_checks_them(
             "due_words": "",
             "kind": "email",
             "owner": "Lee Sample",
+            "owner_id": "o1",
             "in_hubspot": False,
         }
     ]
