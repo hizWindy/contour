@@ -13,8 +13,10 @@
  *   and Try again reloads the team list.
  * - If HubSpot writing is off and nobody would be emailed (`hubspot_writes_off`), the alert tells
  *   the rep to tick "Also email them" to send by email instead.
+ * - While anyone gets a task, a line under the people says what alerts them (PLAN-V23 T2-4,
+ *   choice 11): "Each gets a HubSpot task and a HubSpot alert." "Also email them" stays as it is.
  */
-import { CalendarCheck, CircleAlert, Copy, Hourglass, Send, X } from 'lucide-react'
+import { BellRing, CalendarCheck, CircleAlert, Copy, Hourglass, Send, X } from 'lucide-react'
 import { useEffect, useEffectEvent, useId, useRef, useState, type FormEvent } from 'react'
 import type { ApiProblem } from '@/api/client'
 import {
@@ -177,6 +179,22 @@ function TaskBox({ preview }: { preview: FormEmailPreview }) {
         </p>
       </div>
     </section>
+  )
+}
+
+/**
+ * What alerts the people who get a task (PLAN-V23 T2-4, choice 11), in the server's words: "Each
+ * gets a HubSpot task and a HubSpot alert." Only while someone gets a task. It sits under the
+ * people, so ticking one on or off never moves the rows above it.
+ */
+function TaskAlertLine({ line }: { line: string | null | undefined }) {
+  const words = line?.trim()
+  if (!words) return null
+  return (
+    <p data-slot="task-alert" className="flex items-start gap-2 text-ui text-muted-foreground">
+      <BellRing aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+      {words}
+    </p>
   )
 }
 
@@ -876,6 +894,7 @@ export function SendDialog({
               ))}
             </ul>
           )}
+          <TaskAlertLine line={shown.task_alert} />
 
           {sendProblem !== null ? (
             <div ref={problemRef} className="flex flex-col gap-2">

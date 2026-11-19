@@ -21,7 +21,7 @@ import type {
   TeamMember,
 } from '@/api/types'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
-import { asPhone } from '@/test/screen'
+import { asLaptop, asPhone } from '@/test/screen'
 import { SAMPLE_USER } from '@/test/fake-auth'
 import PreReadPage from './index'
 
@@ -157,6 +157,8 @@ interface Server {
   patchWaits: boolean
   sendWaits: boolean
   previewFails: number | null
+  /** The alert line (PLAN-V23 T2-4): sent while anyone gets a task, as `meeting_send.py` does. */
+  taskAlert: boolean
   release: () => void
   calls: Call[]
 }
@@ -175,6 +177,7 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
     patchWaits: false,
     sendWaits: false,
     previewFails: null,
+    taskAlert: false,
     release: () => undefined,
     calls: [],
     ...changes,
@@ -302,6 +305,10 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
         task_due: '2026-11-26',
         people,
         meeting_note: server.meetingNote ?? null,
+        task_alert:
+          server.taskAlert && people.some((one) => one.task)
+            ? 'Each gets a HubSpot task and a HubSpot alert.'
+            : null,
       }
       return json(preview)
     }
@@ -1112,5 +1119,39 @@ describe('sent, task retry, and send to more (V19 T2-4 & T2-5)', () => {
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Try the HubSpot copy again' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Send to more people' })).toBeNull()
+  })
+})
+
+describe.each([
+  ['a laptop (1440px)', asLaptop],
+  ['a phone (390px)', asPhone],
+])('the alert line (PLAN-V23 T2-4, choice 11), on %s', (_width, size) => {
+  it('says what alerts the people who get a task, and goes when nobody gets one', async () => {
+    size()
+    mockServer({ taskAlert: true })
+    const { user } = renderPreRead()
+    const dialog = await openDialog(user)
+    const line = await within(dialog).findByText('Each gets a HubSpot task and a HubSpot alert.')
+    expect(line).toHaveAttribute('data-slot', 'task-alert')
+    // It sits under the people, so a tick never moves the rows above it.
+    const people = within(dialog).getByRole('list', { name: 'Who gets it' })
+    expect(people.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // "Also email them" stays as it is.
+    expect(within(dialog).getByRole('checkbox', { name: 'Also email them' })).not.toBeChecked()
+
+    // Jo is the only one with a task: with her unticked, nobody gets one.
+    await user.click(within(person(dialog, 'Jo Sample')).getByRole('checkbox'))
+    await waitFor(() => {
+      expect(dialog.querySelector('[data-slot=task-alert]')).toBeNull()
+    })
+  })
+
+  it('shows nothing while the server sends no line', async () => {
+    size()
+    mockServer()
+    const { user } = renderPreRead()
+    const dialog = await openDialog(user)
+    expect(within(person(dialog, 'Jo Sample')).getByRole('checkbox')).toBeChecked()
+    expect(dialog.querySelector('[data-slot=task-alert]')).toBeNull()
   })
 })
