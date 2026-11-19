@@ -106,9 +106,19 @@ function Frame() {
   return (
     <InFrameContext value>
       <SidebarProvider defaultOpen={openAtStart}>
+        {/* The first thing Tab reaches: it shows as it gets the focus, and Enter puts the focus on
+            the page itself, past the menu and the top bar (PLAN-V23 T4-5: 18 Tabs before Today's
+            rows without it). The focus moves by hand, so the address gets no #page and the page
+            isn't drawn again. */}
         <a
           href={`#${MAIN_ID}`}
           className="sr-only z-50 rounded-md border bg-card px-4 py-2 text-ui text-foreground focus:not-sr-only focus:fixed focus:top-4 focus:left-4"
+          onClick={(event) => {
+            const target = page.current
+            if (!target) return
+            event.preventDefault()
+            target.focus()
+          }}
         >
           Skip to the page
         </a>

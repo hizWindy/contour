@@ -149,3 +149,32 @@ describe('a new page eases in (Improvements 1, #8)', () => {
     expect(runs).toHaveLength(0)
   })
 })
+
+describe('Skip to the page (PLAN-V23 T4-5)', () => {
+  it('is the first stop for Tab, and Enter puts the focus on the page, past the menu and top bar', async () => {
+    const router = createMemoryRouter(
+      [
+        {
+          path: '/',
+          element: <AppFrame />,
+          children: [
+            { index: true, element: <button type="button">The page's first button</button> },
+          ],
+        },
+      ],
+      { initialEntries: ['/'] },
+    )
+    stubAuthBackend({ me: signInOff() })
+    const { user } = renderWithProviders(<RouterProvider router={router} />, { withRouter: false })
+    await screen.findByRole('button', { name: "The page's first button" })
+    await user.tab()
+    const skip = screen.getByRole('link', { name: 'Skip to the page' })
+    expect(skip).toHaveFocus()
+    await user.keyboard('{Enter}')
+    expect(page()).toHaveFocus()
+    // The address keeps no #page, and the next Tab is inside the page, not in the menu.
+    expect(router.state.location.hash).toBe('')
+    await user.tab()
+    expect(screen.getByRole('button', { name: "The page's first button" })).toHaveFocus()
+  })
+})

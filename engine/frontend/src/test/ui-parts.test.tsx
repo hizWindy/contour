@@ -521,6 +521,18 @@ describe('Sonner toasts', () => {
     await user.click(screen.getByRole('button', { name: 'Undo' }))
     expect(onUndo).toHaveBeenCalledTimes(1)
   })
+
+  it('makes its buttons 44px tall on a touch screen, as every other button (PLAN-V23 T4-5)', async () => {
+    renderWithProviders(<p>Page</p>)
+    toast('Kept in Call logs, to send with the others.', {
+      action: { label: 'Open Call logs', onClick: vi.fn() },
+      cancel: { label: 'Not now', onClick: vi.fn() },
+    })
+    const action = await screen.findByRole('button', { name: 'Open Call logs' })
+    // 32px with a mouse, 44px where a finger taps (the `touch:` variant in index.css).
+    expect(action).toHaveClass('h-8!', 'touch:h-11!')
+    expect(screen.getByRole('button', { name: 'Not now' })).toHaveClass('h-8!', 'touch:h-11!')
+  })
 })
 
 describe('Chart', () => {

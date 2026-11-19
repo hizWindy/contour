@@ -11,7 +11,8 @@ import {
 /*
   Toasts use our tokens, not Sonner's own colours. The theme follows <html data-theme> when it is
   set, and the computer's setting when it is not. There is no loading spinner: a loading toast
-  shows a still clock, because nothing may loop.
+  shows a still clock, because nothing may loop. Its buttons (Undo, Open) are 32px with a mouse
+  and 44px on a touch screen, like every other button (PLAN-V23 T4-5).
 */
 function subscribeToTheme(onChange: () => void) {
   const observer = new MutationObserver(onChange)
@@ -58,9 +59,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
         classNames: {
           toast: "text-ui! shadow-float! font-sans!",
           actionButton:
-            "h-8! rounded-md! bg-primary! px-3! text-ui! font-semibold! text-primary-foreground!",
+            "h-8! rounded-md! bg-primary! px-3! text-ui! font-semibold! text-primary-foreground! touch:h-11!",
           cancelButton:
-            "h-8! rounded-md! bg-secondary! px-3! text-ui! text-secondary-foreground!",
+            "h-8! rounded-md! bg-secondary! px-3! text-ui! text-secondary-foreground! touch:h-11!",
         },
       }}
       {...props}
