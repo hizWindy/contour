@@ -61,6 +61,7 @@ async def test_signing_in_sets_the_cookie_and_answers_with_the_user_and_the_sess
         "role": "admin",
         "apps": ["lead_finder", "companies"],
         "features": list(FEATURES),
+        "hubspot": "not_set",  # no HubSpot user picked yet (PLAN-V23 T3-1)
     }
     session = body["session"]
     assert (session["current"], session["keep_signed_in"]) == (True, False)
