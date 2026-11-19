@@ -92,6 +92,8 @@ export class FakeMic {
     started: boolean
     stopped: boolean
     aborted: boolean
+    /** The names it was told to listen for as it started (PLAN-V23 T1-5). */
+    hints: readonly string[]
   }[] = []
   readonly storage = new Map<string, string>()
   audioClosed = 0
@@ -233,11 +235,18 @@ export class FakeMic {
 
   /** A fake voice tool: it is ready at once, and finishes as soon as it is stopped. */
   readonly tool: VoiceToolMaker = (events) => {
-    const record = { events, started: false, stopped: false, aborted: false }
+    const record = {
+      events,
+      started: false,
+      stopped: false,
+      aborted: false,
+      hints: [] as readonly string[],
+    }
     this.tools.push(record)
     const tool: VoiceTool = {
-      start: () => {
+      start: (_track, hints = []) => {
         record.started = true
+        record.hints = hints
         if (!this.toolNeverReady) queueMicrotask(events.onReady)
       },
       stop: () => {
@@ -291,6 +300,9 @@ export class FakeRecognition implements SpeechRecognitionLike {
   continuous = false
   interimResults = false
   maxAlternatives = 1
+  /** Set only by on-device mode (PLAN-V23 T1-5). */
+  processLocally?: boolean
+  phrases?: unknown[]
   onstart: SpeechRecognitionLike['onstart'] = null
   onresult: SpeechRecognitionLike['onresult'] = null
   onerror: SpeechRecognitionLike['onerror'] = null

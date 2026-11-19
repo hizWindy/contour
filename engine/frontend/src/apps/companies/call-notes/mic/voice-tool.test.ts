@@ -2,7 +2,14 @@ import { describe, expect, it, vi } from 'vitest'
 import { micName, micsOf } from './devices'
 import { FakeRecognition } from './fake-mic'
 import { fixNames, lettersApart, nameWords } from './name-fix'
-import { browserService, voiceToolFor, type VoiceToolEvents } from './voice-tool'
+import {
+  browserService,
+  ON_DEVICE_HINTS,
+  voiceToolFor,
+  type OnDeviceState,
+  type SpeechRecognitionConstructor,
+  type VoiceToolEvents,
+} from './voice-tool'
 
 /*
   The voice tool seam (PLAN-V18 T3-5): the browser's speech service as a tool, the name fix, and
@@ -35,6 +42,117 @@ function installService() {
 }
 
 const flush = () => new Promise<void>((resolve) => queueMicrotask(resolve))
+
+/** A hint, as the browser's `SpeechRecognitionPhrase` makes one. */
+class FakePhrase {
+  readonly phrase: string
+  readonly boost: number
+  constructor(phrase: string, boost: number) {
+    this.phrase = phrase
+    this.boost = boost
+  }
+}
+
+/**
+ * On-device speech in the window: `SpeechRecognition.available` answers `state`, and the hint
+ * maker is there (`phrases: false` leaves it out). Returns what `available` was asked.
+ */
+function installOnDevice(state: OnDeviceState, { phrases = true } = {}) {
+  const asked: { langs: string[]; processLocally: boolean }[] = []
+  const service = (window as unknown as { SpeechRecognition: SpeechRecognitionConstructor })
+    .SpeechRecognition
+  service.available = (options) => {
+    asked.push(options)
+    return Promise.resolve(state)
+  }
+  if (phrases) vi.stubGlobal('SpeechRecognitionPhrase', FakePhrase)
+  return asked
+}
+
+/** Lets the on-device check answer, and the start that follows it. */
+async function settle(): Promise<void> {
+  for (let turn = 0; turn < 4; turn += 1) await flush()
+}
+
+describe('on-device mode with hints (PLAN-V23 T1-5, built and off until S1)', () => {
+  it('is off by default', () => {
+    expect(ON_DEVICE_HINTS).toBe(false)
+  })
+
+  it('checks the laptop first, then listens there with the hints as phrases', async () => {
+    const made = installService()
+    const asked = installOnDevice('available')
+    const heard = events()
+    browserService(heard, { onDevice: true }).start(null, ['Vitera', 'Jo Sample', 'Vitera'])
+    // Nothing starts before the check answers.
+    expect(made[0]?.started).toBe(0)
+    await settle()
+    expect(asked).toEqual([{ langs: ['en-AU'], processLocally: true }])
+    const [service] = made
+    expect(service?.processLocally).toBe(true)
+    expect(service?.phrases).toEqual([new FakePhrase('Vitera', 2), new FakePhrase('Jo Sample', 2)])
+    expect(service?.started).toBe(1)
+    expect(heard.onReady).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['downloadable', 'downloading', 'unavailable'] as const)(
+    'at %s, the server mode with no hints, as before',
+    async (state) => {
+      const made = installService()
+      installOnDevice(state)
+      browserService(events(), { onDevice: true }).start(null, ['Vitera'])
+      await settle()
+      expect(made[0]?.processLocally).toBeUndefined()
+      expect(made[0]?.phrases).toBeUndefined()
+      expect(made[0]?.started).toBe(1)
+    },
+  )
+
+  it('a browser without phrases, or no hints, asks nothing and starts as before', async () => {
+    const made = installService()
+    const asked = installOnDevice('available', { phrases: false })
+    browserService(events(), { onDevice: true }).start(null, ['Vitera'])
+    browserService(events(), { onDevice: true }).start(null, [])
+    await settle()
+    expect(asked).toEqual([])
+    expect(made.map((service) => service.phrases)).toEqual([undefined, undefined])
+    expect(made.map((service) => service.started)).toEqual([1, 1])
+  })
+
+  it('the laptop’s speech failing before it listens: the server mode, once, with no hints', async () => {
+    const made = installService()
+    installOnDevice('available')
+    const heard = events()
+    // Chrome refuses the hints, then ends: it starts again in the server mode.
+    vi.spyOn(FakeRecognition.prototype, 'start').mockImplementationOnce(function (
+      this: FakeRecognition,
+    ) {
+      this.started += 1
+      queueMicrotask(() => {
+        this.error('phrases-not-supported')
+        this.end()
+      })
+    })
+    browserService(heard, { onDevice: true }).start(null, ['Vitera'])
+    await settle()
+    const [service] = made
+    expect(service?.processLocally).toBe(false)
+    expect(service?.phrases).toEqual([])
+    expect(service?.started).toBe(2)
+    expect(heard.onProblem).not.toHaveBeenCalled()
+    expect(heard.onReady).toHaveBeenCalledTimes(1)
+  })
+
+  it('thrown away while the check is out: nothing starts', async () => {
+    const made = installService()
+    installOnDevice('available')
+    const tool = browserService(events(), { onDevice: true })
+    tool.start(null, ['Vitera'])
+    tool.abort()
+    await settle()
+    expect(made[0]?.started).toBe(0)
+  })
+})
 
 describe('the tool for each setting', () => {
   it('runs the browser service only when the setting says so', () => {
@@ -131,6 +249,18 @@ describe('the browser’s speech service', () => {
     tool.start({ kind: 'audio' } as MediaStreamTrack)
     expect(made).toHaveLength(1)
     expect(heard.onProblem).not.toHaveBeenCalled()
+  })
+
+  it('in the server mode, as built for now, the hints never reach the service (PLAN-V23 T1-5)', async () => {
+    const made = installService()
+    const asked = installOnDevice('available')
+    const heard = events()
+    browserService(heard).start(null, ['Vitera', 'Jo Sample'])
+    await flush()
+    expect(asked).toEqual([])
+    expect(made[0]?.processLocally).toBeUndefined()
+    expect(made[0]?.phrases).toBeUndefined()
+    expect(made[0]?.started).toBe(1)
   })
 
   it('reports nothing more once it is thrown away', () => {

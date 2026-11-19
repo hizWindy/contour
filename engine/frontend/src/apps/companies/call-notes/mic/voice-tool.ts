@@ -15,6 +15,13 @@
  *
  * Our code never stores or sends the audio. The browser service listens to the mic itself (or to
  * the track the card hands it, where the browser can), and only its words come back here.
+ *
+ * **On-device mode with name hints** (PLAN-V23 T1-5, choice 2) is built and off: one constant,
+ * `ON_DEVICE_HINTS`, turns it on once S1 picks it. Then the tool first asks the browser whether
+ * its on-device speech is installed (`SpeechRecognition.available`). Only at `available` does it
+ * listen on the laptop (`processLocally`) with the hint list as phrases, so neither the voice nor
+ * the names leave the laptop. Anything else, or a browser without phrases, is the server mode with
+ * no hints, as before: Chrome refuses phrases in the server mode (`phrases-not-supported`).
  */
 
 import type { VoiceToolKind } from '@/api/types'
@@ -37,8 +44,11 @@ export interface VoiceToolEvents {
 }
 
 export interface VoiceTool {
-  /** Start listening, to this mic's track where the tool can (else to the browser's own mic). */
-  start: (track: MediaStreamTrack | null) => void
+  /**
+   * Start listening, to this mic's track where the tool can (else to the browser's own mic).
+   * `hints`: the names to listen for, used only in on-device mode (PLAN-V23 T1-5).
+   */
+  start: (track: MediaStreamTrack | null, hints?: readonly string[]) => void
   /** Finish: the last words come, then `onFinished`. */
   stop: () => void
   /** Throw away: nothing more comes. */
@@ -70,6 +80,10 @@ export interface SpeechRecognitionLike {
   continuous: boolean
   interimResults: boolean
   maxAlternatives: number
+  /** On-device mode (newer Chrome): the speech is turned into words on the laptop. */
+  processLocally?: boolean
+  /** The names to listen for, as `SpeechRecognitionPhrase`s: on-device mode only (Chrome). */
+  phrases?: unknown[]
   onstart: (() => void) | null
   onresult: ((event: SpeechResultEvent) => void) | null
   onerror: ((event: SpeechErrorEvent) => void) | null
@@ -78,7 +92,18 @@ export interface SpeechRecognitionLike {
   stop: () => void
   abort: () => void
 }
-export type SpeechRecognitionConstructor = new () => SpeechRecognitionLike
+
+/** What `SpeechRecognition.available` answers for a language. */
+export type OnDeviceState = 'unavailable' | 'downloadable' | 'downloading' | 'available'
+
+export interface SpeechRecognitionConstructor {
+  new (): SpeechRecognitionLike
+  /** Whether on-device speech is installed for these languages (newer Chrome only). */
+  available?: (options: { langs: string[]; processLocally: boolean }) => Promise<OnDeviceState>
+}
+
+/** A hint for the service: a name and how much to favour it, 0 to 10. */
+export type SpeechPhraseConstructor = new (phrase: string, boost: number) => unknown
 
 /** The browser's speech recogniser, or null where there is none (Firefox, an old browser). */
 export function speechRecognition(): SpeechRecognitionConstructor | null {
@@ -90,8 +115,33 @@ export function speechRecognition(): SpeechRecognitionConstructor | null {
   return found.SpeechRecognition ?? found.webkitSpeechRecognition ?? null
 }
 
+/** The browser's hint maker, or null where it has none (every browser but a newer Chrome). */
+export function speechPhrase(): SpeechPhraseConstructor | null {
+  if (typeof window === 'undefined') return null
+  const found = window as unknown as { SpeechRecognitionPhrase?: SpeechPhraseConstructor }
+  return typeof found.SpeechRecognitionPhrase === 'function' ? found.SpeechRecognitionPhrase : null
+}
+
 /** The language the service listens for: Australian English. */
 export const SPEECH_LANG = 'en-AU'
+
+/**
+ * On-device mode with the hint list (PLAN-V23 T1-5, choice 2): off until S1, Al-khair's test at
+ * the keyboard, picks it (TBC). Chrome has no Australian on-device model: it uses its US English
+ * one for any English.
+ */
+export const ON_DEVICE_HINTS = false
+
+/** How much each hint is favoured, from 0 to 10 (TBC after S1). */
+export const HINT_BOOST = 2
+
+/** The most hints the service is given: the hint list's own most (choice 1, TBC after S1). */
+const MOST_HINTS = 200
+
+export interface BrowserServiceOptions {
+  /** On-device mode with hints. Default: `ON_DEVICE_HINTS`. */
+  onDevice?: boolean
+}
 
 /** After `stop`, the last words get this long before the tool says it is finished anyway. */
 const FINISH_WAIT_MS = 4000
@@ -115,8 +165,15 @@ function problemOf(error: string): VoiceProblem | null {
 /**
  * The browser service as a voice tool. It listens until it is stopped: the service ends by itself
  * after a silence or a minute, so it starts again then, until `stop` or a problem.
+ *
+ * In on-device mode (`onDevice`, off by default) with hints, it asks `available` first, and
+ * listens on the laptop with the hints only at `available`. If the on-device service fails before
+ * it listens, it starts again once in the server mode, with no hints.
  */
-export function browserService(events: VoiceToolEvents): VoiceTool {
+export function browserService(
+  events: VoiceToolEvents,
+  { onDevice = ON_DEVICE_HINTS }: BrowserServiceOptions = {},
+): VoiceTool {
   const Recognition = speechRecognition()
   let recognition: SpeechRecognitionLike | null = null
   let track: MediaStreamTrack | null = null
@@ -124,6 +181,32 @@ export function browserService(events: VoiceToolEvents): VoiceTool {
   let stopping = false
   let over = false
   let waiting = 0
+  /** Listening on the laptop, with the hints. */
+  let local = false
+
+  /** The hints as the service's phrases, or null where on-device mode can't take them. */
+  const phrasesOf = (hints: readonly string[]): unknown[] | null => {
+    const Phrase = speechPhrase()
+    const texts = [...new Set(hints.map((hint) => hint.trim()).filter(Boolean))]
+    if (!Phrase || texts.length === 0) return null
+    try {
+      return texts.slice(0, MOST_HINTS).map((text) => new Phrase(text, HINT_BOOST))
+    } catch {
+      return null
+    }
+  }
+
+  /** Back to the server mode, with no hints. */
+  const leaveDevice = (): void => {
+    local = false
+    if (!recognition) return
+    try {
+      recognition.processLocally = false
+      recognition.phrases = []
+    } catch {
+      // An older browser has neither: it was never on the laptop.
+    }
+  }
 
   const finish = (): void => {
     if (over) return
@@ -158,8 +241,39 @@ export function browserService(events: VoiceToolEvents): VoiceTool {
     }
   }
 
+  /** On-device mode, when it is on, the browser has it installed, and there are hints. */
+  const startOnDevice = (made: SpeechRecognitionLike, hints: readonly string[]): boolean => {
+    const phrases = onDevice ? phrasesOf(hints) : null
+    if (!phrases || typeof Recognition?.available !== 'function') return false
+    let asked: Promise<OnDeviceState>
+    try {
+      asked = Promise.resolve(Recognition.available({ langs: [SPEECH_LANG], processLocally: true }))
+    } catch {
+      return false
+    }
+    asked.then(
+      (state) => {
+        if (over || recognition !== made) return
+        if (state === 'available') {
+          try {
+            made.processLocally = true
+            made.phrases = phrases
+            local = true
+          } catch {
+            leaveDevice()
+          }
+        }
+        begin()
+      },
+      () => {
+        if (!over && recognition === made) begin()
+      },
+    )
+    return true
+  }
+
   return {
-    start(next) {
+    start(next, hints = []) {
       if (!Recognition) {
         fail('tool_failed')
         return
@@ -193,6 +307,12 @@ export function browserService(events: VoiceToolEvents): VoiceTool {
         events.onHearing(hearing)
       }
       recognition.onerror = (event) => {
+        if (local && !ready && !over) {
+          // The laptop's own speech failed before it listened (like `phrases-not-supported`):
+          // the server mode, with no hints. The service's end that follows starts it again.
+          leaveDevice()
+          return
+        }
         const problem = problemOf(event.error)
         if (problem) fail(problem)
       }
@@ -205,7 +325,7 @@ export function browserService(events: VoiceToolEvents): VoiceTool {
         // It ended by itself (a silence, or its own time limit): listen on.
         begin()
       }
-      begin()
+      if (!startOnDevice(recognition, hints)) begin()
     },
     stop() {
       if (over || stopping) return

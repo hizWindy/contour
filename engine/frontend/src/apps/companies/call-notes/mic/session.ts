@@ -204,6 +204,8 @@ export interface MicSessionOptions {
   tool: VoiceToolKind
   /** The company's and the person's names, for the name fix. */
   names?: readonly string[]
+  /** The names the speech service listens for, in on-device mode only (PLAN-V23 T1-5). */
+  hints?: readonly string[]
   env?: MicEnv
   /** The tool to run; tests hand in a fake. By default, the one for `tool`. */
   makeTool?: VoiceToolMaker | null
@@ -214,7 +216,8 @@ type Listener = () => void
 export class MicSession {
   private readonly mode: 'note' | 'check'
   private readonly kind: VoiceToolKind
-  private readonly names: readonly string[]
+  private names: readonly string[]
+  private hints: readonly string[]
   private readonly env: MicEnv
   private readonly makeTool: VoiceToolMaker | null
   private readonly listeners = new Set<Listener>()
@@ -229,10 +232,18 @@ export class MicSession {
   private timers: number[] = []
   private hearTimer = 0
 
-  constructor({ mode, tool, names = [], env = browserEnv(), makeTool }: MicSessionOptions) {
+  constructor({
+    mode,
+    tool,
+    names = [],
+    hints = [],
+    env = browserEnv(),
+    makeTool,
+  }: MicSessionOptions) {
     this.mode = mode
     this.kind = tool
     this.names = names
+    this.hints = hints
     this.env = env
     // Only the browser service has a tool until Whisper is built (T3-3): with the others the check
     // ends at "Voice to text ready", and nothing listens for words.
@@ -337,6 +348,15 @@ export class MicSession {
     this.run += 1
     this.release()
     this.set({ bars: null })
+  }
+
+  /**
+   * Names that came in after the card opened (PLAN-V23 T1-5: the hint list loads on the first V):
+   * the fix uses them from the next words on, and the speech service from its next start.
+   */
+  setNames(names: readonly string[], hints: readonly string[] = this.hints): void {
+    this.names = names
+    this.hints = hints
   }
 
   /** Everything said so far, as one text: the chunks, then what was still being heard. */
@@ -570,7 +590,7 @@ export class MicSession {
       },
     })
     this.tool = tool
-    tool.start(track)
+    tool.start(track, this.hints)
   }
 
   /** The mic stopped by itself (unplugged, or taken by the computer). */
