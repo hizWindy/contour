@@ -516,3 +516,57 @@ class LearnedNameOut(Out):
 class LearnedNamePage(Out):
     total: int
     items: list[LearnedNameOut] = Field(description="The newest first")
+
+
+# --- Adding a company (PLAN-V23 T1-4, the contract's part 4) ------------------------------------
+
+NEW_COMPANY_MAX_CHARS = 120
+CITY_MAX_CHARS = 120
+
+
+class AssistantCompanyIn(BaseModel):
+    """A company to add to HubSpot, as the card has it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: SafeText = Field(
+        min_length=1,
+        max_length=NEW_COMPANY_MAX_CHARS,
+        description="The company's name, 1 to 120 characters once its spaces are tidied (422 "
+        "`company_name_empty` otherwise). No email address or phone number (422 "
+        "`contact_details`)",
+        examples=["Sample Logistics Pty Ltd"],
+    )
+    city: SafeText | None = Field(
+        None,
+        max_length=CITY_MAX_CHARS,
+        description="Its city, when one was said, like Perth. Empty: none",
+        examples=["Perth"],
+    )
+
+
+class AssistantCompanyPreview(Out):
+    """What adding the company would do. Nothing is written to HubSpot."""
+
+    name: str = Field(description="The name as it would be added, its spaces tidied")
+    city: str | None
+    similar: list[CompanyHit] = Field(
+        description="HubSpot's companies with a close name, best first, at most 5, each read "
+        "into our copy so the card can use it"
+    )
+    exists: CompanyHit | None = Field(
+        description="A company HubSpot (or our copy) already has with this name: adding it again "
+        "is refused (409 `company_exists`). Use this one"
+    )
+    can_write: bool = Field(description="Companies can be added to HubSpot now")
+    waiting_for: str | None = Field(description="Why they can't, in plain words")
+    sentence: str | None = Field(
+        description="The card's line, in plain words: adding is off, the name is there already, "
+        "or HubSpot has a company like it. None when there is nothing to say"
+    )
+
+
+class AssistantCompanyAdded(Out):
+    company_key: str = Field(description="The company's HubSpot id: use it on the card")
+    company: CompanyHit = Field(description="The company as our copy has it now")
+    hubspot_url: str | None = Field(description="The company in HubSpot, when HubSpot gave it")

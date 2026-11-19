@@ -13,6 +13,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 
 from apps.companies import (
+    assistant_add,
     assistant_learned,
     assistant_names,
     assistant_tasks,
@@ -21,10 +22,14 @@ from apps.companies import (
 )
 from apps.companies.api_meetings import SourceDep, WriterDep
 from apps.companies.assistant import Assistant, CommandLimit, check_on, read_command
+from apps.companies.assistant_add import CompanyAdds
 from apps.companies.assistant_names import HintCache
 from apps.companies.assistant_schemas import (
     AssistantCommand,
     AssistantCommandIn,
+    AssistantCompanyAdded,
+    AssistantCompanyIn,
+    AssistantCompanyPreview,
     AssistantEmailIn,
     AssistantNames,
     AssistantTaskIn,
@@ -101,7 +106,18 @@ def name_hints(request: Request) -> HintCache:
     return found
 
 
+def company_adds(request: Request) -> CompanyAdds:
+    """The companies each person may add in a minute (5, TBC), and one add at a time, made on
+    first use. A test puts its own in app.state."""
+    found: CompanyAdds | None = getattr(request.app.state, "company_adds", None)
+    if found is None:
+        found = CompanyAdds()
+        request.app.state.company_adds = found
+    return found
+
+
 AssistantDep = Annotated[Assistant, Depends(assistant_state)]
+CompanyAddsDep = Annotated[CompanyAdds, Depends(company_adds)]
 HintsDep = Annotated[HintCache, Depends(name_hints)]
 AssistantOnDep = Annotated[Settings, Depends(assistant_on)]
 TaskCopyDep = Annotated[TaskCopy, Depends(task_copy)]
@@ -441,6 +457,82 @@ async def reopen_assistant_task(
         now=now,
     )
     return Response(status_code=204)
+
+
+# --- Adding a company (PLAN-V23 T1-4) -----------------------------------------------------------
+
+
+@router.post(
+    "/companies/preview",
+    response_model=AssistantCompanyPreview,
+    dependencies=[Depends(CHANGES)],
+    summary="Check a company before adding it",
+    description=(
+        "What adding this company to HubSpot would do, for the card's 'Add to HubSpot': "
+        "`similar`, HubSpot's companies with a close name (its own search, one free request), "
+        "best first, at most 5, each read into our copy so the card can use it; `exists`, a "
+        "company with this name already (adding it again is refused); whether it can be added "
+        "now (`can_write`, `waiting_for`); and the card's line (`sentence`). Nothing is written "
+        "to HubSpot. With no HubSpot connection, none are listed and it can't be added. 422 "
+        "`company_name_empty`, `contact_details`. 503 `hubspot_unavailable` when HubSpot didn't "
+        "answer. A Viewer gets 403 `viewer_read_only`."
+    ),
+)
+async def preview_assistant_company(
+    body: AssistantCompanyIn, request: Request, session: SessionDep, settings: SettingsDep
+) -> AssistantCompanyPreview:
+    return await assistant_add.preview_company(session, body, app=request.app, settings=settings)
+
+
+@router.post(
+    "/companies",
+    response_model=AssistantCompanyAdded,
+    status_code=201,
+    dependencies=[Depends(CHANGES)],
+    summary="Add a company to HubSpot",
+    description=(
+        "Makes the company in HubSpot, with its name and city only, through core's writer: its "
+        "duplicate check looks for the name in HubSpot first, the write is a row in HubSpot's "
+        "write log, and the company is in our copy at once. Answers its `company_key`. Send the "
+        "card's `Idempotency-Key`: the same key from the same person gives back the first "
+        "company (200), so HubSpot gets one, even for a double press. A send that timed out is "
+        "never sent again blind: HubSpot is searched by name first. 409 `company_exists` when "
+        "HubSpot or our copy has a company with this name (case and spaces aside, in any city: "
+        "TBC), `hubspot_writing_off` while companies can't be added (nothing is sent), "
+        "`company_adding` while the same add is on its way. 429 `too_many_companies` over 5 new "
+        "companies in a minute for one person (TBC), with `Retry-After`; a repeated key isn't "
+        "counted. 422 `company_name_empty`, `contact_details`. 502 `company_not_added` when "
+        "HubSpot refused it or didn't say whether it was made (trying again is safe). 503 "
+        "`hubspot_unavailable`. A Viewer gets 403 `viewer_read_only`."
+    ),
+    responses={
+        200: {"model": AssistantCompanyAdded, "description": "The first company with this key"}
+    },
+)
+async def add_assistant_company(
+    body: AssistantCompanyIn,
+    request: Request,
+    response: Response,
+    session: SessionDep,
+    settings: SettingsDep,
+    auth: SignedInDep,
+    adds: CompanyAddsDep,
+    now: NowDep,
+    idempotency_key: CardKey,
+) -> AssistantCompanyAdded:
+    added, new = await assistant_add.add_company(
+        session,
+        body,
+        app=request.app,
+        auth=auth,
+        settings=settings,
+        adds=adds,
+        key=idempotency_key,
+        now=now,
+    )
+    if not new:
+        response.status_code = 200
+    return added
 
 
 # --- The team email (T1-5) -----------------------------------------------------------------------

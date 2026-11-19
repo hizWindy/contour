@@ -128,15 +128,19 @@ class HubSpotUnavailable(HubSpotError):
     """No connection, a refused key (401), or HubSpot stayed busy or broken after every try."""
 
 
+MISSING_SCOPE_TITLE = "The HubSpot key is missing a permission"
+
+
 class HubSpotMissingScope(HubSpotError):
     """The key lacks a permission (403 MISSING_SCOPES). `scopes` are the ones HubSpot named; any
-    one of them would do."""
+    one of them would do. A write's step log keeps its title (`MISSING_SCOPE_TITLE`), so a project
+    can tell this failure from others (PLAN-V23 T1-4)."""
 
     def __init__(self, scopes: Sequence[str]) -> None:
         self.scopes = tuple(scopes)
         named = ", ".join(self.scopes) if self.scopes else "a scope HubSpot didn't name"
         super().__init__(
-            "The HubSpot key is missing a permission",
+            MISSING_SCOPE_TITLE,
             f"It needs one of: {named}. The admin adds it on the key's page in HubSpot.",
         )
 

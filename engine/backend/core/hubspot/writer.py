@@ -384,13 +384,19 @@ def _note_text(note: str | None, changes: Sequence[FieldChange]) -> str | None:
     return text[:NOTE_MAX_CHARS] or None
 
 
-async def preview_write(session: AsyncSession, hubspot: HubSpot, request: WriteRequest) -> WriteOut:
+async def preview_write(
+    session: AsyncSession, hubspot: HubSpot, request: WriteRequest, *, release: bool = False
+) -> WriteOut:
     """Saves (or refreshes) the subject's one open write as a preview. A subject already sent,
-    or being written, or part-written, gets that write back unchanged."""
+    or being written, or part-written, gets that write back unchanged. With `release`, the read
+    is committed before HubSpot is asked, so no connection waits on HubSpot (PLAN-V23 T1-4): the
+    caller must have nothing waiting to be saved."""
     existing = await latest_write(session, request.app, request.subject)
     if existing is not None and existing.status not in OPEN:
         return write_out(existing)
     existing_id = existing.id if existing is not None else None
+    if release:
+        await session.commit()  # it only read
     plan = await plan_write(hubspot, request)
     row = await save_preview(
         session,
