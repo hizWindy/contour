@@ -127,6 +127,11 @@ export interface AppModule {
    * until it is asked. It is drawn inside a `Suspense`, so it may be a `lazy` component. Optional.
    */
   frame?: ComponentType
+  /**
+   * Its own button in the top bar, before Ctrl+K, like the Assistant's "Speak (V)" (PLAN-V22
+   * T3-1). It is drawn inside a `Suspense`, so it may be a `lazy` component. Optional.
+   */
+  topBar?: ComponentType
   /** Its addresses, inside the app frame. */
   routes: RouteObject[]
 }

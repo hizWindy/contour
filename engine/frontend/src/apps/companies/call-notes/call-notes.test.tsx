@@ -298,7 +298,11 @@ function posts(backend: Backend): Sent[] {
 }
 
 function renderCompanies() {
-  return renderWithProviders(<CompaniesPage />, { route: '/companies' })
+  // No wait between typed keys: the long notes made a test run past 5 seconds under load.
+  return renderWithProviders(<CompaniesPage />, {
+    route: '/companies',
+    userEventOptions: { delay: null },
+  })
 }
 
 /** Two reps on one shared browser (made-up people), for the drafts that are each rep's own. */
@@ -327,7 +331,11 @@ function signedInAs(user: SignedInUser): SignIn {
 function renderCompaniesAs(user: SignedInUser) {
   const queryClient = createTestQueryClient()
   queryClient.setQueryData(queryKeys.auth.me(), signedInAs(user))
-  return renderWithProviders(<CompaniesPage />, { route: '/companies', queryClient })
+  return renderWithProviders(<CompaniesPage />, {
+    route: '/companies',
+    queryClient,
+    userEventOptions: { delay: null },
+  })
 }
 
 /** The page is up, and it knows call notes are on (or off). */

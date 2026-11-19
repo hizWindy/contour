@@ -454,39 +454,12 @@ export function logMeetingLine(
   return [companyName, title.trim(), meetingDay(at, today)].filter(Boolean).join(' · ')
 }
 
-// --- Around the app (T3-11): Home's card and a company's record -----------------------------
+// --- Around the app (T3-11): a company's record ------------------------------------------------
+// Home's "Upcoming meetings" card gave its place to the Assistant's own card (PLAN-V22 T2-3).
 
-export const UPCOMING_MEETINGS = 'Upcoming meetings'
 export const OPEN_MEETINGS = 'Open Meetings'
-export const NO_MEETINGS_SOON = 'No meetings in the next few days.'
-export const NO_MEETINGS_SOON_NOTE =
-  'Your client meetings from HubSpot show here, with their pre-reads.'
-export const MEETINGS_NOT_LOADED = "Your meetings couldn't be loaded right now."
 export const COMING_UP = 'Coming up'
 export const OPEN_PRE_READ = 'Open the pre-read'
-
-/**
- * Home's sentence over the rows, from the counts for the next 7 days: "2 need a pre-read, and 1 is
- * ready to check and send." Null with nothing to do.
- */
-export function upcomingSentence(needPreRead: number, draftReady: number): string | null {
-  const need =
-    needPreRead > 0
-      ? `${formatNumber(needPreRead)} ${needPreRead === 1 ? 'needs' : 'need'} a pre-read`
-      : null
-  const ready =
-    draftReady > 0
-      ? `${formatNumber(draftReady)} ${draftReady === 1 ? 'is' : 'are'} ready to check and send`
-      : null
-  if (need && ready) return `${need}, and ${ready}.`
-  if (need) return `${need}.`
-  if (ready) {
-    return draftReady === 1
-      ? '1 pre-read is ready to check and send.'
-      : `${formatNumber(draftReady)} pre-reads are ready to check and send.`
-  }
-  return null
-}
 
 /** Meetings, found by the company's name, everyone's: where a meeting with no pre-read is. */
 export function companyMeetingsQuery(companyName: string): string {

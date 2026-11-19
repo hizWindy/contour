@@ -441,7 +441,8 @@ describe('PLAN-V19 T3-3: Position, ticks, generated starting/reset passwords & C
       },
     })
 
-    const { user } = renderWithProviders(<AdminPeopleTab />)
+    // No wait between typed keys: three long fields made it run past 5 seconds under load.
+    const { user } = renderWithProviders(<AdminPeopleTab />, { userEventOptions: { delay: null } })
     const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
 
     expect(await screen.findByText('Platform admin')).toBeInTheDocument()

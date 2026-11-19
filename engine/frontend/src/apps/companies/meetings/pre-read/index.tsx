@@ -15,7 +15,10 @@
  * - **It opens once:** the four sections rise 4px and fade in, 40ms apart (`Reveal`). The footer
  *   stays still. With reduced motion everything is simply there.
  * - **Keyboard:** Tab goes from top to bottom. Ctrl+Enter (or Cmd+Enter) opens "Check and send";
- *   while it can't be pressed, the focus goes to the first blank still to fill.
+ *   while it can't be pressed, the focus goes to the first blank still to fill. For a pre-read the
+ *   voice started, this page is its review card (PLAN-V22 T3-4, choice 24): Enter on the page (not
+ *   in a box, nor on a button) does the same, and the send dialog then gives Send the focus, so
+ *   Enter again sends.
  * - **Phone:** one column, and the footer is fixed at the bottom of the screen, above the safe area.
  * - **While it drafts** (a new pre-read, or a redraft), the page asks again every 2 seconds and
  *   stops once it is ready or failed (`useMeetingForm`). What changes doesn't move: the status
@@ -32,7 +35,14 @@
  */
 import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, FileText, SearchX } from 'lucide-react'
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
 import { Link, useParams } from 'react-router'
 import {
   isFormMissing,
@@ -41,6 +51,7 @@ import {
   useMeetingForm,
 } from '@/api/hooks/meetings'
 import type { MeetingFormOut } from '@/api/types'
+import { somethingElseOpen } from '@/apps/assistant/voice/keys'
 import { useCanWrite } from '@/auth/can'
 import { FeatureGuard } from '@/auth/guard'
 import { BackButton } from '@/components/back-button'
@@ -51,6 +62,7 @@ import { PageHeader } from '@/components/page-header'
 import { Pending } from '@/components/skeletons'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { isTyping } from '@/lib/is-typing'
 import { useBarRoom } from '@/lib/use-bar-room'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
@@ -87,6 +99,10 @@ import { BlankField, FormFooter } from './your-part'
 
 /** The form's width: about 840px (TBC after Al-khair's look). */
 const COLUMN = 'mx-auto flex w-full max-w-[52.5rem] flex-col'
+
+/** What Enter presses by itself: on these, Enter on the page is theirs, not Check and send. */
+const PRESSABLE =
+  'button, a, summary, [role=button], [role=link], [role=checkbox], [role=radio], [role=switch], [role=option], [role=menuitem], [role=tab]'
 
 /** Back to Meetings: the page before, or Meetings itself when the page opened from a link. */
 function Back() {
@@ -182,6 +198,8 @@ function PreReadView({ form }: { form: MeetingFormOut }) {
   const onPhone = useMediaQuery(PHONE)
   const canWrite = useCanWrite('companies.meetings')
   const [sending, setSending] = useState(false)
+  // Opened by Enter on the page: Send takes the focus once it can send (PLAN-V22 T3-4).
+  const [sendFirst, setSendFirst] = useState(false)
   // Sent from this page just now: "Sent" draws its tick once.
   const [justSent, setJustSent] = useState(false)
   // When the form was last saved on this visit, for the footer's "saved 2:14 pm".
@@ -214,7 +232,18 @@ function PreReadView({ form }: { form: MeetingFormOut }) {
     putFormOnRows(client, form, meetingId)
   }, [client, form, meetingId])
 
-  /** Ctrl+Enter: Check and send, or the first blank still to fill. */
+  /** Check and send, or the first blank still to fill. */
+  const checkAndSend = (first: boolean): void => {
+    if (block === null) {
+      setSendFirst(first)
+      setSending(true)
+      return
+    }
+    if (block === 'both' || block === 'next_step') nextStepBox.current?.focus()
+    else if (block === 'going') goingBox.current?.focus()
+  }
+
+  /** Ctrl+Enter, in a box or not. */
   const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
     if (
       !canWrite ||
@@ -225,13 +254,39 @@ function PreReadView({ form }: { form: MeetingFormOut }) {
       return
     }
     event.preventDefault()
-    if (block === null) {
-      setSending(true)
+    checkAndSend(false)
+  }
+
+  // Enter on the page, not in a box and not on a button: the review card's Enter (choice 24).
+  const onPageEnter = useEffectEvent((event: globalThis.KeyboardEvent): void => {
+    if (
+      event.key !== 'Enter' ||
+      event.defaultPrevented ||
+      event.repeat ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey ||
+      event.shiftKey ||
+      isTyping(event) ||
+      somethingElseOpen() ||
+      (event.target instanceof Element && event.target.closest(PRESSABLE) !== null)
+    ) {
       return
     }
-    if (block === 'both' || block === 'next_step') nextStepBox.current?.focus()
-    else if (block === 'going') goingBox.current?.focus()
-  }
+    event.preventDefault()
+    checkAndSend(true)
+  })
+  const listens = canWrite && status !== 'sent'
+  useEffect(() => {
+    if (!listens) return undefined
+    const onKey = (event: globalThis.KeyboardEvent): void => {
+      onPageEnter(event)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [listens])
 
   return (
     <Column className={cn(onPhone && status !== 'sent' && 'pb-36')}>
@@ -240,6 +295,7 @@ function PreReadView({ form }: { form: MeetingFormOut }) {
       <SentNote
         form={form}
         onSendToMore={() => {
+          setSendFirst(false)
           setSending(true)
         }}
       />
@@ -294,6 +350,7 @@ function PreReadView({ form }: { form: MeetingFormOut }) {
           onPhone={onPhone}
           barRoom={barRoom}
           onCheckAndSend={() => {
+            setSendFirst(false)
             setSending(true)
           }}
         />
@@ -301,6 +358,7 @@ function PreReadView({ form }: { form: MeetingFormOut }) {
       <SendDialog
         form={form}
         open={sending}
+        sendFirst={sendFirst}
         onOpenChange={setSending}
         onSent={() => {
           setJustSent(true)

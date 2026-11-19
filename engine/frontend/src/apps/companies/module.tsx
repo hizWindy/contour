@@ -14,13 +14,11 @@
  * and `/companies/activity`) send you on to the Assistant's (`apps/assistant/old-addresses.ts`).
  * Each is more exact than a company's own address (`:key`), so none is ever read as a company.
  *
- * Home keeps its two cards here until the Assistant has a Home card of its own (T2-3): the
- * Companies card, with Call logs' quick buttons for a person who has the Call logs tick, and
- * "Upcoming meetings", a card that comes late and goes after the others.
+ * Home has its Companies card: the count, the search and "Prepped today". Call logs' quick
+ * buttons and the "Upcoming meetings" card went to the Assistant's own card (PLAN-V22 T2-3).
  */
 import { Building2 } from 'lucide-react'
 import { OLD_PATHS } from '@/apps/assistant/old-addresses'
-import { UpcomingMeetings } from '@/apps/assistant/parts'
 import type { RouteHandle } from '@/shell/crumbs'
 import type { AppModule } from '@/shell/nav'
 import { page } from '@/shell/page-route'
@@ -33,10 +31,7 @@ export const COMPANIES: AppModule = {
   name: 'Companies',
   icon: Building2,
   tone: 'companies',
-  homeCards: [
-    { id: 'companies', component: CompaniesHomeCard },
-    { id: 'meetings', component: UpcomingMeetings, late: true },
-  ],
+  homeCards: [{ id: 'companies', component: CompaniesHomeCard }],
   prefetchSummary: prefetchCompaniesHome,
   // On Home, its page's code is fetched quietly (Improvements 1, #10), so the first click finds it.
   warm: true,

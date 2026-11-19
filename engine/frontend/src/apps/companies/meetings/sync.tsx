@@ -38,9 +38,18 @@ const WORDS: Readonly<Record<SyncLook, string>> = {
 
 /**
  * The outline button at the toolbar's right end, with the icon that turns once a press. What it
- * does is its description, for the pointer (a tooltip) and for a screen reader.
+ * does is its description (`note`), for the pointer (a tooltip) and for a screen reader. Today's
+ * Sync (PLAN-V22 T2-2) is the same button, for the tasks.
  */
-export function SyncButton({ sync, className }: { sync: MeetingsSync; className?: string }) {
+export function SyncButton({
+  sync,
+  className,
+  note = SYNC_NOTE,
+}: {
+  sync: MeetingsSync
+  className?: string
+  note?: string
+}) {
   const noteId = useId()
   const icon =
     sync.look === 'done' ? (
@@ -81,11 +90,11 @@ export function SyncButton({ sync, className }: { sync: MeetingsSync; className?
             </span>
           </Button>
         </TooltipTrigger>
-        <TooltipContent>{SYNC_NOTE}</TooltipContent>
+        <TooltipContent>{note}</TooltipContent>
       </Tooltip>
       {/* Beside the button, not in it: inside, it would be read as part of the button's name. */}
       <span id={noteId} className="sr-only">
-        {SYNC_NOTE}
+        {note}
       </span>
     </div>
   )

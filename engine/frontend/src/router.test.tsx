@@ -90,7 +90,8 @@ describe('the router', () => {
 
     const page = document.getElementById('page') as HTMLElement
     for (const app of MODULES) {
-      const card = within(page).getByRole('region', { name: app.name })
+      // A project's card may come late (the Assistant's does, PLAN-V22 T2-3), so wait for it.
+      const card = await within(page).findByRole('region', { name: app.name }, { timeout: LAZY })
       // Each card opens its project: at least one of its pages is a link on it.
       const hrefs = within(card)
         .getAllByRole('link')

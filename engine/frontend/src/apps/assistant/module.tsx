@@ -20,15 +20,23 @@
  * - **The old addresses** under `/companies/...` send you on with their query (`old-addresses.ts`).
  *   Ctrl+K still finds the pages by their old words: "activity", "relationships" (the menu group
  *   Meetings and Call logs sat in), "call logs" and "meetings".
- * - **The first visit:** this file, the addresses and the old addresses' route are in it. The
- *   pages, their prefetches and the parts around the app load late.
+ * - **The first visit:** this file, the addresses, the old addresses' route and the V key's small
+ *   listener (`voice/key.tsx`, PLAN-V22 T3-1) are in it. The pages, their prefetches, the parts
+ *   around the app and the voice bar itself load late.
  */
 import { CalendarCheck, Headset, ListTodo, PhoneLog } from 'lucide-react'
 import type { PrefetchArgs, RouteHandle } from '@/shell/crumbs'
 import type { AppModule } from '@/shell/nav'
 import { page } from '@/shell/page-route'
+import { AssistantFrame } from './frame'
 import { MovedAddress } from './old-route'
-import { AssistantCommands, MicCheckHost, MicCheckMenuItem, ToConfirmCount } from './parts'
+import {
+  AssistantCommands,
+  AssistantHomeCard,
+  MicCheckMenuItem,
+  SpeakButton,
+  ToConfirmCount,
+} from './parts'
 import { CALL_LOGS_PATH, MEETINGS_PATH, TODAY_PATH } from './paths'
 import { ASSISTANT_KEYWORDS, ASSISTANT_NAME, TODAY, TODAY_PURPOSE } from './words'
 
@@ -72,6 +80,9 @@ export const ASSISTANT: AppModule = {
   warm: true,
   description:
     'Your work for the day: tasks and meetings, the pre-read for each client meeting, and the calls you logged.',
+  // Today's counts and "Press V to speak" (PLAN-V22 T2-3, choice 5). It comes late, after the other
+  // cards, where "Upcoming meetings" was, and its code loads late too.
+  homeCards: [{ id: 'assistant', component: AssistantHomeCard, late: true }],
   pages: [
     {
       to: TODAY_PATH,
@@ -119,10 +130,12 @@ export const ASSISTANT: AppModule = {
     },
   ],
   commands: AssistantCommands,
-  // "Check my mic" (PLAN-V18 T3-4): a row in the account menu, and the card it opens. Part 3's
-  // voice bar joins the frame the same way (T3-1).
+  // "Check my mic" (PLAN-V18 T3-4): a row in the account menu, and the card it opens.
   accountItems: MicCheckMenuItem,
-  frame: MicCheckHost,
+  // The mic check's card, and the V key with its voice bar (PLAN-V22 T3-1), on every page.
+  frame: AssistantFrame,
+  // "Speak (V)" in the top bar (choice 13): it opens the voice bar, as V does.
+  topBar: SpeakButton,
   routes: [
     {
       path: TODAY_PATH.slice(1),

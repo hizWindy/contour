@@ -14,6 +14,8 @@ export interface Call {
   path: string
   search: string
   body: unknown
+  /** The request's headers, like its Idempotency-Key. */
+  headers?: Headers
 }
 
 export type Answer = (call: Call) => Response | undefined
@@ -32,7 +34,13 @@ export function mockApi(answers: Record<string, unknown>): Call[] {
       } catch {
         body = text
       }
-      const call = { method: request.method, path: url.pathname, search: url.search, body }
+      const call = {
+        method: request.method,
+        path: url.pathname,
+        search: url.search,
+        body,
+        headers: request.headers,
+      }
       calls.push(call)
       const answer = answers[url.pathname]
       if (typeof answer === 'function') {

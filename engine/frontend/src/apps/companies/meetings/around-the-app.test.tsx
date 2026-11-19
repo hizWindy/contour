@@ -1,8 +1,8 @@
 /**
  * The pre-meeting form around the app (PLAN-V17 T3-11, "The screens" part 7), in the whole app
- * against a fake server: Home's "Upcoming meetings" card, Ctrl+K's "Pre-read for a meeting", and a
- * person without the Companies tick, who sees none of it and whose browser asks nothing about
- * meetings. Then a company's record, which lists its meetings. The clock is fixed at 9:00 am on
+ * against a fake server: Ctrl+K's "Pre-read for a meeting", and a person without the Companies
+ * tick, who sees none of it and whose browser asks nothing about meetings. Home's "Upcoming
+ * meetings" card gave its place to the Assistant's own card (PLAN-V22 T2-3, `home-card.test.tsx`). Then a company's record, which lists its meetings. The clock is fixed at 9:00 am on
  * Wednesday 18 Nov 2026, Melbourne time. Made-up names only.
  */
 import { screen, waitFor, within } from '@testing-library/react'
@@ -207,149 +207,6 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe("Home's Upcoming meetings", () => {
-  it('shows the next three, each with its status and button, under what needs doing', async () => {
-    asLaptop()
-    const requests = stubBackend()
-    renderAt('/')
-    await home()
-    const card = within(
-      await screen.findByRole('region', { name: 'Upcoming meetings' }, { timeout: LAZY }),
-    )
-    expect(
-      card.getByText('2 need a pre-read, and 1 is ready to check and send.'),
-    ).toBeInTheDocument()
-    // The next three, a cancelled one left out: it needs nothing.
-    const rows = card.getAllByRole('listitem')
-    expect(rows).toHaveLength(3)
-    expect(rows.map((row) => row.querySelector('.font-semibold')?.textContent)).toEqual([
-      'Sample Logistics Pty Ltd',
-      'Sample Freight Pty Ltd',
-      'Sample Health Pty Ltd',
-    ])
-    const [first, second] = rows
-    if (!first || !second) throw new Error('Too few rows')
-    expect(within(first).getByText('Today, 10:00 am')).toBeInTheDocument()
-    expect(within(first).getByText('Needs pre-read')).toBeInTheDocument()
-    expect(
-      card.getByRole('button', { name: 'Draft it: Sample Logistics Pty Ltd, Today, 10:00 am' }),
-    ).toBeEnabled()
-    expect(within(second).getByText('Draft ready')).toBeInTheDocument()
-    expect(
-      card.getByRole('link', {
-        name: 'Check and send: Sample Freight Pty Ltd, Tomorrow, 11:00 am',
-      }),
-    ).toHaveAttribute('href', '/assistant/meetings/f3')
-    expect(
-      card.getByRole('link', { name: 'Open: Sample Health Pty Ltd, Fri 20 Nov, 9:30 am' }),
-    ).toHaveAttribute('href', '/assistant/meetings/f4')
-    expect(card.getByRole('link', { name: 'Open Meetings' })).toHaveAttribute(
-      'href',
-      '/assistant/meetings',
-    )
-    // Sign-in is off: there is no "me", and the counts cover everyone's, so the rows are
-    // everyone's too (All), as Meetings asks then. My meetings would be empty.
-    expect(meetingRequests(requests)).toContain(
-      `GET ${MEETINGS}?when=upcoming&who=all&limit=100&offset=0`,
-    )
-    expect(meetingRequests(requests).some((request) => request.includes('who=mine'))).toBe(false)
-  })
-
-  it("lists a signed-in rep's own meetings: My meetings, as the card's sentence counts", async () => {
-    asLaptop()
-    const requests = stubBackend({ user: { role: 'staff', apps: ['lead_finder', 'companies'] } })
-    renderAt('/')
-    await home()
-    const card = within(
-      await screen.findByRole('region', { name: 'Upcoming meetings' }, { timeout: LAZY }),
-    )
-    expect(card.getAllByRole('listitem')).toHaveLength(3)
-    expect(meetingRequests(requests)).toContain(
-      `GET ${MEETINGS}?when=upcoming&who=mine&limit=100&offset=0`,
-    )
-    expect(card.queryByRole('link', { name: 'Show all meetings' })).toBeNull()
-  })
-
-  it("says why a rep's own can't be picked out, and links to everyone's on Meetings", async () => {
-    asLaptop()
-    stubBackend({
-      summary: { need_pre_read: 0, draft_ready: 0 },
-      user: { role: 'staff', apps: ['lead_finder', 'companies'] },
-      linked: false,
-    })
-    renderAt('/')
-    await home()
-    const card = within(
-      await screen.findByRole('region', { name: 'Upcoming meetings' }, { timeout: LAZY }),
-    )
-    expect(card.getByRole('status').textContent).toBe(NOT_LINKED)
-    // Home has no All of its own: the sentence's All is on Meetings, which opens on it.
-    expect(card.getByRole('link', { name: 'Show all meetings' })).toHaveAttribute(
-      'href',
-      '/assistant/meetings',
-    )
-    expect(card.getByText('No meetings in the next few days.')).toBeInTheDocument()
-  })
-
-  it('comes after every other card, so its coming moves none of them', async () => {
-    asLaptop()
-    stubBackend()
-    renderAt('/')
-    await home()
-    const meetings = await screen.findByRole(
-      'region',
-      { name: 'Upcoming meetings' },
-      {
-        timeout: LAZY,
-      },
-    )
-    const cost = screen.getByRole('region', { name: 'Runs and cost' })
-    expect(cost.compareDocumentPosition(meetings) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  })
-
-  it('says so in the serif voice when there are no meetings in the next few days', async () => {
-    asLaptop()
-    stubBackend({ summary: { need_pre_read: 0, draft_ready: 0 }, items: [] })
-    renderAt('/')
-    await home()
-    const card = within(
-      await screen.findByRole('region', { name: 'Upcoming meetings' }, { timeout: LAZY }),
-    )
-    expect(card.getByText('No meetings in the next few days.')).toHaveClass('font-serif')
-    expect(card.queryByRole('listitem')).toBeNull()
-  })
-
-  it("says in the server's words, in Meetings' own quiet line, when meetings can't be read yet", async () => {
-    asLaptop()
-    // Track 1's sentence for a missing permission (`meeting_store.py`), word for word.
-    const waiting =
-      'Waiting for HubSpot access to meetings. An admin adds it in HubSpot. You can still start a new pre-read.'
-    stubBackend({ summary: { need_pre_read: 0, draft_ready: 0 }, items: [], sentence: waiting })
-    renderAt('/')
-    await home()
-    const card = within(
-      await screen.findByRole('region', { name: 'Upcoming meetings' }, { timeout: LAZY }),
-    )
-    // As it comes: what still works is said once.
-    expect(card.getByRole('status').textContent).toBe(waiting)
-    expect(card.getByText('No meetings in the next few days.')).toBeInTheDocument()
-    expect(card.queryByRole('link', { name: 'Show all meetings' })).toBeNull()
-  })
-
-  it('is not there while pre-meeting forms are off, and asks for no meetings', async () => {
-    asLaptop()
-    const requests = stubBackend({ summary: 'off' })
-    renderAt('/')
-    await home()
-    await waitFor(() => {
-      expect(meetingRequests(requests)).toContain(`GET ${MEETINGS}/summary`)
-    })
-    // The card took no place in the grid either.
-    expect(screen.queryByRole('region', { name: 'Upcoming meetings' })).toBeNull()
-    expect(meetingRequests(requests)).toEqual([`GET ${MEETINGS}/summary`])
-  })
-})
-
 describe("Ctrl+K's Pre-read for a meeting", () => {
   it('opens Meetings, upcoming', async () => {
     asLaptop()
@@ -370,11 +227,12 @@ describe("Ctrl+K's Pre-read for a meeting", () => {
     const requests = stubBackend({ summary: 'off' })
     const { user } = renderAt('/')
     await home()
+    // Ctrl+K asks for the counts itself, and they answer 409 while forms are off.
+    await user.keyboard('{Control>}k{/Control}')
+    const menu = await screen.findByRole('dialog', { name: 'Go to a page' })
     await waitFor(() => {
       expect(meetingRequests(requests)).toContain(`GET ${MEETINGS}/summary`)
     })
-    await user.keyboard('{Control>}k{/Control}')
-    const menu = await screen.findByRole('dialog', { name: 'Go to a page' })
     expect(within(menu).getByRole('option', { name: 'Meetings' })).toBeInTheDocument()
     expect(within(menu).queryByRole('option', { name: 'Pre-read for a meeting' })).toBeNull()
   })
@@ -386,21 +244,17 @@ describe('who sees it', () => {
     const requests = stubBackend({ user: { role: 'staff', apps: ['lead_finder'] } })
     const { user } = renderAt('/')
     await home()
-    expect(screen.queryByRole('region', { name: 'Upcoming meetings' })).toBeNull()
     await user.keyboard('{Control>}k{/Control}')
     const menu = await screen.findByRole('dialog', { name: 'Go to a page' })
     expect(within(menu).queryByRole('option', { name: 'Pre-read for a meeting' })).toBeNull()
     expect(meetingRequests(requests)).toEqual([])
   })
 
-  it('the same person with the tick sees the card and the entry', async () => {
+  it('the same person with the tick sees the entry', async () => {
     asLaptop()
     stubBackend({ user: { role: 'staff', apps: ['lead_finder', 'companies'] } })
     const { user } = renderAt('/')
     await home()
-    expect(
-      await screen.findByRole('region', { name: 'Upcoming meetings' }, { timeout: LAZY }),
-    ).toBeInTheDocument()
     await user.keyboard('{Control>}k{/Control}')
     expect(
       await screen.findByRole('option', { name: 'Pre-read for a meeting' }),

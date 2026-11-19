@@ -210,3 +210,28 @@ export type HubSpotOwnerOption = Schemas['HubSpotOwnerChoice']
 export type HubSpotOwnerList = Schemas['HubSpotOwnerList']
 export type HubSpotOwnerIn = Schemas['HubSpotOwnerIn']
 export type CallNoteQuery = NonNullable<operations['list_call_notes']['parameters']['query']>
+
+// The Assistant (PLAN-V22): the command step (T1-1, the contract part 1)
+export type AssistantCommand = Schemas['AssistantCommand']
+export type AssistantCommandIn = Schemas['AssistantCommandIn']
+export type AssistantOnPage = Schemas['AssistantOnPage']
+export type AssistantOpen = Schemas['AssistantOpen']
+export type CommandSource = AssistantCommandIn['source']
+
+// The review card (PLAN-V22 T3-3): what it shows, and what it sends (the contract parts 1, 3, 4)
+export type AssistantCardIn = Schemas['AssistantCardIn']
+export type AssistantChange = Schemas['AssistantChange']
+export type AssistantRecipient = Schemas['AssistantRecipient']
+export type AssistantTask = Schemas['AssistantTask']
+export type AssistantMeetingHit = Schemas['AssistantMeetingHit']
+export type AssistantTaskIn = Schemas['AssistantTaskIn']
+export type AssistantEmailIn = Schemas['AssistantEmailIn']
+export type TeamEmail = Schemas['TeamEmail']
+
+// The Assistant (PLAN-V22): Today (T1-3, the contract part 2) and its tasks (T1-4)
+export type Today = Schemas['Today']
+export type TodayPart = Today['parts'][number]
+export type TodayTask = Schemas['TodayTask']
+export type TodayMeeting = Schemas['TodayMeeting']
+export type TodayDeal = Schemas['TodayDeal']
+export type TodayCompany = Schemas['TodayCompany']

@@ -1,23 +1,19 @@
 /**
  * The Companies card on Home (the "bento" Home, 11 Nov; titled Relationships, with a handshake,
  * from 17 Nov 2026 until PLAN-V22 T2-1 took the group apart): how many companies we have and how
- * fresh the HubSpot copy is, a box to find a company, the calls I prepped today, and, while call
- * notes are on (PLAN-V17 T3-7), a quick button for each kind of work waiting: "7 calls to
- * confirm", "2 need a look". Those come last: they arrive after two requests, and at the foot of
- * the card they push nothing inside it. Their code loads late (`apps/assistant/parts.ts`). They
- * move to the Assistant's own card in T2-3 (choice 5).
+ * fresh the HubSpot copy is, a box to find a company, and the calls I prepped today. Call logs'
+ * quick buttons ("7 calls to confirm", "2 need a look") moved to the Assistant's own card
+ * (PLAN-V22 T2-3, choice 5), and the card shows only to a person who sees Companies.
  *
  * The count asks for the Companies page's own first page (the same request), so opening Companies
  * from here shows the list at once. The box opens Companies with the name typed in its search, and
  * a call prepped today opens that company.
  */
 import { ArrowRight, Building2, Search } from 'lucide-react'
-import { Suspense, useId, useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useCompanies, useHubSpotSyncs, useTodayPreps } from '@/api/hooks'
 import type { PrepChip } from '@/api/types'
-import { CallNoteButtons } from '@/apps/assistant/parts'
-import { CALL_LOGS_PATH, MEETINGS_PATH } from '@/apps/assistant/paths'
 import { useCan } from '@/auth/can'
 // By its own file: this card is in the first visit (see the kit's index.ts).
 import { RollingNumber } from '@/components/motion/rolling-number'
@@ -153,15 +149,6 @@ function Today({ linkToCompany }: { linkToCompany: boolean }) {
 export function CompaniesHomeCard() {
   const canCompanies = useCan('companies.companies')
   const canPrep = useCan('companies.call_prep')
-  const canCallLogs = useCan('companies.call_logs')
-  const canMeetings = useCan('companies.meetings')
-  const openTo = canCompanies
-    ? { to: '/companies', label: 'Open Companies' }
-    : canCallLogs
-      ? { to: CALL_LOGS_PATH, label: 'Open Call logs' }
-      : canMeetings
-        ? { to: MEETINGS_PATH, label: 'Open Meetings' }
-        : null
   return (
     <Card role="region" aria-labelledby={TITLE_ID} className="h-full gap-5">
       <div className="flex items-center gap-3 px-6">
@@ -177,10 +164,10 @@ export function CompaniesHomeCard() {
         <h2 id={TITLE_ID} className="flex-1 text-section font-semibold text-foreground">
           Companies
         </h2>
-        {openTo ? (
+        {canCompanies ? (
           <Link
-            to={openTo.to}
-            aria-label={openTo.label}
+            to="/companies"
+            aria-label="Open Companies"
             className="inline-flex shrink-0 items-center gap-1 rounded-sm text-ui text-link underline-offset-4 hover:underline"
           >
             Open
@@ -194,15 +181,8 @@ export function CompaniesHomeCard() {
             <Count />
             <FindCompany />
           </>
-        ) : canCallLogs && !canPrep ? (
-          <p className="text-ui text-muted-foreground">Calls to confirm and call history.</p>
         ) : null}
         {canPrep ? <Today linkToCompany={canCompanies} /> : null}
-        {canCallLogs ? (
-          <Suspense fallback={null}>
-            <CallNoteButtons />
-          </Suspense>
-        ) : null}
       </div>
     </Card>
   )
