@@ -69,6 +69,16 @@ export const TOO_MANY = "That's a lot of commands in one minute. Wait a moment, 
 export const TOO_SLOW = 'That took too long. Your words are kept. Try again.'
 
 /**
+ * The words were too unclear to make a command (PLAN-V23 T1-6, the plan's words). The server
+ * sends the same line; this one stands in when it doesn't.
+ */
+export function unclearWords(words: string): string {
+  return `We didn't catch that clearly. You said: '${words}'. Say it again, or fix the words.`
+}
+/** Listen again, after unclear words. */
+export const SAY_IT_AGAIN = 'Say it again'
+
+/**
  * With the voice tool not built here (Whisper waits for S1), the bar is the text line only. The mic
  * card says "Your mic works" here, after its check; the bar opens no mic, so it says less.
  */

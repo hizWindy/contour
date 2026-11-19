@@ -10,6 +10,8 @@
  *   opens, after the pre-read starts if it has none yet ("Working it out" stays on meanwhile).
  *   With two or more meetings, or none ahead, the card asks.
  * - `unknown` shows its read-back (what the Assistant can do), with Try again.
+ * - `unclear` (PLAN-V23 T1-6) stops before any card: the words wait in the bar's text line, with
+ *   the stop line ("We didn't catch that clearly...") and "Say it again".
  * - `change`, `send` and `cancel` only mean something on an open card, which reads them itself.
  * - With the AI that reads commands off (409 `assistant_off`), V works as dictation (choice 17):
  *   for a rep who can log calls, Log call opens with the words in a new call note, and the rep picks
@@ -25,7 +27,7 @@ import type {
 import { openCard } from '../card/store'
 import { CALL_LOGS_PATH, MEETINGS_PATH, TODAY_PATH } from '../paths'
 import { isVoiceBarOpen } from './store'
-import { CANT_READ_YET } from './words'
+import { CANT_READ_YET, unclearWords } from './words'
 
 /**
  * The Lead Finder's first page in the menu ("Start a run"). Written here, not read from its module:
@@ -47,6 +49,14 @@ export type AfterAnswer =
   | { kind: 'close' }
   /** The bar shows this line. `again`: it offers Try again (say it another way). */
   | { kind: 'show'; line: string; unsure: string | null; again: boolean }
+  /** The words were too unclear (PLAN-V23 T1-6): they wait in the text line, under the line. */
+  | { kind: 'unclear'; words: string; line: string }
+
+/** The stop for words too unclear to make a command: the server's line, else the plan's. */
+export function unclearAnswer(command: AssistantCommand, said: string): AfterAnswer {
+  const words = command.read_back.trim() || said.trim()
+  return { kind: 'unclear', words, line: command.unsure?.trim() || unclearWords(words) }
+}
 
 /** Starts a meeting's pre-read, as Meetings' "Draft it" does. Answers with its id. */
 export type StartPreRead = (meetingId: string) => Promise<{ id: string }>
@@ -142,6 +152,7 @@ export function handOver(
     return { kind: 'show', line: CANT_READ_YET, unsure: null, again: false }
   }
   const { command } = heard
+  if (command.action === 'unclear') return unclearAnswer(command, heard.words)
   if (command.action === 'open' && command.open) {
     go(pageFor(command.open))
     return CLOSE

@@ -23,6 +23,7 @@ import { isMac } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 import type { BarSnapshot } from '../voice/bar-session'
 import { useVKeyOn } from '../voice/v-switch'
+import { SAY_IT_AGAIN } from '../voice/words'
 import { CountdownBar } from './countdown'
 import type { Box } from './draft'
 import {
@@ -295,18 +296,24 @@ export function ListenStrip({ id, ms }: { id: string; ms: number }) {
 
 export interface VoiceStripProps {
   snapshot: BarSnapshot
-  /** The line a problem or an answer says. */
+  /** The line a problem or an answer says, or why typed words wait (unclear words, T1-6). */
   line: string | null
   onTyped: (text: string) => void
   onSendTyped: () => void
+  /** Unclear words (PLAN-V23 T1-6): listen again. */
+  onSayAgain?: () => void
 }
 
-/** V on the card (choice 19): it listens, then works it out, as the voice bar does. */
+/**
+ * V on the card (choice 19): it listens, then works it out, as the voice bar does. Words too
+ * unclear to make a change wait in its text line, under the stop line, with "Say it again".
+ */
 export const VoiceStrip = forwardRef<HTMLInputElement, VoiceStripProps>(function VoiceStrip(
-  { snapshot, line, onTyped, onSendTyped },
+  { snapshot, line, onTyped, onSendTyped, onSayAgain },
   ref,
 ) {
   const { phase } = snapshot
+  const lineId = useId()
   const listening = phase === 'starting' || phase === 'listening'
   const title = listening
     ? LISTENING
@@ -333,24 +340,45 @@ export const VoiceStrip = forwardRef<HTMLInputElement, VoiceStripProps>(function
         </div>
       ) : null}
       {phase === 'typing' ? (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault()
-            onSendTyped()
-          }}
-        >
-          <Input
-            ref={ref}
-            className="touch:text-body"
-            value={snapshot.draft}
-            aria-label={TYPE_CHANGE}
-            placeholder={TYPE_CHANGE}
-            autoComplete="off"
-            onChange={(event) => {
-              onTyped(event.target.value)
+        <>
+          {line ? (
+            <p id={lineId} role="alert" className="text-ui text-pretty text-foreground">
+              {line}
+            </p>
+          ) : null}
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              onSendTyped()
             }}
-          />
-        </form>
+          >
+            <Input
+              ref={ref}
+              className="touch:text-body"
+              value={snapshot.draft}
+              aria-label={TYPE_CHANGE}
+              aria-describedby={line ? lineId : undefined}
+              placeholder={TYPE_CHANGE}
+              autoComplete="off"
+              onChange={(event) => {
+                onTyped(event.target.value)
+              }}
+            />
+          </form>
+          {onSayAgain ? (
+            <div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="touch:h-11"
+                onClick={onSayAgain}
+              >
+                {SAY_IT_AGAIN}
+              </Button>
+            </div>
+          ) : null}
+        </>
       ) : listening ? (
         <div className="min-h-6 text-body text-foreground">
           <LiveWords chunks={snapshot.mic?.chunks ?? []} hearing={snapshot.mic?.hearing ?? ''} />

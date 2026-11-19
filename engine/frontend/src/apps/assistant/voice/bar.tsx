@@ -17,6 +17,17 @@
  *
  * Its code loads late (`key.tsx`), so the first visit doesn't carry it. The review card a command
  * opens (`card/`) sits beside it and comes with it.
+ *
+ * PLAN-V23 Part 1:
+ *
+ * - **The hint list** (T1-5) loads with the bar's code (after the page is idle, or on the first
+ *   V), for the company on screen, and is kept 5 minutes. The name fix uses it on every page, with
+ *   the names on screen first; the speech service gets it in on-device mode only.
+ * - **Hold V** (choice 6): a tap works as before; V still down after 0.4 seconds is a hold, and
+ *   letting go ends the talk. A held key's repeats type nothing.
+ * - **Unclear words** (T1-6) stop here, before any card: the stop line, the words in the text line
+ *   (Enter sends them), and "Say it again".
+ * - **"Try saying"** (T4-3) names the first company of the hint list, or Acme until it is in.
  */
 import { CircleAlert, RotateCcw } from 'lucide-react'
 import { AnimatePresence, m } from 'motion/react'
@@ -77,6 +88,7 @@ import {
   NOTHING_HEARD,
   NOTHING_HEARD_TOUCH,
   sayExamples,
+  SAY_IT_AGAIN,
   SEND,
   TOO_MANY,
   TOO_SLOW,
@@ -170,7 +182,8 @@ function titleOf(snapshot: BarSnapshot): string {
     case 'working':
       return WORKING
     case 'typing':
-      return TYPE_WHAT
+      // Unclear words: the stop line says what to do, under the bar's name (T1-6).
+      return snapshot.problem?.kind === 'unclear' ? VOICE_BAR_NAME : TYPE_WHAT
     case 'problem':
     case 'answer':
       return VOICE_BAR_NAME
@@ -192,6 +205,8 @@ function problemLine(problem: BarProblem): string {
       return VOICE_NOT_SET_UP
     case 'other':
       return problem.detail ? `${problem.title}. ${problem.detail}` : problem.title
+    case 'unclear':
+      return problem.line
   }
 }
 
@@ -202,12 +217,13 @@ function isQuiet(problem: BarProblem): boolean {
   )
 }
 
-type BarAction = 'try_again' | 'type_instead' | 'carry_on'
+type BarAction = 'try_again' | 'type_instead' | 'carry_on' | 'say_again'
 
 const ACTION_LABELS: Readonly<Record<BarAction, string>> = {
   try_again: TRY_AGAIN,
   type_instead: TYPE_INSTEAD,
   carry_on: CARRY_ON,
+  say_again: SAY_IT_AGAIN,
 }
 
 /** The mic's own buttons (PLAN-V18's table), as the bar has them: no mic picker here. */
@@ -223,6 +239,8 @@ function actionsOf(snapshot: BarSnapshot): BarAction[] {
   if (phase === 'answer') return answer?.again ? ['try_again'] : []
   if (!problem) return []
   if (phase === 'typing') {
+    // Unclear words wait in the text line: say them again, where the voice works (T1-6).
+    if (problem.kind === 'unclear') return snapshot.voice ? ['say_again'] : []
     // The text line is there already: only a way back to the mic, where one helps.
     return problem.kind === 'mic' && problemActions(problem.problem, false).includes('try_again')
       ? ['try_again']
@@ -234,6 +252,7 @@ function actionsOf(snapshot: BarSnapshot): BarAction[] {
       return ['try_again', 'type_instead']
     case 'too_many':
     case 'no_voice':
+    case 'unclear':
       return []
     case 'other':
       return problem.resend ? ['try_again', 'type_instead'] : ['type_instead']
@@ -247,10 +266,10 @@ function actionsOf(snapshot: BarSnapshot): BarAction[] {
   }
 }
 
-/** What a screen reader hears once, as the bar moves on. */
+/** What a screen reader hears once, as the bar moves on. A problem's own alert speaks for it. */
 function statusOf(snapshot: BarSnapshot): string {
   if (snapshot.phase === 'answer') return snapshot.answer?.line ?? ''
-  if (snapshot.phase === 'problem') return ''
+  if (snapshot.phase === 'problem' || snapshot.problem?.kind === 'unclear') return ''
   return titleOf(snapshot)
 }
 
@@ -451,11 +470,43 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   const fixes = listening ? (snapshot.mic?.fixes ?? []) : snapshot.fixes
   const act = (action: BarAction): void => {
     if (!session) return
-    if (action === 'try_again') session.tryAgain()
+    if (action === 'try_again' || action === 'say_again') session.tryAgain()
     else session.typeInstead()
   }
   // The rep's own next company, for "Try saying" (PLAN-V23 T4-3).
   const nextCompany = firstCompanyOf(names ?? cachedNames(client, screen.key))
+  // Unclear words: the stop line comes before the text line the words wait in (T1-6).
+  const unclear = problem?.kind === 'unclear'
+
+  const problemView = problem ? (
+    isQuiet(problem) ? (
+      <p id={whyId} data-slot="voice-problem" className="text-pretty text-muted-foreground">
+        {problemLine(problem)}
+      </p>
+    ) : (
+      <p
+        id={unclear ? whyId : undefined}
+        role="alert"
+        data-slot="voice-problem"
+        className="flex items-start gap-2 text-pretty text-destructive-ink"
+      >
+        <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+        {problem.kind === 'nothing_heard' ? (
+          vOn ? (
+            <span>
+              <span className="touch:hidden">{NOTHING_HEARD}</span>
+              <span className="hidden touch:inline">{NOTHING_HEARD_TOUCH}</span>
+            </span>
+          ) : (
+            // With V off, the words name the button, as on a touch screen.
+            <span>{NOTHING_HEARD_TOUCH}</span>
+          )
+        ) : (
+          <span>{problemLine(problem)}</span>
+        )}
+      </p>
+    )
+  ) : null
 
   return (
     <>
@@ -492,6 +543,8 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
               ) : null}
             </div>
 
+            {unclear ? problemView : null}
+
             {phase === 'typing' ? (
               <form
                 className="flex items-center gap-2"
@@ -503,8 +556,8 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
                 <Input
                   ref={line}
                   className="touch:text-body"
-                  // Why the voice can't work here, read with the line.
-                  aria-describedby={problem && isQuiet(problem) ? whyId : undefined}
+                  // Why the voice can't work here, or why the words wait here, read with the line.
+                  aria-describedby={problem && (isQuiet(problem) || unclear) ? whyId : undefined}
                   value={snapshot.draft}
                   maxLength={MAX_CHARS}
                   aria-label={TYPE_WHAT}
@@ -555,38 +608,7 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
               </p>
             ) : null}
 
-            {problem ? (
-              isQuiet(problem) ? (
-                <p
-                  id={whyId}
-                  data-slot="voice-problem"
-                  className="text-pretty text-muted-foreground"
-                >
-                  {problemLine(problem)}
-                </p>
-              ) : (
-                <p
-                  role="alert"
-                  data-slot="voice-problem"
-                  className="flex items-start gap-2 text-pretty text-destructive-ink"
-                >
-                  <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                  {problem.kind === 'nothing_heard' ? (
-                    vOn ? (
-                      <span>
-                        <span className="touch:hidden">{NOTHING_HEARD}</span>
-                        <span className="hidden touch:inline">{NOTHING_HEARD_TOUCH}</span>
-                      </span>
-                    ) : (
-                      // With V off, the words name the button, as on a touch screen.
-                      <span>{NOTHING_HEARD_TOUCH}</span>
-                    )
-                  ) : (
-                    <span>{problemLine(problem)}</span>
-                  )}
-                </p>
-              )
-            ) : null}
+            {unclear ? null : problemView}
 
             <div className="flex flex-wrap items-center gap-2">
               {listening ? (

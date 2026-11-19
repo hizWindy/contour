@@ -57,6 +57,27 @@ function meetingOf(change: Partial<AssistantMeetingHit>): AssistantCommand['meet
 }
 
 describe('handOver', () => {
+  it('unclear words stop before any card: the server’s line, the words to fix (PLAN-V23 T1-6)', () => {
+    const go = vi.fn<(to: string) => void>()
+    const line =
+      "We didn't catch that clearly. You said: 'um the north'. Say it again, or fix the words."
+    const said = (unsure: string | null) =>
+      handOver(
+        {
+          kind: 'command',
+          command: command({ action: 'unclear', read_back: 'um the north', unsure }),
+          words: 'um the north',
+          source: 'mic',
+        },
+        { go },
+      )
+    expect(said(line)).toEqual({ kind: 'unclear', words: 'um the north', line })
+    // With no line from the server, the plan's own words.
+    expect(said(null)).toEqual({ kind: 'unclear', words: 'um the north', line })
+    expect(go).not.toHaveBeenCalled()
+    expect(openedCard()).toBeNull()
+  })
+
   it('opens the page an open command names, and the bar closes', () => {
     const go = vi.fn<(to: string) => void>()
     const after = handOver(

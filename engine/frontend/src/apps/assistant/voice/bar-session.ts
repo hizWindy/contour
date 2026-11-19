@@ -17,6 +17,14 @@
  * - **The mic is let go** as soon as the talk is over: on Esc at once, and after V or a silence as
  *   soon as the last words are written out. Our code never keeps or sends the sound: only the
  *   words go to the server.
+ * - **Hold V** (PLAN-V23 choice 6): the V that started listening, still down after 0.4 seconds
+ *   (TBC), is a hold. While it is held, no silence ends the talk; letting go does. A tap works as
+ *   before. The bar tells the session about the key (`vDown`, `vUp`).
+ * - **The names** (PLAN-V23 T1-5): the names on screen and the hint list, for the name fix, and
+ *   the hint list for the speech service (on-device mode only). The hint list may come in after
+ *   the bar opened (`setNames`).
+ * - **Unclear words** (PLAN-V23 T1-6): the answer `unclear` stops before the card. The words wait
+ *   in the text line, with the stop line and "Say it again".
  */
 import { isAbort, toApiProblem } from '@/api/client'
 import type {
@@ -77,6 +85,11 @@ export type BarProblem =
   | { kind: 'no_voice' }
   /** Anything else, in the server's own words or the website's. */
   | { kind: 'other'; title: string; detail: string | null; resend: boolean }
+  /**
+   * The command step couldn't make a command of the words (PLAN-V23 T1-6): its stop line. The
+   * words wait in the text line.
+   */
+  | { kind: 'unclear'; line: string }
 
 export interface ShownAnswer {
   line: string
@@ -539,6 +552,17 @@ export class BarSession {
   private settle(after: AfterAnswer): void {
     if (after.kind === 'close') {
       this.cancel()
+      return
+    }
+    if (after.kind === 'unclear') {
+      // The words wait in the text line, to fix and send with Enter, or to say again.
+      this.set({
+        phase: 'typing',
+        mic: null,
+        draft: after.words.slice(0, MAX_CHARS),
+        problem: { kind: 'unclear', line: after.line },
+        answer: null,
+      })
       return
     }
     this.set({

@@ -3,7 +3,9 @@
  * rises and listens, V keeps the words, a held V does nothing more, Esc throws them away and gives
  * the focus back, a typed command works, V in the text line types a "v", the text line works with
  * no mic, and the answer goes to the seam (a page opens, the review card opens, or the read-back
- * shows). Made-up names only: Sample Logistics Pty Ltd, Jo Sample.
+ * shows). PLAN-V23: the hint list on every page and "Try saying" (T1-5, T4-3), hold V (choice 6),
+ * and the stop for unclear words (T1-6). Made-up names only: Sample Logistics Pty Ltd, Vitera Pty
+ * Ltd, Jo Sample.
  */
 import type { QueryClient } from '@tanstack/react-query'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
@@ -720,5 +722,68 @@ describe('hold V (PLAN-V23 choice 6)', () => {
     // Let go: a V pressed in the line now is a letter again, held or not.
     fireEvent.keyUp(line, { key: 'v' })
     expect(fireEvent.keyDown(line, { key: 'v', repeat: true })).toBe(true)
+  })
+})
+
+describe('unclear words (PLAN-V23 T1-6)', () => {
+  const LINE =
+    "We didn't catch that clearly. You said: 'um the north'. Say it again, or fix the words."
+
+  /** The first answer is unclear; the next is no action, so the bar shows it. */
+  function unclearThenUnknown(): Answer {
+    let tries = 0
+    return () => {
+      tries += 1
+      return Response.json(
+        tries === 1
+          ? command({ action: 'unclear', read_back: 'um the north', unsure: LINE })
+          : command({ action: 'unknown', read_back: 'The Assistant can open a page.' }),
+      )
+    }
+  }
+
+  it('stop before the card: the plan’s words, then the words in the text line, and Enter sends them', async () => {
+    const { mic, commands, user } = openBar({ answer: unclearThenUnknown() })
+    const found = await listening()
+    await say(found, mic, 'um the north', user)
+    expect(await within(found).findByRole('alert')).toHaveTextContent(LINE)
+    const line = within(found).getByRole('textbox', { name: 'Type what to do' })
+    expect(line).toHaveValue('um the north')
+    expect(line).toHaveAccessibleDescription(LINE)
+    await waitFor(() => {
+      expect(line).toHaveFocus()
+    })
+    // The stop line comes before the text line.
+    const alert = within(found).getByRole('alert')
+    expect(alert.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(buttons(found)).toEqual(['Send', 'Say it again', 'Cancel'])
+    expect(screen.queryByRole('dialog', { name: /Add a task/ })).toBeNull()
+    await user.clear(line)
+    await user.keyboard('open Northwind{Enter}')
+    await waitFor(() => {
+      expect(commands().map((call) => call.body)).toEqual([
+        { text: 'um the north', source: 'mic' },
+        { text: 'open Northwind', source: 'typed' },
+      ])
+    })
+  })
+
+  it('Say it again listens again', async () => {
+    const { mic, user } = openBar({ answer: unclearThenUnknown() })
+    const found = await listening()
+    await say(found, mic, 'um the north', user)
+    await user.click(await within(found).findByRole('button', { name: 'Say it again' }))
+    await listening()
+    expect(mic.tools).toHaveLength(2)
+  })
+
+  it('where the voice can’t work, the words wait in the text line with no Say it again', async () => {
+    const { user } = openBar({ voiceTool: 'typing', answer: unclearThenUnknown() })
+    const found = await bar()
+    const line = await within(found).findByRole('textbox', { name: 'Type what to do' })
+    await user.click(line)
+    await user.keyboard('um the north{Enter}')
+    expect(await within(found).findByRole('alert')).toHaveTextContent(LINE)
+    expect(within(found).queryByRole('button', { name: 'Say it again' })).toBeNull()
   })
 })

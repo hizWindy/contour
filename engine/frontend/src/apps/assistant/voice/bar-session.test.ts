@@ -3,8 +3,9 @@
  * command step and an exact clock: the mic opens and listens, about 1.5 seconds of silence ends the
  * talk, V keeps the words, Esc throws them away, typing always works, and the answer goes to the
  * seam. Then each state of T3-2: nothing heard, the name fix, too many commands, Claude slow or
- * down, and the mic's own problems. Made-up names only: Sample Logistics Pty Ltd, Vitera Pty Ltd,
- * Jo Sample. No sound is ever kept.
+ * down, and the mic's own problems. PLAN-V23: the hint list (T1-5), hold V (choice 6) and unclear
+ * words (T1-6). Made-up names only: Sample Logistics Pty Ltd, Vitera Pty Ltd, Jo Sample. No sound
+ * is ever kept.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiProblem } from '@/api/client'
@@ -643,5 +644,43 @@ describe('hold V (PLAN-V23 choice 6)', () => {
     await tick(TIMES.hold)
     session.vUp()
     expect(now().phase).toBe('typing')
+  })
+})
+
+describe('unclear words (PLAN-V23 T1-6)', () => {
+  const LINE =
+    "We didn't catch that clearly. You said: 'um the north'. Say it again, or fix the words."
+
+  it('wait in the text line with the stop line, and Enter sends them as typed', async () => {
+    const { mic, session, sent, now } = await listening({
+      after: () => ({ kind: 'unclear', words: 'um the north', line: LINE }),
+    })
+    mic.say('um the north')
+    session.pressV()
+    await tick(0)
+    expect(now()).toMatchObject({
+      phase: 'typing',
+      draft: 'um the north',
+      problem: { kind: 'unclear', line: LINE },
+    })
+    expect(mic.live()).toBe(0)
+    session.setDraft('open Northwind')
+    session.sendTyped()
+    expect(sent.at(-1)).toEqual({ text: 'open Northwind', source: 'typed' })
+    expect(now().problem).toBeNull()
+  })
+
+  it('Say it again listens again', async () => {
+    const { mic, session, now } = await listening({
+      after: () => ({ kind: 'unclear', words: 'um', line: LINE }),
+    })
+    mic.say('um')
+    session.pressV()
+    await tick(0)
+    expect(now().phase).toBe('typing')
+    session.tryAgain()
+    await tick(100)
+    expect(now()).toMatchObject({ phase: 'listening', problem: null })
+    expect(mic.tools).toHaveLength(2)
   })
 })

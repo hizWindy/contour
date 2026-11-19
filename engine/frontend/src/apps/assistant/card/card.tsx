@@ -75,7 +75,13 @@ import { changeDetail, toastProblem } from '@/lib/problems'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { CALL_LOGS_PATH, MEETINGS_PATH, type NewPreReadState } from '../paths'
 import { BarSession, type BarProblem, type BarSnapshot } from '../voice/bar-session'
-import { preReadPath, startPreRead, type AfterAnswer, type Heard } from '../voice/hand-over'
+import {
+  preReadPath,
+  startPreRead,
+  unclearAnswer,
+  type AfterAnswer,
+  type Heard,
+} from '../voice/hand-over'
 import { isVKeyOn } from '../voice/v-switch'
 import { CANT_READ_YET, NOTHING_HEARD, TOO_MANY, TOO_SLOW, VOICE_NOT_SET_UP } from '../voice/words'
 import {
@@ -165,6 +171,8 @@ function stripProblem(problem: BarProblem): string {
       return VOICE_NOT_SET_UP
     case 'other':
       return problem.title
+    case 'unclear':
+      return problem.line
   }
 }
 
@@ -679,6 +687,9 @@ function DraftCard({
     }
     const { command } = heard
     switch (command.action) {
+      case 'unclear':
+        // The words wait in the strip's text line, to fix or say again (PLAN-V23 T1-6).
+        return unclearAnswer(command, heard.words)
       case 'send':
         queueMicrotask(() => {
           trySendRef.current('voice')
@@ -751,7 +762,7 @@ function DraftCard({
   const stripLine =
     snapshot.phase === 'answer'
       ? (snapshot.answer?.line ?? null)
-      : snapshot.phase === 'problem' && snapshot.problem
+      : (snapshot.phase === 'problem' || snapshot.problem?.kind === 'unclear') && snapshot.problem
         ? stripProblem(snapshot.problem)
         : null
 
@@ -928,6 +939,14 @@ function DraftCard({
               onSendTyped={() => {
                 voice.sendTyped()
               }}
+              // Unclear words wait in the strip's text line (PLAN-V23 T1-6): say them again.
+              onSayAgain={
+                snapshot.problem?.kind === 'unclear' && snapshot.voice
+                  ? () => {
+                      voice.tryAgain()
+                    }
+                  : undefined
+              }
             />
           ) : listening ? (
             <ListenStrip id={listenId} ms={t.listen} />
