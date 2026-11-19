@@ -18,6 +18,9 @@ the sorter made of it, the rep's edits, what it cost, and the write it became in
 `companies.meeting_forms` keeps each pre-read for a client meeting (PLAN-V17 T2-10): the meeting it
 is for, the facts and the three summaries, the rep's two blanks, who it went to, and its copy in
 HubSpot.
+
+`companies.learned_names` keeps the names the team taught the mic (PLAN-V23 T1-2): words as heard,
+and the company they mean.
 """
 
 import uuid
@@ -407,3 +410,42 @@ class MeetingForm(Base):
         DateTime(timezone=True), server_default=_now(), onupdate=func.now()
     )
     drafted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+HEARD_MAX_CHARS: Final = 80  # the words as heard (the contract's part 2)
+
+
+class LearnedName(Base):
+    """A name the team taught the mic (PLAN-V23 T1-2, choice 3): words the speech service heard,
+    like "North Wind", and the company the rep picked for them, like Northwind. Kept for the whole
+    team, and tried before the close-name match. Words only, never audio.
+
+    `heard_key` is the words in lower case with their spaces tidied (one between words, none at
+    the ends), so "north  wind" and "North Wind" are one pair. The same words may be taught for
+    two companies: then both are choices. `company_name` is the name when it was taught, for the
+    Admin list. An Admin can remove a pair.
+    """
+
+    __tablename__ = "learned_names"
+    __table_args__ = (
+        CheckConstraint("btrim(heard) <> ''", name="heard"),
+        CheckConstraint(
+            "heard_key = lower(heard_key) AND btrim(heard_key) <> ''", name="heard_key"
+        ),
+        # One pair for each words and company: the lookup by the words uses it too.
+        Index("ux_learned_names_heard_company", "heard_key", "company_key", unique=True),
+        # The Admin list, newest first.
+        Index("ix_learned_names_created_at", text("created_at DESC")),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    heard: Mapped[str] = mapped_column(String(HEARD_MAX_CHARS))  # as heard, tidied
+    heard_key: Mapped[str] = mapped_column(String(HEARD_MAX_CHARS))  # lower case, spaces tidied
+    company_key: Mapped[str] = mapped_column(String(64))  # a HubSpot id, or lead:<id>
+    company_name: Mapped[str] = mapped_column(String(300))  # when it was taught
+    # Who taught it. With sign-in off nobody is signed in, so there is no user.
+    made_by: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey(f"{CORE_SCHEMA}.users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=_now())

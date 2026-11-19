@@ -123,6 +123,12 @@ class User(Base):
     # Who this person is in HubSpot (PLAN-V17 T1-4): an owner's id, or none. Never the email.
     hubspot_owner_id: Mapped[str | None] = mapped_column(String(32))
     hubspot_owner_matched_by: Mapped[str | None] = mapped_column(String(16))  # OWNER_MATCHES
+    # The "No HubSpot user" mark (PLAN-V23 T1-2, decision 4): this person has no HubSpot login,
+    # like a designer. False until someone picks it. PLAN-V23 T3-1 reads it with the link above as
+    # `hubspot`: linked, none (this mark) or not_set.
+    no_hubspot_user: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false")
+    )
 
 
 class UserSession(Base):

@@ -78,6 +78,7 @@ os.environ["BROWSER_SPEECH_OK"] = "false"
 get_settings.cache_clear()
 
 TEST_TABLES = (
+    "companies.learned_names",
     "companies.meeting_forms",
     "companies.call_notes",
     "companies.script_edits",

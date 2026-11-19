@@ -26,6 +26,7 @@ from sse_starlette.sse import AppStatus, EventSourceResponse
 
 from apps.companies.tables import (
     CallNote,
+    LearnedName,
     MeetingForm,
     Prep,
     ScriptEdit,
@@ -174,6 +175,13 @@ async def fill_every_table(factory: async_sessionmaker[AsyncSession]) -> None:
                     title="Fit-out walk-through",
                     starts_at=datetime.now(UTC),
                     status="draft",
+                ),
+                LearnedName(
+                    heard="Ack Me",
+                    heard_key="ack me",
+                    company_key="1",
+                    company_name="Acme",
+                    made_by=person.id,
                 ),
                 HubSpotDeal(hubspot_deal_id="9", hubspot_company_id="1", name="Acme fit-out"),
                 RunEvent(run_id=run.id, seq=1, type="run_started", data={}),

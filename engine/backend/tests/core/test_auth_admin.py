@@ -304,7 +304,7 @@ def conninfo(database_url: str) -> Iterator[str]:
             "companies.preps, core.hubspot_meetings, core.hubspot_meeting_reads, "
             "core.hubspot_owner_teams, "
             "companies.call_notes, "
-            "companies.meeting_forms, "
+            "companies.meeting_forms, companies.learned_names, "
             "core.audit_log, core.sessions, core.users"
         )
     yield info
