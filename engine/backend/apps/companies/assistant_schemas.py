@@ -14,6 +14,7 @@ from datetime import date, datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic.config import JsonDict
 
 from apps.companies.schemas import (
     MAX_RECIPIENTS,
@@ -116,6 +117,13 @@ class AssistantCommandIn(BaseModel):
 # --- Out ---------------------------------------------------------------------------------------
 
 
+def no_default_in_types(schema: JsonDict) -> None:
+    """The website's types take a field with a default as always there. Together with
+    `optional_in_types`, this leaves the field optional in them, so test data written before it
+    still type-checks. The API always sends it."""
+    schema.pop("default", None)
+
+
 class AssistantCompany(Out):
     # Added in PLAN-V23: the API always sends them, and the website's types leave them optional.
     model_config = ConfigDict(json_schema_extra=optional_in_types("from_hubspot", "can_add"))
@@ -131,12 +139,14 @@ class AssistantCompany(Out):
         False,
         description="True when our copy didn't have it and HubSpot's own search found it (or "
         "the choices): it is in our copy now (PLAN-V23 T1-3)",
+        json_schema_extra=no_default_in_types,
     )
     can_add: bool = Field(
         False,
         description="True when neither our copy nor HubSpot's search has the company: the card "
         "may offer to add it to HubSpot, with the name as heard (PLAN-V23 T1-4). False when "
         "HubSpot couldn't be searched",
+        json_schema_extra=no_default_in_types,
     )
 
 

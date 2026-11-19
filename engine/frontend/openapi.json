@@ -165,7 +165,8 @@
               "change",
               "send",
               "cancel",
-              "unknown"
+              "unknown",
+              "unclear"
             ],
             "title": "Action",
             "type": "string"
@@ -246,7 +247,7 @@
             "description": "For a call"
           },
           "read_back": {
-            "description": "The card's first line, like 'Log a call with James Sample at Sample Logistics. Follow-up task on Fri 21 Nov.'",
+            "description": "The card's first line, like 'Log a call with James Sample at Sample Logistics. Follow-up task on Fri 21 Nov.' For `unclear`, the words as heard, for the bar's text line",
             "title": "Read Back",
             "type": "string"
           },
@@ -343,6 +344,11 @@
       },
       "AssistantCompany": {
         "properties": {
+          "can_add": {
+            "description": "True when neither our copy nor HubSpot's search has the company: the card may offer to add it to HubSpot, with the name as heard (PLAN-V23 T1-4). False when HubSpot couldn't be searched",
+            "title": "Can Add",
+            "type": "boolean"
+          },
           "choices": {
             "description": "Two or more that match, best first",
             "items": {
@@ -362,6 +368,11 @@
             ],
             "description": "The one company that matches"
           },
+          "from_hubspot": {
+            "description": "True when our copy didn't have it and HubSpot's own search found it (or the choices): it is in our copy now (PLAN-V23 T1-3)",
+            "title": "From Hubspot",
+            "type": "boolean"
+          },
           "from_page": {
             "description": "True when it is the company on screen: none was named, or the one named is close to it, or it is one of several that match",
             "title": "From Page",
@@ -380,6 +391,157 @@
           "choices"
         ],
         "title": "AssistantCompany",
+        "type": "object"
+      },
+      "AssistantCompanyAdded": {
+        "properties": {
+          "company": {
+            "$ref": "#/components/schemas/CompanyHit",
+            "description": "The company as our copy has it now"
+          },
+          "company_key": {
+            "description": "The company's HubSpot id: use it on the card",
+            "title": "Company Key",
+            "type": "string"
+          },
+          "hubspot_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The company in HubSpot, when HubSpot gave it",
+            "title": "Hubspot Url"
+          }
+        },
+        "required": [
+          "company_key",
+          "company",
+          "hubspot_url"
+        ],
+        "title": "AssistantCompanyAdded",
+        "type": "object"
+      },
+      "AssistantCompanyIn": {
+        "additionalProperties": false,
+        "description": "A company to add to HubSpot, as the card has it.",
+        "properties": {
+          "city": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its city, when one was said, like Perth. Empty: none",
+            "examples": [
+              "Perth"
+            ],
+            "title": "City"
+          },
+          "name": {
+            "description": "The company's name, 1 to 120 characters once its spaces are tidied (422 `company_name_empty` otherwise). No email address or phone number (422 `contact_details`)",
+            "examples": [
+              "Sample Logistics Pty Ltd"
+            ],
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[^\\x00]*$",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "AssistantCompanyIn",
+        "type": "object"
+      },
+      "AssistantCompanyPreview": {
+        "description": "What adding the company would do. Nothing is written to HubSpot.",
+        "properties": {
+          "can_write": {
+            "description": "Companies can be added to HubSpot now",
+            "title": "Can Write",
+            "type": "boolean"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "exists": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompanyHit"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A company HubSpot (or our copy) already has with this name: adding it again is refused (409 `company_exists`). Use this one"
+          },
+          "name": {
+            "description": "The name as it would be added, its spaces tidied",
+            "title": "Name",
+            "type": "string"
+          },
+          "sentence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The card's line, in plain words: adding is off, the name is there already, or HubSpot has a company like it. None when there is nothing to say",
+            "title": "Sentence"
+          },
+          "similar": {
+            "description": "HubSpot's companies with a close name, best first, at most 5, each read into our copy so the card can use it",
+            "items": {
+              "$ref": "#/components/schemas/CompanyHit"
+            },
+            "title": "Similar",
+            "type": "array"
+          },
+          "waiting_for": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why they can't, in plain words",
+            "title": "Waiting For"
+          }
+        },
+        "required": [
+          "name",
+          "city",
+          "similar",
+          "exists",
+          "can_write",
+          "waiting_for",
+          "sentence"
+        ],
+        "title": "AssistantCompanyPreview",
         "type": "object"
       },
       "AssistantEmail": {
@@ -573,6 +735,65 @@
           "form"
         ],
         "title": "AssistantMeetingHit",
+        "type": "object"
+      },
+      "AssistantName": {
+        "properties": {
+          "company_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The company it belongs to, for a company or a client person. None for a teammate or a word",
+            "title": "Company Key"
+          },
+          "kind": {
+            "enum": [
+              "company",
+              "person",
+              "teammate",
+              "word"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "description": "The name as said: a company without Pty Ltd and the like, a person's full name, or a fixed word",
+            "examples": [
+              "Sample Logistics"
+            ],
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "kind",
+          "company_key"
+        ],
+        "title": "AssistantName",
+        "type": "object"
+      },
+      "AssistantNames": {
+        "description": "The names this person is most likely to say, for the mic: the speech service's hints, and\nthe list a misheard name is fixed against on every page. Free: no HubSpot request.",
+        "properties": {
+          "names": {
+            "description": "At most the Settings page's number (50 to start), most likely first, each name once",
+            "items": {
+              "$ref": "#/components/schemas/AssistantName"
+            },
+            "title": "Names",
+            "type": "array"
+          }
+        },
+        "required": [
+          "names"
+        ],
+        "title": "AssistantNames",
         "type": "object"
       },
       "AssistantOnPage": {
@@ -8762,6 +8983,112 @@
           "updated_at"
         ],
         "title": "LeadRow",
+        "type": "object"
+      },
+      "LearnedNameIn": {
+        "additionalProperties": false,
+        "description": "A name the rep fixed on the card: the words as heard, and the company they picked.",
+        "properties": {
+          "company_key": {
+            "description": "The company the rep picked: a HubSpot id, or lead:<id>",
+            "examples": [
+              "201"
+            ],
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[^\\x00]*$",
+            "title": "Company Key",
+            "type": "string"
+          },
+          "heard": {
+            "description": "The words as heard, like North Wind: 1 to 80 characters. An email address or a phone number in them is refused (422 `contact_details`)",
+            "examples": [
+              "North Wind"
+            ],
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[^\\x00]*$",
+            "title": "Heard",
+            "type": "string"
+          }
+        },
+        "required": [
+          "heard",
+          "company_key"
+        ],
+        "title": "LearnedNameIn",
+        "type": "object"
+      },
+      "LearnedNameOut": {
+        "properties": {
+          "company_key": {
+            "title": "Company Key",
+            "type": "string"
+          },
+          "company_name": {
+            "description": "The company's name in our copy now, else its name when it was taught",
+            "title": "Company Name",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "heard": {
+            "description": "The words as heard, tidied",
+            "title": "Heard",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "taught_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who taught it. None: sign-in was off, or gone",
+            "title": "Taught By"
+          }
+        },
+        "required": [
+          "id",
+          "heard",
+          "company_key",
+          "company_name",
+          "taught_by",
+          "created_at"
+        ],
+        "title": "LearnedNameOut",
+        "type": "object"
+      },
+      "LearnedNamePage": {
+        "properties": {
+          "items": {
+            "description": "The newest first",
+            "items": {
+              "$ref": "#/components/schemas/LearnedNameOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "items"
+        ],
+        "title": "LearnedNamePage",
         "type": "object"
       },
       "LogEntryOut": {
@@ -21948,7 +22275,7 @@
     },
     "/companies/assistant/command": {
       "post": {
-        "description": "Turns one thing a rep said or typed into one action for the review card: `pre_read`, `log_call`, `task`, `email` or `open`, or on an open card (`card`) `change`, `send` or `cancel`. Anything else is `unknown`, and `read_back` lists what the Assistant can do. One small Claude request, on the call notes' model and within their cap for one note; a card's plain 'send it' or 'cancel' needs none. Claude gets only the words (emails and phone numbers blanked), today's date and an open card's box names. Code finds the company, the person, the meeting and the teammates in our HubSpot copy: each comes back as `heard`, then `found` (one match) or `choices` (two or more, best first). With no company named, the one on screen (`on_page`). It writes nothing, sends nothing and keeps no copy of the words; its cost goes to the search log. Behind the Call logs or the Meetings tick; a Viewer gets 403 `viewer_read_only`. 409 `assistant_off` while call notes or their AI sort are off, or Claude isn't set up. 422 `command_empty`, or `command_too_long` over 2,000 characters. 429 `too_many_commands` over 20 in a minute for one person, with `Retry-After`. 503 `claude_unavailable` when Claude takes over 15 seconds, is down, or today's limit is reached, with `Retry-After`.",
+        "description": "Turns one thing a rep said or typed into one action for the review card: `pre_read`, `log_call`, `task`, `email` or `open`, or on an open card (`card`) `change`, `send` or `cancel`. Anything else is `unknown`, and `read_back` lists what the Assistant can do. Words too unclear to make a command are `unclear` (PLAN-V23): `read_back` holds the words as heard and `unsure` the stop line; words too short to be a command (like 'um') are `unclear` with no Claude request. One small Claude request, on the call notes' model and within their cap for one note; a card's plain 'send it' or 'cancel' needs none. Claude gets only the words (emails and phone numbers blanked), today's date and an open card's box names. Code finds the company, the person, the meeting and the teammates in our HubSpot copy: each comes back as `heard`, then `found` (one match) or `choices` (two or more, best first). With no company named, the one on screen (`on_page`). A company is found in this order: the one on screen when the words are close to it, the team's learned names, our copy, then HubSpot's own search (one free request), which reads what it finds into our copy (`from_hubspot`). Found nowhere after HubSpot was searched: `can_add`, so the card may offer to add it. With no HubSpot connection it isn't searched, and `can_add` is false. It writes nothing to HubSpot, sends nothing and keeps no copy of the words; its cost goes to the search log. Behind the Call logs or the Meetings tick; a Viewer gets 403 `viewer_read_only`. 409 `assistant_off` while call notes or their AI sort are off, or Claude isn't set up. 422 `command_empty`, or `command_too_long` over 2,000 characters. 429 `too_many_commands` over 20 in a minute for one person, with `Retry-After`. 503 `claude_unavailable` when Claude takes over 15 seconds, is down, or today's limit is reached, with `Retry-After`.",
         "operationId": "read_assistant_command",
         "requestBody": {
           "content": {
@@ -22088,6 +22415,326 @@
           }
         ],
         "summary": "Read a command",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/assistant/companies": {
+      "post": {
+        "description": "Makes the company in HubSpot, with its name and city only, through core's writer: its duplicate check looks for the name in HubSpot first, the write is a row in HubSpot's write log, and the company is in our copy at once. Answers its `company_key`. Send the card's `Idempotency-Key`: the same key from the same person gives back the first company (200), so HubSpot gets one, even for a double press. A send that timed out is never sent again blind: HubSpot is searched by name first. 409 `company_exists` when HubSpot or our copy has a company with this name (case and spaces aside, in any city: TBC), `hubspot_writing_off` while companies can't be added (nothing is sent), `company_adding` while the same add is on its way. 429 `too_many_companies` over 5 new companies in a minute for one person (TBC), with `Retry-After`; a repeated key isn't counted. 422 `company_name_empty`, `contact_details`. 502 `company_not_added` when HubSpot refused it or didn't say whether it was made (trying again is safe). 503 `hubspot_unavailable`. A Viewer gets 403 `viewer_read_only`.",
+        "operationId": "add_assistant_company",
+        "parameters": [
+          {
+            "description": "Any unique text (a UUID is fine), made when the review card opens. A repeated key from the same person gives back the first answer, and sends nothing again",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": true,
+            "schema": {
+              "description": "Any unique text (a UUID is fine), made when the review card opens. A repeated key from the same person gives back the first answer, and sends nothing again",
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantCompanyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantCompanyAdded"
+                }
+              }
+            },
+            "description": "The first company with this key"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantCompanyAdded"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Add a company to HubSpot",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/assistant/companies/preview": {
+      "post": {
+        "description": "What adding this company to HubSpot would do, for the card's 'Add to HubSpot': `similar`, HubSpot's companies with a close name (its own search, one free request), best first, at most 5, each read into our copy so the card can use it; `exists`, a company with this name already (adding it again is refused); whether it can be added now (`can_write`, `waiting_for`); and the card's line (`sentence`). Nothing is written to HubSpot. With no HubSpot connection, none are listed and it can't be added. 422 `company_name_empty`, `contact_details`. 503 `hubspot_unavailable` when HubSpot didn't answer. A Viewer gets 403 `viewer_read_only`.",
+        "operationId": "preview_assistant_company",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantCompanyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantCompanyPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Check a company before adding it",
         "tags": [
           "Companies"
         ]
@@ -22408,6 +23055,610 @@
           }
         ],
         "summary": "Check a team email before sending it",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/assistant/learned": {
+      "get": {
+        "description": "Every name the team taught the mic, the newest first, a page at a time: the words as heard, the company (its name in our copy now), who taught it and when. For the Settings page, where an Admin removes one. Admins only (403 `admin_only`).",
+        "operationId": "list_learned_names",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 1000000,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LearnedNamePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "List the learned names",
+        "tags": [
+          "Companies"
+        ]
+      },
+      "post": {
+        "description": "Keeps a name the rep fixed on the card, for the whole team: the words as heard (1 to 80 characters, like North Wind) and the company they picked (like Northwind). The card sends it after the send, when the rep picked the company by hand. The command step then tries it before the close-name match. Words only, never audio. It is saved only when the words differ from the company's name, case and spaces aside, and only once; the same words taught for two companies give both as choices (at most 5). Either way it answers 204. 404 `company_not_found` when the company isn't open to this person. 422 `contact_details` for an email address or a phone number in the words. A Viewer gets 403 `viewer_read_only`.",
+        "operationId": "teach_assistant_name",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LearnedNameIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Teach the mic a name",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/assistant/learned/{pair_id}": {
+      "delete": {
+        "description": "Removes one learned name, so the command step no longer tries it. Admins only (403 `admin_only`). 404 `learned_not_found` when it was removed already.",
+        "operationId": "remove_learned_name",
+        "parameters": [
+          {
+            "description": "The learned name's id",
+            "in": "path",
+            "name": "pair_id",
+            "required": true,
+            "schema": {
+              "description": "The learned name's id",
+              "format": "uuid",
+              "title": "Pair Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Remove a learned name",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/assistant/names": {
+      "get": {
+        "description": "The names this person is most likely to say, most likely first, each once, at most the Settings page's number (50 to start): the company on screen (`company_key`), its people, its open deals' client names and its next meeting's people; my meetings today and tomorrow and my tasks due (as Today last read them); the companies I called in the last 30 days, then those I own; my teammates; the companies the mic gets wrong (they have learned names); then the words fitout, test fit, pre-read and follow up. A company is said without Pty Ltd and the like. The voice bar loads it when the page is idle or on the first V: the speech service's hints, and the list a misheard name is fixed against on every page. It reads our copy only, never HubSpot, so it is free, and each list is kept for 5 minutes for each person and company on screen. Another rep's companies stay out unless I called them. Behind the Call logs or the Meetings tick; a Viewer gets 403 `viewer_read_only` (no V).",
+        "operationId": "read_assistant_names",
+        "parameters": [
+          {
+            "description": "The company on screen: a HubSpot id, or lead:<id>",
+            "in": "query",
+            "name": "company_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "pattern": "^[^\\x00]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The company on screen: a HubSpot id, or lead:<id>",
+              "title": "Company Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantNames"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "The names the mic listens for",
         "tags": [
           "Companies"
         ]

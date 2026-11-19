@@ -188,9 +188,49 @@ export interface paths {
         put?: never;
         /**
          * Read a command
-         * @description Turns one thing a rep said or typed into one action for the review card: `pre_read`, `log_call`, `task`, `email` or `open`, or on an open card (`card`) `change`, `send` or `cancel`. Anything else is `unknown`, and `read_back` lists what the Assistant can do. One small Claude request, on the call notes' model and within their cap for one note; a card's plain 'send it' or 'cancel' needs none. Claude gets only the words (emails and phone numbers blanked), today's date and an open card's box names. Code finds the company, the person, the meeting and the teammates in our HubSpot copy: each comes back as `heard`, then `found` (one match) or `choices` (two or more, best first). With no company named, the one on screen (`on_page`). It writes nothing, sends nothing and keeps no copy of the words; its cost goes to the search log. Behind the Call logs or the Meetings tick; a Viewer gets 403 `viewer_read_only`. 409 `assistant_off` while call notes or their AI sort are off, or Claude isn't set up. 422 `command_empty`, or `command_too_long` over 2,000 characters. 429 `too_many_commands` over 20 in a minute for one person, with `Retry-After`. 503 `claude_unavailable` when Claude takes over 15 seconds, is down, or today's limit is reached, with `Retry-After`.
+         * @description Turns one thing a rep said or typed into one action for the review card: `pre_read`, `log_call`, `task`, `email` or `open`, or on an open card (`card`) `change`, `send` or `cancel`. Anything else is `unknown`, and `read_back` lists what the Assistant can do. Words too unclear to make a command are `unclear` (PLAN-V23): `read_back` holds the words as heard and `unsure` the stop line; words too short to be a command (like 'um') are `unclear` with no Claude request. One small Claude request, on the call notes' model and within their cap for one note; a card's plain 'send it' or 'cancel' needs none. Claude gets only the words (emails and phone numbers blanked), today's date and an open card's box names. Code finds the company, the person, the meeting and the teammates in our HubSpot copy: each comes back as `heard`, then `found` (one match) or `choices` (two or more, best first). With no company named, the one on screen (`on_page`). A company is found in this order: the one on screen when the words are close to it, the team's learned names, our copy, then HubSpot's own search (one free request), which reads what it finds into our copy (`from_hubspot`). Found nowhere after HubSpot was searched: `can_add`, so the card may offer to add it. With no HubSpot connection it isn't searched, and `can_add` is false. It writes nothing to HubSpot, sends nothing and keeps no copy of the words; its cost goes to the search log. Behind the Call logs or the Meetings tick; a Viewer gets 403 `viewer_read_only`. 409 `assistant_off` while call notes or their AI sort are off, or Claude isn't set up. 422 `command_empty`, or `command_too_long` over 2,000 characters. 429 `too_many_commands` over 20 in a minute for one person, with `Retry-After`. 503 `claude_unavailable` when Claude takes over 15 seconds, is down, or today's limit is reached, with `Retry-After`.
          */
         post: operations["read_assistant_command"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/assistant/companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a company to HubSpot
+         * @description Makes the company in HubSpot, with its name and city only, through core's writer: its duplicate check looks for the name in HubSpot first, the write is a row in HubSpot's write log, and the company is in our copy at once. Answers its `company_key`. Send the card's `Idempotency-Key`: the same key from the same person gives back the first company (200), so HubSpot gets one, even for a double press. A send that timed out is never sent again blind: HubSpot is searched by name first. 409 `company_exists` when HubSpot or our copy has a company with this name (case and spaces aside, in any city: TBC), `hubspot_writing_off` while companies can't be added (nothing is sent), `company_adding` while the same add is on its way. 429 `too_many_companies` over 5 new companies in a minute for one person (TBC), with `Retry-After`; a repeated key isn't counted. 422 `company_name_empty`, `contact_details`. 502 `company_not_added` when HubSpot refused it or didn't say whether it was made (trying again is safe). 503 `hubspot_unavailable`. A Viewer gets 403 `viewer_read_only`.
+         */
+        post: operations["add_assistant_company"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/assistant/companies/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a company before adding it
+         * @description What adding this company to HubSpot would do, for the card's 'Add to HubSpot': `similar`, HubSpot's companies with a close name (its own search, one free request), best first, at most 5, each read into our copy so the card can use it; `exists`, a company with this name already (adding it again is refused); whether it can be added now (`can_write`, `waiting_for`); and the card's line (`sentence`). Nothing is written to HubSpot. With no HubSpot connection, none are listed and it can't be added. 422 `company_name_empty`, `contact_details`. 503 `hubspot_unavailable` when HubSpot didn't answer. A Viewer gets 403 `viewer_read_only`.
+         */
+        post: operations["preview_assistant_company"];
         delete?: never;
         options?: never;
         head?: never;
@@ -231,6 +271,70 @@ export interface paths {
          * @description The email as it would go: the subject, the plain text and the HTML (every value escaped, ending 'Sent by {name} from Contour HQ', with a link to the company when `company_key` is given), who it goes to (1 to 20 people, each once), whether a reply goes to my own Contour address (`reply_to_me`), whether it can be sent now (`can_send`, `waiting_for`), and my sends left today (30 a day, TBC). Nothing is sent. Teammates come from GET /team, each with a Contour account; Contour addresses can be typed in full. 422 `outside_address` (one outside address refuses the whole email, and is named), `no_account` (a teammate who can't get it, with why), `owner_not_found`, `no_one`, `too_many_recipients`, `subject_empty`, `body_empty`, `not_in_hubspot` (a Lead Finder company). 404 `company_not_found`. A Viewer gets 403 `viewer_read_only`.
          */
         post: operations["preview_team_email"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/assistant/learned": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the learned names
+         * @description Every name the team taught the mic, the newest first, a page at a time: the words as heard, the company (its name in our copy now), who taught it and when. For the Settings page, where an Admin removes one. Admins only (403 `admin_only`).
+         */
+        get: operations["list_learned_names"];
+        put?: never;
+        /**
+         * Teach the mic a name
+         * @description Keeps a name the rep fixed on the card, for the whole team: the words as heard (1 to 80 characters, like North Wind) and the company they picked (like Northwind). The card sends it after the send, when the rep picked the company by hand. The command step then tries it before the close-name match. Words only, never audio. It is saved only when the words differ from the company's name, case and spaces aside, and only once; the same words taught for two companies give both as choices (at most 5). Either way it answers 204. 404 `company_not_found` when the company isn't open to this person. 422 `contact_details` for an email address or a phone number in the words. A Viewer gets 403 `viewer_read_only`.
+         */
+        post: operations["teach_assistant_name"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/assistant/learned/{pair_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a learned name
+         * @description Removes one learned name, so the command step no longer tries it. Admins only (403 `admin_only`). 404 `learned_not_found` when it was removed already.
+         */
+        delete: operations["remove_learned_name"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/assistant/names": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The names the mic listens for
+         * @description The names this person is most likely to say, most likely first, each once, at most the Settings page's number (50 to start): the company on screen (`company_key`), its people, its open deals' client names and its next meeting's people; my meetings today and tomorrow and my tasks due (as Today last read them); the companies I called in the last 30 days, then those I own; my teammates; the companies the mic gets wrong (they have learned names); then the words fitout, test fit, pre-read and follow up. A company is said without Pty Ltd and the like. The voice bar loads it when the page is idle or on the first V: the speech service's hints, and the list a misheard name is fixed against on every page. It reads our copy only, never HubSpot, so it is free, and each list is kept for 5 minutes for each person and company on screen. Another rep's companies stay out unless I called them. Behind the Call logs or the Meetings tick; a Viewer gets 403 `viewer_read_only` (no V).
+         */
+        get: operations["read_assistant_names"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2342,7 +2446,7 @@ export interface components {
              * Action
              * @enum {string}
              */
-            action: "pre_read" | "log_call" | "task" | "email" | "open" | "change" | "send" | "cancel" | "unknown";
+            action: "pre_read" | "log_call" | "task" | "email" | "open" | "change" | "send" | "cancel" | "unknown" | "unclear";
             change: components["schemas"]["AssistantChange"] | null;
             /** @description For a pre-read, a call, a task, a company page, or an email that names one */
             company: components["schemas"]["AssistantCompany"] | null;
@@ -2359,7 +2463,7 @@ export interface components {
             person: components["schemas"]["AssistantPerson"] | null;
             /**
              * Read Back
-             * @description The card's first line, like 'Log a call with James Sample at Sample Logistics. Follow-up task on Fri 21 Nov.'
+             * @description The card's first line, like 'Log a call with James Sample at Sample Logistics. Follow-up task on Fri 21 Nov.' For `unclear`, the words as heard, for the bar's text line
              */
             read_back: string;
             task: components["schemas"]["AssistantTask"] | null;
@@ -2391,12 +2495,22 @@ export interface components {
         /** AssistantCompany */
         AssistantCompany: {
             /**
+             * Can Add
+             * @description True when neither our copy nor HubSpot's search has the company: the card may offer to add it to HubSpot, with the name as heard (PLAN-V23 T1-4). False when HubSpot couldn't be searched
+             */
+            can_add?: boolean;
+            /**
              * Choices
              * @description Two or more that match, best first
              */
             choices: components["schemas"]["CompanyHit"][];
             /** @description The one company that matches */
             found: components["schemas"]["CompanyHit"] | null;
+            /**
+             * From Hubspot
+             * @description True when our copy didn't have it and HubSpot's own search found it (or the choices): it is in our copy now (PLAN-V23 T1-3)
+             */
+            from_hubspot?: boolean;
             /**
              * From Page
              * @description True when it is the company on screen: none was named, or the one named is close to it, or it is one of several that match
@@ -2407,6 +2521,74 @@ export interface components {
              * @description The company as heard. Empty when the command named none
              */
             heard: string;
+        };
+        /** AssistantCompanyAdded */
+        AssistantCompanyAdded: {
+            /** @description The company as our copy has it now */
+            company: components["schemas"]["CompanyHit"];
+            /**
+             * Company Key
+             * @description The company's HubSpot id: use it on the card
+             */
+            company_key: string;
+            /**
+             * Hubspot Url
+             * @description The company in HubSpot, when HubSpot gave it
+             */
+            hubspot_url: string | null;
+        };
+        /**
+         * AssistantCompanyIn
+         * @description A company to add to HubSpot, as the card has it.
+         */
+        AssistantCompanyIn: {
+            /**
+             * City
+             * @description Its city, when one was said, like Perth. Empty: none
+             * @example Perth
+             */
+            city?: string | null;
+            /**
+             * Name
+             * @description The company's name, 1 to 120 characters once its spaces are tidied (422 `company_name_empty` otherwise). No email address or phone number (422 `contact_details`)
+             * @example Sample Logistics Pty Ltd
+             */
+            name: string;
+        };
+        /**
+         * AssistantCompanyPreview
+         * @description What adding the company would do. Nothing is written to HubSpot.
+         */
+        AssistantCompanyPreview: {
+            /**
+             * Can Write
+             * @description Companies can be added to HubSpot now
+             */
+            can_write: boolean;
+            /** City */
+            city: string | null;
+            /** @description A company HubSpot (or our copy) already has with this name: adding it again is refused (409 `company_exists`). Use this one */
+            exists: components["schemas"]["CompanyHit"] | null;
+            /**
+             * Name
+             * @description The name as it would be added, its spaces tidied
+             */
+            name: string;
+            /**
+             * Sentence
+             * @description The card's line, in plain words: adding is off, the name is there already, or HubSpot has a company like it. None when there is nothing to say
+             */
+            sentence: string | null;
+            /**
+             * Similar
+             * @description HubSpot's companies with a close name, best first, at most 5, each read into our copy so the card can use it
+             */
+            similar: components["schemas"]["CompanyHit"][];
+            /**
+             * Waiting For
+             * @description Why they can't, in plain words
+             */
+            waiting_for: string | null;
         };
         /** AssistantEmail */
         AssistantEmail: {
@@ -2499,6 +2681,37 @@ export interface components {
             starts_at: string;
             /** Title */
             title: string;
+        };
+        /** AssistantName */
+        AssistantName: {
+            /**
+             * Company Key
+             * @description The company it belongs to, for a company or a client person. None for a teammate or a word
+             */
+            company_key: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "company" | "person" | "teammate" | "word";
+            /**
+             * Text
+             * @description The name as said: a company without Pty Ltd and the like, a person's full name, or a fixed word
+             * @example Sample Logistics
+             */
+            text: string;
+        };
+        /**
+         * AssistantNames
+         * @description The names this person is most likely to say, for the mic: the speech service's hints, and
+         *     the list a misheard name is fixed against on every page. Free: no HubSpot request.
+         */
+        AssistantNames: {
+            /**
+             * Names
+             * @description At most the Settings page's number (50 to start), most likely first, each name once
+             */
+            names: components["schemas"]["AssistantName"][];
         };
         /**
          * AssistantOnPage
@@ -5849,6 +6062,64 @@ export interface components {
             useful: boolean | null;
             /** Web Searches */
             web_searches: number;
+        };
+        /**
+         * LearnedNameIn
+         * @description A name the rep fixed on the card: the words as heard, and the company they picked.
+         */
+        LearnedNameIn: {
+            /**
+             * Company Key
+             * @description The company the rep picked: a HubSpot id, or lead:<id>
+             * @example 201
+             */
+            company_key: string;
+            /**
+             * Heard
+             * @description The words as heard, like North Wind: 1 to 80 characters. An email address or a phone number in them is refused (422 `contact_details`)
+             * @example North Wind
+             */
+            heard: string;
+        };
+        /** LearnedNameOut */
+        LearnedNameOut: {
+            /** Company Key */
+            company_key: string;
+            /**
+             * Company Name
+             * @description The company's name in our copy now, else its name when it was taught
+             */
+            company_name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Heard
+             * @description The words as heard, tidied
+             */
+            heard: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Taught By
+             * @description Who taught it. None: sign-in was off, or gone
+             */
+            taught_by: string | null;
+        };
+        /** LearnedNamePage */
+        LearnedNamePage: {
+            /**
+             * Items
+             * @description The newest first
+             */
+            items: components["schemas"]["LearnedNameOut"][];
+            /** Total */
+            total: number;
         };
         /** LogEntryOut */
         LogEntryOut: {
@@ -12276,6 +12547,264 @@ export interface operations {
             };
         };
     };
+    add_assistant_company: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Any unique text (a UUID is fine), made when the review card opens. A repeated key from the same person gives back the first answer, and sends nothing again */
+                "idempotency-key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantCompanyIn"];
+            };
+        };
+        responses: {
+            /** @description The first company with this key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantCompanyAdded"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantCompanyAdded"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    preview_assistant_company: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantCompanyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantCompanyPreview"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     send_team_email: {
         parameters: {
             query?: never;
@@ -12431,6 +12960,491 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TeamEmail"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_learned_names: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnedNamePage"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    teach_assistant_name: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearnedNameIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    remove_learned_name: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The learned name's id */
+                pair_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    read_assistant_names: {
+        parameters: {
+            query?: {
+                /** @description The company on screen: a HubSpot id, or lead:<id> */
+                company_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantNames"];
                 };
             };
             /** @description The request can't be understood */
