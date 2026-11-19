@@ -20,6 +20,13 @@ answer about an unsure step.
   and the rest go back to the rep.
 - **The writer is injected** (`ActivityWriter`), so tests use a fake one. HubSpot is read only by
   the writer: the owner and the deal come from our copy.
+- **The company's owner is told** (PLAN-V23 T2-2, choice 8): a send that carries a call on a
+  company whose owner (in our copy, an owner who hasn't left) isn't the call's owner asks the
+  writer for an FYI task: "FYI: Jo Sample logged a call with Sample Logistics Pty Ltd", the call's
+  summary, and a link to the company in Contour (its Call history shows the call; Call logs show
+  only your own notes). The writer makes it once the call is in HubSpot, due that day, with the
+  2 minute reminder. Only the send that carries the call can ask for it, so a later send of what
+  didn't land never makes a second one. Off with `notify_owner_calls`, read as the send starts.
 """
 
 import asyncio
@@ -36,7 +43,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from apps.companies.deals import stage_kind
-from apps.companies.facts import day
+from apps.companies.facts import day, scrub
+from apps.companies.links import company_link
 from apps.companies.note_fields import NotOnTheList, hubspot_property
 from apps.companies.notes import (
     MELBOURNE,
@@ -53,6 +61,8 @@ from apps.companies.notes import (
 )
 from apps.companies.schemas import CallNoteStep, CallNoteTotals, StepStatus
 from apps.companies.tables import CallNote
+from core.auth.models import User
+from core.config import Settings
 from core.hubspot import activities
 from core.hubspot.activities import (
     BODY_MAX_CHARS,
@@ -60,17 +70,20 @@ from core.hubspot.activities import (
     ActivityRequest,
     CallIn,
     FieldSet,
+    FyiIn,
     NoteIn,
     TaskIn,
 )
 from core.hubspot.client import HubSpot, HubSpotWritesOff
-from core.hubspot.models import HubSpotDeal, HubSpotWrite
+from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOwner, HubSpotWrite
 from core.hubspot.writer import WriteOut
+from core.prefs.service import effective_settings
 
 log = logging.getLogger(__name__)
 
 APP = "companies"
 TITLE_CHARS = 300
+START_CHARS = 200  # an FYI task for a call with no summary quotes how its note starts
 FINAL: Final = ("done", "partial", "failed", "uncertain")  # a write that has finished
 PREVIEWABLE: Final = ("to_confirm", "partial", "failed")  # notes with parts not yet in HubSpot
 
@@ -100,6 +113,7 @@ type PreviewFn = Callable[[AsyncSession, HubSpot, ActivityRequest], Awaitable[Wr
 type ApplyFn = Callable[[AsyncSession, HubSpot, uuid.UUID], Awaitable[WriteOut]]
 type ResolveFn = Callable[[AsyncSession, uuid.UUID, str, bool], Awaitable[WriteOut]]
 type OwnerFn = Callable[[AsyncSession, uuid.UUID | None], Awaitable[str | None]]
+type SettingsFn = Callable[[AsyncSession], Awaitable[Settings]]
 
 
 @dataclass(frozen=True)
@@ -204,6 +218,77 @@ def off_the_list(card: NoteCard) -> bool:
 
 
 @dataclass(frozen=True)
+class Caller:
+    """Who logged a call, from their account: the FYI task for the company's owner names them
+    (PLAN-V23 T2-2)."""
+
+    name: str
+    position: str | None
+
+
+async def caller_of(session: AsyncSession, note: CallNote) -> Caller | None:
+    """The account that logged the note. None with sign-in off (nobody), or once it is deleted."""
+    if note.made_by is None:
+        return None
+    user = await session.get(User, note.made_by)
+    return Caller(name=user.name, position=user.position) if user is not None else None
+
+
+async def owner_to_tell(session: AsyncSession, company_key: str, rep: str | None) -> str | None:
+    """The company's owner, to be told of a call someone else logged (PLAN-V23 choice 8): from
+    our copy, and not the call's owner (`rep`). None: the company has no owner, the call is the
+    owner's own, or the owner has left HubSpot."""
+    owner = await session.scalar(
+        select(HubSpotCompany.owner_id).where(HubSpotCompany.hubspot_id == company_key)
+    )
+    if not owner or owner == rep:
+        return None
+    left = await session.scalar(select(HubSpotOwner.archived).where(HubSpotOwner.owner_id == owner))
+    return None if left else owner
+
+
+def fyi_subject(caller: Caller, company_name: str) -> str:
+    """Like "FYI: Jo Sample logged a call with Sample Logistics Pty Ltd"."""
+    return f"FYI: {caller.name} logged a call with {company_name}"[:TITLE_CHARS]
+
+
+def fyi_body(note: CallNote, card: NoteCard, settings: Settings) -> str:
+    """The call's summary (or how its note starts, when it has none), then a link to the company
+    in Contour: its Call history shows the call. No email address or phone number."""
+    summary = " ".join(scrub(card.call.summary).split())
+    if not summary:
+        summary = " ".join(scrub(note.text).split())[:START_CHARS].rstrip()
+    link = company_link(settings, note.company_key)
+    parts = [summary, f"See the call on {note.company_name} in Contour: {link}"]
+    return "\n\n".join(part for part in parts if part)[:BODY_MAX_CHARS]
+
+
+async def fyi_of(
+    session: AsyncSession,
+    note: CallNote,
+    card: NoteCard,
+    *,
+    rep: str | None,
+    settings: Settings,
+    today: date,
+) -> FyiIn | None:
+    """The FYI task for the company's owner, for a send that carries a call (PLAN-V23 T2-2), or
+    None: the switch is off, nobody is signed in, or there is no one else to tell."""
+    if not settings.notify_owner_calls:
+        return None
+    caller = await caller_of(session, note)
+    owner = await owner_to_tell(session, note.company_key, rep) if caller is not None else None
+    if caller is None or owner is None:
+        return None
+    return FyiIn(
+        owner_id=owner,
+        subject=fyi_subject(caller, note.company_name),
+        body=fyi_body(note, card, settings),
+        due=today,
+    )
+
+
+@dataclass(frozen=True)
 class Planned:
     """One send of one note: the request for the writer, and the parts of the card it carries."""
 
@@ -212,9 +297,16 @@ class Planned:
 
 
 async def plan_send(
-    session: AsyncSession, note: CallNote, card: NoteCard, *, writer: ActivityWriter
+    session: AsyncSession,
+    note: CallNote,
+    card: NoteCard,
+    *,
+    writer: ActivityWriter,
+    settings: Settings,
+    today: date,
 ) -> Planned | str:
-    """What the next send of this note carries, or why it can't be sent."""
+    """What the next send of this note carries, or why it can't be sent. `settings`: as the send
+    starts; `today`: its day, Melbourne time (an FYI task is due then)."""
     if note.company_key.startswith("lead:"):
         return LEAD_ONLY
     call, changes, tasks = unsent(card)
@@ -226,13 +318,20 @@ async def plan_send(
     subject = f"call_note:{note.id}" if number == 1 else f"call_note:{note.id}:{number}"
     outcome = card.call.outcome if card.call.outcome in OUTCOME_NAMES else None
     meeting = is_meeting(note)
+    rep = await writer.owner_of(session, note.made_by)
+    carries_call = call and not meeting
+    fyi = (
+        await fyi_of(session, note, card, rep=rep, settings=settings, today=today)
+        if carries_call
+        else None
+    )
     request = ActivityRequest(
         app=APP,
         subject=subject,
         company_id=note.company_key,
         contact_id=note.contact_id,
         deal_id=await one_open_deal(session, note.company_key),
-        owner_id=await writer.owner_of(session, note.made_by),
+        owner_id=rep,
         call=(
             CallIn(
                 at=note.called_at,
@@ -241,7 +340,7 @@ async def plan_send(
                 outcome=outcome,
                 direction="outbound",
             )
-            if call and not meeting
+            if carries_call
             else None
         ),
         note=NoteIn(body=meeting_body(note, card)) if call and meeting else None,
@@ -264,6 +363,7 @@ async def plan_send(
             )
             for task in tasks
         ],
+        fyi=fyi,
     )
     record = CardWrite(
         id="",
@@ -655,15 +755,26 @@ class NoteSender:
         hubspot: HubSpotSource,
         writer: ActivityWriter | None = None,
         clock: Clock = _utc_now,
+        settings: SettingsFn = effective_settings,
     ) -> None:
         self.sessions = sessions
         self.hubspot = hubspot
         self.writer = writer or ActivityWriter()
         self._clock = clock
+        self._settings = settings  # read as each send starts (tests give their own)
         self._task: asyncio.Task[None] | None = None
         self._claimed = False
         self._notes: frozenset[uuid.UUID] = frozenset()
         self.batch_id: uuid.UUID | None = None
+
+    def _today(self) -> date:
+        return self._clock().astimezone(MELBOURNE).date()
+
+    async def _plan(self, session: AsyncSession, note: CallNote, card: NoteCard) -> Planned | str:
+        settings = await self._settings(session)
+        return await plan_send(
+            session, note, card, writer=self.writer, settings=settings, today=self._today()
+        )
 
     @property
     def busy(self) -> bool:
@@ -752,7 +863,7 @@ class NoteSender:
             if note is None or note.status != "sending":
                 return
             card = NoteCard.model_validate(note.card or {})
-            planned = await plan_send(session, note, card, writer=self.writer)
+            planned = await self._plan(session, note, card)
             if isinstance(planned, str):  # nothing to send after all: it settles as it is
                 settle_note(note, card, self._clock())
             await session.commit()
@@ -822,9 +933,7 @@ class NoteSender:
             note = await session.get(CallNote, note_id)
             if note is None or note.status not in PREVIEWABLE:
                 return
-            planned = await plan_send(
-                session, note, NoteCard.model_validate(note.card or {}), writer=self.writer
-            )
+            planned = await self._plan(session, note, NoteCard.model_validate(note.card or {}))
             await session.commit()
         if isinstance(planned, str):
             return

@@ -27,14 +27,14 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Final
-from urllib.parse import quote
 
 from fastapi import FastAPI
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.companies.links import company_link, form_link
 from apps.companies.meeting_form import SUMMARY_NAMES, form_not_found, when_words
-from apps.companies.meeting_job import app_url, email_sender, form_link
+from apps.companies.meeting_job import email_sender
 from apps.companies.meeting_store import EMPTY_SUMMARY, MeetingSource
 from apps.companies.note_batch import ActivityWriter, one_open_deal
 from apps.companies.note_store import WAITING_FOR_WRITES, sending_state
@@ -278,10 +278,6 @@ class FormEmail:
     subject: str
     text: str
     html: str
-
-
-def company_link(settings: Settings, company_key: str) -> str:
-    return f"{app_url(settings)}/companies/{quote(company_key, safe='')}"
 
 
 def facts_of(form: MeetingForm) -> list[FormFact]:

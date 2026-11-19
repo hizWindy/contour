@@ -112,6 +112,8 @@ EDITABLE_KEYS: Final[list[str]] = [
     "today_quiet_days",
     # The mic's hint list (PLAN-V23 T1-1)
     "name_hints_max",
+    # An FYI task for the company's owner when someone else's call reaches HubSpot (PLAN-V23 T2-2)
+    "notify_owner_calls",
 ]
 
 # Which env-only ceiling caps each editable key.
@@ -538,6 +540,10 @@ class Settings(BaseSettings):
     # Microsoft takes 500 at most; a long list can make a service hear names nobody said (TBC
     # after S1, the voice test).
     name_hints_max: int = Field(50, ge=5, le=200)
+    # When someone else's call on a company reaches HubSpot, the company's owner gets an FYI task
+    # (PLAN-V23 choice 8, T2-2): one per call, due that day, with a reminder. On to start (TBC with
+    # Levi, W4: one per call, none, or one a day).
+    notify_owner_calls: StrictBool = True
 
     # --- Validators --------------------------------------------------------------------
 
@@ -557,6 +563,7 @@ class Settings(BaseSettings):
         "call_notes_ai_enabled",
         "meeting_forms_enabled",
         "meeting_note_on_meeting",
+        "notify_owner_calls",
         mode="before",
     )
     @classmethod

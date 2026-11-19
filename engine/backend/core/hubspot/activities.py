@@ -68,6 +68,14 @@ link to a HubSpot owner, or None, and HubSpot then shows the call as unassigned)
    reminder never falls in the past: once that time has passed (or is under 2 minutes away), 2
    minutes after the send. Whether HubSpot takes a second time, and whether it alerts at all, is
    S2's test (TBC). The send's time comes from `clock` (tests give a fixed one).
+8. **The FYI task for the company's owner** (`fyi`, PLAN-V23 T2-2, choice 8). A project that wants
+   it gives `fyi` with a call: a task for the company's owner, saying someone else logged a call.
+   It is the write's last step, made only once the call is in HubSpot (a call that hasn't landed
+   leaves it waiting, with no result, so applying the write again makes it once the call lands),
+   linked to the company only, and due on its day with the 2 minute reminder. It is a courtesy:
+   its result is kept in the step log and the log line, but never changes the write's status or
+   its error, so the rep's call reads as sent. Being a step, it is written once only, like the
+   others: a timed-out create is looked for, never sent again blind.
 
 Log lines hold ids, step names and states only: never a call's text, a field's value, an email
 or a phone number.
@@ -158,6 +166,7 @@ STALLED_AFTER = timedelta(minutes=5)  # TBC: a "writing" write not kept this lon
 # preview on, so a row without it was saved before the writer kept it.
 SENDING = "sending"
 MEETING = "meeting"  # the step that adds the note to the meeting's internal notes (T1-9)
+FYI = "fyi"  # the FYI task for the company's owner (PLAN-V23 T2-2), after the call has landed
 MEETING_NOTES = "hs_internal_meeting_notes"  # the only field of a meeting ever read or sent
 # The plan's key for whether the note also goes on the meeting (the `meeting` step): decided at
 # the preview, from the request and the switch (`meeting_note_on_meeting`) then.
@@ -230,6 +239,7 @@ MEETING_UNREAD_DETAIL = (
     "twice."
 )
 MEETING_EMPTY_DETAIL = "The note has no text to add to the meeting."
+FYI_DONE_DETAIL = "Told the company's owner, with an FYI task."
 UNNAMED = "This company"
 
 
@@ -263,6 +273,18 @@ class TaskIn(BaseModel):
     kind: TaskKind = "todo"
     priority: TaskPriority = "medium"
     owner_id: str | None = Field(None, description="Who it is for. None: the rep")
+
+
+class FyiIn(BaseModel):
+    """The FYI task for the company's owner (PLAN-V23 T2-2): someone else logged a call with their
+    company. The project words it; the writer makes it once the call is in HubSpot."""
+
+    model_config = ConfigDict(frozen=True)
+
+    owner_id: str = Field(min_length=1, max_length=64, description="The company's owner")
+    subject: str = Field(min_length=1, max_length=300)
+    body: str = Field("", max_length=BODY_MAX_CHARS, description="Plain text")
+    due: date = Field(description="The day it is due: the day of the send")
 
 
 class FieldSet(BaseModel):
@@ -308,6 +330,13 @@ class ActivityRequest(BaseModel):
             "at the end of its internal notes. It never links the note to the meeting"
         ),
     )
+    fyi: FyiIn | None = Field(
+        None,
+        description=(
+            "PLAN-V23 T2-2: an FYI task for the company's owner, made once the call is in "
+            "HubSpot. Only with a call"
+        ),
+    )
 
     @model_validator(mode="after")
     def _something_to_write(self) -> "ActivityRequest":
@@ -321,6 +350,13 @@ class ActivityRequest(BaseModel):
         dropping it quietly would hide that nothing reached the meeting."""
         if self.meeting_id is not None and self.note is None:
             raise ValueError("a meeting_id needs a note: only the note is added to a meeting")
+        return self
+
+    @model_validator(mode="after")
+    def _an_fyi_needs_a_call(self) -> "ActivityRequest":
+        """An FYI task tells the owner about a call, so one with no call is the caller's mistake."""
+        if self.fyi is not None and self.call is None:
+            raise ValueError("an fyi needs a call: it tells the owner about the call")
         return self
 
 
@@ -342,13 +378,17 @@ def planned_steps(request: ActivityRequest, *, on_meeting: bool = False) -> list
     names += ["note"] if request.note is not None else []
     if on_meeting and request.note is not None and request.meeting_id is not None:
         names.append(MEETING)
+    if request.fyi is not None and request.call is not None:
+        names.append(FYI)  # last: it waits for the call
     return names
 
 
 def activity_status(planned: Sequence[str], steps: Mapping[str, StepResult]) -> WriteStatus:
-    """A write's status from its steps, as `status_of` says, with two more rules: a planned step
-    with no result yet isn't finished, and a write whose every step had nothing to send (or held
-    its fields) is done."""
+    """A write's status from its steps, as `status_of` says, with three more rules: a planned step
+    with no result yet isn't finished; a write whose every step had nothing to send (or held its
+    fields) is done; and the FYI task for the owner (`fyi`) never counts: it is a courtesy, so the
+    rep's call reads as sent whatever happens to it."""
+    planned = [name for name in planned if name != FYI]
     results = [steps[name] for name in planned if name in steps]
     status = status_of(results)
     missing = len(results) < len(planned)
@@ -757,8 +797,9 @@ class _Run:
 
     async def finish(self, session: AsyncSession) -> WriteStatus:
         status = activity_status(self.planned, self.steps)
+        counted = [step for step in self.ordered() if step.step != FYI]  # never the FYI task's
         await self.save(
-            session, status=status, error=error_of(self.ordered()), finished_at=datetime.now(UTC)
+            session, status=status, error=error_of(counted), finished_at=datetime.now(UTC)
         )
         return status
 
@@ -901,6 +942,8 @@ async def _write_steps(session: AsyncSession, hubspot: HubSpot, run: _Run, pause
         before = run.steps.get(name)
         if before is not None and before.status in ("done", "skipped"):
             continue
+        if name == FYI and not _call_landed(run):
+            continue  # it tells the owner about the call: it waits, with no result, for it to land
         record: HubSpotObject | None = None
         if name == "fields":
             result = await _fields_step(session, hubspot, run)
@@ -923,6 +966,11 @@ async def _write_steps(session: AsyncSession, hubspot: HubSpot, run: _Run, pause
             await _save_call_copy(session, run, record)
         elif name == "fields":
             await refresh_copy(session, hubspot, run.company_id)
+
+
+def _call_landed(run: _Run) -> bool:
+    call = run.steps.get("call")
+    return call is not None and call.status == "done"
 
 
 async def _create_step(
@@ -991,6 +1039,23 @@ def _create_of(run: _Run, name: str) -> _Create:
         filters = [*_found_by(at, owner), Filter("hs_task_subject", "EQ", task.subject)]
         links = _links(request, company, person=True)
         return _Create("tasks", properties, links, filters, "Added the task.")
+    if name == FYI and request.fyi is not None:
+        fyi = request.fyi
+        at = _ms(_due_at(fyi.due))
+        properties = {
+            "hs_timestamp": at,
+            "hs_task_subject": fyi.subject,
+            "hs_task_status": "NOT_STARTED",
+            "hs_task_priority": "LOW",  # ticking it done is all it asks (TBC)
+            "hs_task_type": "TODO",
+        }
+        _put(properties, "hs_task_body", note_html(fyi.body))
+        _put(properties, "hubspot_owner_id", fyi.owner_id)
+        reminders = task_reminders(fyi.due, someone_else=True, sent_at=run.clock())
+        _put(properties, TASK_REMINDERS, _reminders_text(reminders))
+        filters = [*_found_by(at, fyi.owner_id), Filter("hs_task_subject", "EQ", fyi.subject)]
+        links = [Link("companies", company)]  # the company only: the task is the owner's
+        return _Create("tasks", properties, links, filters, FYI_DONE_DETAIL)
     if name == "note" and request.note is not None:
         at = str(run.plan.get("note_at") or _ms(datetime.now(UTC)))
         properties = {"hs_timestamp": at, "hs_note_body": note_html(request.note.body)}

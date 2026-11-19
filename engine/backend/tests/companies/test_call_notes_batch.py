@@ -812,6 +812,7 @@ async def test_the_request_for_a_note(world: World, fake: FakeWriter, sender: No
         ],
         "note": None,
         "meeting_id": None,  # a call note never goes on a meeting (PLAN-V17 M5)
+        "fyi": None,  # the company has no owner to tell (PLAN-V23 T2-2)
     }
     assert first.call is not None
     assert (first.call.title, first.call.outcome, first.call.direction) == (

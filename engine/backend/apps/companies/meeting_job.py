@@ -30,7 +30,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
-from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI
@@ -38,6 +37,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from apps.companies.facts import scrub
+from apps.companies.links import form_link
 from apps.companies.meeting_form import MeetingFormRunner, when_words
 from apps.companies.meeting_store import MeetingSource, cancelled, client_meetings, forms_of
 from apps.companies.tables import MeetingForm
@@ -110,20 +110,6 @@ def email_sender(app: FastAPI, settings: Settings) -> EmailSender:
     `EmailNotSetUp` (an `EmailError`) while email isn't set up."""
     own: EmailSender | None = getattr(app.state, "email_sender", None)
     return own or get_sender(settings)
-
-
-def app_url(settings: Settings) -> str:
-    """The website's address for links: APP_URL, else the public origin, else the laptop's (as
-    the Lead Finder's run email does)."""
-    for url in (settings.app_url, settings.public_origin, *settings.cors_origins):
-        if url:
-            return url.rstrip("/")
-    return "http://localhost:5173"
-
-
-def form_link(settings: Settings, form_id: uuid.UUID) -> str:
-    """The pre-read's page on the website: the Assistant's Meetings (PLAN-V22 T1-6)."""
-    return f"{app_url(settings)}/assistant/meetings/{quote(str(form_id))}"
 
 
 # --- Which meetings -------------------------------------------------------------------------------

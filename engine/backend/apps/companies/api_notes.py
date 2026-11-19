@@ -169,7 +169,9 @@ async def preview_call_notes(
         "each as one record (one failure never fails the rest). It answers at once: `sending` "
         "is how many started. While a batch is being sent, a second press starts nothing and "
         "says so (`already_sending`, still 202). A note left out, not mine, not waiting to be "
-        "sent, or for a company not in HubSpot yet is in `skipped`, with why. 409 "
+        "sent, or for a company not in HubSpot yet is in `skipped`, with why. When a call is on "
+        "a company someone else owns, the owner gets one FYI task in HubSpot once the call is "
+        "there, with an alert (PLAN-V23 T2-2; Settings can switch it off). 409 "
         "`hubspot_writes_off` while sending waits for HubSpot write access: nothing is sent. "
         "409 `call_notes_off`."
     ),

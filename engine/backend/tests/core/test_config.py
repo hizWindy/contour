@@ -80,6 +80,7 @@ BOOL_KEYS = {  # a switch has no min or max
     "call_notes_enabled",
     "call_notes_ai_enabled",
     "meeting_forms_enabled",
+    "notify_owner_calls",  # PLAN-V23 T2-2
 }
 NOT_NUMBERS = CHOICE_KEYS | BOOL_KEYS
 

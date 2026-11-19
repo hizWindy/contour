@@ -44,8 +44,8 @@ from apps.companies.assistant_schemas import (
     TodayCompany,
 )
 from apps.companies.facts import scrub
+from apps.companies.links import company_link
 from apps.companies.meeting_job import email_sender
-from apps.companies.meeting_send import company_link
 from apps.companies.meeting_store import MeetingSource
 from apps.companies.notes import MELBOURNE
 from apps.companies.schemas import MAX_RECIPIENTS

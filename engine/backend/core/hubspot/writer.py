@@ -64,9 +64,9 @@ log = logging.getLogger(__name__)
 
 StepName = Literal["company", "note", "list"]  # the Lead Finder's steps
 # Every step's name, as text with a pattern, so old rows and new ones read the same way: the Lead
-# Finder's; an activity's (PLAN-V17): call, fields, task:1 ..., note, meeting; and a task's status
-# (PLAN-V22 T1-4): status.
-STEP_NAME = r"^(?:company|note|list|call|fields|task:[1-9][0-9]*|meeting|status)$"
+# Finder's; an activity's (PLAN-V17): call, fields, task:1 ..., note, meeting, and fyi (the FYI
+# task for the company's owner, PLAN-V23 T2-2); and a task's status (PLAN-V22 T1-4): status.
+STEP_NAME = r"^(?:company|note|list|call|fields|task:[1-9][0-9]*|meeting|fyi|status)$"
 StepStatus = Literal["done", "failed", "uncertain", "skipped"]
 WriteStatus = Literal["previewed", "writing", "done", "partial", "failed", "uncertain"]
 PlanKind = Literal["company", "activity", "task"]
@@ -190,8 +190,9 @@ class StepResult(BaseModel):
     step: str = Field(
         pattern=STEP_NAME,
         description=(
-            "company, note or list (the Lead Finder); call, fields, task:1, task:2 ..., note or "
-            "meeting (an activity); status (a task ticked done or opened again)"
+            "company, note or list (the Lead Finder); call, fields, task:1, task:2 ..., note, "
+            "meeting or fyi (an activity: fyi is the FYI task for the company's owner, made once "
+            "the call is in HubSpot); status (a task ticked done or opened again)"
         ),
         examples=["task:1"],
     )

@@ -308,6 +308,13 @@ TEXT: dict[str, tuple[str, str]] = {
         "your teammates. The same list fixes a misheard name. A long list can make it hear names "
         "nobody said. 50 to start, TBC after the voice test.",
     ),
+    "notify_owner_calls": (
+        "Tell the owner about calls on their companies",
+        "When someone logs a call with a company they don't own, the company's owner gets an FYI "
+        "task in HubSpot once the call is there: who called, the call's summary and a link, due "
+        "that day, with an alert 2 minutes after the send. One per call. On to start, TBC with "
+        "Levi.",
+    ),
     "memory_fresh_days": (
         "Days a note stays fresh",
         "Notes and leads younger than this are reused instead of searched again.",
