@@ -39,6 +39,11 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Dialogs, menus and tooltips are added after this empty box, so the app's own box is never
+         the last one in the page. When it stopped being the last, the browser worked out again the
+         look of every button on the page as each one opened (PLAN-V23 T4-4: about 2 ms at 4x CPU
+         slowdown on Today, more on a longer page). -->
+    <div hidden></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

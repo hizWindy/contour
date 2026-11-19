@@ -28,7 +28,9 @@
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { Send } from 'lucide-react'
 import {
+  useDeferredValue,
   useEffect,
+  useEffectEvent,
   useId,
   useLayoutEffect,
   useRef,
@@ -64,6 +66,7 @@ import type { MicEnv } from '@/apps/companies/call-notes/mic/session'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import { problemWords } from '@/apps/companies/call-notes/mic/words'
 import { MicSheet, MicSheetTitle } from '@/components/motion/mic-sheet'
+import { useStill } from '@/components/motion/use-still'
 import { Button } from '@/components/ui/button'
 import { useDebounced } from '@/hooks/useDebounced'
 import { melbourneDate } from '@/lib/format'
@@ -283,6 +286,11 @@ function DraftCard({
 
   const [draft, setDraft] = useState<CardDraft>(first)
   const [inBox, setInBox] = useState(false)
+  // The card's first render holds its frame, its read-back and its buttons; its boxes come in a
+  // second one, while the card still fades in from nothing (PLAN-V23 T4-4), so the frame it
+  // appears in holds less. With reduced motion the card shows at once, so it is drawn whole.
+  const still = useStill()
+  const whole = useDeferredValue(true, still)
   // After a spoken command, the card listens for "send it" as it opens (choice 23), once the voice
   // tool setting is known and it is the speech service.
   const spoken = request.kind === 'command' && request.source === 'mic'
@@ -415,14 +423,28 @@ function DraftCard({
     stopListen.current = null
   }
 
-  const focusBox = (box: Box): void => {
+  /** Puts the focus in a box. False when the box isn't drawn. */
+  const focusBox = (box: Box): boolean => {
     const target = card.current?.querySelector<HTMLElement>(`[data-box="${box}"]`)
-    if (!target) return
+    if (!target) return false
     const focusable = target.matches('input, textarea, button')
       ? target
       : target.querySelector<HTMLElement>('input, textarea, button')
     focusable?.focus()
+    return focusable !== null
   }
+
+  // An empty card (PLAN-V23 T4-3) starts in its first box, as soon as its boxes are drawn.
+  const toFirstBox = useRef(request.kind === 'empty')
+  const focusFirstBox = (): void => {
+    if (!toFirstBox.current) return
+    const box = missingOf(latest.current.draft, latest.current.today)
+    if (!box || focusBox(box)) toFirstBox.current = false
+  }
+  const boxesDrawn = useEffectEvent(focusFirstBox)
+  useEffect(() => {
+    if (whole) boxesDrawn()
+  }, [whole])
 
   const startSend = (now: CardDraft): void => {
     closing.current = 'send'
@@ -789,10 +811,9 @@ function DraftCard({
       describedBy={listening ? listenId : undefined}
       onOpenAutoFocus={(event) => {
         event.preventDefault()
-        // An empty card (PLAN-V23 T4-3) starts in its first box: there is nothing to send yet.
-        const box = request.kind === 'empty' ? missingOf(draft, today) : null
-        if (box) {
-          focusBox(box)
+        // An empty card (PLAN-V23 T4-3) starts in its first box (above): nothing to send yet.
+        if (toFirstBox.current) {
+          focusFirstBox()
           return
         }
         // The focus starts on Send (choice 19).
@@ -814,9 +835,13 @@ function DraftCard({
           {draft.unsure && !draft.edited ? (
             <p className="text-ui text-pretty text-muted-foreground">{draft.unsure}</p>
           ) : null}
-          {layout}
-          {saveProblem ? <PartProblem>{saveProblem}</PartProblem> : null}
-          {previewProblem ? <PartProblem>{previewProblem}</PartProblem> : null}
+          {whole ? (
+            <>
+              {layout}
+              {saveProblem ? <PartProblem>{saveProblem}</PartProblem> : null}
+              {previewProblem ? <PartProblem>{previewProblem}</PartProblem> : null}
+            </>
+          ) : null}
         </div>
         <div className="flex flex-col gap-3 border-t px-5 py-3">
           {voice ? (

@@ -509,6 +509,26 @@ describe('on a phone (choice 13)', () => {
     await user.click(screen.getByRole('button', { name: 'Speak' }))
     expect(isVoiceBarOpen()).toBe(true)
   })
+
+  it('"Speak" steps aside while the voice bar is open, and its room stays (PLAN-V23 T4-4)', async () => {
+    asPhone()
+    const { user } = openToday()
+    await part('Your HubSpot tasks')
+    const bar = document.querySelector('[data-slot=speak-bar]')
+    const speak = screen.getByRole('button', { name: 'Speak' })
+    await user.click(speak)
+    expect(isVoiceBarOpen()).toBe(true)
+    expect(bar).toHaveAttribute('hidden')
+    expect(screen.queryByRole('button', { name: 'Speak' })).toBeNull()
+    // The page keeps its end, so nothing moves.
+    expect(document.querySelector('[data-slot=speak-room]')).toBeInTheDocument()
+    act(() => {
+      closeVoiceBar()
+    })
+    expect(bar).not.toHaveAttribute('hidden')
+    // The same button, so the voice bar can give the focus back to it.
+    expect(screen.getByRole('button', { name: 'Speak' })).toBe(speak)
+  })
 })
 
 describe('"Add task" and "Email the team" (PLAN-V23 T4-3)', () => {
@@ -542,7 +562,8 @@ describe('"Add task" and "Email the team" (PLAN-V23 T4-3)', () => {
       { name: 'Add a task for you.' },
       { timeout: 5000 },
     )
-    const company = within(card).getByRole('textbox', { name: 'Find a company' })
+    // Its boxes come a frame after the card (PLAN-V23 T4-4).
+    const company = await within(card).findByRole('textbox', { name: 'Find a company' })
     await waitFor(() => {
       expect(company).toHaveFocus()
     })

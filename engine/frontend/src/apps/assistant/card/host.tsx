@@ -6,11 +6,12 @@
  * The dictation panel (Log call, with the AI off) loads on its own, only when it is needed.
  *
  * A closed card stays drawn, closed, until the next one opens, so it can shrink away (150ms). Each
- * opening is a new card, with its own draft. A draft a closed page cut off in its hold is offered
- * again here, once. With the AI off, Log call opens here instead, with the words (`dictation.tsx`).
+ * opening is a new card, with its own draft, drawn in a transition a moment after it is asked for
+ * (PLAN-V23 T4-4). A draft a closed page cut off in its hold is offered again here, once. With the
+ * AI off, Log call opens here instead, with the words (`dictation.tsx`).
  */
 import { useQueryClient } from '@tanstack/react-query'
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useDeferredValue, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import type { SignIn } from '@/api/hooks/auth'
 import { queryKeys } from '@/api/query'
@@ -49,8 +50,13 @@ function useCutHolds(): void {
 export function CardHost(props: CardHostProps) {
   useCutHolds()
   const request = useOpenCard()
-  const [shown, setShown] = useState<CardRequest | null>(request)
-  if (request !== null && request !== shown) setShown(request)
+  // The card is drawn a moment later, in a transition (PLAN-V23 T4-4), not in the same render as
+  // the voice bar closing. Closing stays at once: `open` reads the request itself. At 4x CPU
+  // slowdown the frame it appears in is still long, mostly the browser's work for a modal dialog
+  // (the page behind made inert, the focus moved in): see PLAN-V23's Part 4 Log.
+  const later = useDeferredValue(request)
+  const [shown, setShown] = useState<CardRequest | null>(later)
+  if (later !== null && later !== shown) setShown(later)
   if (shown === null) return null
   if (shown.kind === 'dictation') {
     return (
