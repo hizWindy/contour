@@ -12,6 +12,10 @@
  *   changes go as a PATCH (`callPatchOf`).
  * - **The read-back** (choice 21) is the server's sentence until the rep changes something; then
  *   the card says it in its own words, from the boxes.
+ * - **How the company was found** (PLAN-V23): by HubSpot's own search (`fromHubspot`), nowhere
+ *   (`canAdd`: the card offers "Add to HubSpot"), or by the rep after the command found nothing
+ *   (`byHand`). A company found by hand teaches the mic the words heard, once the card is sent
+ *   (`learnedOf`, T1-5). A pick from the command's own choices doesn't: the command found it.
  */
 import { newIdempotencyKey } from '@/api/client'
 import type {
@@ -25,6 +29,7 @@ import type {
   CallNotePatch,
   CallNotePerson,
   CommandSource,
+  LearnedNameIn,
   TaskKind,
   TeamMember,
 } from '@/api/types'
@@ -56,6 +61,9 @@ export interface CompanyFind extends Find<Company> {
   /** The rep added it to HubSpot from the card. */
   added: boolean
 }
+
+/** The longest words a learned name takes (the contract part 2). */
+export const LEARNED_MAX = 80
 
 /** A teammate or a Contour address, as the command named them, or as the rep added them. */
 export interface Recipient {
@@ -298,6 +306,21 @@ export function emptyDraftOf(
     forWhom: null,
     body: '',
   }
+}
+
+/**
+ * The name the card teaches the mic once it is sent (PLAN-V23 T1-5): the words heard, and the
+ * company the rep found by hand after the command found nothing. Null when there is nothing to
+ * teach: an email, a company the command found, or no words heard.
+ */
+export function learnedOf(draft: CardDraft): LearnedNameIn | null {
+  if (draft.action === 'email') return null
+  const { company } = draft
+  const heard = company.heard.trim()
+  if (!company.byHand || company.found === null || heard === '' || heard.length > LEARNED_MAX) {
+    return null
+  }
+  return { heard, company_key: company.found.key }
 }
 
 // --- What blocks a send ---------------------------------------------------------------------------

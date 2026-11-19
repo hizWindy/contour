@@ -3,7 +3,14 @@
  * Made-up names only: Sample Logistics Pty Ltd, Northwind Pty Ltd, North Wind (as misheard).
  */
 import { describe, expect, it } from 'vitest'
-import { draftOf, NO_COMPANY, type CardDraft } from './draft'
+import {
+  draftOf,
+  learnedOf,
+  NO_COMPANY,
+  pickCompany,
+  type CardDraft,
+  type TaskDraft,
+} from './draft'
 import { callCommand, emailCommand, NORTHWIND, SAMPLE, taskCommand } from './fixtures'
 import { cardLinesOf, companyLinesOf, unsureLeft } from './lines'
 
@@ -65,5 +72,44 @@ describe('the lines the parts say themselves', () => {
     expect(unsureLeft(NOT_THERE, [NOT_THERE])).toBeNull()
     expect(unsureLeft(null, [NOT_THERE])).toBeNull()
     expect(unsureLeft('Something else.', [])).toBe('Something else.')
+  })
+})
+
+describe('the name the card teaches (T1-5)', () => {
+  const nowhere = taskCommand({
+    company: { found: null, choices: [], from_page: false, heard: 'North Wind', can_add: true },
+  })
+
+  it('the words heard, and the company found by hand after the command found nothing', () => {
+    const task = draft(nowhere) as TaskDraft
+    expect(learnedOf(task)).toBeNull()
+    const picked = { ...task, company: pickCompany(task.company, SAMPLE, 'by_hand') }
+    expect(learnedOf(picked)).toEqual({ heard: 'North Wind', company_key: '201' })
+    const added = { ...task, company: pickCompany(task.company, NORTHWIND, 'added') }
+    expect(learnedOf(added)).toEqual({ heard: 'North Wind', company_key: '301' })
+  })
+
+  it('nothing from the command’s own choices, a company it found, an email, or no words', () => {
+    const choices = draft(
+      taskCommand({
+        company: { found: null, choices: [SAMPLE, NORTHWIND], from_page: false, heard: 'Sample' },
+      }),
+    ) as TaskDraft
+    expect(
+      learnedOf({ ...choices, company: pickCompany(choices.company, SAMPLE, 'choice') }),
+    ).toBeNull()
+    expect(learnedOf(draft())).toBeNull()
+    expect(learnedOf(draft(emailCommand()))).toBeNull()
+    const task = draft(nowhere) as TaskDraft
+    const silent = {
+      ...task,
+      company: pickCompany({ ...task.company, heard: ' ' }, SAMPLE, 'by_hand'),
+    }
+    expect(learnedOf(silent)).toBeNull()
+    const long = {
+      ...task,
+      company: pickCompany({ ...task.company, heard: 'x'.repeat(81) }, SAMPLE, 'by_hand'),
+    }
+    expect(learnedOf(long)).toBeNull()
   })
 })

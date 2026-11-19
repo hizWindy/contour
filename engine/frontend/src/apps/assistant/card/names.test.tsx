@@ -14,6 +14,7 @@ import { mockApi, type Answer } from '@/test/mock-api'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import {
   API,
+  callCommand,
   CLOCK,
   command,
   companyAdded,
@@ -23,6 +24,7 @@ import {
   notePreview,
   NORTHWIND,
   options,
+  OTHER_SAMPLE,
   SAM,
   SAMPLE,
   taskCommand,
@@ -32,6 +34,7 @@ import {
 import { CardHost } from './host'
 import { closeCard, openCard } from './store'
 
+const HOLD = 5000
 const NOT_THERE = "North Wind isn't in HubSpot. Add it, or pick another company."
 const NEW_THERE = "Northwind Pty Ltd is new in HubSpot. We'll use it."
 const LIKE_IT = 'HubSpot already has Northwind Pty Ltd. Use it, or add North Wind anyway.'
@@ -341,6 +344,112 @@ describe('the company, when a name goes wrong (T1-6)', () => {
     await user.click(within(found).getByRole('button', { name: 'Back' }))
     expect(within(found).getByText(NOT_THERE)).toBeInTheDocument()
     expect(within(found).getByRole('button', { name: 'Add to HubSpot' })).toHaveFocus()
+  })
+})
+
+describe('the name the card teaches the mic (T1-5)', () => {
+  /** Finds Sample Logistics by hand in the search list, after the command found nothing. */
+  async function pickByHand(found: HTMLElement, user: ReturnType<typeof show>['user']) {
+    const box = within(found).getByRole('textbox', { name: 'Find a company' })
+    await user.clear(box)
+    await user.type(box, 'Sample')
+    await user.click(await within(found).findByRole('button', { name: /Sample Logistics/ }))
+  }
+
+  it('a company found by hand teaches the words heard, only after the send went', async () => {
+    vi.useFakeTimers(CLOCK)
+    const { user, of } = show(nowhere())
+    const found = await card()
+    await pickByHand(found, user)
+    await waitFor(() => {
+      expect(of(API.taskPreview).at(-1)?.body).toMatchObject({ company_key: '201' })
+    })
+    await user.keyboard('{Control>}{Enter}{/Control}')
+    await screen.findByText('Adding the task in HubSpot')
+    await wait(HOLD - 100)
+    expect(of(API.learned)).toHaveLength(0)
+    await wait(100)
+    await waitFor(() => {
+      expect(of(API.learned)).toHaveLength(1)
+    })
+    expect(of(API.learned)[0]?.body).toEqual({ heard: 'North Wind', company_key: '201' })
+  })
+
+  it('never on Cancel, or Undo', async () => {
+    vi.useFakeTimers(CLOCK)
+    const { user, of } = show(nowhere())
+    const found = await card()
+    await pickByHand(found, user)
+    await user.click(within(found).getByRole('button', { name: 'Send' }))
+    await user.click(await screen.findByRole('button', { name: 'Undo' }))
+    const again = await card()
+    await user.click(within(again).getByRole('button', { name: 'Cancel' }))
+    await wait(HOLD * 2)
+    expect(of(API.tasks)).toHaveLength(0)
+    expect(of(API.learned)).toHaveLength(0)
+  })
+
+  it('never when the send failed', async () => {
+    vi.useFakeTimers(CLOCK)
+    const { user, of } = show(nowhere(), {
+      [API.tasks]: () =>
+        Response.json(
+          { title: 'HubSpot didn’t answer', status: 503, code: 'hubspot_unavailable' },
+          { status: 503 },
+        ),
+    })
+    const found = await card()
+    await pickByHand(found, user)
+    await user.click(within(found).getByRole('button', { name: 'Send' }))
+    await wait(HOLD)
+    expect(await screen.findByText('Not sent')).toBeInTheDocument()
+    expect(of(API.learned)).toHaveLength(0)
+  })
+
+  it('never for a pick from the command’s own choices, or a company it found', async () => {
+    vi.useFakeTimers(CLOCK)
+    const choices = show(
+      taskCommand({
+        company: {
+          found: null,
+          choices: [SAMPLE, OTHER_SAMPLE],
+          from_page: false,
+          heard: 'Sample',
+        },
+      }),
+    )
+    const found = await card()
+    await choices.user.click(within(found).getByRole('button', { name: /Sample Freight/ }))
+    await choices.user.click(within(found).getByRole('button', { name: 'Send' }))
+    await wait(HOLD)
+    await waitFor(() => {
+      expect(choices.of(API.tasks)).toHaveLength(1)
+    })
+    expect(choices.of(API.learned)).toHaveLength(0)
+  })
+
+  it('a call teaches it too, once it is on its way to HubSpot', async () => {
+    vi.useFakeTimers(CLOCK)
+    const { user, of } = show(
+      callCommand({
+        company: { found: null, choices: [], from_page: false, heard: 'North Wind', can_add: true },
+        person: null,
+      }),
+    )
+    const found = await card()
+    await pickByHand(found, user)
+    await within(found).findByText('Connected')
+    await waitFor(() => {
+      expect(within(found).getByRole('button', { name: 'Send' })).not.toHaveAttribute(
+        'aria-disabled',
+      )
+    })
+    await user.click(within(found).getByRole('button', { name: 'Send' }))
+    await wait(HOLD)
+    await waitFor(() => {
+      expect(of(API.learned)).toHaveLength(1)
+    })
+    expect(of(API.learned)[0]?.body).toEqual({ heard: 'North Wind', company_key: '201' })
   })
 })
 

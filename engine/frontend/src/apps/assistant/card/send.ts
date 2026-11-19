@@ -10,10 +10,15 @@
  *
  * After the send a toast says how it went. A send that didn't go keeps the draft, and its toast
  * opens the card again.
+ *
+ * **A learned name** (PLAN-V23 T1-5): once a call or a task has gone, a company the rep found by
+ * hand (the command found nothing) teaches the mic the words heard, for the whole team. Never on
+ * Later, Cancel, Undo or a send that failed. A refusal is quiet: the send itself went.
  */
 import type { QueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { api, toApiProblem, unwrap } from '@/api/client'
+import { teachName } from '@/api/hooks/assistant-names'
 import { markCountsOld, refreshCallNoteLists } from '@/api/hooks/call-notes'
 import type {
   AssistantEmailIn,
@@ -28,7 +33,7 @@ import type {
 } from '@/api/types'
 import { changeDetail } from '@/lib/problems'
 import { CALL_LOGS_PATH } from '../paths'
-import { emailBodyOf, taskBodyOf, type CardDraft, type CallDraft } from './draft'
+import { emailBodyOf, learnedOf, taskBodyOf, type CardDraft, type CallDraft } from './draft'
 import { dropCardDraft, keepCardDraft } from './drafts'
 import { CALL_SENT, emailSent, KEPT, NOT_SENT, OPEN, OPEN_CALL_LOGS, TASK_ADDED } from './words'
 
@@ -115,6 +120,12 @@ function problemDetail(error: unknown): string | null {
   return changeDetail(toApiProblem(error))
 }
 
+/** The send went: a company found by hand teaches the mic the words heard (T1-5). */
+function teach(draft: CardDraft): void {
+  const pair = learnedOf(draft)
+  if (pair) void teachName(pair).catch(() => undefined)
+}
+
 async function sendCall(draft: CallDraft, tools: SendTools): Promise<void> {
   const id = draft.noteId
   if (id === null) return
@@ -136,6 +147,7 @@ async function sendCall(draft: CallDraft, tools: SendTools): Promise<void> {
     })
     return
   }
+  teach(draft)
   toast.success(CALL_SENT, {
     action: {
       label: OPEN_CALL_LOGS,
@@ -164,6 +176,7 @@ export async function sendDraft(draft: CardDraft, tools: SendTools): Promise<voi
         )
         if (write.status === 'done') {
           dropCardDraft(draft.by, draft.key)
+          teach(draft)
           toast.success(TASK_ADDED)
           return
         }
