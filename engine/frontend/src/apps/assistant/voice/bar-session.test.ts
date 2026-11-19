@@ -583,3 +583,65 @@ describe('the hint list (PLAN-V23 T1-5)', () => {
     expect(mic.tools.at(-1)?.hints).toEqual(['Vitera'])
   })
 })
+
+describe('hold V (PLAN-V23 choice 6)', () => {
+  it('held 0.4 seconds: no silence ends the talk, and letting go does', async () => {
+    const { mic, session, sent, now } = await listening()
+    session.vDown()
+    await tick(TIMES.hold)
+    mic.say(SAID)
+    await tick(TIMES.silence * 3)
+    expect(now().phase).toBe('listening')
+    expect(sent).toEqual([])
+    session.vUp()
+    await tick(0)
+    expect(sent).toEqual([{ text: SAID, source: 'mic' }])
+    expect(mic.live()).toBe(0)
+  })
+
+  it('a tap works as before: let go at once, and the silence still ends the talk', async () => {
+    const { mic, session, sent, now } = await listening()
+    session.vDown()
+    await tick(TIMES.hold - 100)
+    session.vUp()
+    expect(now().phase).toBe('listening')
+    mic.say(SAID)
+    await tick(TIMES.silence)
+    expect(sent).toEqual([{ text: SAID, source: 'mic' }])
+  })
+
+  it('held while the mic opens: the wait for the first word doesn’t end it either', async () => {
+    const { mic, session, now } = setUp()
+    session.start('browser_service')
+    session.vDown()
+    await tick(TIMES.firstWords * 2)
+    expect(now().phase).toBe('listening')
+    mic.say(SAID)
+    session.vUp()
+    await tick(0)
+    expect(now().phase).toBe('answer')
+  })
+
+  it('letting go of a V that wasn’t held, or after the talk is over, does nothing', async () => {
+    const { mic, session, sent, now } = await listening()
+    session.vUp()
+    expect(now().phase).toBe('listening')
+    session.vDown()
+    await tick(TIMES.hold)
+    mic.say(SAID)
+    // Done first, by the button: the words go once.
+    session.done()
+    session.vUp()
+    await tick(0)
+    expect(sent).toEqual([{ text: SAID, source: 'mic' }])
+  })
+
+  it('V down where nothing listens (the text line) is no hold', async () => {
+    const { session, now } = await listening()
+    session.typeInstead()
+    session.vDown()
+    await tick(TIMES.hold)
+    session.vUp()
+    expect(now().phase).toBe('typing')
+  })
+})

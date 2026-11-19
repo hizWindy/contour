@@ -3,7 +3,8 @@
  * box (it types a "v"), not with Ctrl, Cmd, Alt or Shift (Ctrl+V still pastes), not as a held
  * key's repeat, not through an input method, not while a dialog, menu or list box is open, and
  * never for a Viewer. The bar's code loads once the page is idle, or on the first V. The bar itself
- * is a stand-in here; `bar.test.tsx` has the real one.
+ * is a stand-in here; `bar.test.tsx` has the real one. Hold V (PLAN-V23 choice 6): the V that
+ * opens the bar is marked down until it comes up.
  */
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
@@ -13,7 +14,7 @@ import { queryKeys } from '@/api/query'
 import { fakeIdle } from '@/test/fake-idle'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import { VoiceKey } from './key'
-import { closeVoiceBar, isVoiceBarOpen, wantVoiceCode } from './store'
+import { closeVoiceBar, isVHeld, isVoiceBarOpen, openVoiceBar, wantVoiceCode } from './store'
 import { setVKeyOn } from './v-switch'
 
 vi.mock('./bar', async () => {
@@ -177,6 +178,43 @@ describe('the V key', () => {
     renderKey({ signIn: VIEWER })
     expect(press({ key: 'v' })).toBe(true)
     expect(isVoiceBarOpen()).toBe(false)
+  })
+})
+
+describe('hold V (PLAN-V23 choice 6)', () => {
+  it('the V that opens the bar is marked down until it comes up', () => {
+    renderKey()
+    expect(press({ key: 'v' })).toBe(false)
+    expect(isVHeld()).toBe(true)
+    // Another key coming up changes nothing.
+    fireEvent.keyUp(document.body, { key: 'Shift' })
+    expect(isVHeld()).toBe(true)
+    fireEvent.keyUp(document.body, { key: 'v' })
+    expect(isVHeld()).toBe(false)
+  })
+
+  it('the window losing the keys lets go too', () => {
+    renderKey()
+    press({ key: 'V' })
+    expect(isVHeld()).toBe(true)
+    fireEvent.blur(window)
+    expect(isVHeld()).toBe(false)
+  })
+
+  it('a bar opened by a button is no hold, and closing forgets one', () => {
+    renderKey()
+    act(() => {
+      openVoiceBar()
+    })
+    expect(isVHeld()).toBe(false)
+    act(() => {
+      closeVoiceBar()
+    })
+    press({ key: 'v' })
+    act(() => {
+      closeVoiceBar()
+    })
+    expect(isVHeld()).toBe(false)
   })
 })
 

@@ -66,7 +66,7 @@ import { isPlainV, somethingElseOpen, VOICE_BAR } from './keys'
 import { cachedNames, firstCompanyOf, fixNamesOf, hintsOf, namesOnPage } from './names'
 import { onPageOf, panelCompany } from './on-page'
 import { onScreen } from './on-screen'
-import { closeVoiceBar, useVoiceBarOpen } from './store'
+import { closeVoiceBar, isVHeld, letGoV, useVoiceBarOpen } from './store'
 import { useVKeyOn } from './v-switch'
 import {
   CANCEL,
@@ -112,6 +112,12 @@ function SayExamples({ company }: { company: string | null }) {
     </div>
   )
 }
+
+/** A V key, with or without Shift. */
+function isVKey(event: KeyboardEvent): boolean {
+  return event.key === 'v' || event.key === 'V'
+}
+
 /** What is on screen as the bar opens: its company, for the hint list, and its names. */
 interface Screen {
   key: string | null
@@ -333,10 +339,19 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
       session.setNames(fixNamesOf(screen.names, names), hintsOf(screen.names, names))
   }, [session, names, screen.names])
 
+  // A V the bar took (the one that opened it, or one that listens again) until it comes up: its
+  // repeats type nothing, even in the text line the focus may have moved to (PLAN-V23 choice 6).
+  const vTaken = useRef(false)
+
   // It starts once the voice tool setting is known, and lets everything go when the bar closes.
   const toolKnown = !options.isPending
   const begin = useEffectEvent((current: BarSession) => {
     current.start(voiceToolOf(options.data))
+    // The V that opened the bar is still down: held, letting it go ends the talk (choice 6).
+    if (isVHeld()) {
+      vTaken.current = true
+      current.vDown()
+    }
   })
   useEffect(() => {
     if (!open || !session || !toolKnown) return undefined
@@ -352,11 +367,16 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   )
   const { phase } = snapshot
 
-  // The bar's own keys, while it is open: V is Done (or listens again), Esc is Cancel.
+  // The bar's own keys, while it is open: V is Done (or listens again), Esc is Cancel. A V that
+  // listens again and is held ends the talk as it comes up, as the V that opened the bar does.
   useEffect(() => {
     if (!open || !session) return undefined
     const onKey = (event: KeyboardEvent): void => {
       if (event.defaultPrevented) return
+      if (event.repeat && isVKey(event)) {
+        if (vTaken.current) event.preventDefault()
+        return
+      }
       const inBar = event.target instanceof Element && event.target.closest(VOICE_BAR) !== null
       if (event.key === 'Escape') {
         // A box on the page keeps its own Esc, and so does another dialog or menu.
@@ -365,11 +385,27 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
         session.cancel()
         return
       }
-      if (isPlainV(event) && session.pressV()) event.preventDefault()
+      if (isPlainV(event) && session.pressV()) {
+        event.preventDefault()
+        vTaken.current = true
+        session.vDown()
+      }
+    }
+    const letGo = (): void => {
+      vTaken.current = false
+      letGoV()
+      session.vUp()
+    }
+    const onUp = (event: KeyboardEvent): void => {
+      if (isVKey(event)) letGo()
     }
     document.addEventListener('keydown', onKey)
+    document.addEventListener('keyup', onUp)
+    window.addEventListener('blur', letGo)
     return () => {
       document.removeEventListener('keydown', onKey)
+      document.removeEventListener('keyup', onUp)
+      window.removeEventListener('blur', letGo)
     }
   }, [open, session])
 

@@ -26,7 +26,7 @@ import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import VoiceBar from './bar'
 import type { Times } from './bar-session'
 import { closeCard } from '../card/store'
-import { closeVoiceBar, isVoiceBarOpen, openVoiceBar } from './store'
+import { closeVoiceBar, isVoiceBarOpen, openVoiceBar, openVoiceBarByKey } from './store'
 import { setVKeyOn } from './v-switch'
 
 const OPTIONS = '/api/v1/companies/call-notes/options'
@@ -91,6 +91,9 @@ interface Open {
   page?: ReactNode
   /** The hint list the server gives (PLAN-V23 T1-5). Left out: none (a 404). */
   names?: AssistantNames | Answer
+  /** V opened the bar, and is still down (PLAN-V23 choice 6). */
+  byKey?: boolean
+  times?: Partial<Times>
 }
 
 function openBar({
@@ -104,6 +107,8 @@ function openBar({
   notesOn = true,
   page,
   names,
+  byKey = false,
+  times = QUIET,
 }: Open = {}) {
   const mic = new FakeMic(micOptions)
   const calls = mockApi({
@@ -118,14 +123,15 @@ function openBar({
     <>
       <button type="button">Where I was</button>
       {page}
-      <VoiceBar env={mic.env()} makeTool={mic.tool} times={QUIET} {...(read ? { read } : {})} />
+      <VoiceBar env={mic.env()} makeTool={mic.tool} times={times} {...(read ? { read } : {})} />
       <Where />
     </>,
     { queryClient, route },
   )
   screen.getByRole('button', { name: 'Where I was' }).focus()
   act(() => {
-    openVoiceBar()
+    if (byKey) openVoiceBarByKey()
+    else openVoiceBar()
   })
   const commands = () => calls.filter((call) => call.path === COMMAND)
   return { mic, calls, commands, ...view }
@@ -665,5 +671,54 @@ describe('the hint list (PLAN-V23 T1-5, T4-3)', () => {
       expect(calls.some((call) => call.path === OPTIONS)).toBe(true)
     })
     expect(calls.some((call) => call.path === NAMES)).toBe(false)
+  })
+})
+
+/** Waits on the real clock, for the short hold the tests give. */
+async function pause(ms: number) {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, ms))
+  })
+}
+
+describe('hold V (PLAN-V23 choice 6)', () => {
+  it('V held past the hold: letting go ends the talk, and the words go', async () => {
+    const { mic, commands } = openBar({ byKey: true, times: { ...QUIET, hold: 20 } })
+    await listening()
+    act(() => {
+      mic.say(SAID)
+    })
+    await pause(60)
+    expect(commands()).toEqual([])
+    fireEvent.keyUp(document.body, { key: 'v' })
+    await waitFor(() => {
+      expect(commands().map((call) => call.body)).toEqual([{ text: SAID, source: 'mic' }])
+    })
+  })
+
+  it('a tap works as before: let go at once, and it listens on', async () => {
+    const { mic, commands } = openBar({ byKey: true, times: { ...QUIET, hold: 20 } })
+    fireEvent.keyUp(document.body, { key: 'v' })
+    const found = await listening()
+    act(() => {
+      mic.say(SAID)
+    })
+    await pause(60)
+    expect(title(found)).toHaveTextContent('Listening')
+    expect(commands()).toEqual([])
+  })
+
+  it('a held V’s repeats type nothing, even in the text line the focus moved to', async () => {
+    openBar({ byKey: true, mic: { devices: [] } })
+    const found = await bar()
+    const line = await within(found).findByRole('textbox', { name: 'Type what to do' })
+    await waitFor(() => {
+      expect(line).toHaveFocus()
+    })
+    expect(fireEvent.keyDown(line, { key: 'v', repeat: true })).toBe(false)
+    expect(line).toHaveValue('')
+    // Let go: a V pressed in the line now is a letter again, held or not.
+    fireEvent.keyUp(line, { key: 'v' })
+    expect(fireEvent.keyDown(line, { key: 'v', repeat: true })).toBe(true)
   })
 })

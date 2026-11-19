@@ -168,6 +168,11 @@ function stripProblem(problem: BarProblem): string {
   }
 }
 
+/** A V key, with or without Shift. */
+function isVKey(event: { key: string }): boolean {
+  return event.key === 'v' || event.key === 'V'
+}
+
 /**
  * A refusal the preview gives (a 4xx): the send would be refused too, so it waits. A task with no
  * one to do it isn't said here: its "For whom" says it, with the team list (PLAN-V23 T3-4).
@@ -594,6 +599,28 @@ function DraftCard({
     [voice],
   )
 
+  // Hold V on the card (PLAN-V23 choice 6): the V that started a change, held 0.4 seconds, ends it
+  // as it comes up, and its repeats type nothing. The listener is there all along, and the session
+  // is known at once (`voiceNow`), so a quick let-go is never missed.
+  const voiceNow = useRef<BarSession | null>(null)
+  const vTaken = useRef(false)
+  useEffect(() => {
+    const letGo = (): void => {
+      if (!vTaken.current) return
+      vTaken.current = false
+      voiceNow.current?.vUp()
+    }
+    const onUp = (event: globalThis.KeyboardEvent): void => {
+      if (isVKey(event)) letGo()
+    }
+    document.addEventListener('keyup', onUp)
+    window.addEventListener('blur', letGo)
+    return () => {
+      document.removeEventListener('keyup', onUp)
+      window.removeEventListener('blur', letGo)
+    }
+  }, [])
+
   // --- A change by voice ----------------------------------------------------------------------------
   const changeCall = (change: AssistantChange): boolean => {
     const { note: saved, outcomes } = latest.current
@@ -683,10 +710,16 @@ function DraftCard({
     return { kind: 'show', line: CARD_CAN, unsure: command.unsure, again: true }
   }
 
-  const speak = (): void => {
+  /** V on the card, or Say it again: a change by voice. `byKey`: the V key, which may be held. */
+  const speak = (byKey = false): void => {
     stopListening()
+    const held = (session: BarSession): void => {
+      if (!byKey) return
+      vTaken.current = true
+      session.vDown()
+    }
     if (voice) {
-      voice.pressV()
+      if (voice.pressV()) held(voice)
       return
     }
     const now = latest.current.draft
@@ -695,13 +728,16 @@ function DraftCard({
       card: { action: now.action, boxes: [...BOXES[now.action]] },
       hand: onVoiceAnswer,
       onClose: () => {
+        if (voiceNow.current === session) voiceNow.current = null
         setVoice(null)
       },
       env,
       makeTool,
     })
+    voiceNow.current = session
     setVoice(session)
     session.start(tool)
+    held(session)
   }
 
   const snapshot = useSyncExternalStore(
@@ -727,6 +763,11 @@ function DraftCard({
     stopListening()
     // The card's keys stay in the card. Esc is the dialog's own (`onEscape`).
     if (event.key !== 'Escape') event.stopPropagation()
+    if (event.repeat && isVKey(event)) {
+      // A held V's repeats type nothing, even in the box the focus went to (PLAN-V23 choice 6).
+      if (vTaken.current) event.preventDefault()
+      return
+    }
     const typing = typingKey(event.nativeEvent)
     if (event.key === 'Enter') {
       const withCtrl = event.ctrlKey || event.metaKey
@@ -751,7 +792,7 @@ function DraftCard({
       isVKeyOn()
     ) {
       event.preventDefault()
-      speak()
+      speak(true)
     }
   }
 

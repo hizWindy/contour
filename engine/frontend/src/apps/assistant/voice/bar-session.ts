@@ -45,6 +45,8 @@ export const TIMES = {
   firstWords: 6000,
   /** The longest talk (TBC). */
   limit: 60_000,
+  /** V still down this long is a hold: letting go ends the talk (PLAN-V23 choice 6, TBC). */
+  hold: 400,
 }
 
 export type Times = typeof TIMES
@@ -148,6 +150,9 @@ function wordsOf(text: string): string {
 type TimerName = 'silence' | 'first' | 'limit'
 type Listener = () => void
 
+/** The V that started listening: not down, down for less than the hold, or held. */
+type Hold = 'none' | 'down' | 'held'
+
 export class BarSession {
   private readonly onPage: AssistantOnPage | null
   private readonly card: AssistantCardIn | null
@@ -173,6 +178,8 @@ export class BarSession {
   private request: AbortController | null = null
   private source: CommandSource = 'mic'
   private over = false
+  private hold: Hold = 'none'
+  private holdTimer = 0
 
   constructor(options: BarSessionOptions) {
     this.onPage = options.onPage ?? null
@@ -348,8 +355,36 @@ export class BarSession {
   /** The bar is gone: the mic is let go and nothing more comes. */
   dispose(): void {
     this.over = true
+    window.clearTimeout(this.holdTimer)
     this.stopListening()
     this.abortRequest()
+  }
+
+  // --- Hold V (PLAN-V23 choice 6) -----------------------------------------------------------------
+
+  /**
+   * V went down, and started (or is) the listening: held past `times.hold`, it is a hold, and no
+   * silence ends the talk while it is. Anywhere else, nothing.
+   */
+  vDown(): void {
+    const { phase } = this.snapshot
+    if (this.over || (phase !== 'starting' && phase !== 'listening')) return
+    window.clearTimeout(this.holdTimer)
+    this.hold = 'down'
+    this.holdTimer = window.setTimeout(() => {
+      if (this.hold !== 'down') return
+      this.hold = 'held'
+      this.clear('silence')
+      this.clear('first')
+    }, this.times.hold)
+  }
+
+  /** V came up: after a hold, the talk is over, as with Done. After a tap, nothing changes. */
+  vUp(): void {
+    window.clearTimeout(this.holdTimer)
+    const held = this.hold === 'held'
+    this.hold = 'none'
+    if (held) this.done()
   }
 
   // --- The mic ----------------------------------------------------------------------------------
@@ -368,11 +403,14 @@ export class BarSession {
       return
     }
     if (this.snapshot.phase === 'starting' && snap.steps.allowed === 'pass') {
-      // The mic is open and the tool listens: the words count from now.
+      // The mic is open and the tool listens: the words count from now. While V is held, only
+      // letting go ends the talk.
       this.set({ phase: 'listening', mic: snap })
-      this.restart('first', this.times.firstWords, () => {
-        this.done()
-      })
+      if (this.hold !== 'held') {
+        this.restart('first', this.times.firstWords, () => {
+          this.done()
+        })
+      }
       this.restart('limit', this.times.limit, () => {
         this.done()
       })
@@ -397,12 +435,13 @@ export class BarSession {
     })
   }
 
-  /** New words: the talk goes on, and the silence counts from now. */
+  /** New words: the talk goes on, and the silence counts from now (not while V is held). */
   private heard(text: string): void {
     const words = wordsOf(text)
     if (words === '' || words === this.heardWords) return
     this.heardWords = words
     this.clear('first')
+    if (this.hold === 'held') return
     this.restart('silence', this.times.silence, () => {
       this.done()
     })

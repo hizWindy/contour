@@ -7,6 +7,9 @@
  * first V or press of "Speak (V)" in the top bar, or as a review card opens from a button. If its
  * file can't be downloaded (an old file gone after a deploy), the bar closes again and the page goes
  * on.
+ *
+ * Hold V (PLAN-V23 choice 6): the V that opens the bar is marked down until it comes up, here in
+ * the first visit, so a key let go before the bar's code is in is never missed.
  */
 import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react'
 import { useIsViewer } from '@/auth/can'
@@ -15,7 +18,8 @@ import { isPlainV } from './keys'
 import {
   closeVoiceBar,
   isVoiceBarOpen,
-  openVoiceBar,
+  letGoV,
+  openVoiceBarByKey,
   useVoiceBarOpen,
   useVoiceCodeWanted,
 } from './store'
@@ -53,15 +57,22 @@ export function VoiceKey() {
       // Once the bar is open, its own keys take over (V finishes, Esc throws away).
       if (isVoiceBarOpen() || !isPlainV(event)) return
       event.preventDefault()
-      openVoiceBar()
+      openVoiceBarByKey()
+    }
+    const onUp = (event: KeyboardEvent): void => {
+      if (event.key === 'v' || event.key === 'V') letGoV()
     }
     document.addEventListener('keydown', onKey)
+    document.addEventListener('keyup', onUp)
+    window.addEventListener('blur', letGoV)
     // The bar's code, quietly, once the browser has nothing better to do.
     const cancel = whenIdle(() => {
       setIdle(true)
     })
     return () => {
       document.removeEventListener('keydown', onKey)
+      document.removeEventListener('keyup', onUp)
+      window.removeEventListener('blur', letGoV)
       cancel()
     }
   }, [viewer])
