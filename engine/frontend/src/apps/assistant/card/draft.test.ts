@@ -118,9 +118,7 @@ describe('what blocks a send', () => {
     expect(missingOf({ ...task, subject: ' ' }, TODAY)).toBe('subject')
     expect(missingOf({ ...task, when: 'whenever' }, TODAY)).toBe('due')
     expect(missingOf({ ...task, when: '1/1/2000' }, TODAY)).toBe('due')
-    expect(missingOf({ ...task, company: { found: null, choices: [], heard: 'x' } }, TODAY)).toBe(
-      'company',
-    )
+    expect(missingOf({ ...task, company: { ...task.company, found: null } }, TODAY)).toBe('company')
     expect(missingOf(task, TODAY)).toBeNull()
   })
 })

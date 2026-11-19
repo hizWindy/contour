@@ -11,13 +11,13 @@
  *   when there is none ahead, with New pre-read.
  *
  * A choice the command left open ("Which James?") shows as buttons in its place, and the part
- * shows once it is picked. Every part a send waits for carries `data-box`.
+ * shows once it is picked. Every part a send waits for carries `data-box`. The company, with
+ * "Add to HubSpot" when it is nowhere (PLAN-V23 T1-6), is its own part (`company.tsx`).
  */
 import { useQueryClient } from '@tanstack/react-query'
 import { Hourglass, X } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
-import { useCompanySearch } from '@/api/hooks'
 import { useTeam } from '@/api/hooks/meetings'
 import { queryKeys } from '@/api/query'
 import type {
@@ -28,7 +28,6 @@ import type {
   CallNotePatch,
   CallNotePreview,
   CallNoteTask,
-  CompanyHit,
   HubSpotWrite,
   TaskKind,
   TeamEmail,
@@ -51,7 +50,6 @@ import {
   SORTING,
   UNDO,
 } from '@/apps/companies/call-logs/words'
-import { FIND_COMPANY, LOOKING, NO_MATCH } from '@/apps/companies/words'
 import { useNoHubSpotUser } from '@/auth/hubspot-user'
 import { ChipGroup, Segmented } from '@/components/motion'
 import { Button } from '@/components/ui/button'
@@ -59,18 +57,17 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { dueDateText } from '@/lib/due-date'
 import { formatDateTime } from '@/lib/format'
-import { useDebounced } from '@/hooks/useDebounced'
+import { CompanyPart } from './company'
 import {
   BODY_MAX,
   dueOf,
   isPending,
   MOST_PEOPLE,
+  pickCompany,
   recipientOf,
   SUBJECT_MAX,
   type CallDraft,
-  type Company,
   type EmailDraft,
-  type Find,
   type Recipient,
   type TaskDraft,
 } from './draft'
@@ -82,7 +79,6 @@ import {
   ADD_PLACEHOLDER,
   ADD_SOMEONE,
   BODY,
-  COMPANY,
   dueLine,
   FOR_WHOM,
   FOR_YOU,
@@ -91,7 +87,6 @@ import {
   KIND,
   MORE,
   NEW_PRE_READ,
-  noCompanyWords,
   noMeetingWords,
   NO_ONE,
   NOTHING_ADDED,
@@ -105,7 +100,6 @@ import {
   WHEN_PAST,
   WHEN_UNREADABLE,
   whichWords,
-  WHICH_COMPANY,
   WHICH_MEETING,
   WHICH_PERSON,
   WHICH_TEAMMATE,
@@ -116,93 +110,6 @@ const KIND_OPTIONS = (Object.keys(KIND_LABELS) as TaskKind[]).map((kind) => ({
   value: kind,
   label: KIND_LABELS[kind],
 }))
-
-// --- The company ----------------------------------------------------------------------------------
-
-/** Find a company in our HubSpot copy, when the command found none: the box, then the matches. */
-function CompanyPicker({ heard, onPick }: { heard: string; onPick: (company: Company) => void }) {
-  const [text, setText] = useState(heard)
-  const settled = useDebounced(text, 250)
-  const search = useCompanySearch(settled)
-  const hits: readonly CompanyHit[] =
-    settled.trim().length >= 2 ? (search.data?.companies ?? []) : []
-  const id = useId()
-  return (
-    <div className="flex flex-col gap-2">
-      <p className="text-ui text-foreground">{noCompanyWords(heard)}</p>
-      <Input
-        id={id}
-        data-box="company"
-        aria-label={FIND_COMPANY}
-        placeholder={FIND_COMPANY}
-        autoComplete="off"
-        value={text}
-        className="touch:text-body"
-        onChange={(event) => {
-          setText(event.target.value)
-        }}
-        onKeyDown={(event) => {
-          // Down goes into the matches, which then move with the arrow keys.
-          if (event.key !== 'ArrowDown') return
-          const first = event.currentTarget
-            .closest('[data-slot=company-picker]')
-            ?.querySelector<HTMLButtonElement>('[data-slot=card-choice]')
-          if (!first) return
-          event.preventDefault()
-          first.focus()
-        }}
-      />
-      {hits.length > 0 ? (
-        <ChoiceList
-          label={WHICH_COMPANY}
-          box="company"
-          options={hits.slice(0, 6).map((hit) => ({
-            id: hit.key,
-            title: hit.name,
-            detail: [hit.industry, hit.city].filter(Boolean).join(' · ') || null,
-          }))}
-          onPick={(key) => {
-            const hit = hits.find((one) => one.key === key)
-            if (hit) onPick({ key: hit.key, name: hit.name })
-          }}
-        />
-      ) : settled.trim().length >= 2 ? (
-        <p role="status" className="text-caption text-muted-foreground">
-          {search.isFetching ? LOOKING : NO_MATCH}
-        </p>
-      ) : null}
-    </div>
-  )
-}
-
-/** The company: as found, to pick from two or more, or to find. */
-function CompanyPart({
-  company,
-  onPick,
-}: {
-  company: Find<Company>
-  onPick: (company: Company) => void
-}) {
-  if (company.found) return <CardLine label={COMPANY}>{company.found.name}</CardLine>
-  if (isPending(company)) {
-    return (
-      <ChoiceList
-        label={whichWords(company.heard, WHICH_COMPANY)}
-        box="company"
-        options={company.choices.map((one) => ({ id: one.key, title: one.name }))}
-        onPick={(key) => {
-          const picked = company.choices.find((one) => one.key === key)
-          if (picked) onPick(picked)
-        }}
-      />
-    )
-  }
-  return (
-    <div data-slot="company-picker">
-      <CompanyPicker heard={company.heard} onPick={onPick} />
-    </div>
-  )
-}
 
 // --- A call -------------------------------------------------------------------------------------------
 
@@ -437,6 +344,8 @@ export interface CallLayoutProps {
   onEdit: EditCall
   /** A box's own Esc, where it is reached: the focus leaves the box. */
   onLeaveBox: () => void
+  /** How long the company's add check waits after the last key (PLAN-V23 T1-6). */
+  previewMs?: number
 }
 
 export function CallLayout({
@@ -449,6 +358,7 @@ export function CallLayout({
   onOpenCallLogs,
   onEdit,
   onLeaveBox,
+  previewMs = 0,
 }: CallLayoutProps) {
   const { person } = draft
   const companyPicked = draft.company.found !== null
@@ -458,12 +368,9 @@ export function CallLayout({
     <div className="flex flex-col gap-4">
       <CompanyPart
         company={draft.company}
-        onPick={(company) => {
-          onDraft({
-            ...draft,
-            company: { ...draft.company, found: company, choices: [] },
-            edited: true,
-          })
+        previewMs={previewMs}
+        onPick={(company, how) => {
+          onDraft({ ...draft, company: pickCompany(draft.company, company, how), edited: true })
         }}
       />
       {companyPicked ? (
@@ -653,6 +560,8 @@ export interface TaskLayoutProps {
   checked?: boolean
   /** It can't be for you: no HubSpot user, so "For whom" asks for a teammate (PLAN-V23 T3-4). */
   needsTeammate?: boolean
+  /** How long the company's add check waits after the last key (PLAN-V23 T1-6). */
+  previewMs?: number
 }
 
 export function TaskLayout({
@@ -663,6 +572,7 @@ export function TaskLayout({
   today,
   checked = true,
   needsTeammate = false,
+  previewMs = 0,
 }: TaskLayoutProps) {
   const due = dueOf(draft, today)
   const change = (part: Partial<TaskDraft>): void => {
@@ -673,8 +583,9 @@ export function TaskLayout({
     <div className="flex flex-col gap-4">
       <CompanyPart
         company={draft.company}
-        onPick={(company) => {
-          change({ company: { ...draft.company, found: company, choices: [] } })
+        previewMs={previewMs}
+        onPick={(company, how) => {
+          change({ company: pickCompany(draft.company, company, how) })
         }}
       />
       <BoxField

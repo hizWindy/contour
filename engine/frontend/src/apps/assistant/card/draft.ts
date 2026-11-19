@@ -45,6 +45,18 @@ export interface Find<T> {
   heard: string
 }
 
+/** The company a call or a task is for, and how it was found (PLAN-V23 T1-5, T1-6). */
+export interface CompanyFind extends Find<Company> {
+  /** Our copy didn't have it, and HubSpot's own search found it: the card says so. */
+  fromHubspot: boolean
+  /** Neither our copy nor HubSpot has it: the card offers "Add to HubSpot". */
+  canAdd: boolean
+  /** The rep found it, after the command found nothing: the words heard teach the mic. */
+  byHand: boolean
+  /** The rep added it to HubSpot from the card. */
+  added: boolean
+}
+
 /** A teammate or a Contour address, as the command named them, or as the rep added them. */
 export interface Recipient {
   /** Its place on the card. */
@@ -74,7 +86,7 @@ interface Base {
 
 export interface CallDraft extends Base {
   action: 'log_call'
-  company: Find<Company>
+  company: CompanyFind
   person: Find<CallNotePerson>
   /** The note, word for word as said (choice 16). */
   text: string
@@ -86,7 +98,7 @@ export interface CallDraft extends Base {
 
 export interface TaskDraft extends Base {
   action: 'task'
-  company: Find<Company>
+  company: CompanyFind
   subject: string
   /** The "When" box, as said or typed ("Friday"). */
   when: string
@@ -125,13 +137,46 @@ export const MOST_PEOPLE = 20
 
 // --- From the command ------------------------------------------------------------------------------
 
-function companyOf(command: AssistantCommand): Find<Company> {
+function companyOf(command: AssistantCommand): CompanyFind {
   const company = command.company
   const pick = (hit: { key: string; name: string }): Company => ({ key: hit.key, name: hit.name })
   return {
     found: company?.found ? pick(company.found) : null,
     choices: (company?.choices ?? []).map(pick),
     heard: company?.heard ?? '',
+    fromHubspot: company?.from_hubspot === true,
+    canAdd: company?.can_add === true,
+    byHand: false,
+    added: false,
+  }
+}
+
+/** No company yet: an empty card's, before the rep picks one. */
+export const NO_COMPANY: CompanyFind = {
+  found: null,
+  choices: [],
+  heard: '',
+  fromHubspot: false,
+  canAdd: false,
+  byHand: false,
+  added: false,
+}
+
+/**
+ * The company picked on the card. From the command's own choices it was found by the command;
+ * anywhere else (the search list, a company like it, one added) the rep found it by hand.
+ */
+export function pickCompany(
+  company: CompanyFind,
+  picked: Company,
+  how: 'choice' | 'by_hand' | 'added',
+): CompanyFind {
+  return {
+    ...company,
+    found: picked,
+    choices: [],
+    byHand: how !== 'choice',
+    added: how === 'added',
   }
 }
 
@@ -244,7 +289,7 @@ export function emptyDraftOf(
   return {
     ...base,
     action: 'task',
-    company: { found: null, choices: [], heard: '' },
+    company: NO_COMPANY,
     subject: '',
     when: '',
     whenStart: '',

@@ -68,6 +68,47 @@ export function noCompanyWords(heard: string): string {
   return name ? `We couldn't find '${name}' in HubSpot. Pick the company.` : 'Pick the company.'
 }
 
+// --- When a name goes wrong (PLAN-V23 T1-6, the plan's table, word for word) ---------------------
+
+/** HubSpot's own search found the company, and it is in our copy now. */
+export function newInHubspotWords(name: string): string {
+  return `${name} is new in HubSpot. We'll use it.`
+}
+
+/** Neither our copy nor HubSpot has it: the card offers to add it, and the search list. */
+export function isntInHubspotWords(name: string): string {
+  return `${name} isn't in HubSpot. Add it, or pick another company.`
+}
+
+/** HubSpot has a company with a close name. */
+export function likeItWords(other: string, name: string): string {
+  return `HubSpot already has ${other}. Use it, or add ${name} anyway.`
+}
+
+export const ADDING_OFF = "Adding companies to HubSpot is off for now. Pick a company that's there."
+
+export const ADD_TO_HUBSPOT = 'Add to HubSpot'
+export const ADD_ANYWAY = 'Add anyway'
+/** While the add is on its way. */
+export const ADDING = 'Adding.'
+/** The check with HubSpot didn't answer: ask it again. */
+export const TRY_AGAIN = 'Try again'
+
+/** "Use Northwind Pty Ltd": take the company HubSpot already has. */
+export function pickWords(name: string): string {
+  return `Use ${name}`
+}
+
+/** The add's own boxes (TBC at Al-khair's look). */
+export const COMPANY_NAME = 'Name'
+export const CITY = 'City'
+export const CITY_HINT = 'Optional, like Perth'
+export const CHECKING_HUBSPOT = 'Checking HubSpot.'
+/** Back from the add to the search list. */
+export const BACK = 'Back'
+/** Under the company once the rep added it (TBC). */
+export const ADDED_TO_HUBSPOT = 'Added to HubSpot.'
+
 /** No meeting ahead, for a pre-read. */
 export function noMeetingWords(company: string): string {
   return `${company} has no meeting in HubSpot in the next 60 days. Start a pre-read and type the date.`

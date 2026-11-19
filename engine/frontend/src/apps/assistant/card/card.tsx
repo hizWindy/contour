@@ -22,6 +22,11 @@
  * - **Sending** (T3-4): Enter, a click on Send or "send it" closes the card and starts the 5 second
  *   hold (`hold.tsx`), with Undo. After a spoken command, the card listens 5 seconds for "send it"
  *   or "cancel" (`listen.ts`); any key or click stops it.
+ * - **When a name goes wrong** (PLAN-V23 T1-6): the company part says it ("new in HubSpot", "isn't
+ *   in HubSpot", with Add to HubSpot), so the server's paragraph above leaves those lines out.
+ *   Unclear words spoken on the card wait in its strip's text line, as in the bar.
+ * - **Hold V** (PLAN-V23 choice 6) on the card works as in the bar: a V held 0.4 seconds ends the
+ *   change it started as it comes up.
  *
  * Its code loads with the voice bar's, late, never in the first visit (`host.tsx`).
  */
@@ -102,6 +107,7 @@ import { keepCardDraft } from './drafts'
 import { inTextBox, typingKey } from './keys'
 import { startHold } from './hold'
 import { CallLayout, EmailLayout, PreReadLayout, TaskLayout, type EditCall } from './layouts'
+import { cardLinesOf, unsureLeft } from './lines'
 import { listenForSendIt } from './listen'
 import { CARD_TIMES, type CardTimes } from './times'
 import { HintBar, ListenStrip, PartProblem, VoiceStrip } from './parts'
@@ -833,6 +839,8 @@ function DraftCard({
 
   // A call is put off, not cancelled: it waits in Call logs (PLAN-V23 T4-2).
   const putOff = draft.action === 'log_call' ? LATER : CANCEL
+  // The server's lines the parts don't say themselves (PLAN-V23 T1-6: "Say it once").
+  const unsure = unsureLeft(draft.unsure, cardLinesOf(draft))
 
   let layout
   switch (draft.action) {
@@ -851,6 +859,7 @@ function DraftCard({
           }}
           onEdit={editCall}
           onLeaveBox={leaveBox}
+          previewMs={t.preview}
         />
       )
       break
@@ -864,6 +873,7 @@ function DraftCard({
           today={today}
           checked={checked}
           needsTeammate={teammate}
+          previewMs={t.preview}
         />
       )
       break
@@ -914,8 +924,8 @@ function DraftCard({
           <MicSheetTitle data-slot="read-back" className="text-body">
             {readBackOf(draft, today, note.data)}
           </MicSheetTitle>
-          {draft.unsure && !draft.edited ? (
-            <p className="text-ui text-pretty text-muted-foreground">{draft.unsure}</p>
+          {unsure && !draft.edited ? (
+            <p className="text-ui text-pretty text-muted-foreground">{unsure}</p>
           ) : null}
           {whole ? (
             <>

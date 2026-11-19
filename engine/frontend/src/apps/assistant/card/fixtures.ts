@@ -4,6 +4,8 @@
  */
 import type {
   AssistantCommand,
+  AssistantCompanyAdded,
+  AssistantCompanyPreview,
   CallNoteChange,
   CallNoteOptions,
   CallNoteOut,
@@ -40,6 +42,10 @@ export const API = {
   team: '/api/v1/companies/team',
   search: '/api/v1/companies/search',
   forms: '/api/v1/companies/meetings/forms',
+  // PLAN-V23 Part 1: adding a company from the card, and the names the mic learns.
+  companies: '/api/v1/companies/assistant/companies',
+  companyPreview: '/api/v1/companies/assistant/companies/preview',
+  learned: '/api/v1/companies/assistant/learned',
 }
 
 export const NOTE_ID = '7d0c5b8e-0000-4000-8000-000000000001'
@@ -62,6 +68,40 @@ export const OTHER_SAMPLE: CompanyHit = {
   city: 'Melbourne',
   industry: 'Freight',
   source: 'hubspot',
+}
+
+/** A company only HubSpot had, until the command read it into our copy (PLAN-V23 T1-3). */
+export const NORTHWIND: CompanyHit = {
+  key: '301',
+  name: 'Northwind Pty Ltd',
+  city: 'Perth',
+  industry: 'Freight',
+  source: 'hubspot',
+}
+
+/** What adding a company would do (PLAN-V23 T1-4): nothing like it, and adding is on. */
+export function companyPreview(
+  change: Partial<AssistantCompanyPreview> = {},
+): AssistantCompanyPreview {
+  return {
+    name: 'North Wind',
+    city: null,
+    similar: [],
+    exists: null,
+    can_write: true,
+    waiting_for: null,
+    sentence: null,
+    ...change,
+  }
+}
+
+/** The company the card added to HubSpot. */
+export function companyAdded(name = 'North Wind', key = '401'): AssistantCompanyAdded {
+  return {
+    company_key: key,
+    company: { key, name, city: null, industry: null, source: 'hubspot' },
+    hubspot_url: null,
+  }
 }
 
 export const JO = { id: 'c-1', name: 'Jo Sample', title: 'Office manager' }
