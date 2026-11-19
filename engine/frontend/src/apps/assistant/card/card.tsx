@@ -486,6 +486,24 @@ function DraftCard({
     if (whole) boxesDrawn()
   }, [whole])
 
+  // A company picked on the card (a choice, the search list, Use, or one added; PLAN-V23 T1-6):
+  // the part it was picked in goes, so the focus would fall to the page. It goes on to the next
+  // box still to fill, else to Send, so the keyboard carries on from there.
+  const pickedKey = draft.action === 'email' ? null : (draft.company.found?.key ?? null)
+  const pickedBefore = useRef(pickedKey)
+  const companyPicked = useEffectEvent(() => {
+    const active = document.activeElement
+    if (active instanceof HTMLElement && active !== document.body && card.current?.contains(active))
+      return
+    const box = missingOf(latest.current.draft, latest.current.today)
+    if (!box || !focusBox(box)) sendButton.current?.focus()
+  })
+  useEffect(() => {
+    const before = pickedBefore.current
+    pickedBefore.current = pickedKey
+    if (before === null && pickedKey !== null) companyPicked()
+  }, [pickedKey])
+
   const startSend = (now: CardDraft): void => {
     closing.current = 'send'
     stopListening()

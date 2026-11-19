@@ -100,10 +100,12 @@ export function pickWords(name: string): string {
 }
 
 /** The add's own boxes (TBC at Al-khair's look). */
-export const COMPANY_NAME = 'Name'
+export const COMPANY_NAME = 'Company name'
 export const CITY = 'City'
 export const CITY_HINT = 'Optional, like Perth'
 export const CHECKING_HUBSPOT = 'Checking HubSpot.'
+/** The check found no company with a close name: adding it is safe (TBC). */
+export const NOTHING_LIKE_IT = 'HubSpot has no company like it.'
 /** Back from the add to the search list. */
 export const BACK = 'Back'
 /** Under the company once the rep added it (TBC). */

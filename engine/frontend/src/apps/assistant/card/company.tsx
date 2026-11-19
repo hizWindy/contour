@@ -51,6 +51,7 @@ import {
   isntInHubspotWords,
   likeItWords,
   noCompanyWords,
+  NOTHING_LIKE_IT,
   pickWords,
   TRY_AGAIN,
   WHICH_COMPANY,
@@ -91,50 +92,58 @@ export function CompanyPicker({
   const hits: readonly CompanyHit[] =
     settled.trim().length >= 2 ? (search.data?.companies ?? []) : []
   const id = useId()
-  return (
-    <div className="flex flex-col gap-2">
-      {line}
-      <Input
-        id={id}
-        data-box="company"
-        aria-label={FIND_COMPANY}
-        placeholder={FIND_COMPANY}
-        autoComplete="off"
-        value={text}
-        className="touch:text-body"
-        onChange={(event) => {
-          setText(event.target.value)
-        }}
-        onKeyDown={(event) => {
-          // Down goes into the matches, which then move with the arrow keys.
-          if (event.key !== 'ArrowDown') return
-          const first = event.currentTarget
-            .closest('[data-slot=company-picker]')
-            ?.querySelector<HTMLButtonElement>('[data-slot=card-choice]')
-          if (!first) return
-          event.preventDefault()
-          first.focus()
+  const matches =
+    hits.length > 0 ? (
+      <ChoiceList
+        label={WHICH_COMPANY}
+        box="company"
+        options={hits.slice(0, 6).map((hit) => ({
+          id: hit.key,
+          title: hit.name,
+          detail: [hit.industry, hit.city].filter(Boolean).join(' · ') || null,
+        }))}
+        onPick={(key) => {
+          const hit = hits.find((one) => one.key === key)
+          if (hit) onPick({ key: hit.key, name: hit.name })
         }}
       />
-      {hits.length > 0 ? (
-        <ChoiceList
-          label={WHICH_COMPANY}
-          box="company"
-          options={hits.slice(0, 6).map((hit) => ({
-            id: hit.key,
-            title: hit.name,
-            detail: [hit.industry, hit.city].filter(Boolean).join(' · ') || null,
-          }))}
-          onPick={(key) => {
-            const hit = hits.find((one) => one.key === key)
-            if (hit) onPick({ key: hit.key, name: hit.name })
+    ) : null
+  return (
+    <div className="flex flex-col gap-3">
+      {line}
+      {/* The box with its label, like the card's other boxes, so it says what it is with words
+          in it, and what the search found under it. */}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={id} className="text-caption text-muted-foreground">
+          {FIND_COMPANY}
+        </label>
+        <Input
+          id={id}
+          data-box="company"
+          autoComplete="off"
+          value={text}
+          className="touch:text-body"
+          onChange={(event) => {
+            setText(event.target.value)
+          }}
+          onKeyDown={(event) => {
+            // Down goes into the matches, which then move with the arrow keys.
+            if (event.key !== 'ArrowDown') return
+            const first = event.currentTarget
+              .closest('[data-slot=company-picker]')
+              ?.querySelector<HTMLButtonElement>('[data-slot=card-choice]')
+            if (!first) return
+            event.preventDefault()
+            first.focus()
           }}
         />
-      ) : settled.trim().length >= 2 ? (
-        <p role="status" className="text-caption text-muted-foreground">
-          {search.isFetching ? LOOKING : NO_MATCH}
-        </p>
-      ) : null}
+        {!matches && settled.trim().length >= 2 ? (
+          <p role="status" className="text-caption text-muted-foreground">
+            {search.isFetching ? LOOKING : NO_MATCH}
+          </p>
+        ) : null}
+      </div>
+      {matches}
     </div>
   )
 }
@@ -294,13 +303,19 @@ function AddForm({
           />
         </div>
       </div>
-      {now !== '' && !checked && !preview.isError ? (
-        <p role="status" className="text-caption text-muted-foreground">
-          {CHECKING_HUBSPOT}
-        </p>
-      ) : null}
-      {failed ? <PartProblem>{problemWords(preview.error)}</PartProblem> : null}
-      {like ? <Line>{data?.sentence ?? likeItWords(like.name, body.name)}</Line> : null}
+      {/* What the check says, in one place that keeps its height, so the buttons don't jump, and
+          that a screen reader hears. Nothing while a name is still being typed. */}
+      <div role="status" data-slot="company-check" className="min-h-6">
+        {failed ? (
+          <PartProblem>{problemWords(preview.error)}</PartProblem>
+        ) : like ? (
+          <Line>{data?.sentence ?? likeItWords(like.name, body.name)}</Line>
+        ) : checked ? (
+          <p className="text-ui text-pretty text-muted-foreground">{NOTHING_LIKE_IT}</p>
+        ) : preview.isFetching ? (
+          <p className="text-ui text-muted-foreground">{CHECKING_HUBSPOT}</p>
+        ) : null}
+      </div>
       {problem ? <PartProblem>{problem}</PartProblem> : null}
       <div className="flex flex-wrap items-center gap-2">
         {like ? (

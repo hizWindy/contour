@@ -96,6 +96,7 @@ function LearnedTable({
                 type="button"
                 variant="ghost"
                 size="sm"
+                className="touch:h-11"
                 aria-label={`Remove ${item.heard}`}
                 onClick={() => {
                   onRemove(item)

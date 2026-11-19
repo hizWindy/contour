@@ -156,8 +156,8 @@ describe('the company, when a name goes wrong (T1-6)', () => {
     const found = await card()
     await user.click(within(found).getByRole('button', { name: 'Add to HubSpot' }))
     // The name as heard, to fix, and a city.
-    expect(within(found).getByRole('textbox', { name: 'Name' })).toHaveValue('North Wind')
-    expect(within(found).getByRole('textbox', { name: 'Name' })).toHaveFocus()
+    expect(within(found).getByRole('textbox', { name: 'Company name' })).toHaveValue('North Wind')
+    expect(within(found).getByRole('textbox', { name: 'Company name' })).toHaveFocus()
     expect(within(found).getByRole('textbox', { name: 'City' })).toHaveValue('')
     expect(await within(found).findByText(LIKE_IT)).toBeInTheDocument()
     expect(of(API.companyPreview)[0]?.body).toEqual({ name: 'North Wind', city: null })
@@ -193,7 +193,7 @@ describe('the company, when a name goes wrong (T1-6)', () => {
     const { user, of } = show(nowhere())
     const found = await card()
     await user.click(within(found).getByRole('button', { name: 'Add to HubSpot' }))
-    const name = within(found).getByRole('textbox', { name: 'Name' })
+    const name = within(found).getByRole('textbox', { name: 'Company name' })
     await user.clear(name)
     await user.type(name, 'Northwind Freight')
     await user.type(within(found).getByRole('textbox', { name: 'City' }), 'Perth')
@@ -207,6 +207,11 @@ describe('the company, when a name goes wrong (T1-6)', () => {
     await waitFor(() => {
       expect(add).toBeEnabled()
     })
+    // The check says so, where a screen reader hears it.
+    expect(found.querySelector('[data-slot=company-check]')).toHaveTextContent(
+      'HubSpot has no company like it.',
+    )
+    expect(found.querySelector('[data-slot=company-check]')).toHaveAttribute('role', 'status')
     await user.dblClick(add)
     expect(await within(found).findByText('Added to HubSpot.')).toBeInTheDocument()
     expect(of(API.companies)).toHaveLength(1)
@@ -335,6 +340,19 @@ describe('the company, when a name goes wrong (T1-6)', () => {
       expect(within(found).getByRole('button', { name: 'Add to HubSpot' })).toBeEnabled()
     })
     expect(of(API.companyPreview)).toHaveLength(2)
+  })
+
+  it('a company picked here moves the focus on to the next box to fill, or Send', async () => {
+    const { user } = show(nowhere({ task: null }))
+    const found = await card()
+    const box = within(found).getByRole('textbox', { name: 'Find a company' })
+    await user.clear(box)
+    await user.type(box, 'Sample')
+    await user.click(await within(found).findByRole('button', { name: /Sample Logistics/ }))
+    // The task has no words yet: "What to do" is next.
+    await waitFor(() => {
+      expect(within(found).getByRole('textbox', { name: 'What to do' })).toHaveFocus()
+    })
   })
 
   it('Back from the add returns to the line, the button and the search list', async () => {
