@@ -12,6 +12,8 @@ import { pluralise } from '@/lib/format'
 
 export const TASKS = 'Your HubSpot tasks'
 export const MEETINGS = 'Your meetings today and tomorrow'
+/** The pre-reads sent to me, for meetings from today on (PLAN-V23 T2-4, choice 9). */
+export const PRE_READS = 'Pre-reads for you'
 export const CALLS = 'Calls to confirm'
 export const DEALS = 'Deals that need a nudge'
 
@@ -41,6 +43,7 @@ export const NOTHING_DUE_NEXT = 'Press V to log a call or add a task.'
 export const NOTHING_DUE_NEXT_TOUCH = 'Tap Speak to log a call or add a task.'
 export const NO_TASKS = 'No tasks due in the next 7 days.'
 export const NO_MEETINGS = 'No meetings today or tomorrow.'
+export const NO_PRE_READS = 'No pre-reads sent to you.'
 export const NO_CALLS = 'No calls to confirm.'
 export const NO_DEALS = 'No deals need a nudge.'
 
@@ -64,6 +67,11 @@ export function dueWords(task: Pick<TodayTask, 'group'>, day: string): string {
   if (task.group === 'overdue') return `Overdue, due ${day}`
   if (task.group === 'today') return 'Due today'
   return `Due ${day}`
+}
+
+/** Who sent me a pre-read: "Sent by Sam Sample". */
+export function sentByWords(name: string): string {
+  return `Sent by ${name}`
 }
 
 /** HubSpot has more old overdue tasks than Today lists (it reads 100 at most). */

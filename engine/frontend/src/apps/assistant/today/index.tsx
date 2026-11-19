@@ -22,6 +22,7 @@
  *   serif voice, and the errors in plain words.
  * - **The layout:** two columns on a laptop, the tasks first; one column on a phone, with "Speak"
  *   pinned at the bottom (choice 13).
+ * - **Pre-reads for you** (PLAN-V23 T2-4) come right after the meetings (`pre-reads.tsx`).
  * - **"Add task" and "Email the team"** (PLAN-V23 T4-3) open the review card empty. No AI reads
  *   anything, so they work while the AI is off or busy; Ctrl+K has them too.
  * - **After L** (or a row's "Log a call"), as the Log call panel closes, the focus goes back to the
@@ -67,12 +68,14 @@ import {
   nextRowId,
   nothingToday,
   onPageOfRow,
+  preReadsOf,
   rowsOf,
   sees,
   taskGroups,
   taskRowId,
   type TodayRow,
 } from './rows'
+import { PreReadRows } from './pre-reads'
 import { CallsRow, DealRow, MeetingRow, TaskRow, type RowAct, type RowBase } from './rows-view'
 import { SpeakBar } from './speak-bar'
 import { useTaskDone } from './use-done'
@@ -87,12 +90,14 @@ import {
   NO_CALLS,
   NO_DEALS,
   NO_MEETINGS,
+  NO_PRE_READS,
   NO_TASKS,
   NOTHING_DUE,
   NOTHING_DUE_NEXT,
   NOTHING_DUE_NEXT_TOUCH,
   OPEN,
   OPEN_IN_HUBSPOT,
+  PRE_READS,
   soonWords,
   SYNC_TASKS_NOTE,
   TASK_GROUPS,
@@ -338,6 +343,8 @@ function TodayParts({
         }
         return null
       }
+      case 'pre_read':
+        return { label: OPEN, to: preReadHref(row.preRead.form_id) }
       case 'calls':
         return { label: OPEN, to: callLogsHref(row.tab) }
       case 'deal': {
@@ -492,6 +499,15 @@ function TodayParts({
                 </ul>
               </div>
             ) : null,
+          )}
+        </Part>
+      ) : null}
+      {sees(today, 'pre_reads') ? (
+        <Part title={PRE_READS}>
+          {preReadsOf(today).length === 0 ? (
+            <PartLine serif>{NO_PRE_READS}</PartLine>
+          ) : (
+            <PreReadRows preReads={preReadsOf(today)} day={day} rowProps={base} />
           )}
         </Part>
       ) : null}
