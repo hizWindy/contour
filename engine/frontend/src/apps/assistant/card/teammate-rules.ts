@@ -4,9 +4,9 @@
  * its "For" box before Send. The server refuses it otherwise (409 `no_hubspot_user`) and writes
  * nothing. The words are the plan's ("Words for when things go wrong"), word for word.
  *
- * A follow-up names its teammate by name only (`CallNoteTask.owner`), and a change to the follow-ups
- * sends the whole list, so each one's teammate goes back as an id found by that name in the team
- * list (**TBC**: the contract could send the id with the name).
+ * A change to the follow-ups sends the whole list, so each one's teammate goes back as it came: the
+ * id the server sends with the name (`CallNoteTask.owner_id`), so two people with one name stay
+ * apart. An answer without the id (older test data) falls back to that name in the team list.
  */
 import { isApiProblem } from '@/api/client'
 import type { CallNoteTask, TeamMember } from '@/api/types'
@@ -32,11 +32,12 @@ export function needsTeammate(tasks: readonly CallNoteTask[]): boolean {
   return tasks.some(lacksTeammate)
 }
 
-/** The teammate a follow-up is for, as the server takes it: the id of that name in the team list. */
+/** The teammate a follow-up is for, as the server takes it: its id, or the id of its name. */
 export function ownerIdOf(
-  task: Pick<CallNoteTask, 'owner'>,
+  task: Pick<CallNoteTask, 'owner' | 'owner_id'>,
   team: readonly TeamMember[] | undefined,
 ): string | null {
+  if (task.owner_id !== undefined) return task.owner_id
   const name = task.owner?.trim()
   if (!name || !team) return null
   return team.find((member) => member.name.trim() === name)?.owner_id ?? null

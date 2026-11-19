@@ -316,4 +316,15 @@ describe('the teammate rules', () => {
     expect(ownerIdOf({ owner: null }, team)).toBeNull()
     expect(ownerIdOf({ owner: 'Sam Example' }, undefined)).toBeNull()
   })
+
+  it('send a follow-up’s teammate back by the id the server gave, so one name can’t mix two people up', () => {
+    const twoSams: TeamMember[] = [
+      ...team,
+      { owner_id: 'o-4', name: 'Sam Example', has_account: false, is_me: false },
+    ]
+    expect(ownerIdOf({ owner: 'Sam Example', owner_id: 'o-4' }, twoSams)).toBe('o-4')
+    expect(ownerIdOf({ owner: 'Sam Example', owner_id: 'o-3' }, twoSams)).toBe('o-3')
+    expect(ownerIdOf({ owner: 'Sam Example', owner_id: 'o-4' }, undefined)).toBe('o-4')
+    expect(ownerIdOf({ owner: null, owner_id: null }, twoSams)).toBeNull()
+  })
 })
