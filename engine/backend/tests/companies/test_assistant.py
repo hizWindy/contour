@@ -204,7 +204,7 @@ def test_teammates_with_an_account_come_first_and_me_is_the_rep() -> None:
 
 
 def test_an_email_goes_to_teammates_with_an_account_and_contour_addresses_only() -> None:
-    typed = "Email Lee Sample, Jo and kim@ContourInteriors.com.au and bob@gmail.com the plan"
+    typed = "Email Lee Sample, Jo and kim@ContourInteriors.com.au and bob@example.com the plan"
     found = email_recipients(
         ["Lee Sample", "Jo", "everyone", "[email left out]", "Lee Sample"], typed, TEAM, DOMAINS
     )
@@ -213,7 +213,7 @@ def test_an_email_goes_to_teammates_with_an_account_and_contour_addresses_only()
         ("Jo", "o4", None),
         ("everyone", None, None),
         ("kim@ContourInteriors.com.au", None, "kim@contourinteriors.com.au"),
-        ("bob@gmail.com", None, None),
+        ("bob@example.com", None, None),
     ]
     problems = [r.problem for r in found]
     assert problems[0] is None
@@ -223,7 +223,7 @@ def test_an_email_goes_to_teammates_with_an_account_and_contour_addresses_only()
     assert problems[2] == "We couldn't find 'everyone' on the team list. Pick who gets it."
     assert problems[3] is None
     assert problems[4] == (
-        "Emails from the Assistant go to Contour people only. Remove bob@gmail.com to send."
+        "Emails from the Assistant go to Contour people only. Remove bob@example.com to send."
     )
 
 

@@ -539,7 +539,7 @@ async def test_an_email_goes_only_to_teammates_with_an_account_or_contour_addres
             body="Hi,\nThe floor plan is ready.",
         )
     ]
-    words = "Email Lee, Jo Teammate, kim@contourinteriors.com.au and bob@gmail.com the floor plan"
+    words = "Email Lee, Jo Teammate, kim@contourinteriors.com.au and bob@example.com the floor plan"
     async with rep(world) as client:
         found = await ask(client, words)
     to = found["email"]["to"]
@@ -550,14 +550,14 @@ async def test_an_email_goes_only_to_teammates_with_an_account_or_contour_addres
     assert (to[2]["address"], to[2]["problem"]) == ("kim@contourinteriors.com.au", None)
     assert (to[3]["address"], to[3]["problem"]) == (
         None,
-        "Emails from the Assistant go to Contour people only. Remove bob@gmail.com to send.",
+        "Emails from the Assistant go to Contour people only. Remove bob@example.com to send.",
     )
     assert (found["email"]["subject"], found["email"]["body"]) == (
         "Floor plan",
         "Hi,\nThe floor plan is ready.",
     )
     assert found["read_back"] == (
-        "Email Lee, Jo Teammate, kim@contourinteriors.com.au and bob@gmail.com: Floor plan."
+        "Email Lee, Jo Teammate, kim@contourinteriors.com.au and bob@example.com: Floor plan."
     )
     assert found["unsure"] == (
         "Which Lee? Jo Teammate has no Contour account, so they can't get this email. Pick "
