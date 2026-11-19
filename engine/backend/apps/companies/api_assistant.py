@@ -12,13 +12,15 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 
-from apps.companies import assistant_learned, assistant_tasks, team_email, today
+from apps.companies import assistant_learned, assistant_names, assistant_tasks, team_email, today
 from apps.companies.api_meetings import SourceDep, WriterDep
 from apps.companies.assistant import Assistant, CommandLimit, check_on, read_command
+from apps.companies.assistant_names import HintCache
 from apps.companies.assistant_schemas import (
     AssistantCommand,
     AssistantCommandIn,
     AssistantEmailIn,
+    AssistantNames,
     AssistantTaskIn,
     LearnedNameIn,
     LearnedNamePage,
@@ -30,7 +32,7 @@ from apps.companies.team_email import TeamEmailBook
 from apps.companies.today import TaskCopy
 from core.api.access import SignedInDep, need
 from core.api.deps import SessionDep, SettingsDep
-from core.api.models import OFFSET_MAX
+from core.api.models import OFFSET_MAX, SafeText
 from core.api.runs import IDEMPOTENCY_PATTERN
 from core.api.signin import AdminDep, NowDep
 from core.config import Settings
@@ -83,7 +85,18 @@ def team_email_book(request: Request) -> TeamEmailBook:
     return found
 
 
+def name_hints(request: Request) -> HintCache:
+    """Each person's hint list, kept for 5 minutes, made on first use. A test puts its own in
+    app.state."""
+    found: HintCache | None = getattr(request.app.state, "name_hints", None)
+    if found is None:
+        found = HintCache()
+        request.app.state.name_hints = found
+    return found
+
+
 AssistantDep = Annotated[Assistant, Depends(assistant_state)]
+HintsDep = Annotated[HintCache, Depends(name_hints)]
 AssistantOnDep = Annotated[Settings, Depends(assistant_on)]
 TaskCopyDep = Annotated[TaskCopy, Depends(task_copy)]
 EmailBookDep = Annotated[TeamEmailBook, Depends(team_email_book)]
@@ -195,6 +208,56 @@ async def read_today(
         copy=copy,
         now=now,
         fresh=fresh,
+    )
+
+
+# --- The mic's hint list (PLAN-V23 T1-1) ---------------------------------------------------------
+
+
+@router.get(
+    "/names",
+    response_model=AssistantNames,
+    dependencies=[Depends(CHANGES)],
+    summary="The names the mic listens for",
+    description=(
+        "The names this person is most likely to say, most likely first, each once, at most the "
+        "Settings page's number (50 to start): the company on screen (`company_key`), its "
+        "people, its open deals' client names and its next meeting's people; my meetings today "
+        "and tomorrow and my tasks due (as Today last read them); the companies I called in the "
+        "last 30 days, then those I own; my teammates; the companies the mic gets wrong (they "
+        "have learned names); then the words fitout, test fit, pre-read and follow up. A "
+        "company is said without Pty Ltd and the like. The voice bar loads it when the page is "
+        "idle or on the first V: the speech service's hints, and the list a misheard name is "
+        "fixed against on every page. It reads our copy only, never HubSpot, so it is free, and "
+        "each list is kept for 5 minutes for each person and company on screen. Another rep's "
+        "companies stay out unless I called them. Behind the Call logs or the Meetings tick; a "
+        "Viewer gets 403 `viewer_read_only` (no V)."
+    ),
+)
+async def read_assistant_names(
+    session: SessionDep,
+    settings: SettingsDep,
+    auth: SignedInDep,
+    leads: LeadsDep,
+    source: SourceDep,
+    copy: TaskCopyDep,
+    hints: HintsDep,
+    now: NowDep,
+    company_key: Annotated[
+        SafeText | None,
+        Query(max_length=64, description="The company on screen: a HubSpot id, or lead:<id>"),
+    ] = None,
+) -> AssistantNames:
+    return await assistant_names.hint_list(
+        session,
+        auth=auth,
+        settings=settings,
+        company_key=company_key,
+        leads=leads,
+        source=source,
+        copy=copy,
+        hints=hints,
+        now=now,
     )
 
 

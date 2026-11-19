@@ -301,6 +301,13 @@ TEXT: dict[str, tuple[str, str]] = {
         "call, email, meeting, note or task) for this many days, so it gets a nudge. A deal whose "
         "close date has passed is listed too. 14 days to start, TBC with Levi.",
     ),
+    "name_hints_max": (
+        "Names the mic listens for",
+        "The most names the mic is told to listen for when someone presses V, most likely "
+        "first: the company on screen and its people, your meetings and tasks, your companies, "
+        "your teammates. The same list fixes a misheard name. A long list can make it hear names "
+        "nobody said. 50 to start, TBC after the voice test.",
+    ),
     "memory_fresh_days": (
         "Days a note stays fresh",
         "Notes and leads younger than this are reused instead of searched again.",

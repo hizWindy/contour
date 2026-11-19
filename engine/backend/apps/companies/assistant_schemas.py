@@ -419,6 +419,36 @@ class TeamEmail(Out):
     sent_at: datetime | None = Field(description="When it was sent. None for a preview")
 
 
+# --- The hint list (PLAN-V23 T1-1, the contract's part 1) ---------------------------------------
+
+# company: a company (or another name for it, like a deal's client); person: a client person;
+# teammate: someone at Contour, by their HubSpot name; word: a fixed word, like fitout.
+NameKind = Literal["company", "person", "teammate", "word"]
+
+
+class AssistantName(Out):
+    text: str = Field(
+        description="The name as said: a company without Pty Ltd and the like, a person's full "
+        "name, or a fixed word",
+        examples=["Sample Logistics"],
+    )
+    kind: NameKind
+    company_key: str | None = Field(
+        description="The company it belongs to, for a company or a client person. None for a "
+        "teammate or a word"
+    )
+
+
+class AssistantNames(Out):
+    """The names this person is most likely to say, for the mic: the speech service's hints, and
+    the list a misheard name is fixed against on every page. Free: no HubSpot request."""
+
+    names: list[AssistantName] = Field(
+        description="At most the Settings page's number (50 to start), most likely first, each "
+        "name once"
+    )
+
+
 # --- Learned names (PLAN-V23 T1-2, the contract's part 2) ---------------------------------------
 
 HEARD_MAX_CHARS = 80

@@ -110,6 +110,8 @@ EDITABLE_KEYS: Final[list[str]] = [
     "voice_tool",  # PLAN-V18
     # The Assistant's Today (PLAN-V22 T1-3)
     "today_quiet_days",
+    # The mic's hint list (PLAN-V23 T1-1)
+    "name_hints_max",
 ]
 
 # Which env-only ceiling caps each editable key.
@@ -531,6 +533,11 @@ class Settings(BaseSettings):
     # Today lists an open deal of mine whose company nobody has talked to for this many days
     # (TBC with Levi, W3).
     today_quiet_days: int = Field(14, ge=1, le=365)
+    # The most names in the mic's hint list (PLAN-V23 choice 1): sent to the speech service as
+    # hints, most likely first, and used to fix a misheard name. Deepgram advises 20 to 50 and
+    # Microsoft takes 500 at most; a long list can make a service hear names nobody said (TBC
+    # after S1, the voice test).
+    name_hints_max: int = Field(50, ge=5, le=200)
 
     # --- Validators --------------------------------------------------------------------
 

@@ -179,6 +179,14 @@ class TaskCopy:
         if entry.read is not None:
             entry.read = _with_change(entry.read, task_id, task)
 
+    def held(self, owner: str) -> tuple[OpenTask, ...]:
+        """The person's tasks as Today read them last, with the changes made here, or none. It
+        never reads HubSpot (the mic's hint list, PLAN-V23 T1-1)."""
+        entry = self._entries.get(owner)
+        if entry is None or entry.read is None:
+            return ()
+        return entry.read.tasks
+
     def kept(self, owner: str, task_id: str) -> OpenTask | None:
         """A task as the copy has it now, else as a change made here left it, else as it was
         before its last change here (a task ticked done). None when it was never kept."""

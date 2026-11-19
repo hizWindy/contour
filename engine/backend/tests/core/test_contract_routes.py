@@ -106,6 +106,7 @@ ROUTES = [
     ("POST", f"{API}/companies/assistant/tasks/{{task_id}}/reopen"),
     ("POST", f"{API}/companies/assistant/email/preview"),  # PLAN-V22 T1-5
     ("POST", f"{API}/companies/assistant/email"),
+    ("GET", f"{API}/companies/assistant/names"),  # PLAN-V23 T1-1
     ("POST", f"{API}/companies/assistant/learned"),  # PLAN-V23 T1-2
     ("GET", f"{API}/companies/assistant/learned"),
     ("DELETE", f"{API}/companies/assistant/learned/{{pair_id}}"),
