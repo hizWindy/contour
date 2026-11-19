@@ -55,6 +55,7 @@ from core.config import Settings
 from core.hubspot.matching import LEGAL_WORDS, deal_lead
 from core.hubspot.meetings import Meeting
 from core.hubspot.models import HubSpotCall, HubSpotCompany, HubSpotContact, HubSpotDeal
+from core.hubspot.owners import shown_name
 from core.hubspot.profiles import PLACEHOLDER_NAME
 
 log = logging.getLogger(__name__)
@@ -315,14 +316,15 @@ async def owned_companies(session: AsyncSession, me: str) -> list[tuple[str, str
 
 
 async def team_names(session: AsyncSession, picker: Picker, auth: AuthContext | None) -> None:
-    """4. My teammates, those with a Contour account first. Not me."""
+    """4. My teammates, those with a Contour account first. Not me, and not an owner HubSpot
+    gave no name ("HubSpot owner 301" is no name to listen for)."""
     try:
         team = await list_team(session, auth)
     except Problem:  # the team list couldn't be read: the rest still goes
         await session.rollback()
         return
     for member in sorted(team, key=lambda member: not member.has_account):
-        if not member.is_me:
+        if not member.is_me and member.name != shown_name(member.owner_id, None):
             picker.add(member.name, "teammate")
 
 

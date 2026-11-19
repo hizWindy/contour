@@ -147,6 +147,7 @@ async def a_copy(world: World) -> None:
         HubSpotOwner(owner_id="o1", name="Mia Sample"),
         HubSpotOwner(owner_id="o2", name="Lee Sample"),
         HubSpotOwner(owner_id="o3", name="Jo Teammate"),
+        HubSpotOwner(owner_id="o4", name=None),  # shown as "HubSpot owner o4": left out
         HubSpotCall(
             hubspot_id="k1",
             hubspot_company_id="209",
