@@ -396,13 +396,25 @@ function plain(text: string): string {
 }
 
 /**
- * "Send it" or "cancel" at the end of what was heard, and nothing else counts (choice 23): talk
- * nearby that doesn't end on one of them is ignored.
+ * The whole of what was heard must be one of these (choice 23), the same as the server's
+ * `SEND_WORDS` and `CANCEL_WORDS` (`assistant_form.py`). Words that merely end in "send it", like
+ * "don't send it", never send, and talk nearby is ignored.
  */
+const SEND_WORDS: ReadonlySet<string> = new Set([
+  'send',
+  'send it',
+  'send it now',
+  'send now',
+  'yes send it',
+  'ok send it',
+  'okay send it',
+])
+const CANCEL_WORDS: ReadonlySet<string> = new Set(['cancel', 'cancel it', 'cancel that'])
+
 export function sendOrCancel(text: string): 'send' | 'cancel' | null {
   const words = plain(text)
-  if (/(^| )send it$/.test(words)) return 'send'
-  if (/(^| )cancel$/.test(words)) return 'cancel'
+  if (SEND_WORDS.has(words)) return 'send'
+  if (CANCEL_WORDS.has(words)) return 'cancel'
   return null
 }
 

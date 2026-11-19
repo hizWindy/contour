@@ -179,9 +179,15 @@ describe('"send it" and "cancel" (choice 23)', () => {
   it.each([
     ['Send it.', 'send'],
     ['okay send it', 'send'],
+    ['Send it now', 'send'],
     ['Cancel', 'cancel'],
+    ['cancel that', 'cancel'],
     ['send the quote to Jo', null],
     ['send it to Jo', null],
+    // Words that only end in "send it" or "cancel" never count (the review before merge v22).
+    ["Don't send it", null],
+    ['no, do not send it', null],
+    ["don't cancel", null],
     ['', null],
   ])('%j is %s', (heard, meant) => {
     expect(sendOrCancel(heard)).toBe(meant)
