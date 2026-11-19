@@ -4,11 +4,14 @@ person, the meeting and the teammates, and the days. Claude only gives the words
 guessed. Two matches or more give choices, best first. No match gives none, with the words as
 heard.
 
-- **The company:** `match_company` over our copy (the cleaned name, a deal's client name, or a
-  name nearly the same by `names_are_close`'s rules), with the words also tried run together,
-  since a speech service splits names ("North Wind"). Then a word search: names with a word that
-  starts with each word said ("Sample" finds Sample Logistics Pty Ltd). With no company named,
-  the one on screen (`on_page`). Among several, or close to what was said, the one on screen wins.
+- **The company:** the one on screen when the words are close to it. Then the team's learned
+  names (PLAN-V23 T1-3): the companies taught for these words. Then `match_company` over our copy
+  (the cleaned name, a deal's client name, or a name nearly the same by `names_are_close`'s
+  rules), with the words also tried run together, since a speech service splits names ("North
+  Wind"). Then a word search: names with a word that starts with each word said ("Sample" finds
+  Sample Logistics Pty Ltd). Then HubSpot's own search (assistant_live.py), which reads what it
+  finds into our copy (`from_hubspot`); found nowhere, the card may offer to add it (`can_add`).
+  With no company named, the one on screen (`on_page`). Among several, the one on screen wins.
 - **The person:** among that company's people (`people_of`): the full name (`find_person`, the
   call note sorter's test), else every word said matching a word of their name. A word of 4
   letters or more may be spelled slightly wrong ("Sampel").
@@ -29,10 +32,13 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Final
 
+from fastapi import FastAPI
 from rapidfuzz import fuzz
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.companies import learned_store
+from apps.companies.assistant_live import NOT_SEARCHED, live_search
 from apps.companies.assistant_schemas import (
     AssistantCardIn,
     AssistantCompany,
@@ -104,6 +110,16 @@ def not_in_hubspot(heard: str) -> str:
     return f"We couldn't find '{heard}' in HubSpot. Pick the company."
 
 
+def new_in_hubspot(name: str) -> str:
+    """PLAN-V23 "Words for when things go wrong": in HubSpot, but not in our copy (until now)."""
+    return f"{name} is new in HubSpot. We'll use it."
+
+
+def isnt_in_hubspot(name: str) -> str:
+    """PLAN-V23 "Words for when things go wrong": not in HubSpot either."""
+    return f"{name} isn't in HubSpot. Add it, or pick another company."
+
+
 def which(heard: str) -> str:
     return f"Which {heard}?"
 
@@ -157,6 +173,9 @@ class Context:
     leads: Sequence[CompanyLeads]
     now: datetime
     today: date  # Melbourne's
+    app: FastAPI | None = (
+        None  # for HubSpot's own search (PLAN-V23 T1-3); None asks HubSpot nothing
+    )
 
 
 # --- Words and names -----------------------------------------------------------------------------
@@ -391,23 +410,69 @@ async def companies_named(session: AsyncSession, text: str, fuzzy_min: int) -> l
     return await hubspot_hits(session, keys)
 
 
+async def learned_hits(session: AsyncSession, words: str, ctx: Context) -> list[CompanyHit]:
+    """The companies the team taught for these words (PLAN-V23 choice 3), the newest pair first,
+    each open to this person."""
+    hits: list[CompanyHit] = []
+    for key in await learned_store.taught_for(session, heard_key(words)):
+        hit = await company_hit(session, key, ctx.leads)
+        if hit is not None:
+            hits.append(hit)
+    return hits
+
+
+def picked(
+    words: str, hits: Sequence[CompanyHit], page: CompanyHit | None, *, from_hubspot: bool = False
+) -> tuple[AssistantCompany, str | None]:
+    """The one on screen when it is among the hits, else one hit, else the choices."""
+    if page is not None and any(hit.key == page.key for hit in hits):
+        return AssistantCompany(heard=words, from_page=True, found=page, choices=[]), None
+    if len(hits) == 1:
+        line = new_in_hubspot(hits[0].name) if from_hubspot else None
+        found = AssistantCompany(
+            heard=words, from_page=False, found=hits[0], choices=[], from_hubspot=from_hubspot
+        )
+        return found, line
+    choices = AssistantCompany(
+        heard=words,
+        from_page=False,
+        found=None,
+        choices=list(hits[:MAX_CHOICES]),
+        from_hubspot=from_hubspot,
+    )
+    return choices, which(words)
+
+
 async def find_company(
     session: AsyncSession, said: str, page: CompanyHit | None, ctx: Context
 ) -> tuple[AssistantCompany, str | None]:
-    """The company the words name, else the one on screen, and a line when it isn't clear."""
+    """The company the words name, else the one on screen, and a line when it isn't clear: the
+    one on screen when the words are close to it, then the learned names, then our copy, then
+    HubSpot's own search (which reads what it finds into our copy). Found nowhere: the card may
+    add it, when HubSpot was searched."""
     words = heard(said)
     if not words:
         return AssistantCompany(heard="", from_page=page is not None, found=page, choices=[]), None
     fuzzy_min = ctx.settings.match_fuzzy_min
     if page is not None and names_are_close(words, page.name, fuzzy_min):
         return AssistantCompany(heard=words, from_page=True, found=page, choices=[]), None
+    learned = await learned_hits(session, words, ctx)
+    if learned:
+        return picked(words, learned, page)
     hits = await companies_named(session, words, fuzzy_min)
-    if page is not None and any(hit.key == page.key for hit in hits):
-        return AssistantCompany(heard=words, from_page=True, found=page, choices=[]), None
-    if len(hits) == 1:
-        return AssistantCompany(heard=words, from_page=False, found=hits[0], choices=[]), None
-    line = which(words) if hits else not_in_hubspot(words)
-    return AssistantCompany(heard=words, from_page=False, found=None, choices=hits), line
+    if hits:
+        return picked(words, hits, page)
+    live = NOT_SEARCHED
+    if ctx.app is not None:
+        live = await live_search(session, ctx.app, words, fuzzy_min=fuzzy_min)
+    found = await hubspot_hits(session, live.keys)
+    if found:
+        return picked(words, found, page, from_hubspot=True)
+    line = isnt_in_hubspot(words) if live.searched else not_in_hubspot(words)
+    company = AssistantCompany(
+        heard=words, from_page=False, found=None, choices=[], can_add=live.searched
+    )
+    return company, line
 
 
 # --- What is on screen ---------------------------------------------------------------------------

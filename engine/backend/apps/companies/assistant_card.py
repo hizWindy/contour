@@ -6,6 +6,8 @@ first line (choice 21), and `unsure` a short line when something wasn't clear or
   and a call the Call logs tick. Anything else comes back as unknown, with what they can do.
 - **On an open card,** only change (one of its boxes), send and cancel. Without a card, those
   three are unknown (choice 14).
+- **Unclear words stop before the card** (PLAN-V23 choice 4), on a card or not: `unclear`, with
+  the words as heard in the read-back, for the bar's text line, and the stop line in `unsure`.
 - Nothing here writes or sends: the review card does that, through the routes that exist.
 """
 
@@ -55,6 +57,7 @@ from core.api.access import can_feature, feature_not_allowed
 from core.auth import users
 
 UNSURE_CHARS: Final = 200  # Claude's own unsure line
+UNCLEAR_CHARS: Final = 300  # the words as heard, shown back when they were unclear
 UNSURE_MAX: Final = 600  # every line together
 SUBJECT_CHARS: Final = 200  # a task's (the contract's part 3)
 EMAIL_SUBJECT_CHARS: Final = 120  # an email's (the contract's part 4)
@@ -68,6 +71,13 @@ CAN_ON_CARD = (
     "On this card, the Assistant can change a box, send it or cancel it. Try saying it as one "
     "of those."
 )
+
+
+def unclear_line(words: str) -> str:
+    """PLAN-V23 "Words for when things go wrong": the words are too unclear."""
+    return f"We didn't catch that clearly. You said: '{words}'. Say it again, or fix the words."
+
+
 NO_COMPANY = "No company was named. Pick the company."
 NO_ONE = "No teammate was named. Pick who gets it."
 OTHER_BOX = "That isn't one of this card's boxes."
@@ -162,8 +172,11 @@ async def not_open(session: AsyncSession, action: AssistantAction, ctx: Context)
 
 
 async def settle(session: AsyncSession, answer: CommandAnswer, ctx: Context) -> AssistantCommand:
-    """The card's draft for Claude's answer. Reads only."""
+    """The card's draft for Claude's answer. Reads our copy, and HubSpot's own search reads a
+    company it finds into it (PLAN-V23 T1-3): nothing else is written."""
     claude = sentence(clean_line(answer.unsure, UNSURE_CHARS)) or None
+    if answer.action == "unclear":
+        return unclear(ctx)
     if ctx.card is not None:
         return on_card(answer, ctx, claude)
     action = answer.action
@@ -181,6 +194,13 @@ async def settle(session: AsyncSession, answer: CommandAnswer, ctx: Context) -> 
     if action == "email":
         return await write_email(session, answer, ctx, claude)
     return await open_page(session, answer, ctx, claude)
+
+
+def unclear(ctx: Context) -> AssistantCommand:
+    """The words were too unclear to make a command: they come back as heard, to fix or say
+    again."""
+    words = clean_line(ctx.said, UNCLEAR_CHARS)
+    return command("unclear", words, unsure=unclear_line(words))
 
 
 def on_card(answer: CommandAnswer, ctx: Context, claude: str | None) -> AssistantCommand:

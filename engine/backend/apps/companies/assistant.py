@@ -8,7 +8,10 @@ words. The route is in api_assistant.py.
   names. Call notes must be on too. Its cost goes to the search log, so the daily limit counts it:
   that row holds the model, the tokens and the cost, never the words.
 - **Code, not Claude, finds things** (assistant_find.py) and fills in the card
-  (assistant_card.py).
+  (assistant_card.py). When our copy has no company for the words, HubSpot's own search is tried
+  (PLAN-V23 T1-3, assistant_live.py).
+- **Unclear words stop before the card** (PLAN-V23 choice 4): Claude answers `unclear`, or code
+  does with no request when the words are too short to be a command ("um", "a").
 - **Limits:** 2,000 characters a command; 20 commands a minute a person (kept in memory, so they
   start again when the backend restarts, TBC); and 15 seconds for Claude's answer (TBC: M2
   measures it). On an open card, a plain "send it" or "cancel" needs no request.
@@ -25,6 +28,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Final
 
+from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies.assistant_card import settle
@@ -35,6 +39,7 @@ from apps.companies.assistant_form import (
     blank_answer,
     card_shortcut,
     command_prompt,
+    unclear_shortcut,
 )
 from apps.companies.assistant_schemas import (
     COMMAND_MAX_CHARS,
@@ -57,7 +62,7 @@ log = logging.getLogger(__name__)
 
 APP = "companies"
 STEP = "assistant:command"
-PROMPT_VERSION = "assistant-1"
+PROMPT_VERSION = "assistant-2"  # PLAN-V23 T1-3: the unclear action
 # A short sort into one of a few actions, so the lowest effort: quick and cheap. M2 checks it gets
 # at least 18 of 20 right; if not, medium is next (TBC).
 EFFORT = "low"
@@ -225,8 +230,11 @@ async def read_command(
     meetings: MeetingSource,
     leads: list[CompanyLeads],
     now: datetime,
+    app: FastAPI | None = None,
 ) -> AssistantCommand:
-    """One command, read and settled. It writes nothing but its cost to the search log."""
+    """One command, read and settled. It writes nothing to HubSpot: only its cost to the search
+    log, and a company HubSpot's own search found, read into our copy (`app`: the HubSpot
+    connection; None asks HubSpot nothing)."""
     text = body.text.strip()
     if not text:
         raise command_empty()
@@ -237,7 +245,7 @@ async def read_command(
         raise too_many_commands(wait)
     said = scrub(text)  # no email address or phone number reaches Claude
     today = now.astimezone(MELBOURNE).date()
-    answer = card_shortcut(said, body.card)
+    answer = card_shortcut(said, body.card) or unclear_shortcut(said)
     if answer is None:
         prompt = command_prompt(said, source=body.source, today=today, card=body.card)
         answer = await ask(session, assistant, prompt, settings)
@@ -252,6 +260,7 @@ async def read_command(
         leads=leads,
         now=now,
         today=today,
+        app=app,
     )
     command = await settle(session, answer, context)
     log.info(

@@ -12,7 +12,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 
-from apps.companies import assistant_learned, assistant_names, assistant_tasks, team_email, today
+from apps.companies import (
+    assistant_learned,
+    assistant_names,
+    assistant_tasks,
+    team_email,
+    today,
+)
 from apps.companies.api_meetings import SourceDep, WriterDep
 from apps.companies.assistant import Assistant, CommandLimit, check_on, read_command
 from apps.companies.assistant_names import HintCache
@@ -126,13 +132,21 @@ CHANGES = need("companies.call_logs", "companies.meetings", write=True)
         "Turns one thing a rep said or typed into one action for the review card: `pre_read`, "
         "`log_call`, `task`, `email` or `open`, or on an open card (`card`) `change`, `send` or "
         "`cancel`. Anything else is `unknown`, and `read_back` lists what the Assistant can do. "
+        "Words too unclear to make a command are `unclear` (PLAN-V23): `read_back` holds the "
+        "words as heard and `unsure` the stop line; words too short to be a command (like 'um') "
+        "are `unclear` with no Claude request. "
         "One small Claude request, on the call notes' model and within their cap for one note; "
         "a card's plain 'send it' or 'cancel' needs none. Claude gets only the words (emails and "
         "phone numbers blanked), today's date and an open card's box names. Code finds the "
         "company, the person, the meeting and the teammates in our HubSpot copy: each comes "
         "back as `heard`, then `found` (one match) or `choices` (two or more, best first). With "
-        "no company named, the one on screen (`on_page`). It writes nothing, sends nothing and "
-        "keeps no copy of the words; its cost goes to the search log. Behind the Call logs or "
+        "no company named, the one on screen (`on_page`). A company is found in this order: the "
+        "one on screen when the words are close to it, the team's learned names, our copy, "
+        "then HubSpot's own search (one free request), which reads what it finds into our copy "
+        "(`from_hubspot`). Found nowhere after HubSpot was searched: `can_add`, so the card may "
+        "offer to add it. With no HubSpot connection it isn't searched, and `can_add` is false. "
+        "It writes nothing to HubSpot, sends nothing and keeps no copy of the words; its cost "
+        "goes to the search log. Behind the Call logs or "
         "the Meetings tick; a Viewer gets 403 `viewer_read_only`. 409 `assistant_off` while "
         "call notes or their AI sort are off, or Claude isn't set up. 422 `command_empty`, or "
         "`command_too_long` over 2,000 characters. 429 `too_many_commands` over 20 in a minute "
@@ -142,6 +156,7 @@ CHANGES = need("companies.call_logs", "companies.meetings", write=True)
 )
 async def read_assistant_command(
     body: AssistantCommandIn,
+    request: Request,
     session: SessionDep,
     settings: AssistantOnDep,
     auth: SignedInDep,
@@ -159,6 +174,7 @@ async def read_assistant_command(
         meetings=source,
         leads=leads,
         now=now,
+        app=request.app,
     )
 
 

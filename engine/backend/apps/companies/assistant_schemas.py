@@ -1,6 +1,7 @@
 """What the Assistant takes and gives (PLAN-V22): the command step (T1-1 and T1-2, the contract's
 part 1), Today (T1-3, part 2), a task on its own (T1-4, part 3) and the team email (T1-5, part
-4). The website's types come from these.
+4). PLAN-V23 adds the mic's hint list, learned names, a better company search and adding a
+company (its contract's parts 1 to 4). The website's types come from these.
 
 A command is one thing a rep says or types. The server turns it into one action and finds the
 company, the person, the meeting and the teammates in our HubSpot copy. Each thing it looks for
@@ -24,11 +25,23 @@ from apps.companies.schemas import (
     OwnerId,
     PrepPerson,
     TeamMember,
+    optional_in_types,
 )
 from core.api.models import SafeText
 
+# unclear (PLAN-V23 choice 4): the words are too unclear to make a command. The bar stops before
+# the card, with the words in `read_back`.
 AssistantAction = Literal[
-    "pre_read", "log_call", "task", "email", "open", "change", "send", "cancel", "unknown"
+    "pre_read",
+    "log_call",
+    "task",
+    "email",
+    "open",
+    "change",
+    "send",
+    "cancel",
+    "unknown",
+    "unclear",
 ]
 # The pages a command can open. `company` is one company's page, with `company_key`.
 AssistantPageName = Literal[
@@ -104,6 +117,9 @@ class AssistantCommandIn(BaseModel):
 
 
 class AssistantCompany(Out):
+    # Added in PLAN-V23: the API always sends them, and the website's types leave them optional.
+    model_config = ConfigDict(json_schema_extra=optional_in_types("from_hubspot", "can_add"))
+
     heard: str = Field(description="The company as heard. Empty when the command named none")
     from_page: bool = Field(
         description="True when it is the company on screen: none was named, or the one named "
@@ -111,6 +127,17 @@ class AssistantCompany(Out):
     )
     found: CompanyHit | None = Field(description="The one company that matches")
     choices: list[CompanyHit] = Field(description="Two or more that match, best first")
+    from_hubspot: bool = Field(
+        False,
+        description="True when our copy didn't have it and HubSpot's own search found it (or "
+        "the choices): it is in our copy now (PLAN-V23 T1-3)",
+    )
+    can_add: bool = Field(
+        False,
+        description="True when neither our copy nor HubSpot's search has the company: the card "
+        "may offer to add it to HubSpot, with the name as heard (PLAN-V23 T1-4). False when "
+        "HubSpot couldn't be searched",
+    )
 
 
 class AssistantPerson(Out):
@@ -192,7 +219,8 @@ class AssistantCommand(Out):
     action: AssistantAction
     read_back: str = Field(
         description="The card's first line, like 'Log a call with James Sample at Sample "
-        "Logistics. Follow-up task on Fri 21 Nov.'"
+        "Logistics. Follow-up task on Fri 21 Nov.' For `unclear`, the words as heard, for the "
+        "bar's text line"
     )
     company: AssistantCompany | None = Field(
         description="For a pre-read, a call, a task, a company page, or an email that names one"

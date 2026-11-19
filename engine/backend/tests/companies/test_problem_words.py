@@ -19,7 +19,9 @@ from pathlib import Path
 
 from apps.companies import (
     assistant,
+    assistant_card,
     assistant_find,
+    assistant_learned,
     assistant_tasks,
     meeting_form,
     meeting_send,
@@ -201,4 +203,21 @@ def test_the_plan_v22_words_are_the_ones_sent() -> None:
     # Found while building (T1-4 and T1-6): the same shape, for tasks.
     assert assistant_tasks.too_many_tasks(5).detail == (
         "That's a lot of tasks in one minute. Wait a moment, then try again."
+    )
+
+
+def test_the_plan_v23_words_are_the_ones_sent() -> None:
+    """PLAN-V23 "Words for when things go wrong", Part 1's rows, as the server sends them."""
+    assert assistant_card.unclear_line("the uh for at blue") == (
+        "We didn't catch that clearly. You said: 'the uh for at blue'. Say it again, or fix the "
+        "words."
+    )
+    assert (
+        assistant_find.new_in_hubspot("Northwind") == "Northwind is new in HubSpot. We'll use it."
+    )
+    assert assistant_find.isnt_in_hubspot("Northwind") == (
+        "Northwind isn't in HubSpot. Add it, or pick another company."
+    )
+    assert assistant_learned.contact_details().detail == (
+        "Phone numbers and emails can't be kept as a learned name. Take them out, then try again."
     )

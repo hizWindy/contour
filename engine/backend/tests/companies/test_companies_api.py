@@ -6,6 +6,7 @@ import re
 import uuid
 from datetime import UTC, date, datetime, timedelta
 
+import httpx
 import pytest
 from fastapi import FastAPI
 
@@ -50,6 +51,21 @@ def filled(path: str) -> str:
     return re.sub(r"\{[^}]+\}", "101", path)
 
 
+# Open to Admins only, whatever the ticks (PLAN-V23 T1-2): the learned names' list and Remove.
+ADMIN_ONLY = {
+    ("GET", f"{API}/assistant/learned"),
+    ("DELETE", f"{API}/assistant/learned/{{pair_id}}"),
+}
+
+
+def open_to(answer: httpx.Response, method: str, path: str, *, admin: bool) -> bool:
+    """The route let this person through: anything but a 403, or an Admin-only route's own 403
+    for someone who isn't an Admin."""
+    if answer.status_code != 403:
+        return True
+    return (method, path) in ADMIN_ONLY and not admin and answer.json()["code"] == "admin_only"
+
+
 async def test_every_companies_route_refuses_a_person_without_the_tick(world: World) -> None:
     await a_small_copy(world)
     async with signed_in_as(world, "sam", ["lead_finder"]) as client:
@@ -80,7 +96,12 @@ async def test_every_companies_route_walked_as_four_accounts(
         for method, path in companies_routes(world.app):
             answer = await client.request(method, filled(path) + "?q=ab", json={})
             if open_:
-                assert answer.status_code != 403, (login, method, path, answer.text)
+                assert open_to(answer, method, path, admin=role == "admin"), (
+                    login,
+                    method,
+                    path,
+                    answer.text,
+                )
             else:
                 assert answer.status_code == 403, (login, method, path, answer.status_code)
                 assert answer.json()["code"] == "feature_not_allowed"
@@ -91,7 +112,7 @@ async def test_with_the_tick_every_companies_route_is_open(world: World) -> None
     async with signed_in_as(world, "mia", ["companies"]) as client:
         for method, path in companies_routes(world.app):
             answer = await client.request(method, filled(path) + "?q=ab", json={})
-            assert answer.status_code != 403, (method, path, answer.text)
+            assert open_to(answer, method, path, admin=False), (method, path, answer.text)
 
 
 # --- B2: the list ------------------------------------------------------------------------------
