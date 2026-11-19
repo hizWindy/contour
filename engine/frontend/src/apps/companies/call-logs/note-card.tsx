@@ -42,6 +42,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Fragment, useId, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { noteInLists } from '@/api/hooks/call-notes'
+import { useTeam } from '@/api/hooks/meetings'
 import type {
   CallNoteChange,
   CallNoteOptions,
@@ -49,6 +50,8 @@ import type {
   CallNotePatch,
   CallNoteTask,
 } from '@/api/types'
+import { ownerIdOf } from '@/apps/assistant/card/teammate-rules'
+import { useNoHubSpotUser } from '@/auth/hubspot-user'
 import { ChipGroup, Reveal, TickIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
@@ -290,6 +293,10 @@ export function NoteCard({
   const outcome = note.call.outcome
   const fieldKinds = options.fields
   const client = useQueryClient()
+  // A follow-up's teammate goes back with it, found by name in the team list (PLAN-V23 T3-4): one
+  // picked on the review card by someone with no HubSpot user would be cleared by an edit here.
+  const noUser = useNoHubSpotUser()
+  const team = useTeam({ enabled: noUser })
   const stop = (): void => {
     onEditing(false)
   }
@@ -311,13 +318,17 @@ export function NoteCard({
   const saveTasks = (tasks: CallNoteTask[]): void => {
     edit(
       {
-        tasks: tasks.map((task) => ({
-          id: task.id.startsWith(NEW_PART) ? null : task.id,
-          subject: task.subject,
-          due: task.due,
-          due_words: task.due_words,
-          kind: task.kind,
-        })),
+        tasks: tasks.map((task) => {
+          const owner = ownerIdOf(task, team.data)
+          return {
+            id: task.id.startsWith(NEW_PART) ? null : task.id,
+            subject: task.subject,
+            due: task.due,
+            due_words: task.due_words,
+            kind: task.kind,
+            ...(owner ? { owner_id: owner } : {}),
+          }
+        }),
       },
       (now) => ({ ...now, tasks }),
     )
