@@ -32,6 +32,7 @@ import {
   useStartHubSpotSync,
 } from '@/api/hooks'
 import type { HubSpotProject, HubSpotScope, HubSpotSync, HubSpotWrite } from '@/api/types'
+import { useOpensHubSpot } from '@/auth/hubspot-user'
 import { DataTable } from '@/components/data-table'
 import { isStopping, stoppedWords, syncProgress } from '@/components/hubspot/sync-progress'
 import { ErrorState } from '@/components/error-state'
@@ -97,6 +98,13 @@ function syncCounts(sync: HubSpotSync): string {
 }
 
 const writeHelp = createColumnHelper<HubSpotWrite>()
+/** A write's record in HubSpot: Open, or only "Yes" for someone with no HubSpot user (T3-4). */
+function WrittenTo({ url }: { url: string | null }) {
+  const opens = useOpensHubSpot()
+  if (!url) return 'Not yet'
+  return opens ? <SourceLink href={url} label="Open" /> : 'Yes'
+}
+
 const writeColumns = [
   writeHelp.accessor('created_at', {
     header: 'When',
@@ -124,10 +132,7 @@ const writeColumns = [
     header: 'In HubSpot',
     enableSorting: false,
     meta: { hideBelow: 'sm' },
-    cell: (info) => {
-      const url = info.getValue()
-      return url ? <SourceLink href={url} label="Open" /> : 'Not yet'
-    },
+    cell: (info) => <WrittenTo url={info.getValue()} />,
   }),
 ]
 

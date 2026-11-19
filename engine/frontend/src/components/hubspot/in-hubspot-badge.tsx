@@ -1,4 +1,5 @@
 import type { HubSpotStatus } from '@/api/types'
+import { useOpensHubSpot } from '@/auth/hubspot-user'
 import { HubSpotBadge } from '@/components/hubspot-badge'
 import { SourceLink } from '@/components/source-link'
 import { cn } from '@/lib/utils'
@@ -17,9 +18,11 @@ export interface InHubSpotBadgeProps {
 
 /**
  * Where a company stands in HubSpot, for any project: the label, the name, the owner and a link
- * to the record. The label always has an icon and a word.
+ * to the record. The label always has an icon and a word. No link for someone with no HubSpot user
+ * (PLAN-V23 T3-4).
  */
 export function InHubSpotBadge({ status, name, owner, href, className }: InHubSpotBadgeProps) {
+  const opens = useOpensHubSpot()
   return (
     <span
       data-slot="in-hubspot"
@@ -28,7 +31,7 @@ export function InHubSpotBadge({ status, name, owner, href, className }: InHubSp
       <HubSpotBadge status={status} />
       {name ? <span>{name}</span> : null}
       {owner ? <span className="text-muted-foreground">Owner: {owner}</span> : null}
-      {href ? <SourceLink href={href} label="Open in HubSpot" /> : null}
+      {href && opens ? <SourceLink href={href} label="Open in HubSpot" /> : null}
     </span>
   )
 }

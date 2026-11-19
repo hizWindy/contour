@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import type { ApiProblem } from '@/api/client'
 import type { HubSpotFieldChange, HubSpotStep, HubSpotWrite } from '@/api/types'
+import { useOpensHubSpot } from '@/auth/hubspot-user'
 import { ErrorState } from '@/components/error-state'
 import { SourceLink } from '@/components/source-link'
 import {
@@ -124,13 +125,17 @@ function Steps({ steps }: { steps: HubSpotStep[] }) {
 
 function Plan({ write }: { write: HubSpotWrite }) {
   const plan = write.plan
+  // No HubSpot user, no HubSpot login: no link to open (PLAN-V23 T3-4).
+  const opens = useOpensHubSpot()
   return (
     <div className="flex flex-col gap-3 text-ui">
       <p>
         {plan.action === 'create'
           ? 'This makes a new company in HubSpot.'
           : `This fills the empty fields of ${plan.company_name} in HubSpot. What a person typed stays.`}{' '}
-        {plan.company_url ? <SourceLink href={plan.company_url} label="Open in HubSpot" /> : null}
+        {plan.company_url && opens ? (
+          <SourceLink href={plan.company_url} label="Open in HubSpot" />
+        ) : null}
       </p>
       {(plan.warnings ?? []).length > 0 ? (
         <ul className="flex flex-col gap-1" aria-label="Before you send">
@@ -175,6 +180,8 @@ export function SendToHubSpotDialog({
   const finished = write ? FINISHED.has(write.status) : false
   const retry = write ? RETRY.has(write.status) : false
   const canSend = Boolean(write?.can_write) && !finished && !sending && !loading
+  // No HubSpot user, no HubSpot login: no link to open (PLAN-V23 T3-4).
+  const opens = useOpensHubSpot()
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="sm:max-w-2xl">
@@ -194,7 +201,7 @@ export function SendToHubSpotDialog({
         {write ? (
           <div className="flex max-h-[60vh] flex-col gap-4 overflow-auto">
             {write.steps.length > 0 ? <Steps steps={write.steps} /> : null}
-            {finished && write.hubspot_url ? (
+            {finished && write.hubspot_url && opens ? (
               <SourceLink href={write.hubspot_url} label="Open the company in HubSpot" />
             ) : null}
             {!finished ? <Plan write={write} /> : null}

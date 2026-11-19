@@ -19,6 +19,7 @@ import { ExternalLink, FileText } from 'lucide-react'
 import { Link } from 'react-router'
 import { useMeeting } from '@/api/hooks/meetings'
 import type { MeetingFormOut } from '@/api/types'
+import { useOpensHubSpot } from '@/auth/hubspot-user'
 import { TickIn } from '@/components/motion'
 import { PageHeader } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
@@ -52,9 +53,12 @@ function StatusMark({ status, justSent }: { status: MeetingFormOut['status']; ju
   )
 }
 
+/** Hidden for someone with no HubSpot user, who has no HubSpot login (PLAN-V23 T3-4). */
 function OpenInHubSpot({ meetingId }: { meetingId: string | null }) {
-  const meeting = useMeeting(meetingId)
+  const opens = useOpensHubSpot()
+  const meeting = useMeeting(opens ? meetingId : null)
   const href = safeHref(meeting.data?.meeting.hubspot_url)
+  if (!opens) return null
   if (meetingId && meeting.isPending) {
     // Its place, unseen and out of the keyboard's way, until the meeting answers.
     return (

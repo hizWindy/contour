@@ -30,6 +30,7 @@ import type {
   CompanyOffice,
   CompanyPerson,
 } from '@/api/types'
+import { useOpensHubSpot } from '@/auth/hubspot-user'
 import { ResultBadge } from '@/components/result-badge'
 import { SourceLink } from '@/components/source-link'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -169,6 +170,8 @@ function OfficeRow({ office, today }: { office: CompanyOffice; today: string }) 
 }
 
 function DealRow({ deal }: { deal: CompanyDeal }) {
+  // No HubSpot user, no HubSpot login: no link to open (PLAN-V23 T3-4).
+  const opens = useOpensHubSpot()
   const facts = [
     deal.amount_aud === null
       ? null
@@ -187,7 +190,7 @@ function DealRow({ deal }: { deal: CompanyDeal }) {
         <span className="text-caption text-muted-foreground">{facts.join(' · ')}</span>
       ) : null}
       {deal.next_step ? <p className="text-ui">Next step: {deal.next_step}</p> : null}
-      {deal.hubspot_url ? (
+      {deal.hubspot_url && opens ? (
         <SourceLink href={deal.hubspot_url} label="Open the deal in HubSpot" className="w-fit" />
       ) : null}
     </li>

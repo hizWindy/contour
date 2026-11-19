@@ -6,12 +6,14 @@
  * A row knows no HubSpot address, only the company's data does. A pointer resting on a row
  * already loads that data (the page prefetches it), so by the time the actions show, the address
  * is usually in the cache and the button is a real link. Before that, or for a lead that isn't in
- * HubSpot, the button opens the company instead, which has the link.
+ * HubSpot, the button opens the company instead, which has the link. Someone with no HubSpot user
+ * has no HubSpot login, so it isn't there for them (PLAN-V23 T3-4).
  */
 import { useQuery } from '@tanstack/react-query'
 import { ExternalLink } from 'lucide-react'
 import { companyQueryOptions } from '@/api/hooks'
 import type { CompanyRow } from '@/api/types'
+import { useOpensHubSpot } from '@/auth/hubspot-user'
 import { Button } from '@/components/ui/button'
 import { safeHref } from '@/lib/safe-href'
 
@@ -26,8 +28,9 @@ export function RowActions({ row, handlers }: { row: CompanyRow; handlers: RowAc
   // Only the cache: no request of its own. The page prefetches the company on pointer rest.
   const company = useQuery({ ...companyQueryOptions(row.key), enabled: false })
   const hubspot = safeHref(company.data?.hubspot_url)
+  const opens = useOpensHubSpot()
   // A lead isn't in HubSpot, so there is nothing to show.
-  if (row.source === 'lead') return null
+  if (row.source === 'lead' || !opens) return null
   return (
     <span
       data-slot="row-actions"

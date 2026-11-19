@@ -25,6 +25,7 @@ import type { TodayDeal, TodayMeeting, TodayTask } from '@/api/types'
 import { StatusLine } from '@/apps/companies/meetings/row-parts'
 import { dayText } from '@/apps/companies/meetings/words'
 import { needsLookTail, toConfirmTail } from '@/apps/companies/words'
+import { useOpensHubSpot } from '@/auth/hubspot-user'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { formatTime } from '@/lib/format'
@@ -132,7 +133,10 @@ export function ActButton({ act, context }: { act: RowAct; context: string }) {
   )
 }
 
-/** A link to HubSpot: another site, so the arrow out of the box, and a new tab. */
+/**
+ * A link to HubSpot: another site, so the arrow out of the box, and a new tab. Hidden for someone
+ * with no HubSpot user, who has no HubSpot login (PLAN-V23 T3-4).
+ */
 export function HubSpotLink({
   href,
   context,
@@ -142,8 +146,9 @@ export function HubSpotLink({
   context: string
   label?: string
 }) {
+  const opens = useOpensHubSpot()
   const safe = safeHref(href)
-  if (!safe) return null
+  if (!safe || !opens) return null
   return (
     <Button asChild variant="ghost" size="sm" className="touch:h-11">
       <a href={safe} target="_blank" rel="noopener noreferrer nofollow">

@@ -26,6 +26,7 @@ import { useCompany } from '@/api/hooks'
 import { useCallNoteOptions } from '@/api/hooks/call-notes'
 import type { CompanyDetail, CompanyPerson, CompanyRow } from '@/api/types'
 import { useCanWrite } from '@/auth/can'
+import { useOpensHubSpot } from '@/auth/hubspot-user'
 import { ErrorState } from '@/components/error-state'
 import { Button } from '@/components/ui/button'
 import {
@@ -91,9 +92,13 @@ export interface CompanyActionsProps {
   fullPage?: { onOpen?: (key: string) => void }
 }
 
-/** "Prep a call", "Log call", "Open in HubSpot" and "Open full page". */
+/**
+ * "Prep a call", "Log call", "Open in HubSpot" and "Open full page". "Open in HubSpot" isn't there
+ * for someone with no HubSpot user (PLAN-V23 T3-4).
+ */
 export function CompanyActions({ company, onPrep, onLogCall, fullPage }: CompanyActionsProps) {
-  const hubspot = safeHref(company.hubspot_url)
+  const opens = useOpensHubSpot()
+  const hubspot = opens ? safeHref(company.hubspot_url) : null
   return (
     <div className="flex flex-wrap items-center gap-2">
       {onPrep ? (
