@@ -49,6 +49,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useListKeyboard } from '@/hooks/useListKeyboard'
 import { melbourneDate } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
+import { safeHref } from '@/lib/safe-href'
 import { cn } from '@/lib/utils'
 import { showOnScreen } from '../voice/on-screen'
 import { TODAY, TODAY_PURPOSE } from '../words'
@@ -331,8 +332,11 @@ function TodayParts({
     const main = mainOf(row)
     if (!main) return
     if ('to' in main) void navigate(main.to)
-    else if ('href' in main) window.open(main.href, '_blank', 'noopener,noreferrer')
-    else if (!main.busy) main.run()
+    else if ('href' in main) {
+      // The same guard as the link button: only a plain web address opens.
+      const safe = safeHref(main.href)
+      if (safe) window.open(safe, '_blank', 'noopener,noreferrer')
+    } else if (!main.busy) main.run()
   }
 
   const rowById = (id: string): TodayRow | undefined => rows.find((row) => row.id === id)
