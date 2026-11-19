@@ -20,7 +20,9 @@
         "run",
         "--directory",
         "engine/backend",
-        "engine",
+        "python",
+        "-m",
+        "core.cli",
         "serve"
       ],
       "port": 8000
