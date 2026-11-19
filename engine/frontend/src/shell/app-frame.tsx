@@ -112,7 +112,9 @@ function Frame() {
             isn't drawn again. */}
         <a
           href={`#${MAIN_ID}`}
-          className="sr-only z-50 rounded-md border bg-card px-4 py-2 text-ui text-foreground focus:not-sr-only focus:fixed focus:top-4 focus:left-4"
+          // Off the screen until it has the focus, then a small card at the top left. (Tailwind's
+          // `not-sr-only` set its padding to 0, so it showed as bare text over the menu.)
+          className="fixed top-4 left-4 z-60 -translate-y-[200%] rounded-md border bg-card px-4 py-2 text-ui text-foreground shadow-float focus:translate-y-0"
           onClick={(event) => {
             const target = page.current
             if (!target) return

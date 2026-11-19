@@ -613,9 +613,18 @@ export interface TaskLayoutProps {
   preview: HubSpotWrite | undefined
   mic: VoiceToolKind | null
   today: string
+  /** An empty box shows as one still to fill (an empty card: once Send was tried). */
+  checked?: boolean
 }
 
-export function TaskLayout({ draft, onDraft, preview, mic, today }: TaskLayoutProps) {
+export function TaskLayout({
+  draft,
+  onDraft,
+  preview,
+  mic,
+  today,
+  checked = true,
+}: TaskLayoutProps) {
   const due = dueOf(draft, today)
   const change = (part: Partial<TaskDraft>): void => {
     onDraft({ ...draft, ...part, edited: true })
@@ -636,7 +645,7 @@ export function TaskLayout({ draft, onDraft, preview, mic, today }: TaskLayoutPr
         max={SUBJECT_MAX.task}
         mic={mic}
         names={names}
-        invalid={draft.subject.trim() === ''}
+        invalid={checked && draft.subject.trim() === ''}
         onChange={(subject) => {
           change({ subject })
         }}
@@ -647,7 +656,8 @@ export function TaskLayout({ draft, onDraft, preview, mic, today }: TaskLayoutPr
         value={draft.when}
         max={60}
         mic={null}
-        invalid={due.kind !== 'date'}
+        // Words that can't be read say so at once; an empty box, once checked.
+        invalid={due.kind !== 'date' && (checked || due.kind !== 'empty')}
         hint={
           due.kind === 'date' ? (
             dueLine(dueDateText(due.date))
@@ -733,9 +743,11 @@ export interface EmailLayoutProps {
   onDraft: (draft: EmailDraft) => void
   preview: TeamEmail | undefined
   mic: VoiceToolKind | null
+  /** An empty box shows as one still to fill (an empty card: once Send was tried). */
+  checked?: boolean
 }
 
-export function EmailLayout({ draft, onDraft, preview, mic }: EmailLayoutProps) {
+export function EmailLayout({ draft, onDraft, preview, mic, checked = true }: EmailLayoutProps) {
   const change = (part: Partial<EmailDraft>): void => {
     onDraft({ ...draft, ...part, edited: true })
   }
@@ -784,7 +796,7 @@ export function EmailLayout({ draft, onDraft, preview, mic }: EmailLayoutProps) 
         max={SUBJECT_MAX.email}
         mic={mic}
         names={names}
-        invalid={draft.subject.trim() === ''}
+        invalid={checked && draft.subject.trim() === ''}
         onChange={(subject) => {
           change({ subject })
         }}
@@ -797,7 +809,7 @@ export function EmailLayout({ draft, onDraft, preview, mic }: EmailLayoutProps) 
         max={BODY_MAX.email}
         mic={mic}
         names={names}
-        invalid={draft.body.trim() === ''}
+        invalid={checked && draft.body.trim() === ''}
         onChange={(body) => {
           change({ body })
         }}

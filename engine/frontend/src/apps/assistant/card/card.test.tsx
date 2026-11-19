@@ -552,6 +552,22 @@ describe('typing in a call, and Later (PLAN-V23 T4-2)', () => {
     ).toBeInTheDocument()
   })
 
+  it('an empty card marks a box still to fill only once Send was tried (PLAN-V23 T4-3)', async () => {
+    const { user } = show({ kind: 'empty', action: 'task' })
+    const found = await card()
+    const what = await within(found).findByRole('textbox', { name: 'What to do' })
+    expect(what).not.toHaveAttribute('aria-invalid')
+    expect(within(found).getByRole('textbox', { name: 'When' })).not.toHaveAttribute('aria-invalid')
+    await user.click(within(found).getByRole('button', { name: 'Send' }))
+    // The first box still to fill takes the focus, and the empty ones say so.
+    expect(within(found).getByRole('textbox', { name: 'Find a company' })).toHaveFocus()
+    expect(what).toHaveAttribute('aria-invalid', 'true')
+    expect(within(found).getByRole('textbox', { name: 'When' })).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    )
+  })
+
   it('a task card keeps Cancel', async () => {
     show(typed(taskCommand()))
     const found = await card()

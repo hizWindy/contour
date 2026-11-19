@@ -392,12 +392,13 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
           <m.div
             key="voice-bar"
             ref={setBar}
+            // Above call prep's panel (a later layer at z-50), which V works over (PLAN-V23 T4-1).
             role="dialog"
             aria-label={VOICE_BAR_NAME}
             data-slot="voice-bar"
             data-phase={phase}
             tabIndex={-1}
-            className="fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 mx-auto flex w-[min(40rem,calc(100vw-2rem))] flex-col gap-3 rounded-lg border bg-popover p-4 text-ui text-popover-foreground shadow-float outline-none"
+            className="fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-60 mx-auto flex w-[min(40rem,calc(100vw-2rem))] flex-col gap-3 rounded-lg border bg-popover p-4 text-ui text-popover-foreground shadow-float outline-none"
             initial={still ? false : { opacity: 0, y: RISE }}
             animate={{ opacity: 1, y: 0, transition: still ? INSTANT : springs.smooth }}
             exit={{ opacity: 0, y: RISE / 2, transition: still ? INSTANT : springs.exit }}

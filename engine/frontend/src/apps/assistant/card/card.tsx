@@ -286,6 +286,9 @@ function DraftCard({
 
   const [draft, setDraft] = useState<CardDraft>(first)
   const [inBox, setInBox] = useState(false)
+  // A box still to fill shows as one: at once for a command, which was meant to fill it; on an empty
+  // card (PLAN-V23 T4-3), only once Send was tried, not before the rep has typed anything.
+  const [checked, setChecked] = useState(request.kind !== 'empty')
   // The card's first render holds its frame, its read-back and its buttons; its boxes come in a
   // second one, while the card still fades in from nothing (PLAN-V23 T4-4), so the frame it
   // appears in holds less. With reduced motion the card shows at once, so it is drawn whole.
@@ -490,6 +493,7 @@ function DraftCard({
     const { draft: now, ready: canSend, today: day } = latest.current
     const box = missingOf(now, day)
     if (box) {
+      setChecked(true)
       focusBox(box)
       return
     }
@@ -788,12 +792,19 @@ function DraftCard({
           preview={taskPreview.data}
           mic={mic}
           today={today}
+          checked={checked}
         />
       )
       break
     case 'email':
       layout = (
-        <EmailLayout draft={draft} onDraft={setDraft} preview={emailPreview.data} mic={mic} />
+        <EmailLayout
+          draft={draft}
+          onDraft={setDraft}
+          preview={emailPreview.data}
+          mic={mic}
+          checked={checked}
+        />
       )
       break
   }
@@ -843,7 +854,9 @@ function DraftCard({
             </>
           ) : null}
         </div>
-        <div className="flex flex-col gap-3 border-t px-5 py-3">
+        {/* Kept in view at the card's foot while its boxes scroll: a call's boxes make the card
+            taller than a phone (PLAN-V23 T4-2). */}
+        <div className="sticky bottom-0 flex flex-col gap-3 border-t bg-popover px-5 py-3">
           {voice ? (
             <VoiceStrip
               ref={changeLine}
