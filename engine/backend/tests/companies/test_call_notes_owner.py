@@ -12,7 +12,9 @@ with core's real writer and a fake HubSpot (what HubSpot gets):
   Sample, Designer, in Contour."; a linked account's call has no such line;
 - each follow-up says whose it is (`owner_id`), so the website sends the list back as it came:
   two teammates with one name stay apart, and a change to one follow-up leaves the other's
-  teammate alone.
+  teammate alone;
+- the Call logs tick reads the team list, to pick a follow-up's teammate; neither tick is still a
+  403, and a Viewer still needs the Meetings tick.
 
 Made-up companies and people only (Sample Logistics Pty Ltd, Mia Sample, Sam Sample).
 """
@@ -33,11 +35,12 @@ from apps.companies.notes import CardCall, CardTask, NoteCard
 from apps.companies.schemas import CallNoteTaskIn
 from core.api.deps import settings_dependency
 from core.auth import admin
+from core.auth.features import Feature
 from core.config import Settings
 from core.hubspot.activities import FyiIn
 from core.hubspot.client import HubSpot
 from core.hubspot.models import HubSpotCompany, HubSpotOwner
-from tests.companies.helpers import add
+from tests.companies.helpers import API, add
 from tests.companies.test_call_notes_api import NOTES, a_company, log_call, notes_settings, set_note
 from tests.companies.test_call_notes_batch import FAKE_HUBSPOT, FakeWriter, confirm, one
 from tests.companies.test_today import signed_in
@@ -370,6 +373,37 @@ async def test_two_teammates_with_one_name_stay_apart_when_one_follow_up_changes
         ("Send the floor plan and the lease", "o2"),
         ("Book a site visit", "o3"),
     ]
+
+
+async def test_the_call_logs_tick_reads_the_team_list_to_pick_a_follow_ups_teammate(
+    world: World,
+) -> None:
+    """Choice 15: Jo's follow-up needs a teammate from the team list, and Jo starts with the Call
+    logs tick only (choice 13). Nobody else gains it: neither tick is still a 403, and a Viewer,
+    who can't add a follow-up, still needs the Meetings tick."""
+    await a_copy(world)  # Lee Sample (o1) and Sam Sample (o2)
+    async with as_jo(world) as client:
+        jo = await client.get(f"{API}/team")
+    others: dict[str, tuple[str, list[Feature]]] = {
+        "pat": ("staff", ["companies.companies", "companies.call_prep"]),  # neither tick
+        "vic": ("viewer", ["companies.call_logs"]),
+        "val": ("viewer", ["companies.meetings"]),
+    }
+    answers: dict[str, httpx.Response] = {}
+    for login, (role, features) in others.items():
+        async with signed_in(world, login, owner=None, role=role, features=features) as (client, _):
+            answers[login] = await client.get(f"{API}/team")
+
+    assert jo.status_code == 200, jo.text
+    assert jo.json() == [
+        {"owner_id": "o1", "name": "Lee Sample", "has_account": False, "is_me": False},
+        {"owner_id": "o2", "name": "Sam Sample", "has_account": False, "is_me": False},
+    ]
+    for login in ("pat", "vic"):  # as before
+        refused = answers[login].json()
+        assert (answers[login].status_code, refused["code"]) == (403, "feature_not_allowed"), login
+        assert refused["detail"].startswith("You don't have access to Meetings."), login
+    assert answers["val"].status_code == 200, answers["val"].text  # as before
 
 
 async def test_a_call_by_someone_with_no_hubspot_user_has_no_owner_and_says_who_logged_it(

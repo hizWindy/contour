@@ -41,6 +41,7 @@ from core.api.deps import SessionDep, SettingsDep
 from core.api.models import OFFSET_MAX, SafeText
 from core.api.runs import IDEMPOTENCY_PATTERN
 from core.api.signin import NowDep
+from core.auth.features import is_viewer
 from core.claude.client import get_claude
 from core.config import Settings
 from core.db.engine import get_sessionmaker
@@ -95,16 +96,31 @@ MeetingId = Annotated[
 ]
 FormId = Annotated[uuid.UUID, Path(description="The pre-read's id")]
 
+# Who may read the team list (PLAN-V23 choice 15): the Meetings tick, for a pre-read's send list,
+# or the Call logs tick, for a follow-up's teammate. Someone with no HubSpot user starts with the
+# Call logs tick only (choice 13). A Viewer can't add a follow-up, so a Viewer still needs the
+# Meetings tick, as before.
+TEAM_TICKS = need("companies.meetings", "companies.call_logs")
+VIEWER_TEAM_TICK = need("companies.meetings")
+
+
+async def viewers_need_meetings(auth: SignedInDep, db: SessionDep) -> None:
+    """A Viewer reads the team list only with the Meetings tick (403 `feature_not_allowed`)."""
+    if auth is not None and is_viewer(auth.user.role):
+        await VIEWER_TEAM_TICK(auth, db)
+
 
 @router.get(
     "/team",
     response_model=list[TeamMember],
-    dependencies=[Depends(need("companies.meetings"))],
-    summary="Contour team owners for pre-read sending",
+    dependencies=[Depends(TEAM_TICKS), Depends(viewers_need_meetings)],
+    summary="The team, for a pre-read or a follow-up",
     description=(
         "Active HubSpot owners ordered by name, with whether each has an active Contour account "
-        "and whether they are the signed-in user. Never exposes email addresses. 503 "
-        "`team_unavailable` if loading fails."
+        "and whether they are the signed-in user: who a pre-read can go to, and who a call's "
+        "follow-up can be for. Never exposes email addresses. Behind the Meetings or the Call "
+        "logs tick (403 `feature_not_allowed`); a Viewer, who can't add a follow-up, needs the "
+        "Meetings tick. 503 `team_unavailable` if loading fails."
     ),
 )
 async def list_team(session: SessionDep, auth: SignedInDep) -> list[TeamMember]:

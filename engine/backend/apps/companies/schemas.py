@@ -859,7 +859,8 @@ class MeetingFormState(Out):
 
 
 class TeamMember(Out):
-    """One active HubSpot owner selectable on the pre-read send list (never exposes emails)."""
+    """One active HubSpot owner: someone a pre-read can go to, or a call's follow-up can be for
+    (never exposes emails)."""
 
     owner_id: str = Field(description="Active HubSpot owner id")
     name: str = Field(description="Display name from HubSpot, never an email")
