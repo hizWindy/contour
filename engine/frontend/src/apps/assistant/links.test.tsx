@@ -17,6 +17,8 @@ import { asLaptop, asPhone } from '@/test/screen'
 import { callLogsHref, readLog, withoutLog } from '@/apps/companies/call-logs/params'
 import { closeMicCheck } from '@/apps/companies/call-notes/mic/check-store'
 import { FakeMic } from '@/apps/companies/call-notes/mic/fake-mic'
+import { closeVoiceBar } from './voice/store'
+import { setVKeyOn } from './voice/v-switch'
 
 // Pages load lazily. A busy test run can take more than the default second to load one.
 const LAZY = 5000
@@ -402,8 +404,12 @@ describe('Check my mic (PLAN-V18 T3-4)', () => {
       await user.click(screen.getByRole('button', { name: 'Account menu, Jo Sample' }))
       // The row loads late, with the rest of the Assistant's parts.
       await screen.findByRole('menuitem', { name: 'Check my mic' }, { timeout: LAZY })
-      const names = screen.getAllByRole('menuitem').map((item) => item.textContent)
-      expect(names).toEqual(['Check my mic', 'Change password', 'Sign out'])
+      const names = Array.from(
+        screen.getByRole('menu').querySelectorAll('[role^="menuitem"]'),
+        (item) => item.textContent,
+      )
+      // "Use V to speak" (PLAN-V23 T4-1) comes first among the Assistant's rows.
+      expect(names).toEqual(['Use V to speak', 'Check my mic', 'Change password', 'Sign out'])
       await user.click(screen.getByRole('menuitem', { name: 'Check my mic' }))
       // Whisper waits for T3-3: the card checks the mic and says speech to words isn't set up yet.
       expect(
@@ -435,6 +441,81 @@ describe('Check my mic (PLAN-V18 T3-4)', () => {
       await optionsKnown(queryClient)
       await within(menu).findByRole('option', { name: 'Call logs' })
       expect(within(menu).queryByRole('option', { name: 'Check my mic' })).toBeNull()
+    },
+    SLOW,
+  )
+})
+
+describe('Use V to speak (PLAN-V23 T4-1)', () => {
+  // The whole app on Home, then the late parts and the bar: slow on a cold, busy run.
+  const SLOW = LAZY * 6
+  const BAR = 'Speak to the Assistant'
+
+  afterEach(() => {
+    act(() => {
+      closeVoiceBar()
+      setVKeyOn(true)
+    })
+  })
+
+  it(
+    'the account menu switches V off: the button says Speak and still opens the bar, V does nothing, and it stays after a reload',
+    async () => {
+      asLaptop()
+      stubBackend({ user: { role: 'staff', apps: ['companies'] } })
+      const first = renderAt('/')
+      await home()
+      const speak = await screen.findByRole('button', { name: 'Speak (V)' }, { timeout: LAZY })
+      expect(speak).toHaveAttribute('aria-keyshortcuts', 'V')
+      // V works while the switch is on.
+      await first.user.keyboard('v')
+      expect(
+        await screen.findByRole('dialog', { name: BAR }, { timeout: LAZY }),
+      ).toBeInTheDocument()
+      act(() => {
+        closeVoiceBar()
+      })
+
+      await first.user.click(screen.getByRole('button', { name: 'Account menu, Jo Sample' }))
+      const row = await screen.findByRole(
+        'menuitemcheckbox',
+        { name: 'Use V to speak' },
+        { timeout: LAZY },
+      )
+      expect(row).toHaveAttribute('aria-checked', 'true')
+      await first.user.click(row)
+      // The menu stays open, so the switch is seen to move.
+      expect(row).toHaveAttribute('aria-checked', 'false')
+      await first.user.keyboard('{Escape}')
+
+      // The top bar's button, and Home's card, which shows its Speak button on a laptop now too.
+      const plains = await screen.findAllByRole('button', { name: 'Speak' })
+      expect(plains).toHaveLength(2)
+      for (const one of plains) expect(one).not.toHaveAttribute('aria-keyshortcuts')
+      const [plain] = plains
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog', { name: BAR })).toBeNull()
+      })
+      await first.user.keyboard('v')
+      expect(screen.queryByRole('dialog', { name: BAR })).toBeNull()
+      await first.user.click(plain)
+      expect(await screen.findByRole('dialog', { name: BAR })).toBeInTheDocument()
+      act(() => {
+        closeVoiceBar()
+      })
+
+      // A reload: the app is drawn again, and reads the choice this browser keeps.
+      first.unmount()
+      const again = renderAt('/')
+      await home()
+      expect(
+        (await screen.findAllByRole('button', { name: 'Speak' }, { timeout: LAZY })).length,
+      ).toBeGreaterThan(0)
+      expect(screen.queryByRole('button', { name: 'Speak (V)' })).toBeNull()
+      await again.user.click(screen.getByRole('button', { name: 'Account menu, Jo Sample' }))
+      expect(
+        await screen.findByRole('menuitemcheckbox', { name: 'Use V to speak' }, { timeout: LAZY }),
+      ).toHaveAttribute('aria-checked', 'false')
     },
     SLOW,
   )

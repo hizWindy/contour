@@ -31,9 +31,9 @@ import { page } from '@/shell/page-route'
 import { AssistantFrame } from './frame'
 import { MovedAddress } from './old-route'
 import {
+  AssistantAccountItems,
   AssistantCommands,
   AssistantHomeCard,
-  MicCheckMenuItem,
   SpeakButton,
   ToConfirmCount,
 } from './parts'
@@ -130,8 +130,9 @@ export const ASSISTANT: AppModule = {
     },
   ],
   commands: AssistantCommands,
-  // "Check my mic" (PLAN-V18 T3-4): a row in the account menu, and the card it opens.
-  accountItems: MicCheckMenuItem,
+  // "Use V to speak" (PLAN-V23 T4-1) and "Check my mic" (PLAN-V18 T3-4): rows in the account
+  // menu. The mic check's card is drawn by the frame.
+  accountItems: AssistantAccountItems,
   // The mic check's card, and the V key with its voice bar (PLAN-V22 T3-1), on every page.
   frame: AssistantFrame,
   // "Speak (V)" in the top bar (choice 13): it opens the voice bar, as V does.

@@ -7,6 +7,7 @@
  */
 import type { QueryClient } from '@tanstack/react-query'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useLocation } from 'react-router'
 import type {
@@ -25,6 +26,7 @@ import VoiceBar from './bar'
 import type { Times } from './bar-session'
 import { closeCard } from '../card/store'
 import { closeVoiceBar, isVoiceBarOpen, openVoiceBar } from './store'
+import { setVKeyOn } from './v-switch'
 
 const OPTIONS = '/api/v1/companies/call-notes/options'
 const COMMAND = '/api/v1/companies/assistant/command'
@@ -83,6 +85,8 @@ interface Open {
   read?: (body: AssistantCommandIn, signal: AbortSignal) => Promise<AssistantCommand>
   /** Call notes switched on. Off: no one can log a call. */
   notesOn?: boolean
+  /** More of the page around the bar, like call prep's panel. */
+  page?: ReactNode
 }
 
 function openBar({
@@ -94,6 +98,7 @@ function openBar({
   answer = command({}),
   read,
   notesOn = true,
+  page,
 }: Open = {}) {
   const mic = new FakeMic(micOptions)
   const calls = mockApi({
@@ -106,6 +111,7 @@ function openBar({
   const view = renderWithProviders(
     <>
       <button type="button">Where I was</button>
+      {page}
       <VoiceBar env={mic.env()} makeTool={mic.tool} times={QUIET} {...(read ? { read } : {})} />
       <Where />
     </>,
@@ -141,6 +147,7 @@ afterEach(() => {
     closeVoiceBar()
     // A task's answer opens the review card (T3-3): it closes with the test.
     closeCard()
+    setVKeyOn(true)
   })
 })
 
@@ -537,6 +544,51 @@ describe('what each state shows (T3-2)', () => {
       expect(found.querySelector('[data-slot=voice-answer]')).toHaveTextContent(
         "The Assistant can't read commands yet.",
       )
+    })
+  })
+})
+
+describe('over call prep, and with V off (PLAN-V23 T4-1)', () => {
+  it('over call prep, a command that names no company uses the prepped one, and V keeps the words', async () => {
+    const { mic, commands, user } = openBar({
+      page: <div role="dialog" aria-label="Call prep" data-voice-company="201" />,
+      loaded: (client) => {
+        client.setQueryData(queryKeys.companies.detail('201'), VITERA)
+      },
+    })
+    const found = await listening()
+    act(() => {
+      mic.say('Log a call with Jo at Vitara')
+    })
+    // The prepped company's names drive the name fix, as on its own page.
+    expect(within(found).getByText('Log a call with Jo at Vitera')).toBeInTheDocument()
+    // V over the panel is still the bar's: it keeps the words.
+    await user.keyboard('v')
+    await waitFor(() => {
+      expect(commands().map((call) => call.body)).toEqual([
+        { text: 'Log a call with Jo at Vitera', source: 'mic', on_page: { company_key: '201' } },
+      ])
+    })
+  })
+
+  it('with V off, V is a letter no more: Done has no key, and Done still works', async () => {
+    act(() => {
+      setVKeyOn(false)
+    })
+    const { mic, commands, user } = openBar()
+    const found = await listening()
+    act(() => {
+      mic.say('Add a task')
+    })
+    await user.keyboard('v')
+    expect(title(found)).toHaveTextContent('Listening')
+    expect(commands()).toEqual([])
+    const done = within(found).getByRole('button', { name: 'Done' })
+    expect(done).not.toHaveAttribute('aria-keyshortcuts')
+    expect(done).toHaveTextContent(/^Done$/)
+    await user.click(done)
+    await waitFor(() => {
+      expect(commands().map((call) => call.body)).toEqual([{ text: 'Add a task', source: 'mic' }])
     })
   })
 })

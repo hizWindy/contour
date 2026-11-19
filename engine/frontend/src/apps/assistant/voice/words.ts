@@ -5,9 +5,15 @@
  * keep PLAN-V18's words (`call-notes/mic/words.ts`). The wording is Al-khair's to change.
  */
 
-/** The top bar's mic button (choice 13). Its full name for a screen reader is "Speak (V)". */
+/**
+ * The top bar's mic button (choice 13). Its full name for a screen reader is "Speak (V)", and
+ * "Speak" while V is off (PLAN-V23 T4-1).
+ */
 export const SPEAK = 'Speak'
 export const SPEAK_KEY = '(V)'
+
+/** The account menu's switch for the V key (PLAN-V23 T4-1, the plan's words). */
+export const USE_V = 'Use V to speak'
 
 /** The bar's name for a screen reader. */
 export const VOICE_BAR_NAME = 'Speak to the Assistant'

@@ -52,6 +52,7 @@ import { toastProblem } from '@/lib/problems'
 import { safeHref } from '@/lib/safe-href'
 import { cn } from '@/lib/utils'
 import { showOnScreen } from '../voice/on-screen'
+import { useVKeyOn } from '../voice/v-switch'
 import { TODAY, TODAY_PURPOSE } from '../words'
 import {
   callsRows,
@@ -210,6 +211,7 @@ function TodayParts({
   const navigate = useNavigate()
   const client = useQueryClient()
   const viewer = useIsViewer()
+  const vOn = useVKeyOn()
   const canCompanies = useCan('companies.companies')
   const canDraft = useCanWrite('companies.meetings')
   const canLogCalls = useCanWrite('companies.call_logs')
@@ -518,11 +520,14 @@ function TodayParts({
         <EmptyState
           title={NOTHING_DUE}
           description={
-            viewer ? undefined : (
+            viewer ? undefined : vOn ? (
               <>
                 <span className="touch:hidden">{NOTHING_DUE_NEXT}</span>
                 <span className="hidden touch:inline">{NOTHING_DUE_NEXT_TOUCH}</span>
               </>
+            ) : (
+              // "Use V to speak" off (PLAN-V23 T4-1): the words name the Speak button instead.
+              NOTHING_DUE_NEXT_TOUCH
             )
           }
         />

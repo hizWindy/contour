@@ -68,6 +68,7 @@ import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { CALL_LOGS_PATH, MEETINGS_PATH } from '../paths'
 import { BarSession, type BarProblem, type BarSnapshot } from '../voice/bar-session'
 import { preReadPath, startPreRead, type AfterAnswer, type Heard } from '../voice/hand-over'
+import { isVKeyOn } from '../voice/v-switch'
 import { CANT_READ_YET, NOTHING_HEARD, TOO_MANY, TOO_SLOW, VOICE_NOT_SET_UP } from '../voice/words'
 import {
   applyChange,
@@ -629,7 +630,9 @@ function DraftCard({
       !event.altKey &&
       !event.shiftKey &&
       !event.repeat &&
-      !typing
+      !typing &&
+      // "Use V to speak" off (PLAN-V23 T4-1): V is no key on the card either.
+      isVKeyOn()
     ) {
       event.preventDefault()
       speak()

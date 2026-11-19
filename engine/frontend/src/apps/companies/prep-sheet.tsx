@@ -30,6 +30,9 @@
  *   panel cross-fades in 150 ms. The note view pushes in like a phone app's next screen.
  * - **Phone:** it fills the screen and blocks the page, and the number with a Call button stays at
  *   the bottom.
+ * - **V over the panel** (PLAN-V23 T4-1): on a laptop, V opens the voice bar over it, with the
+ *   prepped company as the one a command uses when it names none. V in a box still types a "v",
+ *   and Esc while the bar is open closes the bar, not the panel.
  */
 import {
   Building2,
@@ -48,6 +51,7 @@ import { useCallNoteOptions } from '@/api/hooks/call-notes'
 import { prepLost } from '@/api/hooks/companies'
 import { toneInUse, useScriptStyle } from '@/api/hooks/script'
 import type { CompanyPerson } from '@/api/types'
+import { closeVoiceBar, isVoiceBarOpen } from '@/apps/assistant/voice/store'
 import { useCan, useCanWrite } from '@/auth/can'
 import { ErrorState } from '@/components/error-state'
 import { PushView } from '@/components/motion'
@@ -405,12 +409,22 @@ export function PrepSheet({ target, onClose, onChangeTarget, onOpenCompany }: Pr
         side="right"
         // 576 px: one column, and lines of reading length (DESIGN.md "Line length").
         className="w-full gap-0 p-0 outline-none data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
+        // V works over the panel on a laptop, and a command that names no company uses this one
+        // (PLAN-V23 T4-1, `voice/keys.ts`). On a phone the panel holds the page, so V stays out.
+        data-voice-company={!onPhone && companyKey ? companyKey : undefined}
         // A click on the list (another row's Prep, J, K) must not close the panel.
         onInteractOutside={(event) => {
           event.preventDefault()
         }}
-        // Esc in the note view goes back to the script; it doesn't close the panel.
         onEscapeKeyDown={(event) => {
+          // The voice bar over the panel: Esc throws its words away, as it does anywhere, and the
+          // panel stays (Radix would close it first otherwise).
+          if (isVoiceBarOpen()) {
+            event.preventDefault()
+            closeVoiceBar()
+            return
+          }
+          // Esc in the note view goes back to the script; it doesn't close the panel.
           if (noting) {
             event.preventDefault()
             backToScript()

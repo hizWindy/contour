@@ -15,6 +15,7 @@ import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import { AssistantHomeCard } from './home-card'
 import { TEST_NOW, today } from './today/fixtures'
 import { closeVoiceBar, isVoiceBarOpen } from './voice/store'
+import { setVKeyOn } from './voice/v-switch'
 
 const TODAY = '/api/v1/companies/assistant/today'
 
@@ -54,6 +55,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => {
     closeVoiceBar()
+    setVKeyOn(true)
   })
 })
 
@@ -136,6 +138,19 @@ describe("Home's Assistant card", () => {
     expect(found.getByText(/to speak, on any page\./)).toBeInTheDocument()
     expect(found.getByText('V')).toBeInTheDocument()
     await user.click(found.getByRole('button', { name: 'Speak' }))
+    expect(isVoiceBarOpen()).toBe(true)
+  })
+
+  it('with "Use V to speak" off, says nothing of V, and shows its Speak button (PLAN-V23 T4-1)', async () => {
+    act(() => {
+      setVKeyOn(false)
+    })
+    const { user } = openCard()
+    const found = await card()
+    expect(found.queryByText(/to speak, on any page\./)).toBeNull()
+    const speak = found.getByRole('button', { name: 'Speak' })
+    expect(speak).not.toHaveClass('hidden')
+    await user.click(speak)
     expect(isVoiceBarOpen()).toBe(true)
   })
 

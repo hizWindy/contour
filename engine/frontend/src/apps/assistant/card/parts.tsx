@@ -22,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { isMac } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 import type { BarSnapshot } from '../voice/bar-session'
+import { useVKeyOn } from '../voice/v-switch'
 import { CountdownBar } from './countdown'
 import type { Box } from './draft'
 import {
@@ -247,9 +248,14 @@ function Hint({ keys, words }: { keys: string; words: string }) {
   )
 }
 
-/** Real key caps: on the card, or inside a box. Not on a touch screen. */
-export function HintBar({ inBox }: { inBox: boolean }) {
+/**
+ * Real key caps: on the card, or inside a box. Not on a touch screen. `escape` is what Esc does
+ * on the card: Cancel, or Later on a call (PLAN-V23 T4-2). V shows only while "Use V to speak" is
+ * on (T4-1).
+ */
+export function HintBar({ inBox, escape = CANCEL }: { inBox: boolean; escape?: string }) {
   const ctrl = isMac() ? '⌘' : 'Ctrl'
+  const vOn = useVKeyOn()
   return (
     <div
       data-slot="card-hints"
@@ -265,8 +271,8 @@ export function HintBar({ inBox }: { inBox: boolean }) {
       ) : (
         <>
           <Hint keys="Enter" words={SEND} />
-          <Hint keys="Esc" words={CANCEL} />
-          <Hint keys="V" words={SPEAK} />
+          <Hint keys="Esc" words={escape} />
+          {vOn ? <Hint keys="V" words={SPEAK} /> : null}
         </>
       )}
     </div>

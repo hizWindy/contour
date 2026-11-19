@@ -10,6 +10,8 @@ import type {
   PrepFacts,
   PrepOut,
 } from '@/api/types'
+import { somethingElseOpen } from '@/apps/assistant/voice/keys'
+import { closeVoiceBar, isVoiceBarOpen, openVoiceBar } from '@/apps/assistant/voice/store'
 import { renderWithProviders } from '@/test/render'
 import { asPhone } from '@/test/screen'
 import CompaniesPage from './index'
@@ -754,5 +756,49 @@ describe('on a phone', () => {
     expect(call).toHaveAttribute('href', 'tel:+61890001234')
     expect(within(modal).getByRole('button', { name: 'Copy number' })).toBeInTheDocument()
     expect(within(modal).getByRole('button', { name: 'Copy script' })).toBeInTheDocument()
+  })
+})
+
+describe('V over call prep (PLAN-V23 T4-1)', () => {
+  afterEach(() => {
+    act(() => {
+      closeVoiceBar()
+    })
+  })
+
+  it('the panel names its company and lets V through; Esc with the bar open shuts the bar, not the panel', async () => {
+    mockApi()
+    const { user } = renderCompanies()
+    const table = await screen.findByRole('table', { name: 'Companies' })
+    await user.click(
+      await within(table).findByRole('button', { name: 'Prep a call to ABC Logistics' }),
+    )
+    const panel = await screen.findByRole('dialog', { name: 'Jason Reeds' })
+    expect(panel).toHaveAttribute('data-voice-company', '101')
+    // V's rule: call prep doesn't hold the keys the way another dialog does.
+    expect(somethingElseOpen()).toBe(false)
+    act(() => {
+      openVoiceBar()
+    })
+    await user.keyboard('{Escape}')
+    expect(isVoiceBarOpen()).toBe(false)
+    expect(screen.getByRole('dialog', { name: 'Jason Reeds' })).toBeInTheDocument()
+    // With the bar shut, Esc shuts the panel, as before.
+    await user.keyboard('{Escape}')
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Jason Reeds' })).toBeNull()
+    })
+  })
+
+  it('on a phone the panel holds the page, so V stays out', async () => {
+    asPhone()
+    mockApi({ prepStatus: 409 })
+    const { user } = renderCompanies()
+    await screen.findByRole('list', { name: 'Companies' })
+    await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'jas')
+    await user.click(await screen.findByRole('option', { name: /Jason Reeds/ }))
+    const modal = await screen.findByRole('dialog', { name: /Jason Reeds/ })
+    expect(modal).not.toHaveAttribute('data-voice-company')
+    expect(somethingElseOpen()).toBe(true)
   })
 })

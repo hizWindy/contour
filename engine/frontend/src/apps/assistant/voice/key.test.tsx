@@ -14,6 +14,7 @@ import { fakeIdle } from '@/test/fake-idle'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import { VoiceKey } from './key'
 import { closeVoiceBar, isVoiceBarOpen } from './store'
+import { setVKeyOn } from './v-switch'
 
 vi.mock('./bar', async () => {
   const { useVoiceBarOpen } = await import('./store')
@@ -66,6 +67,7 @@ function press(init: KeyboardEventInit, target: Element = document.body): boolea
 afterEach(() => {
   act(() => {
     closeVoiceBar()
+    setVKeyOn(true)
   })
 })
 
@@ -175,6 +177,62 @@ describe('the V key', () => {
     renderKey({ signIn: VIEWER })
     expect(press({ key: 'v' })).toBe(true)
     expect(isVoiceBarOpen()).toBe(false)
+  })
+})
+
+describe('V over call prep, and the V switch (PLAN-V23 T4-1)', () => {
+  /** Call prep's panel as it marks itself on a laptop, with a box of its own. */
+  const prep = (
+    <div role="dialog" aria-label="Call prep" data-voice-company="201">
+      <input aria-label="Line edit" />
+    </div>
+  )
+
+  it('V over call prep starts the bar', () => {
+    renderKey({ page: prep })
+    expect(press({ key: 'v' })).toBe(false)
+    expect(isVoiceBarOpen()).toBe(true)
+  })
+
+  it('V in a box of call prep still types a "v"', async () => {
+    const { user } = renderKey({ page: prep })
+    const box = screen.getByRole('textbox', { name: 'Line edit' })
+    await user.click(box)
+    await user.keyboard('v')
+    expect(box).toHaveValue('v')
+    expect(isVoiceBarOpen()).toBe(false)
+  })
+
+  it('another dialog over call prep still holds V', () => {
+    renderKey({
+      page: (
+        <>
+          {prep}
+          <div role="menu" aria-label="Calling" />
+        </>
+      ),
+    })
+    expect(press({ key: 'v' })).toBe(true)
+    expect(isVoiceBarOpen()).toBe(false)
+  })
+
+  it('with V off, V does nothing, and the choice stays after a reload', () => {
+    act(() => {
+      setVKeyOn(false)
+    })
+    const first = renderKey()
+    expect(press({ key: 'v' })).toBe(true)
+    expect(isVoiceBarOpen()).toBe(false)
+    // A reload: the page is drawn again, and reads the choice this browser keeps.
+    first.unmount()
+    renderKey()
+    expect(press({ key: 'v' })).toBe(true)
+    expect(isVoiceBarOpen()).toBe(false)
+    act(() => {
+      setVKeyOn(true)
+    })
+    expect(press({ key: 'v' })).toBe(false)
+    expect(isVoiceBarOpen()).toBe(true)
   })
 })
 

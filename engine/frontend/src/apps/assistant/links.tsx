@@ -21,11 +21,13 @@
  *   first time it is asked for.
  * - **The old words still find them.** Call logs was Activity, and Meetings and Call logs sat in a
  *   menu group called Relationships, so those words stay among the entries' keywords.
- * - **"Speak (V)"** (PLAN-V22 T3-1) in the top bar opens the voice bar, as V does.
+ * - **"Speak (V)"** (PLAN-V22 T3-1) in the top bar opens the voice bar, as V does. "Use V to
+ *   speak" in the account menu switches the V key off and on (PLAN-V23 T4-1).
  * - **Loaded late**, through `parts.ts`: the menu, Home and Ctrl+K are in the first visit, and this
  *   file, with its hooks, words and icons, is not. Import the parts from there, not here.
  */
-import { ClipboardCheck, FileText, Mic, NotebookPen } from 'lucide-react'
+import { ClipboardCheck, FileText, Keyboard, Mic, NotebookPen } from 'lucide-react'
+import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui'
 import { lazy, Suspense, useState } from 'react'
 import { useCallNoteCounts, useCallNoteOptions, voiceToolOf } from '@/api/hooks/call-note-counts'
 import { useMeetingSummary } from '@/api/hooks/meeting-summary'
@@ -48,12 +50,14 @@ import { Button } from '@/components/ui/button'
 import { CommandItem } from '@/components/ui/command'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Kbd } from '@/components/ui/kbd'
+import { SwitchMark } from '@/components/ui/switch'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { MenuCount } from '@/shell/menu-count'
 import type { CommandsProps } from '@/shell/nav'
 import { MEETINGS_PATH } from './paths'
 import { openVoiceBar } from './voice/store'
-import { SPEAK, SPEAK_KEY } from './voice/words'
+import { setVKeyOn, useVKeyOn } from './voice/v-switch'
+import { SPEAK, SPEAK_KEY, USE_V } from './voice/words'
 import { ASSISTANT_KEYWORDS } from './words'
 
 function ToConfirmCountContent() {
@@ -233,7 +237,10 @@ export function MicCheckHost() {
  * (DESIGN.md: the mic button is square). Not for a Viewer (choice 18).
  */
 export function SpeakButton() {
-  if (useIsViewer()) return null
+  const viewer = useIsViewer()
+  // "Use V to speak" off (PLAN-V23 T4-1): the button says "Speak", with no key, and still works.
+  const vOn = useVKeyOn()
+  if (viewer) return null
   return (
     <Button
       type="button"
@@ -241,18 +248,60 @@ export function SpeakButton() {
       size="sm"
       className="gap-2 text-muted-foreground touch:h-11 max-sm:w-10 max-sm:px-0 max-sm:touch:w-11"
       // "Speak (V)": the word on it, and its key.
-      aria-label={`${SPEAK} ${SPEAK_KEY}`}
-      aria-keyshortcuts="V"
+      aria-label={vOn ? `${SPEAK} ${SPEAK_KEY}` : SPEAK}
+      aria-keyshortcuts={vOn ? 'V' : undefined}
       onClick={openVoiceBar}
     >
       <Mic aria-hidden="true" />
       <span aria-hidden="true" className="max-sm:hidden">
         {SPEAK}
       </span>
-      <Kbd aria-hidden="true" className="touch:hidden max-sm:hidden">
-        V
-      </Kbd>
+      {vOn ? (
+        <Kbd aria-hidden="true" className="touch:hidden max-sm:hidden">
+          V
+        </Kbd>
+      ) : null}
     </Button>
+  )
+}
+
+/**
+ * "Use V to speak" (PLAN-V23 T4-1, from WCAG 2.2 rule 2.1.4: a one-letter shortcut must be able to
+ * be switched off), in the account menu, with the sliding switch's look. The row is the control,
+ * so a screen reader hears a menu checkbox, on or off. The menu stays open as it is pressed, so
+ * the switch is seen to move. Kept in this browser (`voice/v-switch.ts`). Not for a Viewer, who
+ * has no V (choice 18).
+ */
+export function VKeyMenuItem() {
+  const viewer = useIsViewer()
+  const on = useVKeyOn()
+  if (viewer) return null
+  return (
+    <DropdownMenuPrimitive.CheckboxItem
+      data-slot="v-key-switch"
+      checked={on}
+      onCheckedChange={(checked) => {
+        setVKeyOn(checked)
+      }}
+      onSelect={(event) => {
+        event.preventDefault()
+      }}
+      className="relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-ui outline-hidden select-none focus:bg-accent focus:text-accent-foreground touch:min-h-11 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0"
+    >
+      <Keyboard aria-hidden="true" />
+      <span className="flex-1">{USE_V}</span>
+      <SwitchMark checked={on} />
+    </DropdownMenuPrimitive.CheckboxItem>
+  )
+}
+
+/** The Assistant's rows in the account menu: "Use V to speak", then "Check my mic". */
+export function AssistantAccountItems() {
+  return (
+    <>
+      <VKeyMenuItem />
+      <MicCheckMenuItem />
+    </>
   )
 }
 

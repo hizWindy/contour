@@ -55,6 +55,7 @@ import {
   TO_SPEAK,
 } from './today/words'
 import { openVoiceBar } from './voice/store'
+import { useVKeyOn } from './voice/v-switch'
 import { ASSISTANT_NAME } from './words'
 
 const TITLE_ID = 'home-assistant'
@@ -158,19 +159,25 @@ function CountsPending() {
   )
 }
 
-/** "Press V to speak" on a laptop, and the Speak button on a touch screen. */
+/**
+ * "Press V to speak" on a laptop, and the Speak button on a touch screen. With "Use V to speak"
+ * off (PLAN-V23 T4-1), the Speak button on a laptop too.
+ */
 function Speak() {
+  const vOn = useVKeyOn()
   return (
     <div className="px-6">
-      <p className="flex items-center gap-1.5 text-ui text-muted-foreground touch:hidden">
-        {PRESS}
-        <Kbd>V</Kbd>
-        {TO_SPEAK}
-      </p>
+      {vOn ? (
+        <p className="flex items-center gap-1.5 text-ui text-muted-foreground touch:hidden">
+          {PRESS}
+          <Kbd>V</Kbd>
+          {TO_SPEAK}
+        </p>
+      ) : null}
       <Button
         type="button"
         variant="outline"
-        className="hidden touch:inline-flex touch:h-11"
+        className={cn(vOn && 'hidden touch:inline-flex', 'touch:h-11')}
         onClick={openVoiceBar}
       >
         <Mic aria-hidden="true" />

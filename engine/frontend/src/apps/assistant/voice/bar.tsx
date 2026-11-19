@@ -63,9 +63,10 @@ import { BarSession, MAX_CHARS, type BarProblem, type BarSnapshot, type Times } 
 import { handOver } from './hand-over'
 import { isPlainV, somethingElseOpen, VOICE_BAR } from './keys'
 import { namesOnPage } from './names'
-import { onPageOf } from './on-page'
+import { onPageOf, panelCompany } from './on-page'
 import { onScreen } from './on-screen'
 import { closeVoiceBar, useVoiceBarOpen } from './store'
+import { useVKeyOn } from './v-switch'
 import {
   CANCEL,
   CARRY_ON,
@@ -255,6 +256,8 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   const location = useLocation()
   const client = useQueryClient()
   const still = useStill()
+  // "Use V to speak" off (PLAN-V23 T4-1): V is no key here either, so no key cap says it is.
+  const vOn = useVKeyOn()
 
   // A new session each time the bar opens, with what is on screen as it opens.
   const [opened, setOpened] = useState(false)
@@ -262,9 +265,13 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   if (open !== opened) {
     setOpened(open)
     if (open) {
-      // A row the page says is on screen (Today's active row, choice 8), else the address.
-      const row = onScreen()
-      const onPage = row?.onPage ?? onPageOf(location.pathname, location.search)
+      // Call prep's company while its panel is open (PLAN-V23 T4-1), then a row the page says is
+      // on screen (Today's active row, choice 8), else the address.
+      const panel = panelCompany()
+      const row = panel ? null : onScreen()
+      const onPage = panel
+        ? { company_key: panel }
+        : (row?.onPage ?? onPageOf(location.pathname, location.search))
       setSession(
         new BarSession({
           onPage,
@@ -492,10 +499,15 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
                 >
                   <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
                   {problem.kind === 'nothing_heard' ? (
-                    <span>
-                      <span className="touch:hidden">{NOTHING_HEARD}</span>
-                      <span className="hidden touch:inline">{NOTHING_HEARD_TOUCH}</span>
-                    </span>
+                    vOn ? (
+                      <span>
+                        <span className="touch:hidden">{NOTHING_HEARD}</span>
+                        <span className="hidden touch:inline">{NOTHING_HEARD_TOUCH}</span>
+                      </span>
+                    ) : (
+                      // With V off, the words name the button, as on a touch screen.
+                      <span>{NOTHING_HEARD_TOUCH}</span>
+                    )
                   ) : (
                     <span>{problemLine(problem)}</span>
                   )}
@@ -550,13 +562,13 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
                     type="button"
                     size="sm"
                     className="touch:h-11"
-                    aria-keyshortcuts="V"
+                    aria-keyshortcuts={vOn ? 'V' : undefined}
                     onClick={() => {
                       session?.done()
                     }}
                   >
                     {DONE}
-                    <KeyHint>V</KeyHint>
+                    {vOn ? <KeyHint>V</KeyHint> : null}
                   </Button>
                 ) : main ? (
                   <Button

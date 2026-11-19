@@ -3,9 +3,19 @@
  * command that names no company uses this one, like "log a call with Jo" on a company's page. Read
  * from the address, so it needs nothing from the page: a company's own page, the company open in
  * Companies' panel, or a pre-read. Today's rows (choice 8) come with T2-2.
+ *
+ * Call prep's panel (PLAN-V23 T4-1) isn't in the address: it marks itself with the company it
+ * preps, and that company comes first while the panel is open (`panelCompany`).
  */
 import type { AssistantOnPage } from '@/api/types'
 import { MEETINGS_PATH } from '../paths'
+import { VOICE_PANEL } from './keys'
+
+/** The company of the panel V works over (call prep), or null while none is open. */
+export function panelCompany(): string | null {
+  const key = document.querySelector<HTMLElement>(VOICE_PANEL)?.dataset.voiceCompany?.trim()
+  return key ? key : null
+}
 
 /**
  * The old addresses under Companies (`old-addresses.ts`), on their way to the new ones: no company
