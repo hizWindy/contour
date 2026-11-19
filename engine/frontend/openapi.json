@@ -2075,6 +2075,18 @@
             "description": "Who it is for. None: the rep who logged the call",
             "title": "Owner"
           },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Their HubSpot owner id, so two people with one name stay apart. Send it back with the follow-up when the list changes: a follow-up sent without it goes to the rep. None: the rep who logged the call",
+            "title": "Owner Id"
+          },
           "subject": {
             "title": "Subject",
             "type": "string"
@@ -2147,7 +2159,7 @@
                 "type": "null"
               }
             ],
-            "description": "The HubSpot owner it is for. None: the rep",
+            "description": "The HubSpot owner it is for: the follow-up's `owner_id` as it came, or a teammate's from GET /companies/team. Left out or None: the rep",
             "title": "Owner Id"
           },
           "subject": {
@@ -18546,7 +18558,7 @@
         "type": "object"
       },
       "TeamMember": {
-        "description": "One active HubSpot owner selectable on the pre-read send list (never exposes emails).",
+        "description": "One active HubSpot owner: someone a pre-read can go to, or a call's follow-up can be for\n(never exposes emails).",
         "properties": {
           "has_account": {
             "description": "True when linked to an active Contour account",
@@ -30712,7 +30724,7 @@
     },
     "/companies/team": {
       "get": {
-        "description": "Active HubSpot owners ordered by name, with whether each has an active Contour account and whether they are the signed-in user. Never exposes email addresses. 503 `team_unavailable` if loading fails.",
+        "description": "Active HubSpot owners ordered by name, with whether each has an active Contour account and whether they are the signed-in user: who a pre-read can go to, and who a call's follow-up can be for. Never exposes email addresses. Behind the Meetings or the Call logs tick (403 `feature_not_allowed`); a Viewer, who can't add a follow-up, needs the Meetings tick. 503 `team_unavailable` if loading fails.",
         "operationId": "list_team",
         "responses": {
           "200": {
@@ -30845,7 +30857,7 @@
             "sessionCookie": []
           }
         ],
-        "summary": "Contour team owners for pre-read sending",
+        "summary": "The team, for a pre-read or a follow-up",
         "tags": [
           "Companies"
         ]

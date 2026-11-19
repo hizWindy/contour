@@ -1133,8 +1133,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Contour team owners for pre-read sending
-         * @description Active HubSpot owners ordered by name, with whether each has an active Contour account and whether they are the signed-in user. Never exposes email addresses. 503 `team_unavailable` if loading fails.
+         * The team, for a pre-read or a follow-up
+         * @description Active HubSpot owners ordered by name, with whether each has an active Contour account and whether they are the signed-in user: who a pre-read can go to, and who a call's follow-up can be for. Never exposes email addresses. Behind the Meetings or the Call logs tick (403 `feature_not_allowed`); a Viewer, who can't add a follow-up, needs the Meetings tick. 503 `team_unavailable` if loading fails.
          */
         get: operations["list_team"];
         put?: never;
@@ -3343,6 +3343,11 @@ export interface components {
              * @description Who it is for. None: the rep who logged the call
              */
             owner: string | null;
+            /**
+             * Owner Id
+             * @description Their HubSpot owner id, so two people with one name stay apart. Send it back with the follow-up when the list changes: a follow-up sent without it goes to the rep. None: the rep who logged the call
+             */
+            owner_id?: string | null;
             /** Subject */
             subject: string;
         };
@@ -3372,7 +3377,7 @@ export interface components {
             kind: "call" | "email" | "todo";
             /**
              * Owner Id
-             * @description The HubSpot owner it is for. None: the rep
+             * @description The HubSpot owner it is for: the follow-up's `owner_id` as it came, or a teammate's from GET /companies/team. Left out or None: the rep
              */
             owner_id?: string | null;
             /** Subject */
@@ -10338,7 +10343,8 @@ export interface components {
         };
         /**
          * TeamMember
-         * @description One active HubSpot owner selectable on the pre-read send list (never exposes emails).
+         * @description One active HubSpot owner: someone a pre-read can go to, or a call's follow-up can be for
+         *     (never exposes emails).
          */
         TeamMember: {
             /**
