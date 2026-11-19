@@ -30,15 +30,22 @@ export const TYPE_EXAMPLE = 'Like: add a task to send the quote on Friday'
 
 /**
  * Before the first word, the bar shows what a rep can say: one example for each card action (Al-khair
- * asked what to say, 19 Nov). "Acme" stands for any client, so no real one is named (TBC).
+ * asked what to say, 19 Nov). They name the rep's own next company, the first company of the hint
+ * list (PLAN-V23 T4-3). "Acme" stands in until the list is in, or when it has no company.
  */
 export const TRY_SAYING = 'Try saying'
-export const SAY_EXAMPLES: readonly string[] = [
-  'Log a call with James from Acme, follow up Friday',
-  'Make the pre-read for my next meeting with Acme',
-  'Add a task for Sam to send Acme the quote on Monday',
-  'Email Sam that the Acme floor plan is ready',
-]
+export const EXAMPLE_COMPANY = 'Acme'
+
+export function sayExamples(company: string = EXAMPLE_COMPANY): readonly string[] {
+  return [
+    `Log a call with James from ${company}, follow up Friday`,
+    `Make the pre-read for my next meeting with ${company}`,
+    `Add a task for Sam to send ${company} the quote on Monday`,
+    `Email Sam that the ${company} floor plan is ready`,
+  ]
+}
+
+export const SAY_EXAMPLES: readonly string[] = sayExamples()
 
 // --- The keys and buttons --------------------------------------------------------------------------
 

@@ -13,6 +13,7 @@ import { useLocation } from 'react-router'
 import type {
   AssistantCommand,
   AssistantCommandIn,
+  AssistantNames,
   CallNoteOptions,
   CompanyDetail,
 } from '@/api/types'
@@ -30,6 +31,7 @@ import { setVKeyOn } from './v-switch'
 
 const OPTIONS = '/api/v1/companies/call-notes/options'
 const COMMAND = '/api/v1/companies/assistant/command'
+const NAMES = '/api/v1/companies/assistant/names'
 const BAR = 'Speak to the Assistant'
 const SAID = 'Add a task to send Sample Logistics the quote on Monday'
 
@@ -87,6 +89,8 @@ interface Open {
   notesOn?: boolean
   /** More of the page around the bar, like call prep's panel. */
   page?: ReactNode
+  /** The hint list the server gives (PLAN-V23 T1-5). Left out: none (a 404). */
+  names?: AssistantNames | Answer
 }
 
 function openBar({
@@ -99,11 +103,13 @@ function openBar({
   read,
   notesOn = true,
   page,
+  names,
 }: Open = {}) {
   const mic = new FakeMic(micOptions)
   const calls = mockApi({
     [OPTIONS]: { ...options(voiceTool), enabled: notesOn },
     [COMMAND]: answer,
+    ...(names ? { [NAMES]: names } : {}),
   })
   const queryClient = createTestQueryClient()
   queryClient.setQueryData(queryKeys.auth.me(), signIn)
@@ -590,5 +596,74 @@ describe('over call prep, and with V off (PLAN-V23 T4-1)', () => {
     await waitFor(() => {
       expect(commands().map((call) => call.body)).toEqual([{ text: 'Add a task', source: 'mic' }])
     })
+  })
+})
+
+const HINTS: AssistantNames = {
+  names: [
+    { text: 'Vitera', kind: 'company', company_key: '301' },
+    { text: 'Jo Sample', kind: 'person', company_key: '301' },
+    { text: 'fitout', kind: 'word', company_key: null },
+  ],
+}
+
+describe('the hint list (PLAN-V23 T1-5, T4-3)', () => {
+  it('on Today, a name heard nearly right is put right from the hint list, not only on the company’s page', async () => {
+    const { mic, calls, commands, user } = openBar({ route: '/assistant', names: HINTS })
+    const found = await listening()
+    // The list is in: "Try saying" names its first company, not Acme.
+    expect(
+      await within(found).findByText('“Make the pre-read for my next meeting with Vitera”'),
+    ).toBeInTheDocument()
+    expect(within(found).queryByText(/Acme/)).toBeNull()
+    // Asked once, for no company: Today shows none.
+    expect(calls.filter((call) => call.path === NAMES).map((call) => call.search)).toEqual([''])
+    await act(async () => {
+      await Promise.resolve()
+    })
+    act(() => {
+      mic.say('Log a call with Jo at Vitara')
+    })
+    expect(within(found).getByText('Log a call with Jo at Vitera')).toBeInTheDocument()
+    expect(within(found).getByText('Changed Vitara to Vitera.')).toBeInTheDocument()
+    await user.keyboard('v')
+    await waitFor(() => {
+      expect(commands().map((call) => call.body)).toEqual([
+        { text: 'Log a call with Jo at Vitera', source: 'mic' },
+      ])
+    })
+  })
+
+  it('on a company’s page, it asks for that company’s list', async () => {
+    const { calls } = openBar({ route: '/companies/201', names: HINTS })
+    await listening()
+    await waitFor(() => {
+      expect(calls.filter((call) => call.path === NAMES).map((call) => call.search)).toEqual([
+        '?company_key=201',
+      ])
+    })
+  })
+
+  it('never asks for a Viewer', async () => {
+    const { calls } = openBar({
+      names: HINTS,
+      signIn: {
+        state: 'signed_in',
+        user: {
+          id: '11111111-2222-3333-4444-555555555555',
+          email: 'jo@example.test',
+          username: 'jo',
+          name: 'Jo Sample',
+          position: null,
+          role: 'viewer',
+          apps: ['companies'],
+          features: ['companies.call_logs'],
+        },
+      },
+    })
+    await waitFor(() => {
+      expect(calls.some((call) => call.path === OPTIONS)).toBe(true)
+    })
+    expect(calls.some((call) => call.path === NAMES)).toBe(false)
   })
 })

@@ -34,13 +34,15 @@ interface SetUp {
   onPage?: AssistantOnPage | null
   /** The names on screen, for the name fix. */
   names?: readonly string[]
+  /** The hint list, for the speech service. */
+  hints?: readonly string[]
   /** The command step's answer. Default: the task above. */
   answer?: (body: AssistantCommandIn, signal: AbortSignal) => Promise<AssistantCommand>
   /** What the seam does with an answer. Default: shows its read-back. */
   after?: (heard: Heard) => AfterAnswer
 }
 
-function setUp({ mic: micOptions, onPage, names, answer, after }: SetUp = {}) {
+function setUp({ mic: micOptions, onPage, names, hints, answer, after }: SetUp = {}) {
   const mic = new FakeMic(micOptions)
   const sent: AssistantCommandIn[] = []
   const handed: Heard[] = []
@@ -50,6 +52,7 @@ function setUp({ mic: micOptions, onPage, names, answer, after }: SetUp = {}) {
     makeTool: mic.tool,
     onPage: onPage ?? null,
     names: names ?? [],
+    hints: hints ?? [],
     read: (body, signal) => {
       sent.push(body)
       return answer ? answer(body, signal) : Promise.resolve(TASK)
@@ -552,5 +555,31 @@ describe('each state (T3-2)', () => {
     expect(recorder).not.toHaveBeenCalled()
     expect(sent).toEqual([{ text: SAID, source: 'mic', on_page: { company_key: '201' } }])
     expect(mic.live()).toBe(0)
+  })
+})
+
+describe('the hint list (PLAN-V23 T1-5)', () => {
+  it('fixes a name heard nearly right, and goes to the voice tool as it starts', async () => {
+    const { mic, now } = await listening({
+      names: ['Vitera Pty Ltd', 'Jo Sample'],
+      hints: ['Vitera', 'Jo Sample', 'fitout'],
+    })
+    expect(mic.tools[0]?.hints).toEqual(['Vitera', 'Jo Sample', 'fitout'])
+    mic.say('Log a call with Jo at Vitara')
+    expect(now().mic?.chunks).toEqual(['Log a call with Jo at Vitera'])
+    expect(now().mic?.fixes).toEqual([{ from: 'Vitara', to: 'Vitera' }])
+  })
+
+  it('a list that comes in after the bar opened fixes the words from then on', async () => {
+    const { mic, session, now } = await listening()
+    mic.say('Spoke to Vitara')
+    session.setNames(['Vitera Pty Ltd'], ['Vitera'])
+    mic.say('Vitara wants a test fit')
+    expect(now().mic?.chunks).toEqual(['Spoke to Vitara', 'Vitera wants a test fit'])
+    // The service hears the hints from its next start: Try again, after a problem.
+    session.typeInstead()
+    session.tryAgain()
+    await tick(100)
+    expect(mic.tools.at(-1)?.hints).toEqual(['Vitera'])
   })
 })

@@ -31,9 +31,10 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react'
-import { useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router'
 import { readCommand } from '@/api/hooks/assistant'
+import { namesQueryOptions } from '@/api/hooks/assistant-names'
 import { useCallNoteOptions, voiceToolOf } from '@/api/hooks/call-note-counts'
 import type { SignIn } from '@/api/hooks/auth'
 import { queryKeys } from '@/api/query'
@@ -62,7 +63,7 @@ import { openCard } from '../card/store'
 import { BarSession, MAX_CHARS, type BarProblem, type BarSnapshot, type Times } from './bar-session'
 import { handOver } from './hand-over'
 import { isPlainV, somethingElseOpen, VOICE_BAR } from './keys'
-import { namesOnPage } from './names'
+import { cachedNames, firstCompanyOf, fixNamesOf, hintsOf, namesOnPage } from './names'
 import { onPageOf, panelCompany } from './on-page'
 import { onScreen } from './on-screen'
 import { closeVoiceBar, useVoiceBarOpen } from './store'
@@ -75,7 +76,7 @@ import {
   LISTENING,
   NOTHING_HEARD,
   NOTHING_HEARD_TOUCH,
-  SAY_EXAMPLES,
+  sayExamples,
   SEND,
   TOO_MANY,
   TOO_SLOW,
@@ -92,8 +93,11 @@ import {
 /** How far the bar rises as it comes, in px. */
 const RISE = 24
 
-/** Before the first word: what a rep can say, one example for each card action. */
-function SayExamples() {
+/**
+ * Before the first word: what a rep can say, one example for each card action, with the rep's own
+ * next company (PLAN-V23 T4-3), or Acme until the hint list is in.
+ */
+function SayExamples({ company }: { company: string | null }) {
   return (
     <div
       data-slot="voice-examples"
@@ -101,13 +105,20 @@ function SayExamples() {
     >
       <p>{TRY_SAYING}</p>
       <ul className="flex flex-col gap-0.5">
-        {SAY_EXAMPLES.map((line) => (
+        {sayExamples(company ?? undefined).map((line) => (
           <li key={line}>“{line}”</li>
         ))}
       </ul>
     </div>
   )
 }
+/** What is on screen as the bar opens: its company, for the hint list, and its names. */
+interface Screen {
+  key: string | null
+  names: readonly string[]
+}
+
+const NO_SCREEN: Screen = { key: null, names: [] }
 
 const CLOSED: BarSnapshot = {
   phase: 'starting',
@@ -262,6 +273,14 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   // A new session each time the bar opens, with what is on screen as it opens.
   const [opened, setOpened] = useState(false)
   const [session, setSession] = useState<BarSession | null>(null)
+  const [screen, setScreen] = useState<Screen>(NO_SCREEN)
+  // The hint list (PLAN-V23 T1-5): for the address's company while the bar is shut, so it is
+  // ready for the first V; for what is on screen once it opens. Never for a Viewer.
+  const addressKey = onPageOf(location.pathname, location.search)?.company_key ?? null
+  const hintList = useQuery({
+    ...namesQueryOptions(open ? screen.key : addressKey),
+    enabled: !viewer,
+  })
   if (open !== opened) {
     setOpened(open)
     if (open) {
@@ -272,10 +291,18 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
       const onPage = panel
         ? { company_key: panel }
         : (row?.onPage ?? onPageOf(location.pathname, location.search))
+      const shown: Screen = {
+        key: onPage?.company_key ?? null,
+        names: row ? row.names : namesOnPage(client, onPage),
+      }
+      // The list the page has now; one that comes later is handed on (below).
+      const list = cachedNames(client, shown.key)
+      setScreen(shown)
       setSession(
         new BarSession({
           onPage,
-          names: row ? row.names : namesOnPage(client, onPage),
+          names: fixNamesOf(shown.names, list),
+          hints: hintsOf(shown.names, list),
           read,
           hand: (heard) =>
             handOver(heard, {
@@ -298,6 +325,13 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
       )
     }
   }
+
+  // The hint list that came in after the bar opened: the fix and the service use it from now.
+  const names = hintList.data
+  useEffect(() => {
+    if (session && names)
+      session.setNames(fixNamesOf(screen.names, names), hintsOf(screen.names, names))
+  }, [session, names, screen.names])
 
   // It starts once the voice tool setting is known, and lets everything go when the bar closes.
   const toolKnown = !options.isPending
@@ -384,6 +418,8 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
     if (action === 'try_again') session.tryAgain()
     else session.typeInstead()
   }
+  // The rep's own next company, for "Try saying" (PLAN-V23 T4-3).
+  const nextCompany = firstCompanyOf(names ?? cachedNames(client, screen.key))
 
   return (
     <>
@@ -469,7 +505,7 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
                   <LiveWords
                     chunks={snapshot.mic?.chunks ?? []}
                     hearing={snapshot.mic?.hearing ?? ''}
-                    empty={<SayExamples />}
+                    empty={<SayExamples company={nextCompany} />}
                   />
                 ) : snapshot.words ? (
                   <p className="text-pretty">{snapshot.words}</p>

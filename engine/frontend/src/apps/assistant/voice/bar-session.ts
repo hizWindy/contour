@@ -102,8 +102,10 @@ export interface BarSnapshot {
 export interface BarSessionOptions {
   /** What is on screen, for a command that names no company. */
   onPage?: AssistantOnPage | null
-  /** The names on screen, for the name fix. */
+  /** The names on screen and the hint list's, for the name fix. */
   names?: readonly string[]
+  /** The hint list, for the speech service (on-device mode only, PLAN-V23 T1-5). */
+  hints?: readonly string[]
   /** Reads a command: the command step, or a test's fake. */
   read: (body: AssistantCommandIn, signal: AbortSignal) => Promise<AssistantCommand>
   /**
@@ -149,7 +151,8 @@ type Listener = () => void
 export class BarSession {
   private readonly onPage: AssistantOnPage | null
   private readonly card: AssistantCardIn | null
-  private readonly names: readonly string[]
+  private names: readonly string[]
+  private hints: readonly string[]
   private readonly read: BarSessionOptions['read']
   private readonly hand: BarSessionOptions['hand']
   private readonly onClose: () => void
@@ -175,6 +178,7 @@ export class BarSession {
     this.onPage = options.onPage ?? null
     this.card = options.card ?? null
     this.names = options.names ?? []
+    this.hints = options.hints ?? []
     this.read = options.read
     this.hand = options.hand
     this.onClose = options.onClose
@@ -238,6 +242,7 @@ export class BarSession {
       mode: 'note',
       tool: 'browser_service',
       names: this.names,
+      hints: this.hints,
       env: this.env,
       ...(this.makeTool === undefined ? {} : { makeTool: this.makeTool }),
     })
@@ -328,6 +333,16 @@ export class BarSession {
       return true
     }
     return false
+  }
+
+  /**
+   * The hint list came in, or changed (PLAN-V23 T1-5): the name fix uses it from the next words,
+   * and the speech service from its next start.
+   */
+  setNames(names: readonly string[], hints: readonly string[]): void {
+    this.names = names
+    this.hints = hints
+    this.mic?.setNames(names, hints)
   }
 
   /** The bar is gone: the mic is let go and nothing more comes. */
