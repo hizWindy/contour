@@ -408,3 +408,67 @@ describe('the Sources settings (PLAN-V16 T3-6)', () => {
     expect(screen.queryByLabelText('Arealytics facts may go to Claude')).toBeNull()
   })
 })
+
+const LEARNED = '/api/v1/companies/assistant/learned'
+const PAIR = {
+  id: '6a0c1d2e-0000-4000-8000-000000000001',
+  heard: 'north wind',
+  company_key: '301',
+  company_name: 'Northwind Pty Ltd',
+  taught_by: 'Jo Sample',
+  created_at: '2026-11-19T01:00:00Z',
+}
+
+describe('the names the mic learned (PLAN-V23 T1-2, T1-5)', () => {
+  it('lists each pair: the words heard, the company, who taught it and when', async () => {
+    mockApi({
+      '/api/v1/settings': settingsOut(),
+      [LEARNED]: {
+        items: [
+          PAIR,
+          { ...PAIR, id: 'p2', heard: 'vitara', company_name: 'Vitera', taught_by: null },
+        ],
+        total: 2,
+      },
+    })
+    renderWithProviders(<AdminSettingsTab />)
+    const table = await screen.findByRole('table', { name: 'Names the mic learned' })
+    const rows = within(table).getAllByRole('row')
+    expect(rows.map((row) => row.textContent)).toEqual([
+      'HeardCompanyTaught byWhenRemove',
+      'north windNorthwind Pty LtdJo Sample19 Nov 2026Remove',
+      'vitaraViteraNot known19 Nov 2026Remove',
+    ])
+  })
+
+  it('Remove forgets one at once, and Undo teaches it again', async () => {
+    const calls = mockApi({
+      '/api/v1/settings': settingsOut(),
+      [LEARNED]: (call: Call) =>
+        call.method === 'POST'
+          ? new Response(null, { status: 204 })
+          : Response.json({ items: [PAIR], total: 1 }),
+      [`${LEARNED}/${PAIR.id}`]: () => new Response(null, { status: 204 }),
+    })
+    const { user } = renderWithProviders(<AdminSettingsTab />)
+    await user.click(await screen.findByRole('button', { name: 'Remove north wind' }))
+    expect(screen.queryByRole('button', { name: 'Remove north wind' })).toBeNull()
+    await waitFor(() => {
+      expect(calls.some((call) => call.method === 'DELETE')).toBe(true)
+    })
+    expect(calls.find((call) => call.method === 'DELETE')?.path).toBe(`${LEARNED}/${PAIR.id}`)
+    await user.click(await screen.findByRole('button', { name: 'Undo' }))
+    await waitFor(() => {
+      expect(calls.find((call) => call.method === 'POST' && call.path === LEARNED)?.body).toEqual({
+        heard: 'north wind',
+        company_key: '301',
+      })
+    })
+  })
+
+  it('says so, in the serif voice, when there are none yet', async () => {
+    mockApi({ '/api/v1/settings': settingsOut(), [LEARNED]: { items: [], total: 0 } })
+    renderWithProviders(<AdminSettingsTab />)
+    expect(await screen.findByText('No learned names yet.')).toHaveClass('font-serif')
+  })
+})

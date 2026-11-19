@@ -10,6 +10,9 @@
  * Changes are saved together, all or nothing: a value the server refuses comes back beside its field
  * and nothing is saved. A changed setting can go back to its default. A change applies from the next
  * run, said once at the top: a run in progress keeps the caps it started with.
+ *
+ * Under the settings, the names the mic learned (PLAN-V23 T1-2, T1-5), with Remove
+ * (`learned-names.tsx`).
  */
 import { RotateCcw, Save } from 'lucide-react'
 import { useState } from 'react'
@@ -41,6 +44,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { toastProblem } from '@/lib/problems'
+import { LearnedNames } from './learned-names'
 import {
   choiceWords,
   firstSentence,
@@ -326,6 +330,7 @@ export default function AdminSettingsTab() {
           </div>
         </CardContent>
       </Card>
+      <LearnedNames />
       {fixed.length > 0 ? (
         <details className="rounded-lg border bg-card px-6 py-4 text-ui">
           <summary className="cursor-pointer font-semibold">
