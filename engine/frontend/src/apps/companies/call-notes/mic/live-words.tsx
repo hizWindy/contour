@@ -8,6 +8,7 @@
  * again when the next one comes.
  */
 import { m } from 'motion/react'
+import type { ReactNode } from 'react'
 import { EASE, INSTANT } from '@/components/motion/springs'
 import { useStill } from '@/components/motion/use-still'
 import { WORDS_SHOW_HERE } from './words'
@@ -20,12 +21,14 @@ export interface LiveWordsProps {
   chunks: readonly string[]
   /** The words still being heard, which may change. */
   hearing: string
+  /** What shows before the first word. The mic card's quiet line unless a caller gives its own. */
+  empty?: ReactNode
 }
 
-export function LiveWords({ chunks, hearing }: LiveWordsProps) {
+export function LiveWords({ chunks, hearing, empty }: LiveWordsProps) {
   const still = useStill()
   if (chunks.length === 0 && hearing === '') {
-    return <p className="text-muted-foreground">{WORDS_SHOW_HERE}</p>
+    return empty ?? <p className="text-muted-foreground">{WORDS_SHOW_HERE}</p>
   }
   return (
     <p className="text-pretty">

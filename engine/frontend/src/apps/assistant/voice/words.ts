@@ -22,6 +22,18 @@ export const TYPE_WHAT = 'Type what to do'
 /** The text line's hint: an example, so it doesn't repeat the title (TBC). */
 export const TYPE_EXAMPLE = 'Like: add a task to send the quote on Friday'
 
+/**
+ * Before the first word, the bar shows what a rep can say: one example for each card action (Al-khair
+ * asked what to say, 19 Nov). "Acme" stands for any client, so no real one is named (TBC).
+ */
+export const TRY_SAYING = 'Try saying'
+export const SAY_EXAMPLES: readonly string[] = [
+  'Log a call with James from Acme, follow up Friday',
+  'Make the pre-read for my next meeting with Acme',
+  'Add a task for Sam to send Acme the quote on Monday',
+  'Email Sam that the Acme floor plan is ready',
+]
+
 // --- The keys and buttons --------------------------------------------------------------------------
 
 /** V while listening: the talk ends, and the words go to the command step. */

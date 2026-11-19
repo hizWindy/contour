@@ -151,12 +151,19 @@ describe('the voice bar', () => {
     expect(found).toHaveAttribute('data-slot', 'voice-bar')
     expect(found).toHaveFocus()
     expect(screen.getByRole('status')).toHaveTextContent('Listening')
-    expect(within(found).getByText('Your words show here as you speak.')).toBeInTheDocument()
+    // Before the first word: what to say, one example for each card action.
+    expect(within(found).getByText('Try saying')).toBeInTheDocument()
+    expect(
+      within(found).getByText('“Make the pre-read for my next meeting with Acme”'),
+    ).toBeInTheDocument()
+    expect(within(found).getAllByRole('listitem')).toHaveLength(4)
     act(() => {
       mic.say('Add a task')
       mic.hear('to send the quote')
     })
     expect(within(found).getByText(/Add a task/)).toBeInTheDocument()
+    // The examples give way to the words.
+    expect(within(found).queryByText('Try saying')).not.toBeInTheDocument()
     expect(within(found).getByText('to send the quote')).toHaveClass('text-muted-foreground')
   })
 

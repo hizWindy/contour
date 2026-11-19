@@ -74,10 +74,12 @@ import {
   LISTENING,
   NOTHING_HEARD,
   NOTHING_HEARD_TOUCH,
+  SAY_EXAMPLES,
   SEND,
   TOO_MANY,
   TOO_SLOW,
   TRY_AGAIN,
+  TRY_SAYING,
   TYPE_EXAMPLE,
   TYPE_INSTEAD,
   TYPE_WHAT,
@@ -88,6 +90,23 @@ import {
 
 /** How far the bar rises as it comes, in px. */
 const RISE = 24
+
+/** Before the first word: what a rep can say, one example for each card action. */
+function SayExamples() {
+  return (
+    <div
+      data-slot="voice-examples"
+      className="flex flex-col gap-1 text-caption text-muted-foreground"
+    >
+      <p>{TRY_SAYING}</p>
+      <ul className="flex flex-col gap-0.5">
+        {SAY_EXAMPLES.map((line) => (
+          <li key={line}>“{line}”</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
 
 const CLOSED: BarSnapshot = {
   phase: 'starting',
@@ -442,6 +461,7 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
                   <LiveWords
                     chunks={snapshot.mic?.chunks ?? []}
                     hearing={snapshot.mic?.hearing ?? ''}
+                    empty={<SayExamples />}
                   />
                 ) : snapshot.words ? (
                   <p className="text-pretty">{snapshot.words}</p>
