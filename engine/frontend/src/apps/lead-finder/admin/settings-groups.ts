@@ -71,6 +71,8 @@ const GROUP_OF: Record<string, GroupId> = {
   meeting_forms_enabled: 'notes',
   voice_tool: 'notes', // PLAN-V18: which voice to text tool the mic uses
   today_quiet_days: 'notes', // PLAN-V22 T2-2: the days without contact that make a deal quiet on Today
+  name_hints_max: 'notes', // PLAN-V23 T2-4: the most names the mic listens for (T1-1)
+  notify_owner_calls: 'notes', // PLAN-V23 T2-4: the owner's FYI task for someone else's call (T2-2)
 }
 
 /**
