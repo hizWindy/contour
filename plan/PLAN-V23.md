@@ -5,8 +5,8 @@ This plan refines the Assistant that PLAN-V22 built. The mic gets better at name
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
-- **Last updated:** 20 Nov 2026 (S0; the backend of Parts 1 to 3; T4-1 and T4-2).
-- **Progress:** Before the build: 1 of 3. Part 1: 4 of 7. Part 2: 3 of 5. Part 3: 3 of 5. Part 4: 2 of 6. M1 to M4: 0 of 4.
+- **Last updated:** 20 Nov 2026 (built as far as it goes without Al-khair: S1, S2, three looks, T4-4's choice, the screen reader pass and M1 to M4 wait for him).
+- **Progress:** Before the build: 1 of 3. Part 1: 6 of 7. Part 2: 4 of 5. Part 3: 4 of 5. Part 4: 3 of 6. M1 to M4: 0 of 4.
 - **Sources:**
   - Al-khair's ideas and answers in chat on 19 Nov (the second session that day);
   - the meeting with Levi on 18 Nov (Gemini's notes in `minutes of meeting/`);
@@ -274,7 +274,7 @@ All new routes sit under `/api/v1/companies/assistant/`. A route that changes so
 
 ## Part 1: names and hearing
 
-**Progress:** 4 of 7.
+**Progress:** 6 of 7.
 
 - [x] **T1-1. The hint list** (backend). Done 19 Nov 2026 (`e6183ec`, `9d7ee02`). `apps/companies/assistant_names.py` and its route.
   - Choice 1's order, from our copy, Today's reads and the learned names. No HubSpot request.
@@ -289,16 +289,16 @@ All new routes sit under `/api/v1/companies/assistant/`. A route that changes so
   - **Done when:** FakeClaude and fake HubSpot tests pass: "North Wind" with a learned pair finds Northwind; a company only in HubSpot is found and is then in our copy; nothing anywhere gives `can_add`; garbled words give `unclear`; and none of these writes to HubSpot.
 - [x] **T1-4. Adding a company** (backend). Done 19 Nov 2026 (`bbc0968`, `71b854e`). Contract part 4, through the writer's duplicate check.
   - **Done when:** tests pass: a close name in HubSpot shows in `similar`; the same name and city gives 409; writing off gives 409; a repeated key makes one company; the new company is in our copy at once; and each write is a row in `core.hubspot_writes`.
-- [ ] **T1-5. Hearing on the website.**
+- [x] **T1-5. Hearing on the website.** Done 20 Nov 2026 (`d03f924`, `07235db`, `6274ed9`, `00902de`, `ae26f1c`, `520567b`). On-device hints are built and off until S1.
   - The hint list loads with the voice bar (after the page is idle, or on the first V), and the name fix uses it on every page.
   - In on-device mode, only if S1 picked it, the hints go to the speech service.
   - After a send where the rep picked the company by hand, the card saves the learned name.
   - Hold V (choice 6).
   - **Done when:** tests with a fake mic and a fake voice tool pass: hints reach the tool only in on-device mode; "Vitara" becomes "Vitera" on Today, not only on the company's page; a hand-picked company saves a learned name only after the send; hold V stops on release, and a tap works as before. The first visit grows by 1 kB at most.
-- [ ] **T1-6. The card when a name goes wrong** (website).
+- [ ] **T1-6. The card when a name goes wrong** (website). Built 20 Nov 2026 (`d690b58`, `d83227f`), waiting for Al-khair's look.
   - The unclear stop in the bar. "We'll use it" for a company new in HubSpot. "Add to HubSpot", with the similar names.
   - **Done when:** tests cover each Part 1 row of "Words for when things go wrong", and Al-khair has seen it.
-- [ ] **T1-7. Part 1 check.** Backend: ruff, ruff format, mypy, the fast tests, the Companies tests and the contract gate (`RUN_GATES=1`). Website: lint, types, the tests, the build and `node scripts/bundle-report.js`. The `design-review` skill on the bar and the card.
+- [x] **T1-7. Part 1 check.** Done 20 Nov 2026 (`7c255fd`, `c9aa800`; the numbers are in the Log). Backend: ruff, ruff format, mypy, the fast tests, the Companies tests and the contract gate (`RUN_GATES=1`). Website: lint, types, the tests, the build and `node scripts/bundle-report.js`. The `design-review` skill on the bar and the card.
   - **Done when:** all pass, and the numbers are in the Log.
 
 ### Part 1 Log
@@ -313,10 +313,19 @@ All new routes sit under `/api/v1/companies/assistant/`. A route that changes so
 - Adding a company: 409 `company_exists` covers the same name in any city, because the writer's duplicate check matches the name alone (**TBC**, Al-khair: refuse, as built, or add?). Its words: "HubSpot already has {name} in {city}, so it isn't added again. Use it from the list." (**TBC**). Only the name and city go to HubSpot, with no owner and no note (**TBC with Levi**: who owns a company added from the card?). A key that can't create companies answers like writing off (409). One add at a time, and 5 a minute a person, both kept in memory (**TBC**). The writer's `preview_write` gained an opt-in `release` flag, so an add holds no database connection while HubSpot answers.
 - The `security-check` on T1-4: no blocker. Two minor notes: the one-add lock waits on HubSpot, so a slow HubSpot delays other people's adds; and if an add times out and someone makes the same name in HubSpot before the retry, the retry fills that company's empty city (the writer's rule, as for the Lead Finder).
 - `from_hubspot` and `can_add` are optional in the website's types (the API always sends them), so the old test data still type-checks.
+- 20 Nov 2026, T1-5 to T1-7 (website): built in the website copy in 10 commits, then brought into `plan-v23` with cherry-pick (`d03f924` to `c9aa800`). Two small overlaps with T3-4 in the card (`card.tsx`, `layouts.tsx`) were joined by keeping both sides. T1-5 holds: the hints reach the voice tool only in on-device mode; "Vitara" becomes "Vitera" on Today; a learned name is saved only after the send; hold V stops on release and a tap works as before; the first visit grew 92 bytes. T1-6's tests cover each Part 1 row of "Words for when things go wrong"; it waits for Al-khair's look.
+- T1-7's website half (before the join): 159 files, 2,397 tests passed (137 s); an earlier run's race in `mic.test.tsx` was fixed (`7c255fd`). Lint, types, Prettier and the build clean. First visit 248,426 to 248,518 bytes gzip. The `design-review` fixed five things (`c9aa800`): the focus after a company pick goes to the next box or Send; the add's check line is one status region of fixed height; the company search box says "Find a company"; "Name" became "Company name"; Remove is 44 px on touch. Open at the look (**TBC**): the unclear stop uses the red problem style; only the first similar company gets a "Use {name}" button; hold V has no hint on screen (M4's team note can cover it).
+- The hint list loads with the bar's code (when the page is idle, or on the first V), for the company on screen, kept 5 minutes; the person's own list fixes names while the company's loads; never for a Viewer. The name fix tries the names on screen first, then the hint list; the fixed words ("fitout", "follow up") go to the speech service only.
+- On-device mode is one constant, `ON_DEVICE_HINTS`, off until S1. When on, it checks `available()` for en-AU first, sends at most 200 phrases at boost 2 (**TBC**), and falls back once to the server mode if on-device fails before listening.
+- **A reading to confirm (Al-khair):** a learned name is sent only after a send that went, and only when the command found nothing (no match and no choices) and the rep found the company by hand (the search list, Use, or Add). A pick from the command's own choices teaches nothing, because one taught pair would make that company the automatic pick next time. Words over 80 characters aren't sent.
+- Hold V: 0.4 s (**TBC**). While V is held, no silence ends the talk; letting go, or the window losing focus, ends it. A held key's repeats type nothing. Let go before the bar's code has loaded, it counts as a tap.
+- The unclear stop: the server's line (else the plan's) sits above the text line, which holds the words and the focus; Enter sends them as typed. "Say it again" shows only where the voice works. The stop on the speech service's confidence isn't built: it waits for S1's level. The server's paragraph above the card drops lines a part already says, which also fixes two lines PLAN-V22 showed twice ("We couldn't find…" and "Which X?").
+- Add to HubSpot: Add opens Company name (as heard, editable) and City (optional) and checks HubSpot at once; the add is its own press. Each name and city gets its own Idempotency-Key (**TBC**). New words (**TBC**): "Added to HubSpot.", "HubSpot has no company like it.", "Checking HubSpot.", "Back". Settings shows the newest 100 learned names; Remove is at once, and Undo teaches the pair again, so it then shows the Admin as the one who taught it (**TBC**).
+- Not checked: a real mic and Chrome's real speech service, on-device mode (S1), NVDA, the 1280 and 768 widths for these screens, and the real backend (all against made-up answers). Screenshots: `../contour-v23-web/plan/shots/v23/part1/`.
 
 ## Part 2: alerts
 
-**Progress:** 3 of 5. S2 still to come (see the Part 2 Log).
+**Progress:** 4 of 5. S2 still to come (see the Part 2 Log).
 
 - [x] **T2-1. A reminder on every task** (backend, `core/hubspot/activities.py`). Choice 7, as S2 found it. Done 19 Nov 2026 (`7c2d1d3`), as choice 7 says, before S2: S2 may still change it (one place).
   - **Done when:** tests pass: a pre-read task, a teammate's follow-up and "add a task for Sam" get the 2 minute reminder; my own task gets 9:00 am on its day; a reminder never falls in the past; and the time is in milliseconds, as HubSpot wants.
@@ -326,9 +335,9 @@ All new routes sit under `/api/v1/companies/assistant/`. A route that changes so
   - `pre_reads` in Today (contract part 5), found by HubSpot user or by email address.
   - The 4:30 pm nudge as a job that is off until switched on (choice 10).
   - **Done when:** tests pass: a pre-read sent to me by HubSpot user or by email shows; one for a past meeting doesn't; the nudge emails only people with calls waiting, once a day; and with email off it sends nothing and logs why.
-- [ ] **T2-4. Alerts on the website.** Today's "Pre-reads for you" part, the send dialog's line (choice 11), and the three settings on the Settings page.
+- [ ] **T2-4. Alerts on the website.** Built 20 Nov 2026 (`063abc4`, `cc74637`, `c512b44`, `7b533d1`), waiting for Al-khair's look. Today's "Pre-reads for you" part, the send dialog's line (choice 11), and the three settings on the Settings page.
   - **Done when:** tests pass, and Al-khair has seen it.
-- [ ] **T2-5. Part 2 check.** As T1-7.
+- [x] **T2-5. Part 2 check.** As T1-7. Done 20 Nov 2026 (the numbers are in the Log).
   - **Done when:** all pass, and the numbers are in the Log.
 
 ### Part 2 Log
@@ -342,10 +351,12 @@ All new routes sit under `/api/v1/companies/assistant/`. A route that changes so
 - The nudge is a schedule, "Call logs: calls not sent yet", on Admin's Schedules tab: 16:30 on weekdays, off, like the morning jobs. So `calls_nudge_at` is not a setting, and Settings gains one row, not two (**TBC**, Al-khair). It counts To confirm only, as Today does (**TBC**), emails active accounts with Call logs at their Contour address, once a day a person (kept in memory). With no email service, or the log sender, it sends nothing, logs why, and Schedules says "Email isn't switched on yet, so the reminder can't go. An admin can set it up."
 - Today's `pre_reads`: sent pre-reads only, matched by HubSpot user and by the person's own address, at most 20, from the start of today. The part comes after Meetings and needs the Meetings tick, because a pre-read opens only with it (**TBC**). One on a Lead Finder lead shows only to those who may see the lead (the security check's fix).
 - The pre-read preview's alert line shows only when someone gets a task and the company is in HubSpot. The website links moved to `apps/companies/links.py`, to break an import loop.
+- 20 Nov 2026, T2-4 (website): built on `plan-v23` in 4 commits, waiting for Al-khair's look. "Pre-reads for you" comes after Meetings; each row shows when, the company, the title and "Sent by {name}"; rows join J and K, and L on a pre-read row logs a call with its company (**TBC**). The alert line is the server's `task_alert`, under the people list, so ticking someone never moves the rows above. Both new settings sit under Call notes (the group now has 7: at the limit). On Schedules, each job but the city runs now shows its sentence and why it wouldn't start; the nudge's "Email isn't switched on yet" line shows there. Open (**TBC**): Schedules says "Every day at 4:30 pm" while the nudge's own sentence says "on weekdays" (the backend's cadence words).
+- T2-5's website half: two full runs with no failures (2,408 and 2,409 tests, about 108 s each); later runs under load had 5-second timeouts and the known `mic.test.tsx` flake, and those files passed alone. Lint, types, format and the build clean. First visit 248,466 bytes gzip (+40).
 
 ## Part 3: staff without HubSpot
 
-**Progress:** 3 of 5.
+**Progress:** 4 of 5.
 
 - [x] **T3-1. The HubSpot user mark** (backend). Contract part 6, with the column from T1-2. Done 20 Nov 2026 (`f689122`, `76e3a19`, `a5020ff`).
   - "No HubSpot user" starts with the Call logs tick (choice 13).
@@ -354,13 +365,13 @@ All new routes sit under `/api/v1/companies/assistant/`. A route that changes so
   - **Done when:** tests pass: a task for myself, as `none`, gives 409 `no_hubspot_user` and writes nothing; "for Sam" still works; a call's follow-up with no teammate gives 409; a call by a `none` account starts "Logged by Jo Sample, Designer, in Contour." and has no owner; and a `linked` account's call has no such line.
 - [x] **T3-3. Today for them** (backend). `tasks_state: none` (choice 16). Done 19 Nov 2026 (`704442b`, `2a242fe`).
   - **Done when:** tests pass: a `none` account's Today asks HubSpot nothing and shows calls and pre-reads; and a `not_set` account still gets the link message.
-- [ ] **T3-4. The website.**
+- [ ] **T3-4. The website.** Built 20 Nov 2026 (`17f4ce6` to `416225e`, and `f9dbefd`), waiting for Al-khair's look.
   - People: the "HubSpot user" field, the suggested name, and "Not set".
   - Today shows only the parts that apply.
   - "Open in HubSpot" is hidden for `none`.
   - The call card's "For" box, and the words.
   - **Done when:** tests cover each, at 1440 and 390px, and Al-khair has seen it.
-- [ ] **T3-5. Part 3 check.** As T1-7, plus the `security-check` skill on T3-1 and T3-2.
+- [x] **T3-5. Part 3 check.** Done 20 Nov 2026, with the two fixes it found (`c52bce1`, `3a3e34b`, `b02380b`; the Log). As T1-7, plus the `security-check` skill on T3-1 and T3-2.
   - **Done when:** all pass, and the numbers are in the Log.
 
 ### Part 3 Log
@@ -373,10 +384,15 @@ All new routes sit under `/api/v1/companies/assistant/`. A route that changes so
 - The "Logged by {name}, {position}, in Contour." line goes on any call with no owner (`none` or `not_set`), and on a logged meeting's note with no owner. A `not_set` account's own task still goes unassigned. The follow-up 409 is checked at confirm and at retry; a draft may hold a follow-up with no teammate.
 - For a `none` account, Today's parts are `pre_reads` and `calls` only; their typed-in meetings don't show (choice 16, **TBC**).
 - The `security-check` on T3-1 and T3-2: no blocker, one gap fixed (`0b3da20`, Today's pre-reads could name a Lead Finder lead to someone who may not see it). Notes: the Platform admin can link two accounts to one HubSpot owner (possible before; Add person now allows it too), and the second account then sees and can tick that owner's tasks on Today: refuse a duplicate? (**TBC**, Al-khair). Staff names and positions go into a call's text in HubSpot, escaped, never to Claude. The FYI is a HubSpot write the rep doesn't see in the batch preview; it rides on their confirmed send, under the Settings switch.
+- 20 Nov 2026, T3-4 (website): built on `plan-v23` in 8 commits, waiting for Al-khair's look. The type error at `people.tsx:789` is fixed. Tests at 1440 and 390 px: People (17), Today for no HubSpot user (7), "Open in HubSpot" in 7 places (29), the card's "For" box and the 409 (10), and Call logs (3).
+- The closest name on Add person: the first names must agree (Jo and Joanne do), then the most letter pairs in common, at least half (**TBC**). It is only suggested, never picked for you, and never one already linked to someone else. A HubSpot user linked to someone else says "Linked to {name}" and can still be picked (**TBC**, with the backend's note: refuse duplicates?). People can't put an account back to "Not set" (**TBC**). "No HubSpot user" on Add person sets the ticks to Call logs only (an Admin keeps all) and says to tick Meetings for pre-reads.
+- "Open in HubSpot" is hidden in 9 places for someone with no HubSpot user; "Not set" accounts, and sign-in off, keep it. Call logs has no "For" box (**TBC**): a follow-up kept for Later gets its teammate on the card; Call logs keeps the teammate through its own edits. Open at the look (**TBC**): the task card's top line says "Add a task for you." until a teammate is picked; the People HubSpot user change has no Undo.
+- The design review fixed: Today's line under the title named tasks, meetings and deals to people who see none of them; an empty "Checked" line left a gap; "Change" and "Use Jo Sample" were 32 px on touch (now 44); on Add person the error now comes before the suggestion that fixes it.
+- 20 Nov 2026, T3-5 found two gaps, both fixed. A call's follow-up now says whose it is (`CallNoteTask.owner_id`), so two teammates with one name stay apart (`c52bce1`, with the website's `f9dbefd`). The Call logs tick may read the team list (`GET /companies/team`), so staff with no HubSpot user and no Meetings tick can pick a follow-up's teammate (`3a3e34b`; a Viewer still needs Meetings). The contract again: `b02380b`. The `security-check`: no blocker. Checks: the hook on both code commits; Companies tests 301, 145 and 321 passed (25 skipped); core access, sign-in guard, screen words and HubSpot user tests 58 passed. Not confirmed: what HubSpot does with a follow-up for someone who has left (the name match used to drop them; the id now keeps them).
 
 ## Part 4: the Assistant's feel
 
-**Progress:** 2 of 6. Website only. Each item names where it came from.
+**Progress:** 3 of 6. Website only. Each item names where it came from.
 
 - [x] **T4-1. V where it's needed.** Done 19 Nov 2026 (`a515984`).
   - **V over call prep,** with the prepped company as the default. Right after a call is when a rep needs V most. (PLAN-V22 Log: V does nothing while call prep's panel is open.)
@@ -387,16 +403,16 @@ All new routes sit under `/api/v1/companies/assistant/`. A route that changes so
   - **"Later" instead of "Cancel" on a call,** and Esc does the same: "Kept in Call logs, to send with the others." It fits Levi's 9 Nov ask to confirm in one go after about 10 calls. (PLAN-V22 Log: Cancel already keeps the call.)
   - **"New pre-read" from a command opens its dialog,** with the company filled in. (PLAN-V22 Log: it opens Meetings and stops there.)
   - **Done when:** tests pass: each box of the call card takes typing; Esc and "Later" keep the call in To confirm, with its words; and "make a pre-read for Sample Logistics" with no meeting ahead opens New pre-read with the company filled in.
-- [ ] **T4-3. Today.**
+- [x] **T4-3. Today.** Done 20 Nov 2026 (`4188dc8`; "Try saying" in `6274ed9`).
   - **"Add task" and "Email the team" buttons** that open the card empty. They need no AI, so they work when the AI is off or busy. Ctrl+K finds them too. (This chat.)
   - **After L, the focus goes back to the row.** (PLAN-V22 Log: it goes to the page.)
   - **"Try saying" uses your own next company,** the first company in your hint list, instead of "Acme". (This chat.)
   - **Done when:** tests pass: both buttons open the card empty with the AI off; Ctrl+K finds them; after L, the focus is on the row; and "Try saying" names the first company of the hint list.
-- [ ] **T4-4. Phone and speed.**
+- [ ] **T4-4. Phone and speed.** The phone part is done (`2d955ec`). The speed target isn't met: Al-khair's call (the Part 4 Log).
   - **On a phone, the pinned Speak button hides** while the bar is open. (PLAN-V22 Log.)
   - **The card's first frame takes under 50ms at 4x CPU slowdown,** down from 110 to 150ms. Draw the card a moment later, in a React transition, as PLAN-V22's check proposed.
   - **Done when:** tests pass, and the Log has the 4x CPU numbers from the production build.
-- [ ] **T4-5. Reaching everything.**
+- [ ] **T4-5. Reaching everything.** The link and the buttons are done (`4cfc9d6`). The screen reader pass waits for NVDA (**TBC**).
   - **A "Skip to the page" link,** so a keyboard user doesn't Tab 18 times before Today's rows. (PLAN-V22 Log.)
   - **Toast buttons 44px tall on touch screens,** app-wide. They are 32px now. (PLAN-V22's review proposed it.)
   - **A real screen reader pass** (NVDA on Windows, **TBC**): it reads "Listening", the read-back, the unclear stop and the alerts. PLAN-V22 checked these from the code only.
@@ -473,3 +489,5 @@ All new routes sit under `/api/v1/companies/assistant/`. A route that changes so
 - How the build runs, for speed (Al-khair's "faster", 19 Nov): the backend steps are built on `plan-v23` in `../contour-v23`. The website steps are built at the same time in a second copy, `../contour-v23-web` (a detached HEAD, no branch), and their commits are brought into `plan-v23` with `git cherry-pick`, so `plan-v23` stays one straight line.
 - S1's page is ready, never merged: `plan/shots/v23/s1-test/` (git ignores `plan/shots/`); its `README.md` says how to start it. Read on 19 Nov (Chrome 157.0.8103.79 and Edge 157.0.4341.60 here; MDN, the spec draft of 27 Oct 2026, and Chromium's source at 157): Chrome takes hints (`phrases`) only with `processLocally` on, and refuses them otherwise (`phrases-not-supported`). There is no Australian on-device model: Chrome uses its US English one for any English. On-device confidence is always 1.0, so choice 4's level can only come from server numbers. `processLocally` off doesn't force the server: Chrome uses an installed model anyway, so the app may already run on-device on this laptop (the model has been here since 14 Nov; not confirmed yet by a test). That changes W2's wording. The download can't be timed here (already installed: 34.8 MB plus 193.2 MB). Edge Stable has no on-device mode, so its part of S1 is server only.
 - S2's script is ready, never merged: `plan/shots/v23/s2/s2.sh` (`info`, `make`, `second`, `check`, `delete`). It loads the HubSpot key into its own process only. Al-khair's HubSpot user is `101520532`.
+- 20 Nov 2026, the join: Part 4's 7 website commits (`a515984` to `f264bc6`) and Part 1's 10 (`d03f924` to `c9aa800`) were brought into `plan-v23` with cherry-pick; T2-4 and T3-4 were built on `plan-v23` itself. `plan-v23` is one straight line.
+- 20 Nov 2026, the final checks on `plan-v23` (`f9dbefd`): website lint, types and the build clean; the full tests 165 files, 2,477 passed (118 s; an earlier run on a busy laptop had 5 timing failures, and those 4 files passed alone, 127 of 127). First visit: 243 kB of JavaScript and 25 kB of CSS gzip, 39 files. Backend: the hook (ruff, mypy, the fast tests) passed on every code commit; each part's checks are in its Log. **For M1:** `RUN_GATES=1 pytest -m contract` fails, and fails the same on `master` (`475f4f1`): collecting the whole suite changes the order of the Lead Finder's `LeadCard.confidence` options in the made contract, while `pytest tests/gates` passes. It is older than this plan (**TBC**: the cause, in the rules-agent's area).
