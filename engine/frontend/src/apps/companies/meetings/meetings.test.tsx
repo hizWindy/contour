@@ -473,13 +473,13 @@ function PreReadStub() {
   return <h1>{`Pre-read ${formId ?? ''}`}</h1>
 }
 
-function renderMeetings(path = '/assistant/meetings') {
+function renderMeetings(path = '/assistant/meetings', state?: unknown) {
   const router = createMemoryRouter(
     [
       { path: '/assistant/meetings', element: <MeetingsPage /> },
       { path: '/assistant/meetings/:formId', element: <PreReadStub /> },
     ],
-    { initialEntries: [path] },
+    { initialEntries: [state === undefined ? path : { pathname: path, state }] },
   )
   const result = renderWithProviders(<RouterProvider router={router} />, { withRouter: false })
   return { ...result, router }
@@ -1472,6 +1472,54 @@ describe('AI drafts the pre-read', () => {
 })
 
 describe('New pre-read', () => {
+  it('opens by itself with the company filled in, when the Assistant asks (PLAN-V23 T4-2)', async () => {
+    const server = mockServer()
+    const { user, router } = renderMeetings('/assistant/meetings', {
+      newPreRead: { key: '101', name: 'Sample Logistics Pty Ltd' },
+    })
+    const dialog = within(await screen.findByRole('dialog', { name: 'New pre-read' }))
+    expect(dialog.getByRole('combobox', { name: 'Company' })).toHaveTextContent(
+      'Sample Logistics Pty Ltd',
+    )
+    // The company is there: the title is the next thing to type.
+    const title = dialog.getByRole('textbox', { name: 'Title' })
+    await waitFor(() => {
+      expect(title).toHaveFocus()
+    })
+    // The ask is used once: the address forgets it, so Back or a reload doesn't open it again.
+    await waitFor(() => {
+      expect(router.state.location.state).toBeNull()
+    })
+    expect(router.state.location.pathname).toBe('/assistant/meetings')
+
+    await user.type(title, 'Office walk-through')
+    await user.type(dialog.getByRole('textbox', { name: 'Day' }), '26 nov')
+    await user.type(dialog.getByRole('textbox', { name: 'Time' }), '10am')
+    await user.click(dialog.getByRole('button', { name: 'Draft the pre-read' }))
+    expect(await screen.findByRole('heading', { name: 'Pre-read f-typed' })).toBeInTheDocument()
+    expect(server.sent.filter((one) => one.path === FORMS)[0]?.body).toMatchObject({
+      company_key: '101',
+      title: 'Office walk-through',
+    })
+  })
+
+  it('opens with no company when the Assistant found none, and the button opens it empty', async () => {
+    mockServer()
+    const { user } = renderMeetings('/assistant/meetings', { newPreRead: null })
+    const dialog = within(await screen.findByRole('dialog', { name: 'New pre-read' }))
+    expect(dialog.getByRole('combobox', { name: 'Company' })).toHaveTextContent('Pick a company')
+    await user.click(dialog.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'New pre-read' })).toBeNull()
+    })
+    await user.click(screen.getByRole('button', { name: 'New pre-read' }))
+    expect(
+      within(await screen.findByRole('dialog', { name: 'New pre-read' })).getByRole('combobox', {
+        name: 'Company',
+      }),
+    ).toHaveTextContent('Pick a company')
+  })
+
   it('says what each field needs, and reads the day and the time as typed', async () => {
     const server = mockServer()
     const { user } = renderMeetings()

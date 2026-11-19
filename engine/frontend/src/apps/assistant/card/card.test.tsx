@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 import { useLocation } from 'react-router'
 import type { SignIn } from '@/api/hooks/auth'
 import { queryKeys } from '@/api/query'
-import type { AssistantCommand } from '@/api/types'
+import type { AssistantCommand, CallNoteOut, CallNotePatch } from '@/api/types'
 import { FakeMic, type FakeMicOptions } from '@/apps/companies/call-notes/mic/fake-mic'
 import { mockApi, type Answer } from '@/test/mock-api'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
@@ -20,8 +20,10 @@ import {
   CLOCK,
   command,
   emailCommand,
+  FOLLOW_UP,
   JAMES,
   JAMES_TOO,
+  LEASE,
   note,
   NOTE_ID,
   notePath,
@@ -42,7 +44,12 @@ import type { CardTimes } from './times'
 type Opening = Parameters<typeof openCard>[0]
 
 function Where() {
-  return <p data-testid="where">{useLocation().pathname}</p>
+  const location = useLocation()
+  return (
+    <p data-testid="where" data-state={JSON.stringify(location.state ?? null)}>
+      {location.pathname}
+    </p>
+  )
 }
 
 interface Show {
@@ -178,15 +185,23 @@ describe('each layout (choice 24)', () => {
       source: 'typed',
     })
     expect(of(API.notes)[0]?.headers?.get('idempotency-key')).toBeTruthy()
-    // The sort, once ready, with HubSpot's value now (from a fresh preview) and the new one.
-    expect(await within(found).findByText('Connected')).toBeInTheDocument()
-    expect(within(found).getByText('Jo says the lease ends in June 2027.')).toBeInTheDocument()
+    // The sort, once ready, with HubSpot's value now (from a fresh preview) and the new one, each
+    // part a box to type in (PLAN-V23 T4-2).
+    expect(await within(found).findByRole('button', { name: 'Connected' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(within(found).getByRole('textbox', { name: 'The note' })).toHaveValue(
+      'Jo says the lease ends in June 2027.',
+    )
     const changes = await within(found).findByRole('region', { name: 'Changes' })
     await waitFor(() => {
       expect(changes).toHaveTextContent('31 Dec 2026')
     })
-    expect(changes).toHaveTextContent('30 June 2027')
-    expect(within(found).getByRole('region', { name: 'Follow-ups' })).toHaveTextContent(
+    expect(
+      within(changes).getByRole('textbox', { name: 'Lease end · Perth: new value' }),
+    ).toHaveValue('30 June 2027')
+    expect(within(found).getByRole('textbox', { name: 'Follow-up 1: what to do' })).toHaveValue(
       'Call Jo about the lease',
     )
     expect(of(API.notePreview)[0]?.body).toEqual({ ids: [NOTE_ID] })
@@ -316,6 +331,227 @@ describe('each layout (choice 24)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('where')).toHaveTextContent('/assistant/meetings')
     })
+    // Meetings opens its New pre-read with the company filled in (PLAN-V23 T4-2).
+    expect(JSON.parse(screen.getByTestId('where').dataset.state ?? 'null')).toEqual({
+      newPreRead: { key: '201', name: 'Sample Logistics Pty Ltd' },
+    })
+  })
+})
+
+/**
+ * A note on the server that takes edits (PATCH) and answers with the note as it is now, as the
+ * real one does: so the card's own copy, read again after an edit, keeps what was typed.
+ */
+function noteServer(start: CallNoteOut = note()): Answer {
+  let now = start
+  return (call) => {
+    if (call.method === 'PATCH') {
+      const patch = call.body as CallNotePatch
+      now = {
+        ...now,
+        call: {
+          ...now.call,
+          ...(typeof patch.summary === 'string' ? { summary: patch.summary } : {}),
+          ...(patch.outcome !== undefined ? { outcome: patch.outcome } : {}),
+        },
+        changes: patch.changes
+          ? patch.changes.map((change, index) => ({
+              ...(now.changes[index] ?? LEASE),
+              ...change,
+              id: change.id ?? `c-new-${String(index)}`,
+              office: change.office ?? '',
+            }))
+          : now.changes,
+        tasks: patch.tasks
+          ? patch.tasks.map((task, index) => ({
+              ...(now.tasks[index] ?? FOLLOW_UP),
+              ...task,
+              id: task.id ?? `t-new-${String(index)}`,
+              due_words: task.due_words ?? '',
+            }))
+          : now.tasks,
+      }
+    }
+    return Response.json(now)
+  }
+}
+
+function callAnswers(): Record<string, unknown> {
+  return {
+    [API.notes]: note(),
+    [notePath()]: noteServer(),
+    [API.notePreview]: notePreview(),
+  }
+}
+
+describe('typing in a call, and Later (PLAN-V23 T4-2)', () => {
+  it('each box of a call takes typing, and saves when it is left', async () => {
+    const { user, of } = show(typed(callCommand()), { answers: callAnswers() })
+    const found = await card()
+    const patches = () =>
+      of(notePath())
+        .filter((call) => call.method === 'PATCH')
+        .map((call) => call.body)
+
+    // The note.
+    const summary = await within(found).findByRole('textbox', { name: 'The note' })
+    await user.click(summary)
+    await user.type(summary, ' Wants three options.')
+    await user.tab()
+    await waitFor(() => {
+      expect(patches()).toContainEqual({
+        summary: 'Jo says the lease ends in June 2027. Wants three options.',
+      })
+    })
+
+    // How it went.
+    await user.click(within(found).getByRole('button', { name: 'No answer' }))
+    await waitFor(() => {
+      expect(patches()).toContainEqual({ outcome: 'No answer' })
+    })
+    expect(within(found).getByRole('button', { name: 'No answer' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    // A change's new value: any way of writing the day, saved in one form.
+    const lease = within(found).getByRole('textbox', { name: 'Lease end · Perth: new value' })
+    await user.clear(lease)
+    await user.type(lease, '31/12/2027{Enter}')
+    await waitFor(() => {
+      expect(patches()).toContainEqual({
+        changes: [{ id: 'c1', field: 'lease_end', office: 'Perth', value: '2027-12-31' }],
+      })
+    })
+
+    // A follow-up's words, and its day: the read-back follows the day.
+    const what = within(found).getByRole('textbox', { name: 'Follow-up 1: what to do' })
+    await user.clear(what)
+    await user.type(what, 'Send Jo three options{Enter}')
+    const when = within(found).getByRole('textbox', { name: 'Follow-up 1: when' })
+    await user.clear(when)
+    await user.type(when, '30/11/2099{Enter}')
+    await waitFor(() => {
+      expect(patches()).toContainEqual({
+        tasks: [
+          {
+            id: 't1',
+            subject: 'Send Jo three options',
+            due: '2099-11-30',
+            due_words: '30/11/2099',
+            kind: 'call',
+          },
+        ],
+      })
+    })
+    await waitFor(() => {
+      expect(found).toHaveAccessibleName(
+        'Log a call with Jo Sample at Sample Logistics Pty Ltd. Follow-up task on Mon 30 Nov 2099.',
+      )
+    })
+    // Typing sends nothing to HubSpot: the card is still open.
+    expect(of(API.confirm)).toHaveLength(0)
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('a follow-up added by typing goes with the others', async () => {
+    const { user, of } = show(typed(callCommand()), { answers: callAnswers() })
+    const found = await card()
+    await user.click(await within(found).findByRole('button', { name: 'Add a follow-up' }))
+    const what = within(found).getByRole('textbox', { name: 'What to do' })
+    await user.type(what, 'Email the floor plan')
+    await user.type(within(found).getByRole('textbox', { name: 'When' }), '1/12/2099')
+    await user.click(within(found).getByRole('button', { name: 'Add' }))
+    await waitFor(() => {
+      const last = of(notePath())
+        .filter((call) => call.method === 'PATCH')
+        .at(-1)?.body as CallNotePatch | undefined
+      expect(last?.tasks?.map((task) => [task.id, task.subject])).toEqual([
+        ['t1', 'Call Jo about the lease'],
+        [null, 'Email the floor plan'],
+      ])
+    })
+  })
+
+  it('Later keeps the call in To confirm, with its words, and says so', async () => {
+    const { user, of } = show(typed(callCommand()), { answers: callAnswers() })
+    const found = await card()
+    await within(found).findByRole('textbox', { name: 'The note' })
+    // A call is put off, not cancelled: Later, on the button and in the hint bar.
+    expect(within(found).queryByRole('button', { name: 'Cancel' })).toBeNull()
+    expect(found.querySelector('[data-slot=card-hints]')).toHaveTextContent('EscLater')
+    await user.click(within(found).getByRole('button', { name: 'Later' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+    expect(
+      await screen.findByText('Kept in Call logs, to send with the others.'),
+    ).toBeInTheDocument()
+    // Saved once, as said, and never sent or taken away.
+    expect(of(API.notes)).toHaveLength(1)
+    expect(of(API.notes)[0]?.body).toMatchObject({
+      text: 'Spoke to Jo, the lease ends June 2027. Follow up Friday.',
+    })
+    expect(of(API.confirm)).toHaveLength(0)
+    expect(of(notePath()).filter((call) => call.method === 'DELETE')).toHaveLength(0)
+    await user.click(screen.getByRole('button', { name: 'Open Call logs' }))
+    expect(screen.getByTestId('where')).toHaveTextContent('/assistant/call-logs')
+  })
+
+  it('Esc on a call card does the same as Later', async () => {
+    const { user, of } = show(typed(callCommand()), { answers: callAnswers() })
+    const found = await card()
+    await within(found).findByRole('textbox', { name: 'The note' })
+    await user.keyboard('{Escape}')
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+    expect(
+      await screen.findByText('Kept in Call logs, to send with the others.'),
+    ).toBeInTheDocument()
+    expect(of(API.confirm)).toHaveLength(0)
+  })
+
+  it('Later right after typing in a box saves the box first', async () => {
+    const { user, of } = show(typed(callCommand()), { answers: callAnswers() })
+    const found = await card()
+    const summary = await within(found).findByRole('textbox', { name: 'The note' })
+    await user.click(summary)
+    await user.type(summary, ' Call back in March.')
+    await user.click(within(found).getByRole('button', { name: 'Later' }))
+    await waitFor(() => {
+      expect(of(notePath()).find((call) => call.method === 'PATCH')?.body).toEqual({
+        summary: 'Jo says the lease ends in June 2027. Call back in March.',
+      })
+    })
+    expect(of(API.confirm)).toHaveLength(0)
+  })
+
+  it('Esc in a call’s box puts it back and leaves the box; the next Esc is Later', async () => {
+    const { user, of } = show(typed(callCommand()), { answers: callAnswers() })
+    const found = await card()
+    const summary = await within(found).findByRole('textbox', { name: 'The note' })
+    await user.click(summary)
+    await user.type(summary, ' Not this.')
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(summary).toHaveValue('Jo says the lease ends in June 2027.')
+    expect(within(found).getByRole('button', { name: 'Send' })).toHaveFocus()
+    await user.keyboard('{Escape}')
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+    expect(
+      await screen.findByText('Kept in Call logs, to send with the others.'),
+    ).toBeInTheDocument()
+    expect(of(notePath()).filter((call) => call.method === 'PATCH')).toHaveLength(0)
+  })
+
+  it('a task card keeps Cancel', async () => {
+    show(typed(taskCommand()))
+    const found = await card()
+    expect(within(found).getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+    expect(within(found).queryByRole('button', { name: 'Later' })).toBeNull()
   })
 })
 
@@ -541,7 +777,9 @@ describe('the choices', () => {
   it('no company found: the plan’s words, then a search, and a pick', async () => {
     const { user } = show(
       typed(
-        taskCommand({ company: { found: null, choices: [], from_page: false, heard: 'North Wind' } }),
+        taskCommand({
+          company: { found: null, choices: [], from_page: false, heard: 'North Wind' },
+        }),
       ),
       { answers: { [API.search]: { companies: [SAMPLE], people: [] } } },
     )

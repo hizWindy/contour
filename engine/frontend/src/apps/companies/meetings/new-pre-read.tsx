@@ -16,9 +16,20 @@
  *   reads, how long it takes and that the rep checks it before anyone gets it, then its cost in
  *   quiet text.
  * - The dialog's one Navy button is "Draft the pre-read". It closes when the form has started.
+ * - **From the Assistant** (PLAN-V23 T4-2): "make a pre-read for Sample Logistics" with no meeting
+ *   ahead, then the card's "New pre-read", opens this dialog by itself with the company filled in.
  */
 import { ChevronsUpDown, Cpu, FilePlus, MapPin, Video } from 'lucide-react'
-import { useId, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react'
+import {
+  useEffect,
+  useEffectEvent,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react'
 import { useNavigate } from 'react-router'
 import { fieldErrorMap, toApiProblem } from '@/api/client'
 import { useStartMeetingForm } from '@/api/hooks/meetings'
@@ -43,7 +54,7 @@ import { changeDetail } from '@/lib/problems'
 import { clockText, melbourneIso, readTimeOfDay, type TimeOfDay } from '@/lib/time-of-day'
 import { cn } from '@/lib/utils'
 import { CompanySearch, type CompanyMatch } from '../company-search'
-import { preReadHref } from './params'
+import { preReadHref, type NewPreReadAsk } from './params'
 import {
   CANCEL,
   COMPANY,
@@ -119,9 +130,12 @@ function FieldNote({ id, problem, read }: { id: string; problem: string | null; 
 }
 
 function NewPreReadForm({
+  start: given,
   onStarted,
   onCancel,
 }: {
+  /** The company it opens with: from the Assistant's card (PLAN-V23 T4-2), or none. */
+  start: CompanyMatch | null
   onStarted: (formId: string) => void
   onCancel: () => void
 }) {
@@ -143,7 +157,7 @@ function NewPreReadForm({
   // A company was just picked: the title takes the focus, not the picker's button.
   const picked = useRef(false)
   const [picking, setPicking] = useState(false)
-  const [company, setCompany] = useState<CompanyMatch | null>(null)
+  const [company, setCompany] = useState<CompanyMatch | null>(given)
   const [title, setTitle] = useState('')
   const [dayText, setDayText] = useState('')
   const [timeText, setTimeText] = useState('')
@@ -270,6 +284,8 @@ function NewPreReadForm({
           maxLength={200}
           placeholder={TITLE_PLACEHOLDER}
           autoComplete="off"
+          // Opened with its company filled in: the title is the next thing to type.
+          autoFocus={given !== null}
           aria-invalid={titleProblem ? true : undefined}
           aria-describedby={titleProblem ? ids.titleNote : undefined}
           className="touch:text-body"
@@ -382,12 +398,42 @@ function NewPreReadForm({
   )
 }
 
-/** The button in Meetings' header, and its dialog. */
-export function NewPreRead() {
+/**
+ * The button in Meetings' header, and its dialog. An `ask` opens it by itself with its company
+ * filled in, and the title takes the focus; `onAsked` then clears the ask from the address, so
+ * Back or a reload doesn't open it again.
+ */
+export function NewPreRead({
+  ask = null,
+  onAsked,
+}: {
+  ask?: NewPreReadAsk | null
+  onAsked?: () => void
+}) {
   const [open, setOpen] = useState(false)
+  // The company the form opens with: the ask's, or none when the button opens it.
+  const [start, setStart] = useState<CompanyMatch | null>(null)
+  const [taken, setTaken] = useState<string | null>(null)
+  if (ask && ask.key !== taken) {
+    setTaken(ask.key)
+    setStart(ask.company)
+    setOpen(true)
+  }
+  const used = useEffectEvent(() => {
+    onAsked?.()
+  })
+  useEffect(() => {
+    if (taken !== null) used()
+  }, [taken])
   const navigate = useNavigate()
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) setStart(null)
+        setOpen(next)
+      }}
+    >
       <DialogTrigger asChild>
         <Button type="button" variant="outline">
           <FilePlus aria-hidden="true" />
@@ -400,6 +446,7 @@ export function NewPreRead() {
           <DialogDescription>{NEW_DESCRIPTION}</DialogDescription>
         </DialogHeader>
         <NewPreReadForm
+          start={start}
           onCancel={() => {
             setOpen(false)
           }}

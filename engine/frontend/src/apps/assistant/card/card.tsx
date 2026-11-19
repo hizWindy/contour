@@ -15,7 +15,10 @@
  * - **The hint bar** (choice 20) shows the keys for where the focus is, on a laptop.
  * - **A call** is saved as the card opens (`POST /call-notes`, once its company is known), so the
  *   server sorts it while the rep reads. The card shows the sort when it is ready, with HubSpot's
- *   values now from a fresh `/call-notes/preview`.
+ *   values now from a fresh `/call-notes/preview`. Each of its parts takes typing too (PLAN-V23
+ *   T4-2): a box saves when it is left (`PATCH /call-notes/{id}`), and Esc in it puts it back.
+ * - **Later, not Cancel, on a call** (PLAN-V23 T4-2): Later, or Esc, keeps the call in Call logs'
+ *   To confirm, to send with the others ("Kept in Call logs, to send with the others.").
  * - **Sending** (T3-4): Enter, a click on Send or "send it" closes the card and starts the 5 second
  *   hold (`hold.tsx`), with Undo. After a spoken command, the card listens 5 seconds for "send it"
  *   or "cancel" (`listen.ts`); any key or click stops it.
@@ -56,6 +59,7 @@ import type {
   AssistantTaskIn,
   CallNoteOut,
 } from '@/api/types'
+import { NOT_CHANGED } from '@/apps/companies/call-logs/words'
 import type { MicEnv } from '@/apps/companies/call-notes/mic/session'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import { problemWords } from '@/apps/companies/call-notes/mic/words'
@@ -63,9 +67,9 @@ import { MicSheet, MicSheetTitle } from '@/components/motion/mic-sheet'
 import { Button } from '@/components/ui/button'
 import { useDebounced } from '@/hooks/useDebounced'
 import { melbourneDate } from '@/lib/format'
-import { toastProblem } from '@/lib/problems'
+import { changeDetail, toastProblem } from '@/lib/problems'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
-import { CALL_LOGS_PATH, MEETINGS_PATH } from '../paths'
+import { CALL_LOGS_PATH, MEETINGS_PATH, type NewPreReadState } from '../paths'
 import { BarSession, type BarProblem, type BarSnapshot } from '../voice/bar-session'
 import { preReadPath, startPreRead, type AfterAnswer, type Heard } from '../voice/hand-over'
 import { isVKeyOn } from '../voice/v-switch'
@@ -86,17 +90,18 @@ import {
 import { keepCardDraft } from './drafts'
 import { inTextBox, typingKey } from './keys'
 import { startHold } from './hold'
-import { CallLayout, EmailLayout, PreReadLayout, TaskLayout } from './layouts'
+import { CallLayout, EmailLayout, PreReadLayout, TaskLayout, type EditCall } from './layouts'
 import { listenForSendIt } from './listen'
 import { CARD_TIMES, type CardTimes } from './times'
 import { HintBar, ListenStrip, PartProblem, VoiceStrip } from './parts'
 import { previewEmail, previewTask, saveNote, sendDraft, patchNote, type SendTools } from './send'
 import { openCard, type CardRequest } from './store'
 import {
-  CALL_WAITS,
+  CALL_KEPT,
   CANCEL,
   CARD_CAN,
   DRAFT_KEPT,
+  LATER,
   OPEN,
   OPEN_CALL_LOGS,
   SEND,
@@ -113,6 +118,9 @@ export interface ReviewCardProps {
   read?: (body: AssistantCommandIn, signal: AbortSignal) => Promise<AssistantCommand>
   times?: Partial<CardTimes>
 }
+
+/** A call's own boxes (`layouts.tsx`), which save when they are left (PLAN-V23 T4-2). */
+const CALL_EDIT = '[data-slot="call-edit"]'
 
 /** The card's width: more than the mic card's, for its boxes (TBC at Al-khair's look). */
 const WIDTH = 'w-[min(32rem,calc(100vw-2rem))]'
@@ -223,7 +231,13 @@ function PreReadCard({
           company={company}
           onPick={pick}
           onNew={() => {
-            go(MEETINGS_PATH)
+            // Meetings opens its New pre-read with the company filled in (PLAN-V23 T4-2).
+            const found = command.company?.found
+            const state: NewPreReadState = {
+              newPreRead: found ? { key: found.key, name: found.name } : null,
+            }
+            onClose()
+            void navigate(MEETINGS_PATH, { state })
           }}
         />
         {problem ? <PartProblem>{problem}</PartProblem> : null}
@@ -429,11 +443,27 @@ function DraftCard({
     })
   }
 
+  /**
+   * A call's box still being typed in saves when it is left (PLAN-V23 T4-2): before a send or Later,
+   * the focus moves to Send, so it is saved first. The hold's 5 seconds cover the save.
+   */
+  const leaveCallBox = (): void => {
+    const active = document.activeElement
+    if (
+      active instanceof HTMLElement &&
+      active.closest(CALL_EDIT) &&
+      active !== sendButton.current
+    ) {
+      sendButton.current?.focus()
+    }
+  }
+
   /** Enter, a click on Send, or "send it": a choice or a box first, else the hold starts. */
   const trySend = (how: 'key' | 'click' | 'voice'): void => {
     if (closing.current) return
     if (how === 'key' && !armed.current) return
     stopListening()
+    leaveCallBox()
     const { draft: now, ready: canSend, today: day } = latest.current
     const box = missingOf(now, day)
     if (box) {
@@ -444,14 +474,20 @@ function DraftCard({
     startSend(now)
   }
 
+  /**
+   * Cancel, or Later on a call (PLAN-V23 T4-2), and Esc on the card. A call that is saved stays in
+   * Call logs' To confirm, with its words and every change typed in, to send with the others in one
+   * go. A call not saved yet (no company picked) and any other draft are kept in this browser.
+   */
   const cancel = (): void => {
     if (closing.current) return
     closing.current = 'cancel'
     stopListening()
     voice?.dispose()
+    leaveCallBox()
     const now = latest.current.draft
     if (now.action === 'log_call' && now.noteId !== null) {
-      toast(CALL_WAITS, {
+      toast(CALL_KEPT, {
         action: {
           label: OPEN_CALL_LOGS,
           onClick: () => {
@@ -528,6 +564,41 @@ function DraftCard({
       })
     }, toastProblem)
     return true
+  }
+
+  // --- A change typed into a call's box (PLAN-V23 T4-2) ---------------------------------------------
+  // The card shows it at once, and the server is told (as on Call logs, `use-edit.ts`). Once the
+  // last change on its way has answered, the note and its preview are read again, so what shows is
+  // what the server holds: a change it refused goes back, and a toast says why.
+  const editsOnTheirWay = useRef(0)
+  const editCall: EditCall = (patch, apply) => {
+    const saved = latest.current.note
+    if (!saved) return
+    const key = queryKeys.companies.callNote(saved.id)
+    const before = client.getQueryData<CallNoteOut>(key)
+    if (before) client.setQueryData(key, apply(before))
+    // The read-back follows the change.
+    setDraft((now) => (now.action === 'log_call' ? { ...now, edited: true } : now))
+    editsOnTheirWay.current += 1
+    patchNote(saved.id, patch)
+      .catch((error: unknown) => {
+        const detail = changeDetail(toApiProblem(error))
+        toast.error(NOT_CHANGED, detail ? { description: detail } : undefined)
+      })
+      .finally(() => {
+        editsOnTheirWay.current -= 1
+        if (editsOnTheirWay.current > 0) return
+        void client.invalidateQueries({ queryKey: key })
+        void client.invalidateQueries({
+          queryKey: queryKeys.companies.callNotePreview([saved.id]),
+        })
+        void refreshCallNoteLists(client)
+      })
+  }
+
+  /** Esc in a call's box: it is put back, and the focus goes to Send. */
+  const leaveBox = (): void => {
+    sendButton.current?.focus()
   }
 
   const onVoiceAnswer = (heard: Heard): AfterAnswer => {
@@ -652,6 +723,8 @@ function DraftCard({
     if (active && card.current?.contains(active) && inTextBox(active)) {
       // The first Esc leaves the box.
       event.preventDefault()
+      // A call's own box puts itself back first, then gives the focus to Send (`leaveBox`).
+      if (active.closest(CALL_EDIT)) return
       sendButton.current?.focus()
     }
   }
@@ -659,6 +732,9 @@ function DraftCard({
   const onFocus = (event: FocusEvent<HTMLDivElement>): void => {
     setInBox(inTextBox(event.target))
   }
+
+  // A call is put off, not cancelled: it waits in Call logs (PLAN-V23 T4-2).
+  const putOff = draft.action === 'log_call' ? LATER : CANCEL
 
   let layout
   switch (draft.action) {
@@ -675,6 +751,8 @@ function DraftCard({
             cancel()
             void navigate(CALL_LOGS_PATH)
           }}
+          onEdit={editCall}
+          onLeaveBox={leaveBox}
         />
       )
       break
@@ -749,16 +827,17 @@ function DraftCard({
             <ListenStrip id={listenId} ms={t.listen} />
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
-            <HintBar inBox={inBox} />
+            <HintBar inBox={inBox} escape={putOff} />
             <div className="ml-auto flex items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 className="touch:h-11"
+                aria-keyshortcuts="Escape"
                 onClick={cancel}
               >
-                {CANCEL}
+                {putOff}
               </Button>
               <Button
                 ref={sendButton}

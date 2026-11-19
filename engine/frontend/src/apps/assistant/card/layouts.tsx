@@ -3,7 +3,8 @@
  *
  * - **A call:** who (the company and the person), then, once the server has sorted the note, how it
  *   went, the note, the field changes (HubSpot's value now, an arrow, the new one, from a fresh
- *   preview) and the follow-ups. Call logs' own parts show them (`note-parts.tsx`).
+ *   preview) and the follow-ups. Call logs' own fields show them (`note-parts.tsx`), so each part
+ *   takes typing as well as voice (PLAN-V23 T4-2).
  * - **A task:** the company, what, when, the kind, for whom and more words.
  * - **An email:** to whom, the subject and the body. The body is text in a box, never HTML.
  * - **A pre-read** whose meeting the command couldn't pin down: "Which meeting?", or the plan's line
@@ -12,15 +13,21 @@
  * A choice the command left open ("Which James?") shows as buttons in its place, and the part
  * shows once it is picked. Every part a send waits for carries `data-box`.
  */
+import { useQueryClient } from '@tanstack/react-query'
 import { Hourglass, X } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
+import { toast } from 'sonner'
 import { useCompanySearch } from '@/api/hooks'
 import { useTeam } from '@/api/hooks/meetings'
+import { queryKeys } from '@/api/query'
 import type {
   AssistantMeetingHit,
+  CallNoteChange,
   CallNoteOptions,
   CallNoteOut,
+  CallNotePatch,
   CallNotePreview,
+  CallNoteTask,
   CompanyHit,
   HubSpotWrite,
   TaskKind,
@@ -28,10 +35,24 @@ import type {
   TeamMember,
   VoiceToolKind,
 } from '@/api/types'
-import { CardText, ChangeList, TaskList } from '@/apps/companies/call-logs/note-parts'
-import { KIND_LABELS, SORTING } from '@/apps/companies/call-logs/words'
+import {
+  CardText,
+  ChangeList,
+  NEW_PART,
+  SummaryField,
+  TaskList,
+} from '@/apps/companies/call-logs/note-parts'
+import {
+  changeLabel,
+  isMeetingNotes,
+  KIND_LABELS,
+  removedChangeWords,
+  removedTaskWords,
+  SORTING,
+  UNDO,
+} from '@/apps/companies/call-logs/words'
 import { FIND_COMPANY, LOOKING, NO_MATCH } from '@/apps/companies/words'
-import { Segmented } from '@/components/motion'
+import { ChipGroup, Segmented } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -70,7 +91,6 @@ import {
   noCompanyWords,
   noMeetingWords,
   NO_ONE,
-  NOT_SAID,
   NOTHING_ADDED,
   OPEN_CALL_LOGS,
   REMOVE,
@@ -199,6 +219,174 @@ function SortingPart() {
   )
 }
 
+/** A change typed into the call: what the server is told, and the same change on screen at once. */
+export type EditCall = (patch: CallNotePatch, apply: (note: CallNoteOut) => CallNoteOut) => void
+
+/** The whole list of changes, as the server takes it. A part made here goes with no id. */
+function changesPatch(changes: readonly CallNoteChange[]): CallNotePatch {
+  return {
+    changes: changes.map((change) => ({
+      id: change.id.startsWith(NEW_PART) ? null : change.id,
+      field: change.field,
+      office: change.office,
+      value: change.value,
+    })),
+  }
+}
+
+/** The whole list of follow-ups, as the server takes it. A part made here goes with no id. */
+function tasksPatch(tasks: readonly CallNoteTask[]): CallNotePatch {
+  return {
+    tasks: tasks.map((task) => ({
+      id: task.id.startsWith(NEW_PART) ? null : task.id,
+      subject: task.subject,
+      due: task.due,
+      due_words: task.due_words,
+      kind: task.kind,
+    })),
+  }
+}
+
+interface CallBoxesProps {
+  note: CallNoteOut
+  /** The note in a fresh preview, with HubSpot's values now. */
+  fresh: CallNoteOut | undefined
+  options: CallNoteOptions | undefined
+  today: string
+  onEdit: EditCall
+  onLeaveBox: () => void
+}
+
+/**
+ * A sorted call, each part a box to type in (PLAN-V23 T4-2; PLAN-V22 says typing always works where
+ * voice does): how it went, the note, each change's new value, and each follow-up's words, kind and
+ * day, with "Add a follow-up". They are Call logs' own fields (`note-parts.tsx`): each saves when
+ * it is left, or on Enter in a one-line box, and Esc puts it back and leaves it. A part removed
+ * goes at once, with Undo in a toast, as on Call logs.
+ */
+function CallBoxes({ note, fresh, options, today, onEdit, onLeaveBox }: CallBoxesProps) {
+  const client = useQueryClient()
+  const outcomeId = useId()
+  const storedSummary = note.call.summary.trim()
+  const outcome = note.call.outcome
+  const offered = options?.outcomes ?? []
+  // A logged meeting's notes have no call outcome to pick: they go to HubSpot as a note.
+  const outcomes = isMeetingNotes(note)
+    ? []
+    : outcome && !offered.includes(outcome)
+      ? [...offered, outcome]
+      : offered
+  // The new values are the note's, which a box changes at once; HubSpot's now come from the
+  // fresh preview.
+  const changes = note.changes.map((change) => {
+    const now = fresh?.changes.find((one) => one.id === change.id)
+    return now ? { ...change, current: now.current, current_changed: now.current_changed } : change
+  })
+  const saveChanges = (next: CallNoteChange[]): void => {
+    onEdit(changesPatch(next), (now) => ({ ...now, changes: next }))
+  }
+  const saveTasks = (next: CallNoteTask[]): void => {
+    onEdit(tasksPatch(next), (now) => ({ ...now, tasks: next }))
+  }
+  /** Undo puts a removed part back where it was, in the note as it is then, as a new part. */
+  const offerUndo = <Part extends { id: string }>(
+    words: string,
+    part: Part,
+    index: number,
+    listOf: (now: CallNoteOut) => Part[],
+    save: (list: Part[]) => void,
+  ): void => {
+    toast(words, {
+      action: {
+        label: UNDO,
+        onClick: () => {
+          const latest =
+            client.getQueryData<CallNoteOut>(queryKeys.companies.callNote(note.id)) ?? note
+          const list = [...listOf(latest)]
+          list.splice(Math.min(index, list.length), 0, {
+            ...part,
+            id: `${NEW_PART}${crypto.randomUUID()}`,
+          })
+          save(list)
+        },
+      },
+    })
+  }
+  return (
+    <div data-slot="call-edit" className="flex flex-col gap-4">
+      {outcomes.length > 0 ? (
+        <div className="flex flex-col gap-1.5">
+          <span id={outcomeId} className="text-caption text-muted-foreground">
+            {HOW_IT_WENT}
+          </span>
+          <ChipGroup
+            mode="one-or-none"
+            aria-labelledby={outcomeId}
+            options={outcomes.map((name) => ({ value: name, label: name }))}
+            value={outcome === null ? [] : [outcome]}
+            onChange={([picked]) => {
+              const next = picked ?? null
+              onEdit({ outcome: next }, (now) => ({ ...now, call: { ...now.call, outcome: next } }))
+            }}
+          />
+        </div>
+      ) : null}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-caption text-muted-foreground">{THE_NOTE}</span>
+        {storedSummary === '' && note.text.trim() !== '' ? (
+          // The rep's own words stay in view, read-only, while they write a short summary.
+          <CardText text={note.text} className="text-muted-foreground" />
+        ) : null}
+        <SummaryField
+          value={storedSummary}
+          label={THE_NOTE}
+          autoFocus={false}
+          onSave={(text) => {
+            onEdit({ summary: text }, (now) => ({ ...now, call: { ...now.call, summary: text } }))
+          }}
+          onCancel={onLeaveBox}
+        />
+      </div>
+      <ChangeList
+        changes={changes}
+        fields={options?.fields ?? []}
+        editing
+        onSave={(next, removed) => {
+          saveChanges(next)
+          if (removed) {
+            offerUndo(
+              removedChangeWords(changeLabel(removed.label, removed.office)),
+              removed,
+              changes.findIndex((change) => change.id === removed.id),
+              (now) => now.changes,
+              saveChanges,
+            )
+          }
+        }}
+        onCancel={onLeaveBox}
+      />
+      <TaskList
+        tasks={note.tasks}
+        editing
+        today={today}
+        onSave={(next, removed) => {
+          saveTasks(next)
+          if (removed) {
+            offerUndo(
+              removedTaskWords(removed.subject),
+              removed,
+              note.tasks.findIndex((task) => task.id === removed.id),
+              (now) => now.tasks,
+              saveTasks,
+            )
+          }
+        }}
+        onCancel={onLeaveBox}
+      />
+    </div>
+  )
+}
+
 export interface CallLayoutProps {
   draft: CallDraft
   onDraft: (draft: CallDraft) => void
@@ -208,6 +396,10 @@ export interface CallLayoutProps {
   options: CallNoteOptions | undefined
   today: string
   onOpenCallLogs: () => void
+  /** A box typed in (PLAN-V23 T4-2). */
+  onEdit: EditCall
+  /** Esc in a box: it is put back, and the focus leaves it. */
+  onLeaveBox: () => void
 }
 
 export function CallLayout({
@@ -218,6 +410,8 @@ export function CallLayout({
   options,
   today,
   onOpenCallLogs,
+  onEdit,
+  onLeaveBox,
 }: CallLayoutProps) {
   const { person } = draft
   const companyPicked = draft.company.found !== null
@@ -267,23 +461,13 @@ export function CallLayout({
       {draft.noteId !== null ? (
         sorted ? (
           <>
-            <CardLine label={HOW_IT_WENT}>{note.call.outcome ?? NOT_SAID}</CardLine>
-            <CardLine label={THE_NOTE}>
-              <CardText text={note.call.summary.trim() || note.text} />
-            </CardLine>
-            <ChangeList
-              changes={fresh?.changes ?? note.changes}
-              fields={options?.fields ?? []}
-              editing={false}
-              onSave={() => undefined}
-              onCancel={() => undefined}
-            />
-            <TaskList
-              tasks={note.tasks}
-              editing={false}
+            <CallBoxes
+              note={note}
+              fresh={fresh}
+              options={options}
               today={today}
-              onSave={() => undefined}
-              onCancel={() => undefined}
+              onEdit={onEdit}
+              onLeaveBox={onLeaveBox}
             />
             {preview && !preview.sending_ready ? (
               <div className="flex flex-col items-start gap-2">

@@ -19,7 +19,8 @@
  *   (Open), Draft ready (Check and send), Sent (Open), Draft failed (Open). Past rows say whether
  *   what was said is logged, with "Log meeting" (T3-11) while call notes are on: it opens the
  *   transcript box (`log-meeting.tsx`).
- * - **New pre-read** in the header, for a meeting that isn't in HubSpot (`new-pre-read.tsx`).
+ * - **New pre-read** in the header, for a meeting that isn't in HubSpot (`new-pre-read.tsx`). The
+ *   Assistant's card opens it here by itself, with the company filled in (PLAN-V23 T4-2).
  * - **The states:** loading (a still skeleton after 200ms), empty, and an error. While HubSpot's
  *   meetings can't be read yet, one quiet line says so in the server's words (`sentence`), the
  *   rows the server has still show, and New pre-read still works. My meetings and My team say why
@@ -37,7 +38,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { CalendarCheck, Info } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
-import { useSearchParams } from 'react-router'
+import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { useMe } from '@/api/hooks'
 import { useCallNoteOptions } from '@/api/hooks/call-note-counts'
 import { isMeetingFormsOff, useMeetings } from '@/api/hooks/meetings'
@@ -54,7 +55,13 @@ import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { LogMeetingSheet } from './log-meeting'
 import { MeetingList } from './meeting-list'
 import { NewPreRead } from './new-pre-read'
-import { meetingsQuery, readMeetings, writeMeetings, type MeetingsView } from './params'
+import {
+  meetingsQuery,
+  newPreReadAsk,
+  readMeetings,
+  writeMeetings,
+  type MeetingsView,
+} from './params'
 import { warmOtherViews } from './prefetch'
 import { rowKey } from './rows'
 import { MeetingFormsOff, MeetingsPending, WaitingLine } from './states'
@@ -164,6 +171,10 @@ function NoteLine({ words }: { words: string }) {
 
 function MeetingsContent() {
   const [params, setParams] = useSearchParams()
+  // New pre-read, asked for by the Assistant's card (PLAN-V23 T4-2), until it has opened.
+  const location = useLocation()
+  const navigate = useNavigate()
+  const ask = newPreReadAsk(location)
   const asked = readMeetings(params)
   const onPhone = useMediaQuery(PHONE)
   const today = melbourneDate()
@@ -287,7 +298,20 @@ function MeetingsContent() {
         tone="companies"
         title={MEETINGS_TITLE}
         description={onPhone ? undefined : MEETINGS_DESCRIPTION}
-        actions={canWriteMeetings && formsOn && !off ? <NewPreRead /> : undefined}
+        actions={
+          canWriteMeetings && formsOn && !off ? (
+            <NewPreRead
+              ask={ask}
+              onAsked={() => {
+                // Used: Back or a reload doesn't open it again.
+                void navigate(
+                  { pathname: location.pathname, search: location.search },
+                  { replace: true, state: null, preventScrollReset: true },
+                )
+              }}
+            />
+          ) : undefined
+        }
       />
       {off ? (
         <MeetingFormsOff />

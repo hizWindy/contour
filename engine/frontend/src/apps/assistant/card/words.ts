@@ -9,6 +9,11 @@
 
 export const SEND = 'Send'
 export const CANCEL = 'Cancel'
+/**
+ * A call card's Cancel (PLAN-V23 T4-2): the call stays in Call logs' To confirm, to be sent with
+ * the others in one go (Levi, 9 Nov: confirm after about 10 calls).
+ */
+export const LATER = 'Later'
 export const SPEAK = 'Speak'
 export const LEAVE_BOX = 'Leave the box'
 export const REMOVE = 'Remove'
@@ -23,7 +28,6 @@ export const COMPANY = 'Company'
 export const WHO = 'Who'
 export const NO_ONE = 'No one in particular'
 export const HOW_IT_WENT = 'How it went'
-export const NOT_SAID = 'Not said'
 export const THE_NOTE = 'The note'
 export const WHAT = 'What to do'
 export const WHEN = 'When'
@@ -116,8 +120,9 @@ export const NOT_SENT = 'Not sent'
 export const KEPT = 'Your draft is kept. Try again.'
 export const OPEN = 'Open'
 
+/** Later on a call (PLAN-V23 T4-2, the plan's words), with Open Call logs. */
+export const CALL_KEPT = 'Kept in Call logs, to send with the others.'
 /** Cancel: the draft stays (choice 19). */
-export const CALL_WAITS = 'Not sent. The call waits in Call logs.'
 export const DRAFT_KEPT = 'Not sent. Your draft is kept in this browser.'
 
 /** A draft the last page closed on before it went (choice 22). */

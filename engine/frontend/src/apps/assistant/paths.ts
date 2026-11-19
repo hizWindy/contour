@@ -15,5 +15,14 @@ export const TODAY_PATH = '/assistant'
 /** Meetings: the client meetings and their pre-reads. A pre-read is `MEETINGS_PATH/{form_id}`. */
 export const MEETINGS_PATH = '/assistant/meetings'
 
+/**
+ * The router's state on the way to Meetings that opens its "New pre-read" with the company filled
+ * in (PLAN-V23 T4-2): the review card's "New pre-read", for a company with no meeting ahead. A
+ * type only, so nothing more is in the first visit. Null: the dialog opens with no company.
+ */
+export interface NewPreReadState {
+  newPreRead: { key: string; name: string } | null
+}
+
 /** Call logs: the calls a rep logged, to confirm, send to HubSpot and look back at. */
 export const CALL_LOGS_PATH = '/assistant/call-logs'

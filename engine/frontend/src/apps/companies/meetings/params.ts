@@ -14,8 +14,10 @@
  * Companies until PLAN-V22 (T2-1); its old addresses send you on with their query
  * (`apps/assistant/old-addresses.ts`), so an old email's link still opens its pre-read.
  */
+import type { Location } from 'react-router'
 import type { MeetingQuery, MeetingWhen, MeetingWho } from '@/api/types'
-import { MEETINGS_PATH } from '@/apps/assistant/paths'
+import { MEETINGS_PATH, type NewPreReadState } from '@/apps/assistant/paths'
+import type { CompanyMatch } from '../company-search'
 
 /** Meetings' address, kept with the Assistant's others. */
 export { MEETINGS_PATH }
@@ -131,4 +133,32 @@ export function meetingsQuery(view: MeetingsView): MeetingQuery {
 /** A pre-read's own page, under Meetings, like "/assistant/meetings/0f3c9a2e-...". */
 export function preReadHref(formId: string): string {
   return `${MEETINGS_PATH}/${encodeURIComponent(formId)}`
+}
+
+/**
+ * An ask to open New pre-read by itself (PLAN-V23 T4-2): the Assistant's card sends the rep here
+ * with the company it found, as the router's state (`NewPreReadState`). `key` is the address's own,
+ * so one ask opens the dialog once.
+ */
+export interface NewPreReadAsk {
+  key: string
+  company: CompanyMatch | null
+}
+
+/** The ask in an address's state, or null. Anything else in the state is no ask. */
+export function newPreReadAsk(location: Pick<Location, 'key' | 'state'>): NewPreReadAsk | null {
+  const state: unknown = location.state
+  if (typeof state !== 'object' || state === null || !('newPreRead' in state)) return null
+  const company: unknown = (state as NewPreReadState).newPreRead
+  const found =
+    typeof company === 'object' &&
+    company !== null &&
+    'key' in company &&
+    'name' in company &&
+    typeof company.key === 'string' &&
+    typeof company.name === 'string' &&
+    company.key !== ''
+      ? { key: company.key, name: company.name }
+      : null
+  return { key: location.key, company: found }
 }
