@@ -27,6 +27,10 @@ answer about an unsure step.
   only your own notes). The writer makes it once the call is in HubSpot, due that day, with the
   2 minute reminder. Only the send that carries the call can ask for it, so a later send of what
   didn't land never makes a second one. Off with `notify_owner_calls`, read as the send starts.
+- **A call with no owner says who logged it** (PLAN-V23 T3-2, choice 14): someone with no HubSpot
+  user (or one not linked yet) logs a call that HubSpot shows with no owner, so its text starts
+  "Logged by Jo Sample, Designer, in Contour." ("Logged by Jo Sample in Contour." with no
+  position). A logged meeting's note too. A linked account's call has no such line.
 """
 
 import asyncio
@@ -226,6 +230,22 @@ class Caller:
     position: str | None
 
 
+def logged_by(caller: Caller) -> str:
+    """The first line of a call with no owner (PLAN-V23 choice 14): who logged it."""
+    position = " ".join((caller.position or "").split())
+    if position:
+        return f"Logged by {caller.name}, {position}, in Contour."
+    return f"Logged by {caller.name} in Contour."
+
+
+def signed(body: str, caller: Caller | None, rep: str | None) -> str:
+    """A call's or a logged meeting's text, with who logged it first when HubSpot will show it
+    with no owner."""
+    if rep is not None or caller is None:
+        return body
+    return f"{logged_by(caller)}\n\n{body}"[:BODY_MAX_CHARS]
+
+
 async def caller_of(session: AsyncSession, note: CallNote) -> Caller | None:
     """The account that logged the note. None with sign-in off (nobody), or once it is deleted."""
     if note.made_by is None:
@@ -268,6 +288,7 @@ async def fyi_of(
     note: CallNote,
     card: NoteCard,
     *,
+    caller: Caller | None,
     rep: str | None,
     settings: Settings,
     today: date,
@@ -276,7 +297,6 @@ async def fyi_of(
     None: the switch is off, nobody is signed in, or there is no one else to tell."""
     if not settings.notify_owner_calls:
         return None
-    caller = await caller_of(session, note)
     owner = await owner_to_tell(session, note.company_key, rep) if caller is not None else None
     if caller is None or owner is None:
         return None
@@ -319,9 +339,10 @@ async def plan_send(
     outcome = card.call.outcome if card.call.outcome in OUTCOME_NAMES else None
     meeting = is_meeting(note)
     rep = await writer.owner_of(session, note.made_by)
+    caller = await caller_of(session, note)
     carries_call = call and not meeting
     fyi = (
-        await fyi_of(session, note, card, rep=rep, settings=settings, today=today)
+        await fyi_of(session, note, card, caller=caller, rep=rep, settings=settings, today=today)
         if carries_call
         else None
     )
@@ -336,14 +357,16 @@ async def plan_send(
             CallIn(
                 at=note.called_at,
                 title=call_title(note),
-                body=call_body(note, card),
+                body=signed(call_body(note, card), caller, rep),
                 outcome=outcome,
                 direction="outbound",
             )
             if carries_call
             else None
         ),
-        note=NoteIn(body=meeting_body(note, card)) if call and meeting else None,
+        note=(
+            NoteIn(body=signed(meeting_body(note, card), caller, rep)) if call and meeting else None
+        ),
         fields=[
             FieldSet(
                 property=change.property,

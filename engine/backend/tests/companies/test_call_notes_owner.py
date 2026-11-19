@@ -6,7 +6,10 @@ with core's real writer and a fake HubSpot (what HubSpot gets):
 - none for the owner's own call, a company with no owner, an owner who left, a logged meeting, or
   with the switch off;
 - only the send that carries the call asks for it, so a resend of what didn't land makes no
-  second one.
+  second one;
+- PLAN-V23 T3-2, staff with no HubSpot user: a follow-up with nobody in "For" is refused (409
+  `no_hubspot_user`) and nothing is sent; their call has no owner and starts "Logged by Jo
+  Sample, Designer, in Contour."; a linked account's call has no such line.
 
 Made-up companies and people only (Sample Logistics Pty Ltd, Mia Sample, Sam Sample).
 """
@@ -17,13 +20,15 @@ from contextlib import asynccontextmanager
 from datetime import date
 from typing import Any
 
+import httpx
 import pytest
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.companies.note_batch import ActivityWriter, NoteSender
+from apps.companies.note_batch import ActivityWriter, Caller, NoteSender, logged_by
 from apps.companies.notes import CardCall, CardTask, NoteCard
 from core.api.deps import settings_dependency
+from core.auth import admin
 from core.config import Settings
 from core.hubspot.activities import FyiIn
 from core.hubspot.client import HubSpot
@@ -32,7 +37,7 @@ from tests.companies.helpers import add
 from tests.companies.test_call_notes_api import NOTES, a_company, log_call, notes_settings, set_note
 from tests.companies.test_call_notes_batch import FAKE_HUBSPOT, FakeWriter, confirm, one
 from tests.companies.test_today import signed_in
-from tests.core.auth_world import World
+from tests.core.auth_world import FAST, GOOD, World, sign_in
 from tests.core.hubspot_fake import FakeHubSpot as CoreHubSpot
 from tests.core.test_hubspot_activities import REFUSED
 
@@ -253,3 +258,118 @@ async def test_the_owner_gets_one_fyi_task_and_a_resend_makes_no_second(
     assert (fyi.companies, fyi.contacts, fyi.deals) == (("201",), (), ())
     assert (fyi.properties["hs_task_reminders"] or "").isdigit()
     assert by_subject["Send the floor plan"].properties["hubspot_owner_id"] == "301"
+
+
+# --- Staff with no HubSpot user (PLAN-V23 T3-2) --------------------------------------------------
+
+
+def test_who_logged_a_call_reads_with_the_position_when_there_is_one() -> None:
+    assert logged_by(Caller("Jo Sample", "Designer")) == (
+        "Logged by Jo Sample, Designer, in Contour."
+    )
+    assert logged_by(Caller("Jo Sample", None)) == "Logged by Jo Sample in Contour."
+    assert logged_by(Caller("Jo Sample", "  ")) == "Logged by Jo Sample in Contour."
+
+
+@asynccontextmanager
+async def as_jo(
+    world: World, *, position: str | None = "Designer"
+) -> AsyncIterator[httpx.AsyncClient]:
+    """Jo Sample, signed in: a designer with no HubSpot user, and the Call logs tick."""
+    async with world.factory() as db:
+        await admin.create_person(
+            db,
+            email="jo.sample@example.test",
+            username="josample",
+            name="Jo Sample",
+            position=position,
+            role="staff",
+            features=["companies.call_logs"],
+            password=GOOD,
+            now=world.clock.now,
+            hasher=FAST,
+            no_hubspot_user=True,
+        )
+    async with world.browser() as client:
+        assert (await sign_in(client, login="josample")).status_code == 200
+        yield client
+
+
+async def test_a_follow_up_with_nobody_in_for_is_refused_for_someone_with_no_hubspot_user(
+    world: World, fake: FakeWriter, sender: NoteSender
+) -> None:
+    await a_copy(world)
+    async with as_jo(world) as client:
+        note = await log_call(client)
+        await set_note(world, note["id"], card=a_card(FLOOR_PLAN))
+        refused = await client.post(f"{NOTES}/confirm", json={"ids": [note["id"]]})
+        failed = FLOOR_PLAN.model_copy(update={"state": "failed"})
+        await set_note(world, note["id"], status="failed", card=a_card(failed))
+        not_again = await client.post(f"{NOTES}/{note['id']}/retry")
+        assert fake.previews == []  # nothing was sent, or even previewed
+        for_sam = FLOOR_PLAN.model_copy(update={"owner_id": "o2"})
+        await set_note(world, note["id"], status="to_confirm", card=a_card(for_sam))
+        await confirm(client, note)
+        await sender.wait()
+
+    for answer in (refused, not_again):
+        assert (answer.status_code, answer.json()["code"]) == (409, "no_hubspot_user")
+        assert answer.json()["title"] == "A follow-up needs a teammate"
+        assert answer.json()["detail"] == "Who should do this follow-up? Pick a teammate."
+    (request,) = fake.previews  # once a teammate is in For, it goes
+    assert [task.owner_id for task in request.tasks] == ["o2"]
+
+
+async def test_a_call_by_someone_with_no_hubspot_user_has_no_owner_and_says_who_logged_it(
+    world: World, chosen: dict[str, Any]
+) -> None:
+    """With core's real writer: Jo's call has no owner in HubSpot, and its text starts with who
+    logged it; Sam, the company's owner, hears of it. Mia's call, linked, has no such line."""
+    hubspot = CoreHubSpot()
+    hubspot.grant_writes()
+    hubspot.add_company("201", name="Sample Logistics Pty Ltd")
+    sender = a_sender(world, chosen, ActivityWriter(), hubspot)
+    await a_company(world)
+    await add(world, HubSpotOwner(owner_id="302", name="Sam Sample"))
+    await owned_by(world, "302")
+    async with as_jo(world) as client:
+        jos = await log_call(client)
+        await set_note(world, jos["id"], card=a_card(), contact_id=None)
+        await confirm(client, jos)
+        await sender.wait()
+        assert (await one(client, jos))["status"] == "logged"
+    async with signed_in(world, "mia", owner="301") as (client, _):
+        mias = await log_call(client)
+        await set_note(world, mias["id"], card=a_card(), contact_id=None)
+        await confirm(client, mias)
+        await sender.wait()
+
+    calls = {call.properties.get("hubspot_owner_id"): call for call in hubspot.call_log.values()}
+    assert set(calls) == {None, "301"}  # Jo's has no owner; Mia's is hers
+    jo_call, mia_call = calls[None], calls["301"]
+    assert (jo_call.properties["hs_call_body"] or "").startswith(
+        f"<p>Logged by Jo Sample, Designer, in Contour.</p><p>{SUMMARY}</p>"
+    )
+    assert "Logged by" not in (mia_call.properties["hs_call_body"] or "")
+    subjects = sorted(task.properties["hs_task_subject"] or "" for task in hubspot.tasks.values())
+    assert subjects == [
+        "FYI: Jo Sample logged a call with Sample Logistics Pty Ltd",
+        "FYI: Mia Sample logged a call with Sample Logistics Pty Ltd",
+    ]
+
+
+async def test_with_no_position_the_line_says_less(world: World, chosen: dict[str, Any]) -> None:
+    hubspot = CoreHubSpot()
+    hubspot.grant_writes()
+    hubspot.add_company("201", name="Sample Logistics Pty Ltd")
+    sender = a_sender(world, chosen, ActivityWriter(), hubspot)
+    await a_company(world)
+    async with as_jo(world, position=None) as client:
+        note = await log_call(client)
+        await set_note(world, note["id"], card=a_card(), contact_id=None)
+        await confirm(client, note)
+        await sender.wait()
+    (call,) = hubspot.call_log.values()
+    assert (call.properties["hs_call_body"] or "").startswith(
+        "<p>Logged by Jo Sample in Contour.</p>"
+    )

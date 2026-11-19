@@ -171,7 +171,10 @@ async def preview_call_notes(
         "says so (`already_sending`, still 202). A note left out, not mine, not waiting to be "
         "sent, or for a company not in HubSpot yet is in `skipped`, with why. When a call is on "
         "a company someone else owns, the owner gets one FYI task in HubSpot once the call is "
-        "there, with an alert (PLAN-V23 T2-2; Settings can switch it off). 409 "
+        "there, with an alert (PLAN-V23 T2-2; Settings can switch it off). A call by someone "
+        "with no HubSpot user has no owner, and its text starts 'Logged by {name}, {position}, "
+        "in Contour.' (PLAN-V23 T3-2); their follow-up needs a teammate in its For box: 409 "
+        "`no_hubspot_user` otherwise, and nothing is sent. 409 "
         "`hubspot_writes_off` while sending waits for HubSpot write access: nothing is sent. "
         "409 `call_notes_off`."
     ),
@@ -393,6 +396,8 @@ async def delete_call_note(
         "the note being sent. 409 `note_uncertain` until I say whether HubSpot has an unsure "
         "step, `nothing_to_retry` for a note that didn't fail, `already_sending` while a batch "
         "is being sent, and `hubspot_writes_off` while sending waits for HubSpot write access. "
+        "409 `no_hubspot_user` for a follow-up with nobody in its For box, from someone with no "
+        "HubSpot user (PLAN-V23 T3-2). "
         "422 `change_off_the_list` for a change that isn't one a call may change. "
         "403 `not_your_note`, 404 `note_not_found`, 409 `call_notes_off`."
     ),
@@ -408,7 +413,7 @@ async def retry_call_note(
 ) -> CallNoteOut:
     note = await note_store.read_note(session, note_id, auth, change=True)
     await note_store.retry(
-        session, note, app=request.app, settings=settings, sender=sender, now=now
+        session, note, app=request.app, settings=settings, sender=sender, now=now, auth=auth
     )
     return await note_store.one_out(session, note)
 

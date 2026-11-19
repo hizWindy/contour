@@ -10,6 +10,9 @@ routes are in api_assistant.py.
 - **For whom:** me by default (my HubSpot owner), or a teammate on the team list (an active
   HubSpot owner). The task is due at 9:00 am on its day, Melbourne time, as a follow-up is. Its
   words are sent with email addresses and phone numbers blanked, as a call note is saved.
+- **No HubSpot user** (PLAN-V23 T3-2, choice 15): a task for myself, from an account marked "No
+  HubSpot user", would land in HubSpot with no owner, where nobody sees it, so it is refused (409
+  `no_hubspot_user`) and nothing is written. A task for a teammate goes as before.
 - **Done and reopen** (core's `tasks.set_status`): the task is read again and must be mine (403
   `not_your_task` otherwise, and nothing is written; 409 `no_hubspot_link` when my account has no
   HubSpot owner linked). Each is a row in `core.hubspot_writes`.
@@ -50,6 +53,7 @@ from core.hubspot.activities import CONTOUR_ZONE, TASK_DUE_TIME, ActivityRequest
 from core.hubspot.client import HubSpotError, HubSpotNotFound, HubSpotWritesOff
 from core.hubspot.connection import open_hubspot
 from core.hubspot.models import HubSpotCompany, HubSpotOwner
+from core.hubspot.owners import hubspot_user
 from core.hubspot.tasks import OPEN, OpenTask, subject_of
 from core.hubspot.writer import OPEN as REPLANNED
 from core.hubspot.writer import WriteInProgress, WriteOut, latest_write
@@ -175,6 +179,17 @@ def task_not_found() -> Problem:
     )
 
 
+def no_hubspot_user() -> Problem:
+    """A task for myself, from an account with no HubSpot user (409, PLAN-V23 T3-2). The words
+    are the plan's."""
+    return Problem(
+        409,
+        "You don't have a HubSpot user",
+        "You don't have a HubSpot user, so this task can't go to HubSpot. Give it to a teammate.",
+        code="no_hubspot_user",
+    )
+
+
 def no_hubspot_link(asker: str) -> Problem:
     """My account has no HubSpot owner linked, so no task can be told to be mine (409)."""
     return Problem(
@@ -261,6 +276,8 @@ async def task_request(
         )
         if active is None:
             raise owner_not_found()
+    elif auth is not None and hubspot_user(auth.user) == "none":
+        raise no_hubspot_user()  # for myself, with no HubSpot user: nobody would see it
     rep = await writer.owner_of(session, auth.user.id if auth is not None else None)
     request = ActivityRequest(
         app=APP,

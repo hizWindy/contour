@@ -9,7 +9,9 @@ writers and a fake HubSpot:
   follows at once;
 - another person's task gives 403 and changes nothing; so does an account with no HubSpot link;
 - the checks before a task (a Lead Finder company, words, the day, the teammate), a Viewer and
-  nobody signed in.
+  nobody signed in;
+- an account with no HubSpot user can't give itself a task, and nothing is written; "for Sam"
+  still goes (PLAN-V23 T3-2).
 
 Made-up companies and people only (Sample Logistics Pty Ltd, Jo Sample).
 """
@@ -21,10 +23,11 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from apps.companies.assistant import CommandLimit
 from core.api.deps import settings_dependency
+from core.auth.models import User
 from core.hubspot.models import HubSpotOwner, HubSpotWrite
 from tests.companies.helpers import API, add, company
 from tests.companies.test_call_notes_api import notes_settings
@@ -339,3 +342,33 @@ async def test_at_most_20_tasks_a_minute_and_a_repeated_key_isnt_counted(
         world.clock.advance(minutes=1)
         assert (await post(client, TASKS, a_task(), key="k3")).status_code == 201
     assert len(made(hubspot)) == 3
+
+
+# --- No HubSpot user (PLAN-V23 T3-2) -------------------------------------------------------------
+
+
+async def test_a_task_for_myself_with_no_hubspot_user_is_refused_and_one_for_sam_goes(
+    world: World, settings: dict[str, Any], hubspot: FakeHubSpot
+) -> None:
+    """Josie has no HubSpot user: a task for Josie would land in HubSpot with no owner, where nobody
+    sees it, so it is refused (409 `no_hubspot_user`) and nothing is written. For Sam, it goes."""
+    await a_copy(world)
+    async with signed_in(world, "josie", owner=None) as (client, jo):
+        async with world.factory() as db:
+            await db.execute(update(User).where(User.id == jo.id).values(no_hubspot_user=True))
+            await db.commit()
+        checked = await post(client, f"{TASKS}/preview", a_task())
+        mine = await post(client, TASKS, a_task(), key="card-2")
+        for_sam = await post(client, TASKS, a_task(owner_id="o2"), key="card-3")
+
+    for refused in (checked, mine):
+        assert (refused.status_code, refused.json()["code"]) == (409, "no_hubspot_user")
+        assert refused.json()["detail"] == (
+            "You don't have a HubSpot user, so this task can't go to HubSpot. Give it to a "
+            "teammate."
+        )
+    assert for_sam.status_code == 201, for_sam.text
+    assert [task["hubspot_owner_id"] for task in made(hubspot)] == ["o2"]
+    async with world.factory() as db:
+        written = list(await db.scalars(select(HubSpotWrite.subject)))
+    assert written == [f"assistant_task:{jo.id.hex}:card-3"]  # nothing for the refused ones

@@ -99,6 +99,7 @@ from core.config import Settings
 from core.hubspot.activities import OUTCOME_NAMES, StepNotUncertain
 from core.hubspot.connection import hubspot_set_up, project_readiness
 from core.hubspot.models import HubSpotCompany, HubSpotContact, HubSpotOffice, HubSpotOwner
+from core.hubspot.owners import hubspot_user
 from core.hubspot.writer import WriteInProgress, WriteNotFound
 
 APP = "companies"
@@ -1143,6 +1144,32 @@ def already_sending() -> Problem:
     return Problem(409, "Sending in progress", ALREADY_SENDING, code="already_sending")
 
 
+def follow_up_needs_teammate() -> Problem:
+    """A follow-up names nobody, from someone with no HubSpot user (409, PLAN-V23 T3-2, choice
+    15). The words are the plan's."""
+    return Problem(
+        409,
+        "A follow-up needs a teammate",
+        "Who should do this follow-up? Pick a teammate.",
+        code="no_hubspot_user",
+    )
+
+
+def lacks_teammate(note: CallNote) -> bool:
+    """A follow-up not in HubSpot yet with nobody in its "For" box: for someone with no HubSpot
+    user it would land with no owner, where nobody sees it."""
+    card = NoteCard.model_validate(note.card or {})
+    return any(task.state != "landed" and not task.owner_id for task in card.tasks)
+
+
+def check_follow_ups(auth: AuthContext | None, notes: Sequence[CallNote]) -> None:
+    """Refuses a send whose follow-up names nobody, from someone with no HubSpot user (PLAN-V23
+    T3-2): nothing is sent."""
+    no_user = auth is not None and hubspot_user(auth.user) == "none"
+    if no_user and any(lacks_teammate(note) for note in notes):
+        raise follow_up_needs_teammate()
+
+
 async def confirm(
     session: AsyncSession,
     ids: Sequence[uuid.UUID],
@@ -1168,6 +1195,7 @@ async def confirm(
         notes, skipped = await batch_notes(
             session, ids, auth, allowed=("to_confirm",), skip_left_out=True
         )
+        check_follow_ups(auth, notes)
         claimed: list[CallNote] = []
         for note in notes:
             # Under a lock, so a second tab's press can't send the same note twice.
@@ -1206,9 +1234,11 @@ async def retry(
     settings: Settings,
     sender: NoteSender,
     now: datetime,
+    auth: AuthContext | None = None,
 ) -> None:
     """Sends again what didn't land, for a note that failed or was partly saved: a held field
-    goes with the value the rep has now seen."""
+    goes with the value the rep has now seen. A follow-up that names nobody, from someone with no
+    HubSpot user, refuses it (PLAN-V23 T3-2)."""
     if note.status == "uncertain":
         raise Problem(
             409,
@@ -1220,6 +1250,7 @@ async def retry(
         raise nothing_to_retry()
     if off_the_list(NoteCard.model_validate(note.card or {})):
         raise refused("This note can't be sent", OFF_THE_LIST, code="change_off_the_list")
+    check_follow_ups(auth, [note])
     sending = sending_state(app, settings)
     if not sending.ready:
         raise writes_off(sending.waiting_for or WAITING_FOR_WRITES)
