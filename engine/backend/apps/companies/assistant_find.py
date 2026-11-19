@@ -174,6 +174,13 @@ def heard(text: str) -> str:
     return POSSESSIVE.sub("", clean_line(text, HEARD_CHARS)).strip(EDGES)
 
 
+def heard_key(text: str) -> str:
+    """Words as a learned name keeps them (PLAN-V23 T1-2): lower case, one space between words
+    and none at the ends. So "North  Wind" and "north wind" are the same words, and "North Wind"
+    and "Northwind" are not."""
+    return " ".join(text.casefold().split())
+
+
 def name_words(text: str) -> list[str]:
     """A name's words in lower case: letters only, of 2 letters or more."""
     words = LETTERS.findall(POSSESSIVE.sub("", text))

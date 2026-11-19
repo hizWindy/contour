@@ -7,11 +7,12 @@ services are assistant.py (the command), today.py (Today), assistant_tasks.py (a
 own, Done and reopen) and team_email.py (the team email).
 """
 
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 
-from apps.companies import assistant_tasks, team_email, today
+from apps.companies import assistant_learned, assistant_tasks, team_email, today
 from apps.companies.api_meetings import SourceDep, WriterDep
 from apps.companies.assistant import Assistant, CommandLimit, check_on, read_command
 from apps.companies.assistant_schemas import (
@@ -19,6 +20,8 @@ from apps.companies.assistant_schemas import (
     AssistantCommandIn,
     AssistantEmailIn,
     AssistantTaskIn,
+    LearnedNameIn,
+    LearnedNamePage,
     TeamEmail,
     Today,
 )
@@ -27,8 +30,9 @@ from apps.companies.team_email import TeamEmailBook
 from apps.companies.today import TaskCopy
 from core.api.access import SignedInDep, need
 from core.api.deps import SessionDep, SettingsDep
+from core.api.models import OFFSET_MAX
 from core.api.runs import IDEMPOTENCY_PATTERN
-from core.api.signin import NowDep
+from core.api.signin import AdminDep, NowDep
 from core.config import Settings
 from core.hubspot.writer import WriteOut
 
@@ -449,3 +453,67 @@ async def send_team_email(
     if not new:
         response.status_code = 200
     return sent
+
+
+# --- Learned names (PLAN-V23 T1-2, the contract's part 2) ---------------------------------------
+
+
+@router.post(
+    "/learned",
+    status_code=204,
+    dependencies=[Depends(CHANGES)],
+    summary="Teach the mic a name",
+    description=(
+        "Keeps a name the rep fixed on the card, for the whole team: the words as heard (1 to 80 "
+        "characters, like North Wind) and the company they picked (like Northwind). The card "
+        "sends it after the send, when the rep picked the company by hand. The command step "
+        "then tries it before the close-name match. Words only, never audio. It is saved only "
+        "when the words differ from the company's name, case and spaces aside, and only once; "
+        "the same words taught for two companies give both as choices (at most 5). Either way "
+        "it answers 204. 404 `company_not_found` when the company isn't open to this person. "
+        "422 `contact_details` for an email address or a phone number in the words. A Viewer "
+        "gets 403 `viewer_read_only`."
+    ),
+)
+async def teach_assistant_name(
+    body: LearnedNameIn, session: SessionDep, auth: SignedInDep, leads: LeadsDep
+) -> Response:
+    await assistant_learned.learn(session, body, auth=auth, leads=leads)
+    return Response(status_code=204)
+
+
+@router.get(
+    "/learned",
+    response_model=LearnedNamePage,
+    summary="List the learned names",
+    description=(
+        "Every name the team taught the mic, the newest first, a page at a time: the words as "
+        "heard, the company (its name in our copy now), who taught it and when. For the "
+        "Settings page, where an Admin removes one. Admins only (403 `admin_only`)."
+    ),
+)
+async def list_learned_names(
+    session: SessionDep,
+    auth: AdminDep,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0, le=OFFSET_MAX)] = 0,
+) -> LearnedNamePage:
+    return await assistant_learned.list_pairs(session, limit=limit, offset=offset)
+
+
+@router.delete(
+    "/learned/{pair_id}",
+    status_code=204,
+    summary="Remove a learned name",
+    description=(
+        "Removes one learned name, so the command step no longer tries it. Admins only (403 "
+        "`admin_only`). 404 `learned_not_found` when it was removed already."
+    ),
+)
+async def remove_learned_name(
+    pair_id: Annotated[uuid.UUID, Path(description="The learned name's id")],
+    session: SessionDep,
+    auth: AdminDep,
+) -> Response:
+    await assistant_learned.remove_pair(session, pair_id)
+    return Response(status_code=204)

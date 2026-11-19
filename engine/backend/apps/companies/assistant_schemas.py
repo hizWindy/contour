@@ -417,3 +417,44 @@ class TeamEmail(Out):
     waiting_for: str | None = Field(description="Why it can't be sent now, in plain words")
     sends_left: int = Field(description="Team emails I may still send today (30 a day, TBC)")
     sent_at: datetime | None = Field(description="When it was sent. None for a preview")
+
+
+# --- Learned names (PLAN-V23 T1-2, the contract's part 2) ---------------------------------------
+
+HEARD_MAX_CHARS = 80
+
+
+class LearnedNameIn(BaseModel):
+    """A name the rep fixed on the card: the words as heard, and the company they picked."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    heard: SafeText = Field(
+        min_length=1,
+        max_length=HEARD_MAX_CHARS,
+        description="The words as heard, like North Wind: 1 to 80 characters. An email address "
+        "or a phone number in them is refused (422 `contact_details`)",
+        examples=["North Wind"],
+    )
+    company_key: SafeText = Field(
+        min_length=1,
+        max_length=64,
+        description="The company the rep picked: a HubSpot id, or lead:<id>",
+        examples=["201"],
+    )
+
+
+class LearnedNameOut(Out):
+    id: uuid.UUID
+    heard: str = Field(description="The words as heard, tidied")
+    company_key: str
+    company_name: str = Field(
+        description="The company's name in our copy now, else its name when it was taught"
+    )
+    taught_by: str | None = Field(description="Who taught it. None: sign-in was off, or gone")
+    created_at: datetime
+
+
+class LearnedNamePage(Out):
+    total: int
+    items: list[LearnedNameOut] = Field(description="The newest first")
