@@ -42,7 +42,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Fragment, useId, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { noteInLists } from '@/api/hooks/call-notes'
-import { useTeam } from '@/api/hooks/meetings'
+import { useTeam } from '@/api/hooks/team'
 import type {
   CallNoteChange,
   CallNoteOptions,

@@ -45,7 +45,6 @@ import type {
   MeetingQuery,
   MeetingsSyncOut,
   MeetingTranscriptIn,
-  TeamMember,
 } from '@/api/types'
 import { api } from '@/api/client'
 import { markMeetingSummaryOld } from './meeting-summary'
@@ -409,19 +408,8 @@ export function useRedraftMeetingForm(formId: string) {
 
 // --- Sending the pre-read (T3-11 & PLAN-V19 T2-3/T2-4) ------------------------------------------
 
-/** GET /companies/team: active HubSpot owners ordered by name, with Contour status (never emails). */
-export function teamQueryOptions() {
-  return queryOptions({
-    queryKey: queryKeys.companies.team(),
-    queryFn: async ({ signal }): Promise<TeamMember[]> =>
-      unwrap(await api.GET('/companies/team', { signal })),
-    staleTime: 60_000,
-  })
-}
-
-export function useTeam({ enabled = true }: { enabled?: boolean } = {}) {
-  return useQuery({ ...teamQueryOptions(), enabled })
-}
+// The team list has a file of its own (PLAN-V23 T3-4), so Call logs can have it without the rest.
+export { teamQueryOptions, useTeam } from './team'
 
 export interface PreviewFormVariables {
   ownerIds?: readonly string[] | null
