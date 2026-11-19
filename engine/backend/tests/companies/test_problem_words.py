@@ -189,7 +189,8 @@ def test_the_plan_v22_words_are_the_ones_sent() -> None:
     )
     assert assistant_find.which("James") == "Which James?"
     assert assistant_find.no_meeting_ahead("Northwind has") == (
-        "Northwind has no meeting in HubSpot in the next 60 days. Start a pre-read and type the date."
+        "Northwind has no meeting in HubSpot in the next 60 days. "
+        "Start a pre-read and type the date."
     )
     assert today.NO_LINK.format(asker="Al Khair") == (
         "Today needs your account linked to HubSpot. Ask Al Khair to link it."
