@@ -484,6 +484,8 @@ function renderPreRead(signIn: SignIn = { state: 'off' }) {
   return renderWithProviders(<RouterProvider router={router} />, {
     withRouter: false,
     queryClient,
+    // No wait between typed keys: the long addresses made a test run past 5 seconds under load.
+    userEventOptions: { delay: null },
   })
 }
 

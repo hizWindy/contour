@@ -301,6 +301,8 @@ function renderPreRead(path = `/assistant/meetings/${FORM_ID}`) {
   const result = renderWithProviders(<RouterProvider router={router} />, {
     withRouter: false,
     queryClient,
+    // No wait between typed keys: the long blanks made these tests run past 5 seconds under load.
+    userEventOptions: { delay: null },
   })
   return { ...result, router }
 }
