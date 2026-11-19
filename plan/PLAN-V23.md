@@ -5,8 +5,8 @@ This plan refines the Assistant that PLAN-V22 built. The mic gets better at name
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
-- **Last updated:** 19 Nov 2026 (S0, and Part 1's backend: T1-1 to T1-4).
-- **Progress:** Before the build: 1 of 3. Part 1: 4 of 7. Part 2: 0 of 5. Part 3: 0 of 5. Part 4: 0 of 6. M1 to M4: 0 of 4.
+- **Last updated:** 20 Nov 2026 (S0; the backend of Parts 1 to 3; T4-1 and T4-2).
+- **Progress:** Before the build: 1 of 3. Part 1: 4 of 7. Part 2: 3 of 5. Part 3: 3 of 5. Part 4: 2 of 6. M1 to M4: 0 of 4.
 - **Sources:**
   - Al-khair's ideas and answers in chat on 19 Nov (the second session that day);
   - the meeting with Levi on 18 Nov (Gemini's notes in `minutes of meeting/`);
@@ -316,13 +316,13 @@ All new routes sit under `/api/v1/companies/assistant/`. A route that changes so
 
 ## Part 2: alerts
 
-**Progress:** 0 of 5. Needs S2 first.
+**Progress:** 3 of 5. S2 still to come (see the Part 2 Log).
 
-- [ ] **T2-1. A reminder on every task** (backend, `core/hubspot/activities.py`). Choice 7, as S2 found it.
+- [x] **T2-1. A reminder on every task** (backend, `core/hubspot/activities.py`). Choice 7, as S2 found it. Done 19 Nov 2026 (`7c2d1d3`), as choice 7 says, before S2: S2 may still change it (one place).
   - **Done when:** tests pass: a pre-read task, a teammate's follow-up and "add a task for Sam" get the 2 minute reminder; my own task gets 9:00 am on its day; a reminder never falls in the past; and the time is in milliseconds, as HubSpot wants.
-- [ ] **T2-2. FYI tasks for the company's owner** (backend). Choice 8, after a call lands in HubSpot.
+- [x] **T2-2. FYI tasks for the company's owner** (backend). Choice 8, after a call lands in HubSpot. Done 19 Nov 2026 (`e092038`).
   - **Done when:** tests pass: a call by someone who isn't the owner makes one FYI task for the owner, linked to the company; the owner's own call makes none; a company with no owner makes none; the switch off makes none; and a resend makes no second one.
-- [ ] **T2-3. Pre-reads on Today, and the nudge** (backend).
+- [x] **T2-3. Pre-reads on Today, and the nudge** (backend). Done 19 Nov 2026 (`6b799da`, `4920ddc`, `fadec46`, `0b3da20`).
   - `pre_reads` in Today (contract part 5), found by HubSpot user or by email address.
   - The 4:30 pm nudge as a job that is off until switched on (choice 10).
   - **Done when:** tests pass: a pre-read sent to me by HubSpot user or by email shows; one for a past meeting doesn't; the nudge emails only people with calls waiting, once a day; and with email off it sends nothing and logs why.
@@ -333,18 +333,26 @@ All new routes sit under `/api/v1/companies/assistant/`. A route that changes so
 
 ### Part 2 Log
 
-- Nothing yet.
+- 19 Nov 2026, T2-1 to T2-3 (backend): built in 5 commits, plus a fix from Part 3's security check (`0b3da20`). Each "Done when" holds in tests with fakes. Nothing reached the real HubSpot, and no email was sent.
+- T2-5's backend half (at `fadec46`, through `heavy.sh`): ruff, the format check and mypy clean. Fast tests: 3,553 passed, 28 skipped. Companies tests: 240, 129 and 281 passed. The contract gate: 110 passed, 25 skipped. None failed.
+- **Built before S2.** Every task now carries one reminder, as choice 7 says, but whether HubSpot alerts on it is not confirmed until S2. The times are worked out in one place (`task_reminders` in `core/hubspot/activities.py`); two times would be joined with ";" (**TBC**, S2).
+- Whose task it is goes by the task's owner, so a pre-read's task for its sender is their own (9:00 am on its day). A 9:00 am reminder in the past, or under 2 minutes away, moves to 2 minutes after the send.
+- The FYI task is the call write's last step, `fyi`, made only once the call has landed; it never changes the write's status. It is due at 9:00 am on the send's day, so an afternoon FYI shows as overdue at once. Its priority is low (**TBC**). Its owner comes from our copy of HubSpot (read daily); an owner who left gets none, and so does a logged meeting. Its link opens the company's page in Contour, whose Call history shows the call (Call logs show only your own notes). A failed FYI is logged, not retried (**TBC**). No FYI when HubSpot didn't answer about the call and someone then said it is there.
+- **Before `deploy v23`:** `notify_owner_calls` is on by default, so FYI tasks start the moment v23 is live, and Levi hasn't answered W4. Al-khair decides: on, or off until Levi answers.
+- The nudge is a schedule, "Call logs: calls not sent yet", on Admin's Schedules tab: 16:30 on weekdays, off, like the morning jobs. So `calls_nudge_at` is not a setting, and Settings gains one row, not two (**TBC**, Al-khair). It counts To confirm only, as Today does (**TBC**), emails active accounts with Call logs at their Contour address, once a day a person (kept in memory). With no email service, or the log sender, it sends nothing, logs why, and Schedules says "Email isn't switched on yet, so the reminder can't go. An admin can set it up."
+- Today's `pre_reads`: sent pre-reads only, matched by HubSpot user and by the person's own address, at most 20, from the start of today. The part comes after Meetings and needs the Meetings tick, because a pre-read opens only with it (**TBC**). One on a Lead Finder lead shows only to those who may see the lead (the security check's fix).
+- The pre-read preview's alert line shows only when someone gets a task and the company is in HubSpot. The website links moved to `apps/companies/links.py`, to break an import loop.
 
 ## Part 3: staff without HubSpot
 
-**Progress:** 0 of 5.
+**Progress:** 3 of 5.
 
-- [ ] **T3-1. The HubSpot user mark** (backend). Contract part 6, with the column from T1-2.
+- [x] **T3-1. The HubSpot user mark** (backend). Contract part 6, with the column from T1-2. Done 20 Nov 2026 (`f689122`, `76e3a19`, `a5020ff`).
   - "No HubSpot user" starts with the Call logs tick (choice 13).
   - **Done when:** tests pass: a new person with neither choice gives 422; "No HubSpot user" gives `none` and Call logs only; an old account with no link gives `not_set`; and linking later gives `linked`.
-- [ ] **T3-2. Tasks and calls for them** (backend). Choices 14 and 15.
+- [x] **T3-2. Tasks and calls for them** (backend). Choices 14 and 15. Done 19 Nov 2026 (`ef19db1`).
   - **Done when:** tests pass: a task for myself, as `none`, gives 409 `no_hubspot_user` and writes nothing; "for Sam" still works; a call's follow-up with no teammate gives 409; a call by a `none` account starts "Logged by Jo Sample, Designer, in Contour." and has no owner; and a `linked` account's call has no such line.
-- [ ] **T3-3. Today for them** (backend). `tasks_state: none` (choice 16).
+- [x] **T3-3. Today for them** (backend). `tasks_state: none` (choice 16). Done 19 Nov 2026 (`704442b`, `2a242fe`).
   - **Done when:** tests pass: a `none` account's Today asks HubSpot nothing and shows calls and pre-reads; and a `not_set` account still gets the link message.
 - [ ] **T3-4. The website.**
   - People: the "HubSpot user" field, the suggested name, and "Not set".
@@ -357,17 +365,24 @@ All new routes sit under `/api/v1/companies/assistant/`. A route that changes so
 
 ### Part 3 Log
 
-- Nothing yet.
+- 19 to 20 Nov 2026, T3-1 to T3-3 (backend): built in 7 commits. Each "Done when" holds in tests. No migration (Part 1's column).
+- T3-5's backend half (at `a5020ff`, through `heavy.sh`): ruff, the format check and mypy clean. Fast tests: 3,555 passed, 28 skipped. Companies tests: 245, 129 and 283 passed. The contract gate: 110 passed, 25 skipped. Core tests with the database: people, sign-in and access 222 passed (one failed first: a test pinned the whole signed-in answer; fixed in `a5020ff`); the HubSpot writer, owners, settings, schedules and email 499 passed. None failed at the end.
+- **Before `deploy v23`:** Add person now refuses a new person with no HubSpot choice, so the website's T3-4 must go out with this backend. Until T3-4, `people.tsx` doesn't type-check (the only error).
+- On Add person, both choices, or an owner who isn't active, give a plain field error with no code; neither gives `hubspot_choice_missing`. A person added with their HubSpot user is linked by hand, so the sync never changes the link. "No HubSpot user" starts with Call logs only, unless ticks are sent; an Admin role still gets every tick.
+- On the link change, `{"owner_id": null, "no_hubspot_user": true}` sets the mark, `{"owner_id": null}` clears both (`not_set`), and a link clears the mark. The owners sync skips marked accounts, even one marked while a sync runs. The sign-in log gains a `hubspot` detail when an account is made or changed.
+- The "Logged by {name}, {position}, in Contour." line goes on any call with no owner (`none` or `not_set`), and on a logged meeting's note with no owner. A `not_set` account's own task still goes unassigned. The follow-up 409 is checked at confirm and at retry; a draft may hold a follow-up with no teammate.
+- For a `none` account, Today's parts are `pre_reads` and `calls` only; their typed-in meetings don't show (choice 16, **TBC**).
+- The `security-check` on T3-1 and T3-2: no blocker, one gap fixed (`0b3da20`, Today's pre-reads could name a Lead Finder lead to someone who may not see it). Notes: the Platform admin can link two accounts to one HubSpot owner (possible before; Add person now allows it too), and the second account then sees and can tick that owner's tasks on Today: refuse a duplicate? (**TBC**, Al-khair). Staff names and positions go into a call's text in HubSpot, escaped, never to Claude. The FYI is a HubSpot write the rep doesn't see in the batch preview; it rides on their confirmed send, under the Settings switch.
 
 ## Part 4: the Assistant's feel
 
-**Progress:** 0 of 6. Website only. Each item names where it came from.
+**Progress:** 2 of 6. Website only. Each item names where it came from.
 
-- [ ] **T4-1. V where it's needed.**
+- [x] **T4-1. V where it's needed.** Done 19 Nov 2026 (`a515984`).
   - **V over call prep,** with the prepped company as the default. Right after a call is when a rep needs V most. (PLAN-V22 Log: V does nothing while call prep's panel is open.)
   - **"Use V to speak"** on or off, with the sliding switch in the profile menu, kept in this browser. "Speak (V)" says "Speak" when it is off. WCAG 2.2 rule 2.1.4 asks for this: a one-letter shortcut must be able to be switched off. (This chat.)
   - **Done when:** tests pass: V over call prep opens the bar with that company; V in a prep box still types a "v"; with V off, V does nothing and "Speak" still works; and the switch stays after a reload.
-- [ ] **T4-2. The card.**
+- [x] **T4-2. The card.** Done 19 Nov 2026 (`099126a`, `6888c81`).
   - **Typing in every box of the call card,** not only by voice. PLAN-V22 says typing always works wherever voice does. (PLAN-V22 Log: the call card is read-only.)
   - **"Later" instead of "Cancel" on a call,** and Esc does the same: "Kept in Call logs, to send with the others." It fits Levi's 9 Nov ask to confirm in one go after about 10 calls. (PLAN-V22 Log: Cancel already keeps the call.)
   - **"New pre-read" from a command opens its dialog,** with the company filled in. (PLAN-V22 Log: it opens Meetings and stops there.)
@@ -391,7 +406,16 @@ All new routes sit under `/api/v1/companies/assistant/`. A route that changes so
 
 ### Part 4 Log
 
-- Nothing yet.
+- 19 Nov 2026: built in the website copy (`../contour-v23-web`) in 7 commits, brought into `plan-v23` with cherry-pick on 20 Nov (`a515984` to `f264bc6`, no conflicts). T4-1 and T4-2 are ticked.
+- T4-3: its two buttons and the focus after L are done (`4188dc8`); "Try saying" moved to Part 1's website work, because it needs the hint list.
+- T4-4: the phone part is done (`2d955ec`); the speed target is not met. The card's first frame at 4x CPU (the production build, 10 runs each, before and after alternated): a task card 95.9 ms before (74 to 129) and 91.2 ms after (77 to 125); a call card 76.0 ms (65 to 119) and 84.8 ms (67 to 102). Traces: about 40 to 45 ms is the page's restyle and layout forced when the card takes the focus, and 35 to 40 ms is the modal's and the animation's scripts. A non-modal card (tried, not committed) got 42 to 47 ms in 3 of 5 runs, but needs our own focus trap, `aria-modal` and scroll lock. **Al-khair's call:** keep the modal card, or build the non-modal one.
+- T4-5: the skip link now moves the focus, and toast buttons are 44 px on touch screens app-wide (`4cfc9d6`). The screen reader pass is not done: NVDA isn't on this laptop (**TBC**).
+- T4-6's numbers so far: 2,332 tests passed (157 files, 89 s) after T4-4; the last run under load had 10 five-second timeouts and the known `mic.test.tsx` flake, and those files passed alone (173 of 173), so the full run is redone at the end. Lint, types and the build pass. First visit 247,956 to 248,426 bytes gzip (+470), 39 files.
+- The V switch is kept as `assistant.v-key` in this browser; off turns off every use of V (the bar, Done, the card), and the "Press V" lines follow it (**TBC** words). With sign-in off there is no account menu, so V can't be switched off (**TBC**). The menu row uses the Speech icon, because the Keyboard icon added a file to the first visit (**TBC** at the look). V over call prep works on a laptop only; Esc with the bar open closes the bar, not the panel.
+- The card: "Later" on a call with no company picked keeps the draft in this browser. The first Esc in a call's box keeps the typing (Call logs puts it back). A box still being typed in is saved before Send or Later. New words (**TBC**): "Add a task for you." and "Email the team." An empty card marks empty boxes only after Send is tried. New pre-read is opened once, through the page's state, after Meetings' list loads; with no company found it opens empty.
+- Today's two buttons and their Ctrl+K entries show to anyone who can write with the Call logs or Meetings tick. The card is drawn in a React transition (`useDeferredValue`), its boxes one render later, and an empty hidden box after `#root` saves about 2 ms each time an overlay opens.
+- Open from the design review (**TBC** at Al-khair's look): on a phone the toast covers the pinned Speak button for about 4 s; Today's header on a phone stacks three buttons in two rows; the call card mixes small grey labels with bold headings, and its follow-ups sit in a box inside the card.
+- Not checked: a real phone, the real mic, NVDA, Firefox and Safari, and the real backend (Playwright with made-up answers). Screenshots: `../contour-v23-web/plan/shots/v23/`.
 
 ## Merge, checks and going live
 
