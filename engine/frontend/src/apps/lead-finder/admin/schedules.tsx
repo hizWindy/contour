@@ -4,13 +4,15 @@
  * - **Find new leads automatically:** the Lead Finder's four city schedules as one control, with
  *   the round's budget, and each city's last run under it (`round-card.tsx`).
  * - **The other jobs**, one compact row each: the daily HubSpot copy (free) and the Companies
- *   page's morning search ahead (it spends money). On or off, the time, the last start, Run now.
+ *   page's morning search ahead (it spends money). What it does, on or off, the time, the last
+ *   start, Run now, and why it wouldn't start now (like the calls reminder while email is off,
+ *   PLAN-V23 T2-4).
  *
  * Money is asked about first: switching on a job that costs money, and starting one by hand, show
  * what a run costs in a confirm. A free job needs no confirm. What the backend says about a start
  * that didn't happen is shown as it is: it is already in plain words.
  */
-import { CircleCheck, CircleX, Play } from 'lucide-react'
+import { CircleCheck, CircleX, Play, TriangleAlert } from 'lucide-react'
 import { useId, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { toast } from 'sonner'
@@ -137,9 +139,23 @@ function JobRow({ schedule }: { schedule: Schedule }) {
             <span className="text-caption text-muted-foreground">Free</span>
           )}
         </span>
+        {schedule.summary ? (
+          <span className="text-caption text-pretty text-muted-foreground">{schedule.summary}</span>
+        ) : null}
         <span className="text-caption text-muted-foreground">
           {schedule.when}, Melbourne time. <LastStart schedule={schedule} />
         </span>
+        {estimate?.problem ? (
+          // Why it wouldn't start now, like email not switched on for the calls reminder (PLAN-V23
+          // T2-4). A free job has no confirm to say it in, so the row says it.
+          <span
+            data-slot="schedule-problem"
+            className="flex items-start gap-1.5 text-caption text-review-ink"
+          >
+            <TriangleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+            <span>{estimate.problem}</span>
+          </span>
+        ) : null}
       </div>
       <Switch
         id={`${id}-on`}

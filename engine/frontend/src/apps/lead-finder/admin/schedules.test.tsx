@@ -85,6 +85,40 @@ function hubspot(changes: Partial<Schedule> = {}): Schedule {
   }
 }
 
+/**
+ * Call logs' reminder (PLAN-V23 T2-3): free, off, on weekdays at 4:30 pm, and it can't go while
+ * email isn't switched on, in the backend's words (`calls_nudge.py`).
+ */
+function callsNudge(changes: Partial<Schedule> = {}): Schedule {
+  return {
+    ...hubspot(),
+    id: '5d1b7c44-0000-4000-8000-000000000003',
+    project: 'companies',
+    job: 'companies.calls_nudge',
+    name: 'Call logs: calls not sent yet',
+    enabled: false,
+    at: '16:30',
+    when: 'Every day at 4:30 pm',
+    summary:
+      "Emails each person whose calls aren't in HubSpot yet, on weekdays, with a link to Call logs. Once a day a person.",
+    last_run_at: null,
+    last_status: null,
+    last_kind: null,
+    last_id: null,
+    estimate: {
+      valid: true,
+      problem: "Email isn't switched on yet, so the reminder can't go. An admin can set it up.",
+      typical_usd: '0.00',
+      worst_usd: '0.00',
+      per_month_usd: '0.00',
+      cap_usd: '0.00',
+      daily_left_usd: '0.00',
+      basis: 'The reminder is free: one email a person, with no Claude and no HubSpot.',
+    },
+    ...changes,
+  }
+}
+
 function cityPlan(changes: Partial<RoundCity>[] = []): RoundCity[] {
   return CITIES.map((city, index) => ({
     city,
@@ -143,6 +177,8 @@ function mockApi(
     put?: (body: Record<string, unknown>) => Response
     run?: (call: Call) => Response
     patch?: (call: Call) => Response
+    /** The other jobs, after the city schedules: the HubSpot copy unless said. */
+    others?: Schedule[]
   } = {},
 ): Call[] {
   const calls: Call[] = []
@@ -156,7 +192,9 @@ function mockApi(
       const call: Call = { method: request.method, path: url.pathname, body }
       calls.push(call)
       if (call.method === 'GET' && call.path === '/api/v1/schedules') {
-        return Response.json({ items: [...CITIES.map((_, i) => citySchedule(i)), hubspot()] })
+        return Response.json({
+          items: [...CITIES.map((_, i) => citySchedule(i)), ...(answers.others ?? [hubspot()])],
+        })
       }
       if (call.path === '/api/v1/schedules/lead-finder') {
         if (call.method === 'GET') return Response.json(current)
@@ -431,6 +469,43 @@ describe('the other jobs', () => {
     await waitFor(() => {
       expect(sent(calls, 'PATCH')[0]?.body).toEqual({ at: '05:30' })
     })
+  })
+
+  it("says what the calls reminder does, and why it can't go while email is off (PLAN-V23 T2-4)", async () => {
+    const calls = mockApi(round(), {
+      others: [hubspot(), callsNudge()],
+      patch: () => Response.json(callsNudge({ enabled: true })),
+    })
+    const { user } = renderTab()
+    const jobs = await screen.findByRole('list', { name: 'Other jobs' })
+    const row = within(jobs).getByText('Call logs: calls not sent yet').closest('li')
+    if (!(row instanceof HTMLElement)) throw new Error('no row')
+    expect(within(row).getByText('Free')).toBeInTheDocument()
+    expect(
+      within(row).getByText(
+        "Emails each person whose calls aren't in HubSpot yet, on weekdays, with a link to Call logs. Once a day a person.",
+      ),
+    ).toBeInTheDocument()
+    expect(row).toHaveTextContent('Every day at 4:30 pm, Melbourne time. Never run.')
+    const problem = row.querySelector('[data-slot=schedule-problem]')
+    expect(problem).toHaveTextContent(
+      "Email isn't switched on yet, so the reminder can't go. An admin can set it up.",
+    )
+    // A status has an icon and a word.
+    expect(problem?.querySelector('svg')).not.toBeNull()
+    // Free, so on at once, with no confirm.
+    await user.click(within(row).getByRole('switch', { name: 'Call logs: calls not sent yet' }))
+    await waitFor(() => {
+      expect(sent(calls, 'PATCH')[0]?.body).toEqual({ enabled: true })
+    })
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+  })
+
+  it('says nothing more for a job that would start now', async () => {
+    mockApi(round())
+    renderTab()
+    const jobs = await screen.findByRole('list', { name: 'Other jobs' })
+    expect(jobs.querySelector('[data-slot=schedule-problem]')).toBeNull()
   })
 
   it('does not list the city schedules again', async () => {
