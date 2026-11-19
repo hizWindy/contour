@@ -5,8 +5,8 @@ This plan refines the Assistant that PLAN-V22 built. The mic gets better at name
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
-- **Last updated:** 19 Nov 2026 (written, nothing built).
-- **Progress:** Before the build: 0 of 3. Part 1: 0 of 7. Part 2: 0 of 5. Part 3: 0 of 5. Part 4: 0 of 6. M1 to M4: 0 of 4.
+- **Last updated:** 19 Nov 2026 (S0, and Part 1's backend: T1-1 to T1-4).
+- **Progress:** Before the build: 1 of 3. Part 1: 4 of 7. Part 2: 0 of 5. Part 3: 0 of 5. Part 4: 0 of 6. M1 to M4: 0 of 4.
 - **Sources:**
   - Al-khair's ideas and answers in chat on 19 Nov (the second session that day);
   - the meeting with Levi on 18 Nov (Gemini's notes in `minutes of meeting/`);
@@ -195,7 +195,7 @@ One session builds every step, in order: S0, Part 1, Part 2, Part 3, then Part 4
 
 ## Before the build starts
 
-- [ ] **S0. The branch and the copy.** Waits for `merge v22`.
+- [x] **S0. The branch and the copy.** Done 19 Nov 2026 (`0730da1`).
   - Make `plan-v23` from `master` in `../contour-v23`. Don't switch the main folder's branch.
   - Its first commit holds this plan and a line for it in `CLAUDE.md`. The plan was written in the main folder and not committed, so copy it in, then delete the main folder's untracked copy. (`CLAUDE.md` wasn't touched in the main folder, so `merge v22` could move `master`.)
   - Make the database `leadfinder_v23`, and check the newest migration.
@@ -274,20 +274,20 @@ All new routes sit under `/api/v1/companies/assistant/`. A route that changes so
 
 ## Part 1: names and hearing
 
-**Progress:** 0 of 7.
+**Progress:** 4 of 7.
 
-- [ ] **T1-1. The hint list** (backend). `apps/companies/assistant_names.py` and its route.
+- [x] **T1-1. The hint list** (backend). Done 19 Nov 2026 (`e6183ec`, `9d7ee02`). `apps/companies/assistant_names.py` and its route.
   - Choice 1's order, from our copy, Today's reads and the learned names. No HubSpot request.
   - **Done when:** tests with made-up data pass: the screen's company and its people come first; another rep's companies stay out unless I called them; teammates are in; the list stops at `name_hints_max`; and a second ask inside 5 minutes reads nothing new.
-- [ ] **T1-2. Learned names** (backend, with the plan's one migration).
+- [x] **T1-2. Learned names** (backend, with the plan's one migration). Done 19 Nov 2026 (`7a559e6`, `2ab6515`). The Settings list is website work, built with T1-5.
   - The migration `0026_v23_names_and_hubspot_user`: the learned names table, and the accounts' "No HubSpot user" mark.
   - The routes of contract part 2. Settings lists the learned names, with Remove.
   - **Done when:** tests pass: a pair is saved once; the same words for two companies give both; an Admin removes one; a Viewer can't save one; and the migration goes up and down cleanly.
-- [ ] **T1-3. The command step finds better** (backend).
+- [x] **T1-3. The command step finds better** (backend). Done 19 Nov 2026 (`7f75eb2`, `b37d833`).
   - Learned names first, then the close-name match, then a live HubSpot search, which reads a found company into our copy.
   - `unclear` when the words don't make a command (choice 4).
   - **Done when:** FakeClaude and fake HubSpot tests pass: "North Wind" with a learned pair finds Northwind; a company only in HubSpot is found and is then in our copy; nothing anywhere gives `can_add`; garbled words give `unclear`; and none of these writes to HubSpot.
-- [ ] **T1-4. Adding a company** (backend). Contract part 4, through the writer's duplicate check.
+- [x] **T1-4. Adding a company** (backend). Done 19 Nov 2026 (`bbc0968`, `71b854e`). Contract part 4, through the writer's duplicate check.
   - **Done when:** tests pass: a close name in HubSpot shows in `similar`; the same name and city gives 409; writing off gives 409; a repeated key makes one company; the new company is in our copy at once; and each write is a row in `core.hubspot_writes`.
 - [ ] **T1-5. Hearing on the website.**
   - The hint list loads with the voice bar (after the page is idle, or on the first V), and the name fix uses it on every page.
@@ -303,7 +303,16 @@ All new routes sit under `/api/v1/companies/assistant/`. A route that changes so
 
 ### Part 1 Log
 
-- Nothing yet.
+- 19 Nov 2026, T1-1 to T1-4 (backend): built in 8 commits. Each "Done when" holds, in tests with made-up names only. Nothing was written to HubSpot. `leadfinder_v23` is at `0026`.
+- T1-7's backend half (through `heavy.sh`): ruff, the format check and mypy clean (433 files). Fast tests: 3,548 passed, 28 skipped. Companies tests: 183, 176 and 280 passed. The contract gate (`RUN_GATES=1`): 110 passed, 25 skipped (stubs for routes now built). The other database tests: 303, 350 and 405 passed. None failed. `test_companies_speed` failed once on stale statistics in the test database (405 to 420 ms against 300); after `VACUUM ANALYZE` it took 52 ms, the same as the old code.
+- Learned names: "case and spaces aside" means lower case with one space between words, so "North Wind" and "Northwind" differ, and that pair is kept. A pair needs a word of 2 letters or more. One set of words names at most 5 companies. A pair can point to a HubSpot company, or to a Lead Finder lead the person can see. Emails and phone numbers are refused.
+- The hint list refuses Viewers (403), like the command step. It takes at most 10 people, 5 a meeting, 25 companies called, 25 owned and 20 learned. "Called" means my call notes and my HubSpot calls. Companies drop "Pty Ltd", and owners with no name are left out. `name_hints_max` is 5 to 200, default 50 (**TBC** after S1).
+- The migration adds the "No HubSpot user" column only. T3-1 sets its rules; the owners sync's email match should skip a marked account (**TBC**, T3-1).
+- Finding a company: the one on screen when the words are close to it, then learned names, then our copy, then HubSpot's search (each word as `word*`, then the words run together; at most 10 read and 5 kept; 8 s at most, **TBC**). How HubSpot splits names into words is **TBC** on the live site. If HubSpot doesn't answer, the answer is as before, with no `can_add`.
+- `unclear` without asking Claude: when no word of 2 letters or more is left once fillers like "um" are dropped. The prompt is now `assistant-2`. The command step doesn't pick out a city; the card's Add form takes one (**TBC**: should the AI hear one?).
+- Adding a company: 409 `company_exists` covers the same name in any city, because the writer's duplicate check matches the name alone (**TBC**, Al-khair: refuse, as built, or add?). Its words: "HubSpot already has {name} in {city}, so it isn't added again. Use it from the list." (**TBC**). Only the name and city go to HubSpot, with no owner and no note (**TBC with Levi**: who owns a company added from the card?). A key that can't create companies answers like writing off (409). One add at a time, and 5 a minute a person, both kept in memory (**TBC**). The writer's `preview_write` gained an opt-in `release` flag, so an add holds no database connection while HubSpot answers.
+- The `security-check` on T1-4: no blocker. Two minor notes: the one-add lock waits on HubSpot, so a slow HubSpot delays other people's adds; and if an add times out and someone makes the same name in HubSpot before the retry, the retry fills that company's empty city (the writer's rule, as for the Lead Finder).
+- `from_hubspot` and `can_add` are optional in the website's types (the API always sends them), so the old test data still type-checks.
 
 ## Part 2: alerts
 
@@ -433,3 +442,10 @@ All new routes sit under `/api/v1/companies/assistant/`. A route that changes so
 ## Log
 
 - 19 Nov 2026: written from Al-khair's chat on 19 Nov (the second session that day). Nothing built. Not committed: S0 copies it into `plan-v23`. `CLAUDE.md` gets its line at S0, so the main folder stays clean for `merge v22`.
+- 19 Nov 2026, S0: `plan-v23` made from `master` (`475f4f1`) in `../contour-v23`. Its first commit (`0730da1`) holds this plan and its line in `CLAUDE.md`. The main folder's untracked copy was deleted after a byte-for-byte check. Before anything was built on that commit, the plan's example company, a real one in our HubSpot copy, was swapped for the made-up "Northwind", as in PLAN-V22's name swap.
+- S0: the database `leadfinder_v23` is a copy of `leadfinder_v22`, at `0025_v19_roles_access`. The copy needed `max_parallel_maintenance_workers=0`, because Docker's 64 MB shared memory was too small for a parallel index build. Fast backend tests on `plan-v23`: 3,543 passed, 28 skipped (219 s).
+- S0: no uncommitted work in `contour-v22` or `contour-v22-web`. PLAN-V22's open steps (the looks at T2-2, T2-3, the bar and the card; the tries of T3-2 and T3-5; T3-6) touch the Assistant code this plan changes, so a fix from them should land on `plan-v23`, or be joined at `merge v23`.
+- S0, live: `master` `475f4f1` was deployed on 19 Nov at 22:56 Melbourne time (a manual deploy), so live runs PLAN-V21 and PLAN-V22. The live switches (DigitalOcean's app settings, read on 19 Nov, looking only, plus PLAN-V22's S0 read the same day): `EMAIL_PROVIDER` isn't set, so email goes to the log only (off); HubSpot writing on; the AI sort on; `VOICE_TOOL=browser_service` with `BROWSER_SPEECH_OK=true`. Whether the key can create companies wasn't read, because Chrome's extension wasn't connected; S2's free `hubspot-check` reads it (**TBC**).
+- How the build runs, for speed (Al-khair's "faster", 19 Nov): the backend steps are built on `plan-v23` in `../contour-v23`. The website steps are built at the same time in a second copy, `../contour-v23-web` (a detached HEAD, no branch), and their commits are brought into `plan-v23` with `git cherry-pick`, so `plan-v23` stays one straight line.
+- S1's page is ready, never merged: `plan/shots/v23/s1-test/` (git ignores `plan/shots/`); its `README.md` says how to start it. Read on 19 Nov (Chrome 157.0.8103.79 and Edge 157.0.4341.60 here; MDN, the spec draft of 27 Oct 2026, and Chromium's source at 157): Chrome takes hints (`phrases`) only with `processLocally` on, and refuses them otherwise (`phrases-not-supported`). There is no Australian on-device model: Chrome uses its US English one for any English. On-device confidence is always 1.0, so choice 4's level can only come from server numbers. `processLocally` off doesn't force the server: Chrome uses an installed model anyway, so the app may already run on-device on this laptop (the model has been here since 14 Nov; not confirmed yet by a test). That changes W2's wording. The download can't be timed here (already installed: 34.8 MB plus 193.2 MB). Edge Stable has no on-device mode, so its part of S1 is server only.
+- S2's script is ready, never merged: `plan/shots/v23/s2/s2.sh` (`info`, `make`, `second`, `check`, `delete`). It loads the HubSpot key into its own process only. Al-khair's HubSpot user is `101520532`.
