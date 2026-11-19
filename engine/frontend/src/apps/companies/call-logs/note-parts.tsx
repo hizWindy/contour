@@ -24,7 +24,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import type { CallNoteChange, CallNoteTask, NoteField, TaskKind } from '@/api/types'
 import { Segmented } from '@/components/motion'
 import { Button } from '@/components/ui/button'
@@ -614,9 +614,11 @@ function TaskRow({
   onSave,
   onRemove,
   onCancel,
+  forBox,
 }: {
   task: CallNoteTask
   index: number
+  forBox?: ((task: CallNoteTask) => ReactNode) | undefined
   editing: boolean
   today: string
   onSave: (task: CallNoteTask) => void
@@ -680,7 +682,11 @@ function TaskRow({
           onCancel={onCancel}
         />
       </div>
-      <p className="text-caption text-muted-foreground">{forWhom(task.owner)}</p>
+      {forBox ? (
+        forBox(task)
+      ) : (
+        <p className="text-caption text-muted-foreground">{forWhom(task.owner)}</p>
+      )}
     </li>
   )
 }
@@ -823,9 +829,14 @@ interface TaskListProps {
   /** The whole list after an edit: one changed, added or removed. */
   onSave: (tasks: CallNoteTask[], removed?: CallNoteTask) => void
   onCancel: () => void
+  /**
+   * While editing, in place of a follow-up's "For you" line: the review card's "For" box, for
+   * someone with no HubSpot user (PLAN-V23 T3-4).
+   */
+  forBox?: ((task: CallNoteTask) => ReactNode) | undefined
 }
 
-export function TaskList({ tasks, editing, today, onSave, onCancel }: TaskListProps) {
+export function TaskList({ tasks, editing, today, onSave, onCancel, forBox }: TaskListProps) {
   const titleId = useId()
   if (tasks.length === 0 && !editing) return null
   return (
@@ -852,6 +863,7 @@ export function TaskList({ tasks, editing, today, onSave, onCancel }: TaskListPr
                 )
               }}
               onCancel={onCancel}
+              forBox={forBox}
             />
           ))}
         </ul>

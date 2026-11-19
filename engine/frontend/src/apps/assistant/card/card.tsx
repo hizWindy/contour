@@ -65,6 +65,7 @@ import { NOT_CHANGED } from '@/apps/companies/call-logs/words'
 import type { MicEnv } from '@/apps/companies/call-notes/mic/session'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import { problemWords } from '@/apps/companies/call-notes/mic/words'
+import { useNoHubSpotUser } from '@/auth/hubspot-user'
 import { MicSheet, MicSheetTitle } from '@/components/motion/mic-sheet'
 import { useStill } from '@/components/motion/use-still'
 import { Button } from '@/components/ui/button'
@@ -100,6 +101,7 @@ import { CARD_TIMES, type CardTimes } from './times'
 import { HintBar, ListenStrip, PartProblem, VoiceStrip } from './parts'
 import { previewEmail, previewTask, saveNote, sendDraft, patchNote, type SendTools } from './send'
 import { openCard, type CardRequest } from './store'
+import { isNoHubSpotUser, needsTeammate } from './teammate-rules'
 import {
   CALL_KEPT,
   CANCEL,
@@ -166,9 +168,12 @@ function stripProblem(problem: BarProblem): string {
   }
 }
 
-/** A refusal the preview gives (a 4xx): the send would be refused too, so it waits. */
+/**
+ * A refusal the preview gives (a 4xx): the send would be refused too, so it waits. A task with no
+ * one to do it isn't said here: its "For whom" says it, with the team list (PLAN-V23 T3-4).
+ */
 function refusal(error: unknown): string | null {
-  if (!error || isAbort(error)) return null
+  if (!error || isAbort(error) || isNoHubSpotUser(error)) return null
   const problem = toApiProblem(error)
   if (problem.status < 400 || problem.status >= 500 || problem.status === 429) return null
   return [problem.title, problem.detail].filter(Boolean).join('. ')
@@ -263,6 +268,8 @@ interface Latest {
   today: string
   note: CallNoteOut | undefined
   outcomes: readonly string[]
+  /** A teammate is still to pick (PLAN-V23 T3-4): Send goes there first. */
+  teammate: boolean
 }
 
 function DraftCard({
@@ -389,7 +396,17 @@ function DraftCard({
         ? previewProblem === null && taskPreview.data?.can_write !== false
         : previewProblem === null && emailPreview.data?.can_send !== false
 
-  const latest = useRef<Latest>({ draft, ready, today, note: note.data, outcomes: [] })
+  // No HubSpot user (PLAN-V23 T3-4, choice 15): a follow-up, or a task for yourself, needs a
+  // teammate first. The server's refusal of a task says so too, if this page didn't know yet.
+  const noUser = useNoHubSpotUser()
+  const teammate =
+    draft.action === 'log_call'
+      ? noUser && note.data !== undefined && needsTeammate(note.data.tasks)
+      : draft.action === 'task' &&
+        draft.forWhom === null &&
+        (noUser || isNoHubSpotUser(taskPreview.error))
+
+  const latest = useRef<Latest>({ draft, ready, today, note: note.data, outcomes: [], teammate })
   useLayoutEffect(() => {
     latest.current = {
       draft,
@@ -397,6 +414,7 @@ function DraftCard({
       today,
       note: note.data,
       outcomes: options.data?.outcomes ?? [],
+      teammate,
     }
   })
 
@@ -491,7 +509,7 @@ function DraftCard({
     stopListening()
     leaveCallBox()
     const { draft: now, ready: canSend, today: day } = latest.current
-    const box = missingOf(now, day)
+    const box = missingOf(now, day) ?? (latest.current.teammate ? 'for-whom' : null)
     if (box) {
       setChecked(true)
       focusBox(box)
@@ -793,6 +811,7 @@ function DraftCard({
           mic={mic}
           today={today}
           checked={checked}
+          needsTeammate={teammate}
         />
       )
       break

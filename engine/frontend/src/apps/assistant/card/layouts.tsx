@@ -52,6 +52,7 @@ import {
   UNDO,
 } from '@/apps/companies/call-logs/words'
 import { FIND_COMPANY, LOOKING, NO_MATCH } from '@/apps/companies/words'
+import { useNoHubSpotUser } from '@/auth/hubspot-user'
 import { ChipGroup, Segmented } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -74,6 +75,8 @@ import {
   type TaskDraft,
 } from './draft'
 import { BoxField, CardLine, ChoiceList, PartProblem } from './parts'
+import { FollowUpFor, TeammatePicker } from './teammate'
+import { GIVE_IT_TO_A_TEAMMATE, ownerIdOf } from './teammate-rules'
 import {
   ADD,
   ADD_PLACEHOLDER,
@@ -234,16 +237,27 @@ function changesPatch(changes: readonly CallNoteChange[]): CallNotePatch {
   }
 }
 
-/** The whole list of follow-ups, as the server takes it. A part made here goes with no id. */
-function tasksPatch(tasks: readonly CallNoteTask[]): CallNotePatch {
+/**
+ * The whole list of follow-ups, as the server takes it. A part made here goes with no id. Each keeps
+ * the teammate it is for (PLAN-V23 T3-4): one left out is the rep's own, so a list sent without
+ * them would clear them.
+ */
+function tasksPatch(
+  tasks: readonly CallNoteTask[],
+  ownerOf: (task: CallNoteTask) => string | null,
+): CallNotePatch {
   return {
-    tasks: tasks.map((task) => ({
-      id: task.id.startsWith(NEW_PART) ? null : task.id,
-      subject: task.subject,
-      due: task.due,
-      due_words: task.due_words,
-      kind: task.kind,
-    })),
+    tasks: tasks.map((task) => {
+      const owner = ownerOf(task)
+      return {
+        id: task.id.startsWith(NEW_PART) ? null : task.id,
+        subject: task.subject,
+        due: task.due,
+        due_words: task.due_words,
+        kind: task.kind,
+        ...(owner ? { owner_id: owner } : {}),
+      }
+    }),
   }
 }
 
@@ -267,6 +281,9 @@ interface CallBoxesProps {
  */
 function CallBoxes({ note, fresh, options, today, onEdit, onLeaveBox }: CallBoxesProps) {
   const client = useQueryClient()
+  // No HubSpot user (PLAN-V23 T3-4): each follow-up needs a teammate, picked from the team list.
+  const noUser = useNoHubSpotUser()
+  const team = useTeam({ enabled: noUser })
   const outcomeId = useId()
   const storedSummary = note.call.summary.trim()
   const outcome = note.call.outcome
@@ -286,8 +303,10 @@ function CallBoxes({ note, fresh, options, today, onEdit, onLeaveBox }: CallBoxe
   const saveChanges = (next: CallNoteChange[]): void => {
     onEdit(changesPatch(next), (now) => ({ ...now, changes: next }))
   }
-  const saveTasks = (next: CallNoteTask[]): void => {
-    onEdit(tasksPatch(next), (now) => ({ ...now, tasks: next }))
+  const saveTasks = (next: CallNoteTask[], picked?: { task: string; owner: string }): void => {
+    const ownerOf = (task: CallNoteTask): string | null =>
+      task.id === picked?.task ? picked.owner : ownerIdOf(task, team.data)
+    onEdit(tasksPatch(next, ownerOf), (now) => ({ ...now, tasks: next }))
   }
   /** Undo puts a removed part back where it was, in the note as it is then, as a new part. */
   const offerUndo = <Part extends { id: string }>(
@@ -383,6 +402,23 @@ function CallBoxes({ note, fresh, options, today, onEdit, onLeaveBox }: CallBoxe
           }
         }}
         onCancel={onLeaveBox}
+        forBox={
+          noUser
+            ? (task) => (
+                <FollowUpFor
+                  task={task}
+                  onPick={(member) => {
+                    saveTasks(
+                      note.tasks.map((one) =>
+                        one.id === task.id ? { ...one, owner: member.name } : one,
+                      ),
+                      { task: task.id, owner: member.owner_id },
+                    )
+                  }}
+                />
+              )
+            : undefined
+        }
       />
     </div>
   )
@@ -615,6 +651,8 @@ export interface TaskLayoutProps {
   today: string
   /** An empty box shows as one still to fill (an empty card: once Send was tried). */
   checked?: boolean
+  /** It can't be for you: no HubSpot user, so "For whom" asks for a teammate (PLAN-V23 T3-4). */
+  needsTeammate?: boolean
 }
 
 export function TaskLayout({
@@ -624,6 +662,7 @@ export function TaskLayout({
   mic,
   today,
   checked = true,
+  needsTeammate = false,
 }: TaskLayoutProps) {
   const due = dueOf(draft, today)
   const change = (part: Partial<TaskDraft>): void => {
@@ -698,6 +737,25 @@ export function TaskLayout({
               }}
             />
           </ul>
+        </div>
+      ) : needsTeammate ? (
+        <div className="flex flex-col gap-1">
+          <span className="text-caption text-muted-foreground">{FOR_WHOM}</span>
+          <TeammatePicker
+            question={GIVE_IT_TO_A_TEAMMATE}
+            box="for-whom"
+            onPick={(member) => {
+              change({
+                forWhom: recipientOf({
+                  heard: member.name,
+                  found: member,
+                  choices: [],
+                  address: null,
+                  problem: null,
+                }),
+              })
+            }}
+          />
         </div>
       ) : (
         <CardLine label={FOR_WHOM}>{FOR_YOU}</CardLine>
