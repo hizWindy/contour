@@ -5,8 +5,8 @@ This plan builds what Levi asked for on 18 Nov: fewer clicks, and voice for the 
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
-- **Last updated:** 19 Nov 2026 (T1-7, T3-3 and T3-4 done, T3-5 built).
-- **Progress:** Before the build: 1 of 2 (S1 waits for Al-khair at the keyboard). Part 1: 7 of 7. Part 2: 1 of 4 (T2-2 and T2-3 built, waiting for Al-khair's look). Part 3: 3 of 6 (T3-2 and T3-5 built, waiting for Al-khair to try them in the real page). M1 to M4: 0 of 4.
+- **Last updated:** 19 Nov 2026 (T2-4 done; T3-6 run, two points wait for Al-khair).
+- **Progress:** Before the build: 1 of 2 (S1 waits for Al-khair at the keyboard). Part 1: 7 of 7. Part 2: 2 of 4 (T2-2 and T2-3 built, waiting for Al-khair's look). Part 3: 3 of 6 (T3-2 and T3-5 built, waiting for Al-khair to try them in the real page; T3-6 waits for his call on two points). M1 to M4: 0 of 4.
 - **Sources:**
   - the meeting with Levi on 18 Nov (Gemini's notes in `minutes of meeting/`, which git ignores);
   - Al-khair's answers in chat (19 Nov);
@@ -374,7 +374,7 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
 
 ## Part 2: the Assistant tab and Today
 
-**Progress:** 1 of 4. Every step is `frontend-agent` work.
+**Progress:** 2 of 4. Every step is `frontend-agent` work.
 
 - [x] **T2-1. The Assistant module.** Done 19 Nov 2026 (`d956204`, joined in `68fe1b3`). Today is a placeholder page until T2-2.
   - `apps/assistant/module.tsx`. `MODULES` becomes Companies, Assistant, Lead Finder.
@@ -395,7 +395,7 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
   - **Done when:** tests cover each part, each state, each key, Done and Undo, and Sync. Al-khair has seen it.
 - [ ] **T2-3. Home.** The Assistant card and the Companies card (choice 5). Built 19 Nov 2026 (`9cbfa72`, `3b7b657` on `plan-v22-web`), waiting for Al-khair's look.
   - **Done when:** tests pass, and Al-khair has seen it.
-- [ ] **T2-4. Part 2 check.** Lint, types, the tests, the build and `node scripts/bundle-report.js` (the first visit may grow by 1 kB at most). The `design-review` skill on Today and Home. Each screen at 1440, 1280, 768 and 390px, light and dark, by keyboard only.
+- [x] **T2-4. Part 2 check.** Done 19 Nov 2026, with T3-6's checks (Part 3 Log). Lint, types, the tests, the build and `node scripts/bundle-report.js` (the first visit may grow by 1 kB at most). The `design-review` skill on Today and Home. Each screen at 1440, 1280, 768 and 390px, light and dark, by keyboard only.
   - **Done when:** all checks pass, and the numbers are in the Log.
 
 ### Part 2 Log
@@ -442,6 +442,7 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
   - **Done when:** a test for each passes with `mockApi`, and Al-khair has tried each one in the real page.
 - [ ] **T3-6. Part 3 check.** Lint, types, the tests, the build and the bundle report. The `design-review` skill on the bar and the card. The `speed-check` skill: V shows the bar within 100ms, and there are no dropped frames at 4x CPU slowdown. Each screen at 1440, 1280, 768 and 390px, light and dark, by keyboard only, and with reduced motion. A screen reader hears "Listening", and the card's read-back.
   - **Done when:** all checks pass, and the numbers are in the Log.
+  - 19 Nov 2026: all pass but two, which wait for Al-khair's call (Part 3 Log). At 4x CPU the card's first frame takes 110 to 150 ms (one long frame as it appears, none while it moves). And no real screen reader was used: the read-back and "Listening" were checked from the code and the tests only.
 
 ### Part 3 Log
 
@@ -457,6 +458,20 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
   - **Where things are:** `apps/assistant/card/`: `card.tsx` (its keys, Esc, the send check and V), `hold.tsx` (the 5 second hold), `listen.ts` ("send it"), `send.ts`, `draft.ts` and `drafts.ts` (the browser's drafts), `dictation.tsx` and `host.tsx`. The bar sends `card` (`voice/bar-session.ts`), and the seam opens the card (`voice/hand-over.ts`). The pre-read page and `send-dialog.tsx` take Enter. `test/mock-api.ts` now records headers.
   - **TBC at Al-khair's look:** every new word in `card/words.ts`; the card's width (32rem) and the countdown bar (the progress colour, an even speed). The call card is read-only: V can change the follow-up's day, the outcome and the summary, and a follow-up added by voice is called "Follow up". A typed command saves its call with `source: typed`. "New pre-read" opens Meetings, and its dialog doesn't open by itself.
   - **For Al-khair:** the pre-read's send has no 5 second hold, because its send dialog is already the confirmation (choice 22 says every send waits; recommended: keep it so, and check it at the look). Dictation opens Log call only for a rep with the Call logs tick and call notes on; anyone else sees "can't read commands yet".
+- 19 Nov 2026, T2-4 and T3-6, the closing checks (`df8c710`, `d9d469f`, `ad8af13`, `3b450c8`, `068a8d9` by the card's builder, and `b6ea9bf` by the lead session, all on `plan-v22-web`):
+  - **The first visit:** back to 39 files, 247,960 bytes gzip (769,066 raw), under the plan's budget (247,028 + 1 kB). To get there, the card loads with the voice bar instead of as its own file: the bar's late file is 50 kB gzip with the card in it (17 kB of its own), after the page is idle or on the first V (**TBC** at the look). The dictation panel loads only when needed (61 kB).
+  - **The 5 slow tests:** they typed long text with a wait on each key. They now type with no wait, and no time limit was raised: for example 2,355 to 577 ms. The Enter change on the pre-read page wasn't the cause.
+  - **The tests:** 2,293 passed, 0 failed, in 156 files, 80 seconds. Lint, types and the build pass.
+  - **The `design-review` skill** (a fresh `frontend-agent`, read-only) on Today, Home, the bar and the card: 11 findings, all fixed. The 3 blockers: on a phone the pinned Speak bar covered Today's last row; the bar's text line and "Type a change" were 14px on touch, so iPhones zoom in; a call's read-back didn't follow a change. The rest: Send looked ready while a call sorts, two buttons were 40px on touch, a screen reader didn't hear the "send it" strip or why there's no mic, the countdown ran in JavaScript each frame, "Press V" showed on a phone ("Tap Speak" there now, **TBC**), two skeletons weren't the real size, and nested corners. Esc now undoes a running hold (**TBC**). The app's toast buttons stay 32px on touch (a proposal for Al-khair, app-wide). The lead session also made a changed read-back leave out this year, as the server's does ("Mon 30 Nov").
+  - **The browser pass** (Playwright from the backend's own packages, script `v22-shots.py` in the session's scratchpad; screenshots in `plan/shots/v22/`): the real backend of `../contour-v22` on 8091 with no keys, and the website of `../contour-v22-web` on 5261. Made-up answers stood in only for Today, the command step, the two previews, the team list and Done, because without HubSpot and Claude they come back empty.
+    - Home, Today, the bar and the task and email cards at 1440, 1280, 768 and 390px, light and dark: no page scrolls sideways. The site opens light; dark is the person's choice, kept in the browser.
+    - Keys: J and K move the active row, D ticks it done (the toast says "Ticked done in HubSpot: ..." with Undo), V opens the bar, a typed command and Enter open the card, and Esc cancels it with "Not sent. Your draft is kept in this browser."
+    - V to the bar's first frame, after the page is idle: 16 ms (the aim is 100 ms).
+    - 4x CPU, on the production build (`vite preview` on 5262): the bar's first frame takes 50 to 83 ms, and the card's 110 to 150 ms, as each appears; then no long frame while either moves. At normal speed that is about 15 to 40 ms. A fix, if wanted: draw the card a moment later, in a React transition, so its first frame is cut into small pieces (it changes when the card opens, and its tests).
+    - Reduced motion: 40 ms after V, the bar is already in place; without it, it is still rising.
+    - Tab order: 18 Tabs go through the menu and the top bar before Today's rows. The app's frame has no "skip to the page" link (older than this plan; a proposal).
+  - **TBC at Al-khair's look, from the browser pass:** on a phone with no speech service, the bar says "Type what to do" three times (its title, the box's hint and the line under it); on a phone, the pinned Speak button shows under the open bar.
+  - **Not checked:** a real screen reader, a real phone or iPhone, and the real mic.
 
 ## Merge, checks and going live
 
@@ -524,3 +539,4 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
 - 19 Nov 2026, after T1-4 and T3-2: the safety check refused joining `plan-v22-web` into `plan-v22`, because the `git-workflow` skill says a merge needs Al-khair's own word. So the copies stay apart until he says so. The website copy got the same two generated files as `4a70341` instead (`474a41a` on `plan-v22-web`, types and lint pass), so it can build Today and the tasks. Both sides match, so the join stays clean. Each later contract change is copied the same way. The website copy reads this plan from `../contour-v22`. Next: the backend builds T1-5, T1-6 and T1-7, and the website builds T2-2 and T2-3.
 - 19 Nov 2026, after T1-6 and T2-3: the laptop ran low on memory with both agents' test runs, and Claude Code stopped three of the backend's core test parts and the website's closing run. The website's run carried on without its shell and finished (Part 2 Log). Per the rule for stopped jobs, the core parts wait for Al-khair's word. The contract after T1-5 and T1-6 is copied to the website copy (`4e088cf`). Part 1's backend work is built. Next: the website builds T3-3 and T3-4 (the review card and sending), one agent at a time, to spare the memory.
 - 19 Nov 2026, after T3-5: T2-4 and T3-6 (the two closing checks) run together. First the code: the first visit back under the budget, the 5 slow tests made steady, and the `design-review` and `speed-check` skills on Today, Home, the bar and the card. Then the browser pass on the real backend of `../contour-v22` (port 8091) with the website of `../contour-v22-web` (port 5261), which also lets Al-khair look at every screen.
+- 19 Nov 2026, after the closing checks: everything that can be built without Al-khair is built. Left running for his look: the real backend of `../contour-v22` on port 8091 (no keys, database `leadfinder_v22`) and the website of `../contour-v22-web` on http://localhost:5261. Without the Claude key, a spoken or typed command goes to dictation (Log call opens with the words), so the review card shows only with M2's key. Waiting on him: the join of `plan-v22-web` into `plan-v22`, S1, his look at T2-2, T2-3 and the bar and card, T3-2's and T3-5's tries in the real page, T3-6's two points, then `merge v22`, M2 and `deploy v22`.
