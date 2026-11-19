@@ -261,7 +261,8 @@ interface CallBoxesProps {
  * A sorted call, each part a box to type in (PLAN-V23 T4-2; PLAN-V22 says typing always works where
  * voice does): how it went, the note, each change's new value, and each follow-up's words, kind and
  * day, with "Add a follow-up". They are Call logs' own fields (`note-parts.tsx`): each saves when
- * it is left, or on Enter in a one-line box, and Esc puts it back and leaves it. A part removed
+ * it is left, or on Enter in a one-line box. On the card, Esc leaves a box and keeps what was typed
+ * (choice 19; the card stops the field's own Esc, which on Call logs puts it back). A part removed
  * goes at once, with Undo in a toast, as on Call logs.
  */
 function CallBoxes({ note, fresh, options, today, onEdit, onLeaveBox }: CallBoxesProps) {
@@ -398,7 +399,7 @@ export interface CallLayoutProps {
   onOpenCallLogs: () => void
   /** A box typed in (PLAN-V23 T4-2). */
   onEdit: EditCall
-  /** Esc in a box: it is put back, and the focus leaves it. */
+  /** A box's own Esc, where it is reached: the focus leaves the box. */
   onLeaveBox: () => void
 }
 

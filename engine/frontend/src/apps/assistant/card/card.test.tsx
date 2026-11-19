@@ -527,16 +527,22 @@ describe('typing in a call, and Later (PLAN-V23 T4-2)', () => {
     expect(of(API.confirm)).toHaveLength(0)
   })
 
-  it('Esc in a call’s box puts it back and leaves the box; the next Esc is Later', async () => {
+  it('Esc in a call’s box leaves it and keeps what was typed (choice 19); the next Esc is Later', async () => {
     const { user, of } = show(typed(callCommand()), { answers: callAnswers() })
     const found = await card()
     const summary = await within(found).findByRole('textbox', { name: 'The note' })
     await user.click(summary)
-    await user.type(summary, ' Not this.')
+    await user.type(summary, ' Call back in March.')
     await user.keyboard('{Escape}')
     expect(screen.getByRole('dialog')).toBeInTheDocument()
-    expect(summary).toHaveValue('Jo says the lease ends in June 2027.')
     expect(within(found).getByRole('button', { name: 'Send' })).toHaveFocus()
+    // Kept, as the task's and the email's boxes keep theirs, and saved as it was left.
+    expect(summary).toHaveValue('Jo says the lease ends in June 2027. Call back in March.')
+    await waitFor(() => {
+      expect(of(notePath()).find((call) => call.method === 'PATCH')?.body).toEqual({
+        summary: 'Jo says the lease ends in June 2027. Call back in March.',
+      })
+    })
     await user.keyboard('{Escape}')
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).toBeNull()
@@ -544,7 +550,6 @@ describe('typing in a call, and Later (PLAN-V23 T4-2)', () => {
     expect(
       await screen.findByText('Kept in Call logs, to send with the others.'),
     ).toBeInTheDocument()
-    expect(of(notePath()).filter((call) => call.method === 'PATCH')).toHaveLength(0)
   })
 
   it('a task card keeps Cancel', async () => {

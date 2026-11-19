@@ -16,7 +16,7 @@
  * - **A call** is saved as the card opens (`POST /call-notes`, once its company is known), so the
  *   server sorts it while the rep reads. The card shows the sort when it is ready, with HubSpot's
  *   values now from a fresh `/call-notes/preview`. Each of its parts takes typing too (PLAN-V23
- *   T4-2): a box saves when it is left (`PATCH /call-notes/{id}`), and Esc in it puts it back.
+ *   T4-2): a box saves when it is left (`PATCH /call-notes/{id}`), and Esc leaves it, as above.
  * - **Later, not Cancel, on a call** (PLAN-V23 T4-2): Later, or Esc, keeps the call in Call logs'
  *   To confirm, to send with the others ("Kept in Call logs, to send with the others.").
  * - **Sending** (T3-4): Enter, a click on Send or "send it" closes the card and starts the 5 second
@@ -597,7 +597,7 @@ function DraftCard({
       })
   }
 
-  /** Esc in a call's box: it is put back, and the focus goes to Send. */
+  /** A call box's own Esc, where it is reached: the focus goes to Send. */
   const leaveBox = (): void => {
     sendButton.current?.focus()
   }
@@ -722,10 +722,11 @@ function DraftCard({
     }
     const active = document.activeElement
     if (active && card.current?.contains(active) && inTextBox(active)) {
-      // The first Esc leaves the box.
+      // The first Esc leaves the box (choice 19). A call's own box saves as it is left, so it keeps
+      // what was typed, as the task's and the email's boxes do: its own Esc (on Call logs, "put it
+      // back") isn't reached.
       event.preventDefault()
-      // A call's own box puts itself back first, then gives the focus to Send (`leaveBox`).
-      if (active.closest(CALL_EDIT)) return
+      if (active.closest(CALL_EDIT)) event.stopPropagation()
       sendButton.current?.focus()
     }
   }
