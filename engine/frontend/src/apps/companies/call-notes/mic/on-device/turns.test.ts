@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RATE, Resampler, TURN, TurnFinder, WINDOW, Windows } from './turns'
+import { padded, RATE, Resampler, TURN, TurnFinder, WINDOW, Windows } from './turns'
 
 /*
   Finding turns in the mic's sound (PLAN-V24 choice 24), with made-up chances of speech: no model.
@@ -70,6 +70,27 @@ describe('TurnFinder', () => {
     feed(finder, 0.9, 700)
     expect(msOf(finder.flush() ?? new Float32Array(0))).toBeGreaterThanOrEqual(700)
     expect(finder.flush()).toBeNull()
+  })
+})
+
+describe('padded', () => {
+  it('puts quiet on each side of a short turn, as the model hears it', () => {
+    const turn = new Float32Array(Math.round(0.8 * RATE)).fill(0.5)
+    const heard = padded(turn, 300)
+    const pad = Math.round(0.3 * RATE)
+
+    expect(heard).toHaveLength(turn.length + 2 * pad)
+    expect(heard.subarray(0, pad).every((sample) => sample === 0)).toBe(true)
+    expect(heard.subarray(pad, pad + turn.length)).toEqual(turn)
+    expect(heard.subarray(pad + turn.length).every((sample) => sample === 0)).toBe(true)
+  })
+
+  it('leaves a longer turn, and any turn for a model with no padding, as it is', () => {
+    const long = new Float32Array(Math.round((TURN.padUnderMs / 1000) * RATE)).fill(0.5)
+    const short = new Float32Array(Math.round(0.5 * RATE)).fill(0.5)
+
+    expect(padded(long, 300)).toBe(long)
+    expect(padded(short, 0)).toBe(short)
   })
 })
 

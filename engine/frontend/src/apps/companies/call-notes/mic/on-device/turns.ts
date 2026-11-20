@@ -30,6 +30,8 @@ export const TURN = {
   shortestMs: 250,
   /** A turn this long goes on to be written while the talk carries on. */
   longestMs: 20000,
+  /** A turn shorter than this may get quiet on each side before the model hears it (`padded`). */
+  padUnderMs: 1500,
 }
 
 const windows = (ms: number): number => Math.round(ms / WINDOW_MS)
@@ -97,6 +99,19 @@ export class TurnFinder {
     this.quiet = 0
     return sound
   }
+}
+
+/**
+ * A short turn with `padMs` of quiet on each side, as the model will hear it; a longer one as it is.
+ * Moonshine Base hears a short command better so ("Send it." was "Senator," without), Tiny worse:
+ * each model has its own (models.ts).
+ */
+export function padded(turn: Float32Array, padMs: number): Float32Array {
+  if (padMs <= 0 || (turn.length / RATE) * 1000 >= TURN.padUnderMs) return turn
+  const pad = Math.round((padMs / 1000) * RATE)
+  const out = new Float32Array(turn.length + 2 * pad)
+  out.set(turn, pad)
+  return out
 }
 
 /**

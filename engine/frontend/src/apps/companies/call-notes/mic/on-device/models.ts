@@ -23,10 +23,22 @@ import {
   type Device,
   type ModelName,
 } from './files'
-import { RATE } from './turns'
+import { padded, RATE } from './turns'
 
 /** Silero's own wrapper puts the last 64 samples of the window before in front of each window. */
 const CONTEXT = 64
+
+/**
+ * The quiet put on each side of a short turn (turns.ts, `padded`), per model: TBC at S2. Tried on
+ * 21 Nov with Windows' two voices saying 16 short commands ("Send it.", "Later.", "Cancel.", "Stop
+ * listening.", "That's all."): Moonshine Base heard 12 right with none, 16 with 300 ms or 500 ms;
+ * Tiny heard 14 with none, but 12 with 300 ms and 10 with 500 ms (it wrote nothing for some).
+ */
+const PAD_MS: Record<ModelName, number> = {
+  'moonshine-base': 300,
+  'moonshine-tiny': 0,
+  'whisper-base-en': 0,
+}
 
 /** Moonshine writes at most about 6 tokens a second of sound; more is a loop (its model card). */
 const tokensFor = (samples: number): number => Math.ceil((samples / RATE) * 6.5) + 4
@@ -121,7 +133,8 @@ export async function loadModels(
   return {
     device: used,
     detector: detectorFrom(vad),
-    words: async (sound) => {
+    words: async (turn) => {
+      const sound = padded(turn, PAD_MS[model])
       const result = await asr(sound, { max_new_tokens: tokensFor(sound.length) })
       const first = Array.isArray(result) ? result[0] : result
       return first?.text.trim() ?? ''
