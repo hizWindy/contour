@@ -374,6 +374,31 @@ describe('which mic', () => {
     expect(mic.live()).toBe(1)
   })
 
+  it('follows the mic when the one in use is unplugged, and says which (PLAN-V24 T1-2)', async () => {
+    const { mic, spies, user } = openCard({ devices: [HEADSET, LAPTOP_MIC] })
+    await speakNow()
+    act(() => {
+      mic.say('Jo wants a floor plan')
+      mic.unplug()
+    })
+    // A screen reader hears it once; the mic's row shows the new name.
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Speak now. Now using Microphone Array (Realtek).',
+      )
+    })
+    expect(screen.getByRole('dialog', { name: 'Speak now' })).toBeInTheDocument()
+    expect(screen.getByText('Microphone Array (Realtek)')).toBeInTheDocument()
+    expect(mic.live()).toBe(1)
+    act(() => {
+      mic.say('by Friday')
+    })
+    await user.keyboard('{Enter}')
+    await waitFor(() => {
+      expect(spies.onDone).toHaveBeenCalledWith('Jo wants a floor plan by Friday', [])
+    })
+  })
+
   it('uses the remembered mic, and the default one when it is gone', async () => {
     const mic = new FakeMic({ devices: [HEADSET] })
     mic.storage.set(MIC_KEY, 'mic-unplugged')

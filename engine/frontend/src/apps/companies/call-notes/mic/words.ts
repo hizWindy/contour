@@ -175,6 +175,14 @@ export function speakingFor(clock: string): string {
   return `Speaking for ${clock}`
 }
 
+/**
+ * The mic moved by itself (PLAN-V24 T1-2, "The mic changed"): a headset plugged in, or the mic in
+ * use gone. "Now using Headset Microphone (Jabra Evolve2 65)."
+ */
+export function nowUsing(mic: string): string {
+  return `Now using ${mic}.`
+}
+
 /** "Changed Vitara to Vitera." A name the mic heard nearly right, fixed once. */
 export function fixedWords(fixes: readonly { from: string; to: string }[]): string {
   return fixes.map((fix) => `Changed ${fix.from} to ${fix.to}.`).join(' ')

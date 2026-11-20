@@ -26,9 +26,20 @@
  * - **One check a conversation** (choice 5): `handOver` gives the words so far and clears them,
  *   while the mic, the bars and the tool keep running. The next turn starts at once, with no check
  *   and no second mic. Words still being heard go with the turn they were said in, once.
+ * - **It follows the mic** (choice 3): when a headset is plugged in, or the mic in use goes, it
+ *   moves to the computer's default mic, keeps the words, and says "Now using {mic}." (`movedTo`).
+ *   A mic picked by hand stays while it is there. With no other mic, it stops as before.
  */
 import { BAR_COUNT, type BarSource } from '@/components/motion/bar-levels'
-import { hasMic, micName, micsOf, rememberedMic, rememberMic, type MicDevice } from './devices'
+import {
+  defaultMic,
+  hasMic,
+  micName,
+  micsOf,
+  rememberedMic,
+  rememberMic,
+  type MicDevice,
+} from './devices'
 import { fixNames, type NameFix } from './name-fix'
 import {
   speechRecognition,
@@ -75,6 +86,11 @@ export interface MicSnapshot {
   fixes: readonly NameFix[]
   /** When the rep could start speaking (the clock's ms), for the timer. */
   listeningSince: number | null
+  /**
+   * The mic it moved to by itself, for "Now using {mic}." (PLAN-V24 T1-2): a headset plugged in,
+   * or the mic in use gone. Null until it moves.
+   */
+  movedTo: MicDevice | null
 }
 
 /** The browser, as the session uses it. Tests hand in a fake one. */
@@ -278,6 +294,23 @@ function micGone(error: unknown): boolean {
   return name === 'OverconstrainedError' || name === 'NotFoundError'
 }
 
+/**
+ * The mic a track comes from: by its id, else by its name (Chrome calls the default mic's track
+ * "default", with the real mic's name), else by what the track says.
+ */
+function deviceOf(
+  track: MediaStreamTrack | null,
+  devices: readonly MicDevice[],
+  picked: string | null,
+): MicDevice {
+  const id = track?.getSettings().deviceId ?? picked ?? ''
+  const name = micName(track?.label ?? '')
+  return (
+    devices.find((mic) => mic.id === id) ??
+    devices.find((mic) => name !== '' && mic.name === name) ?? { id, name: name || YOUR_MIC }
+  )
+}
+
 const WAITING: Readonly<Record<CheckStep, StepState>> = {
   found: 'waiting',
   allowed: 'waiting',
@@ -311,8 +344,12 @@ export class MicSession {
   private snapshot: MicSnapshot
   private run = 0
   private stream: MediaStream | null = null
+  /** The mic's track in use: the bars and the voice tool hear it. */
+  private track: MediaStreamTrack | null = null
   private audio: AudioContext | null = null
   private analyser: AnalyserNode | null = null
+  /** The mic's sound going into the analyser, swapped when the mic changes. */
+  private source: AudioNode | null = null
   private wave: Float32Array<ArrayBuffer> | null = null
   private tool: VoiceTool | null = null
   private toolReady = false
@@ -322,6 +359,17 @@ export class MicSession {
   private pending = ''
   /** The words still being heard now, as the tool gave them (before the name fix). */
   private heardRaw = ''
+  /** The mic picked by hand that this opening uses, or null for the computer's default (T1-2). */
+  private picked: string | null = null
+  /** The computer's default mic, as last seen: when it changes, the mic follows. */
+  private defaultId: string | null = null
+  /** Where the session hears that the mics changed, while the mic is open. */
+  private watching: MediaDevices | null = null
+  /** The run that is moving to another mic now, or 0; and whether to look again after. */
+  private moving = 0
+  private lookAgain = false
+  /** The voice tool said it lost the mic: it waits for the mic to be followed first. */
+  private toolLost: MicProblem | null = null
 
   constructor({
     mode,
@@ -352,6 +400,7 @@ export class MicSession {
       hearing: '',
       fixes: [],
       listeningSince: null,
+      movedTo: null,
     }
   }
 
@@ -397,6 +446,7 @@ export class MicSession {
       bars: null,
       hearing: '',
       listeningSince: null,
+      movedTo: null,
     })
     void this.check(this.run, rememberedMic(this.env.storage()))
   }
@@ -538,18 +588,17 @@ export class MicSession {
       return
     }
     this.stream = stream
+    this.picked = picked
     const track = stream.getAudioTracks()[0] ?? null
+    this.track = track
     track?.addEventListener('ended', this.onEnded)
 
     // Now the mic is allowed, the list has its names.
     const named = await media.enumerateDevices().catch(() => listed)
     if (this.stale(run)) return
     const devices = micsOf(named)
-    const id = track?.getSettings().deviceId ?? picked ?? ''
-    const device = devices.find((mic) => mic.id === id) ?? {
-      id,
-      name: micName(track?.label ?? '') || YOUR_MIC,
-    }
+    const device = deviceOf(track, devices, picked)
+    this.defaultId = defaultMic(named)?.id ?? null
 
     this.openSound(stream)
     this.set({
@@ -558,6 +607,7 @@ export class MicSession {
       device,
       bars: this.analyser ? barSource(this.analyser) : null,
     })
+    this.watch(media)
 
     // A note's tool starts now, so the first words count while the check finishes.
     if (this.mode === 'note' && this.makeTool) this.startTool(run, track)
@@ -575,12 +625,28 @@ export class MicSession {
       analyser.maxDecibels = -20
       analyser.smoothingTimeConstant = 0.5
       // Into the analyser only: never to the speakers, and never recorded.
-      audio.createMediaStreamSource(stream).connect(analyser)
+      const source = audio.createMediaStreamSource(stream)
+      source.connect(analyser)
       this.audio = audio
       this.analyser = analyser
+      this.source = source
       this.wave = new Float32Array(analyser.fftSize)
     } catch {
       void audio.close().catch(() => undefined)
+    }
+  }
+
+  /** The bars follow another mic: its sound goes into the same analyser (T1-2). */
+  private swapSound(stream: MediaStream): void {
+    const { audio, analyser } = this
+    if (!audio || !analyser) return
+    try {
+      this.source?.disconnect()
+      const source = audio.createMediaStreamSource(stream)
+      source.connect(analyser)
+      this.source = source
+    } catch {
+      this.source = null
     }
   }
 
@@ -663,35 +729,32 @@ export class MicSession {
   private startTool(run: number, track: MediaStreamTrack | null): void {
     const make = this.makeTool
     if (!make) return
-    const tool = make({
+    let tool: VoiceTool | null = null
+    // Only the session's tool of the moment counts: one let go when the mic moved says no more.
+    const current = (): boolean => !this.stale(run) && tool !== null && this.tool === tool
+    tool = make({
       onReady: () => {
-        if (this.stale(run)) return
+        if (!current()) return
         this.toolReady = true
         const { phase, steps } = this.snapshot
         if (phase === 'checking' && steps.hear === 'pass') this.listen()
       },
       onWords: (chunk) => {
-        if (this.stale(run)) return
+        if (!current()) return
         // Words handed over before they were final count once (`handOver`).
         const { rest, left } = afterHanded(chunk, this.pending)
         this.pending = left
-        if (rest.trim() === '') return
-        const fixed = fixNames(rest, this.names)
-        const fixes = [...this.snapshot.fixes]
-        for (const fix of fixed.fixes) {
-          if (!fixes.some((kept) => kept.from === fix.from && kept.to === fix.to)) fixes.push(fix)
-        }
-        this.set({ chunks: [...this.snapshot.chunks, fixed.text], fixes })
+        this.addChunk(rest)
       },
       onHearing: (text) => {
-        if (this.stale(run)) return
+        if (!current()) return
         // Nothing is still being heard: words handed over before they were final are all in.
         if (text.trim() === '') this.pending = ''
         this.heardRaw = afterHanded(text, this.pending).rest
         this.set({ hearing: fixNames(this.heardRaw, this.names).text })
       },
       onFinished: () => {
-        if (this.stale(run)) return
+        if (!current()) return
         if (this.snapshot.phase === 'writing') {
           this.tool = null
           // Words still heard at the end stay: they are part of the note.
@@ -699,25 +762,64 @@ export class MicSession {
         }
       },
       onProblem: (problem) => {
-        if (this.stale(run)) return
+        if (!current()) return
         this.tool = null
-        const { phase } = this.snapshot
-        if (phase === 'checking') {
-          this.fail(run, 'ready', problem, problem !== 'no_mic')
-        } else if (phase === 'listening' || phase === 'writing') {
-          // The words so far stay.
-          this.release()
-          this.set({ phase: 'failed', problem, bars: null })
+        const { phase, steps } = this.snapshot
+        const open = this.stream !== null && steps.allowed === 'pass' && phase !== 'writing'
+        if (problem === 'no_mic' && open && this.otherMic()) {
+          // The mic it heard may have gone (unplugged): follow the mic first (T1-2). It fails
+          // only if nothing moved.
+          this.toolLost = problem
+          void this.follow(run)
+          return
         }
+        this.toolFailed(run, problem)
       },
     })
     this.tool = tool
     tool.start(track, this.hints)
   }
 
-  /** The mic stopped by itself (unplugged, or taken by the computer). */
+  /** A chunk of final words, with the names fixed. */
+  private addChunk(text: string): void {
+    if (text.trim() === '') return
+    const fixed = fixNames(text, this.names)
+    const fixes = [...this.snapshot.fixes]
+    for (const fix of fixed.fixes) {
+      if (!fixes.some((kept) => kept.from === fix.from && kept.to === fix.to)) fixes.push(fix)
+    }
+    this.set({ chunks: [...this.snapshot.chunks, fixed.text], fixes })
+  }
+
+  /** The voice tool can't go on. The words so far stay. */
+  private toolFailed(run: number, problem: MicProblem): void {
+    const { phase } = this.snapshot
+    if (phase === 'checking') {
+      this.fail(run, 'ready', problem, problem !== 'no_mic')
+    } else if (phase === 'listening' || phase === 'writing') {
+      this.release()
+      this.set({ phase: 'failed', problem, bars: null })
+    }
+  }
+
+  /**
+   * The mic stopped by itself (unplugged, or taken by the computer). With another mic on this
+   * computer, the mic follows (T1-2); with none, or while the last words are written out, it
+   * stops as before.
+   */
   private readonly onEnded = (): void => {
     const run = this.run
+    const { phase, steps } = this.snapshot
+    if (phase !== 'writing' && steps.allowed === 'pass' && this.otherMic()) {
+      void this.follow(run)
+      return
+    }
+    this.lost(run)
+  }
+
+  /** The mic is gone and no other took its place: the words so far stay. */
+  private lost(run: number): void {
+    if (this.stale(run)) return
     const { phase } = this.snapshot
     if (phase === 'listening' || phase === 'writing') {
       this.release()
@@ -726,6 +828,152 @@ export class MicSession {
       const at = CHECK_STEPS.find((step) => this.snapshot.steps[step] !== 'pass') ?? 'hear'
       this.fail(run, at, 'no_mic')
     }
+  }
+
+  // --- Following the mic (PLAN-V24 T1-2, choice 3) -------------------------------------------------
+
+  /** Hears when the mics change (a headset plugged in, or one gone), while the mic is open. */
+  private watch(media: MediaDevices): void {
+    if (typeof media.addEventListener !== 'function') return
+    media.addEventListener('devicechange', this.onDeviceChange)
+    this.watching = media
+  }
+
+  private readonly onDeviceChange = (): void => {
+    void this.follow(this.run)
+  }
+
+  /** True when this computer has a mic other than the one in use, as last listed. */
+  private otherMic(): boolean {
+    const { device, devices } = this.snapshot
+    return devices.some((mic) => mic.id !== device?.id)
+  }
+
+  /** One look at the mics at a time. A change that comes during one is looked at after it. */
+  private async follow(run: number): Promise<void> {
+    if (this.moving === run) {
+      this.lookAgain = true
+      return
+    }
+    this.moving = run
+    try {
+      do {
+        this.lookAgain = false
+        await this.lookAtMics(run)
+      } while (this.lookAgain && !this.stale(run))
+    } finally {
+      if (this.moving === run) this.moving = 0
+    }
+  }
+
+  /**
+   * A mic picked by hand stays while it is there and works. Otherwise the computer's default mic
+   * is used: as soon as it changes (a headset plugged in), or when the mic in use goes. A move
+   * that fails leaves the mic in use as it is, while it works.
+   */
+  private async lookAtMics(run: number): Promise<void> {
+    const media = this.env.media()
+    if (!media || !this.stream || this.snapshot.phase === 'writing') {
+      this.afterLook(run)
+      return
+    }
+    const listed = await media.enumerateDevices().catch(() => null)
+    if (this.stale(run) || !this.stream) return
+    const live = this.track?.readyState === 'live'
+    if (!listed) {
+      if (live) this.afterLook(run)
+      else this.lost(run)
+      return
+    }
+    const devices = micsOf(listed)
+    const pickedThere = this.picked !== null && devices.some((mic) => mic.id === this.picked)
+    const nowDefault = defaultMic(listed)?.id ?? null
+    const stay = this.picked !== null ? pickedThere : nowDefault === this.defaultId
+    if (live && stay) {
+      // Nothing to follow. The list may still have changed, for "Change".
+      this.set({ devices })
+      this.afterLook(run)
+      return
+    }
+    if (!hasMic(listed)) {
+      this.lost(run)
+      return
+    }
+    if (this.picked !== null && !pickedThere) {
+      // The mic picked by hand is gone: forget it, as the check does, and use the default one.
+      rememberMic(null, this.env.storage())
+      this.picked = null
+    }
+    const stream = await media
+      .getUserMedia({ audio: soundFor(media, this.picked) })
+      .catch(() => null)
+    if (this.stale(run) || !this.stream) {
+      for (const track of stream?.getTracks() ?? []) track.stop()
+      return
+    }
+    if (!stream) {
+      if (live) {
+        this.set({ devices })
+        this.afterLook(run)
+      } else {
+        this.lost(run)
+      }
+      return
+    }
+    // The list as it is now, with the mic that opened: it may have changed while it opened.
+    const now = await media.enumerateDevices().catch(() => listed)
+    if (this.stale(run) || !this.stream) {
+      for (const track of stream.getTracks()) track.stop()
+      return
+    }
+    this.useStream(run, stream, now)
+  }
+
+  /** A look that moved nothing: a voice tool that lost the mic has failed after all. */
+  private afterLook(run: number): void {
+    const problem = this.toolLost
+    this.toolLost = null
+    if (problem && !this.stale(run)) this.toolFailed(run, problem)
+  }
+
+  /** Moves to another mic: the bars and the voice tool hear it, and the words stay. */
+  private useStream(run: number, stream: MediaStream, listed: readonly MediaDeviceInfo[]): void {
+    const before = this.snapshot.device
+    for (const old of this.stream?.getTracks() ?? []) {
+      old.removeEventListener('ended', this.onEnded)
+      old.stop()
+    }
+    this.stream = stream
+    const track = stream.getAudioTracks()[0] ?? null
+    this.track = track
+    track?.addEventListener('ended', this.onEnded)
+    this.swapSound(stream)
+    const devices = micsOf(listed)
+    const device = deviceOf(track, devices, this.picked)
+    this.defaultId = defaultMic(listed)?.id ?? null
+    this.set({
+      device,
+      devices,
+      movedTo: device.id === before?.id ? this.snapshot.movedTo : device,
+    })
+    // The voice tool hears the new mic. What it was still hearing is kept as said.
+    const lost = this.toolLost !== null
+    this.toolLost = null
+    if (this.tool || lost) {
+      this.keepHearing()
+      this.tool?.abort()
+      this.tool = null
+      this.startTool(run, track)
+    }
+  }
+
+  /** Words still being heard are kept as said, before their tool is let go. */
+  private keepHearing(): void {
+    const raw = this.heardRaw
+    this.pending = ''
+    this.heardRaw = ''
+    this.set({ hearing: '' })
+    this.addChunk(raw)
   }
 
   // --- Letting go -------------------------------------------------------------------------------
@@ -740,6 +988,10 @@ export class MicSession {
     this.timers = []
     this.tool?.abort()
     this.tool = null
+    this.toolLost = null
+    this.lookAgain = false
+    this.watching?.removeEventListener('devicechange', this.onDeviceChange)
+    this.watching = null
     if (this.stream) {
       for (const track of this.stream.getTracks()) {
         track.removeEventListener('ended', this.onEnded)
@@ -747,11 +999,13 @@ export class MicSession {
       }
       this.stream = null
     }
+    this.track = null
     if (this.audio) {
       void this.audio.close().catch(() => undefined)
       this.audio = null
     }
     this.analyser = null
+    this.source = null
     this.wave = null
   }
 }

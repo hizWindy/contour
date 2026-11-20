@@ -5,8 +5,11 @@
  *   const mic = new FakeMic({ level: 0.2 })
  *   render(<MicCard env={mic.env()} makeTool={mic.tool} ... />)
  *   mic.say('Spoke to Jo at Vitara')        // the tool hears a chunk
- *   mic.unplug()                             // the mic stops by itself
+ *   mic.unplug()                             // the mic in use is unplugged: it stops by itself
+ *   mic.plug(HEADSET)                        // a headset, the computer's new default mic
  *   expect(mic.live()).toBe(0)               // every track let go
+ *
+ * The first mic in `devices` is the computer's default, as browsers list it.
  *
  * `install()` puts the same fake in the window (the mic, the sound, the secure page and the
  * browser's speech service), for a test that presses the real mic button. It is taken out again
@@ -67,7 +70,7 @@ class FakeTrack extends EventTarget {
     this.deviceId = deviceId
   }
   getSettings(): MediaTrackSettings {
-    return { deviceId: this.deviceId }
+    return { deviceId: this.deviceId, groupId: this.deviceId }
   }
   stop(): void {
     this.readyState = 'ended'
@@ -122,14 +125,33 @@ export class FakeMic {
     return this.tracks.filter((track) => track.readyState === 'live').length
   }
 
-  /** The mic stops by itself, like an unplugged headset. */
+  /**
+   * The mic in use is unplugged: it leaves the list, its tracks stop by themselves, and the
+   * browser says the mics changed. With no other mic, the mic just stops.
+   */
   unplug(): void {
+    const gone = new Set(
+      this.tracks.filter((track) => track.readyState === 'live').map((track) => track.deviceId),
+    )
+    this.devices = this.devices.filter((device) => !gone.has(device.id))
     for (const track of this.tracks) {
       if (track.readyState === 'live') {
         track.readyState = 'ended'
         track.dispatchEvent(new Event('ended'))
       }
     }
+    this.changed()
+  }
+
+  /** A mic is plugged in: the computer's new default, unless `asDefault` is false (PLAN-V24 T1-2). */
+  plug(device: FakeDevice, { asDefault = true } = {}): void {
+    this.devices = asDefault ? [device, ...this.devices] : [...this.devices, device]
+    this.changed()
+  }
+
+  /** The browser says the mics changed ("devicechange"). */
+  changed(): void {
+    this.deviceEvents.dispatchEvent(new Event('devicechange'))
   }
 
   /** The newest tool hears a chunk of words. */
@@ -147,7 +169,16 @@ export class FakeMic {
     this.tools.at(-1)?.events.onProblem(problem)
   }
 
+  /** Where "devicechange" is heard: the same mic list every time, as in a browser. */
+  private readonly deviceEvents = new EventTarget()
+  private mediaDevices: MediaDevices | null = null
+
   private media(): MediaDevices {
+    this.mediaDevices ??= this.makeMedia()
+    return this.mediaDevices
+  }
+
+  private makeMedia(): MediaDevices {
     const enumerateDevices = (): Promise<MediaDeviceInfo[]> => {
       const allowed = this.tracks.length > 0
       return Promise.resolve(
@@ -193,7 +224,15 @@ export class FakeMic {
       channelCount: true,
       ...(this.voiceIsolation ? { voiceIsolation: true } : {}),
     })
-    return { enumerateDevices, getUserMedia, getSupportedConstraints } as unknown as MediaDevices
+    const events = this.deviceEvents
+    return {
+      enumerateDevices,
+      getUserMedia,
+      getSupportedConstraints,
+      addEventListener: events.addEventListener.bind(events),
+      removeEventListener: events.removeEventListener.bind(events),
+      dispatchEvent: events.dispatchEvent.bind(events),
+    } as unknown as MediaDevices
   }
 
   private audio(): AudioContext {
@@ -222,7 +261,7 @@ export class FakeMic {
         return Promise.resolve()
       },
       createAnalyser: () => analyser,
-      createMediaStreamSource: () => ({ connect: () => undefined }),
+      createMediaStreamSource: () => ({ connect: () => undefined, disconnect: () => undefined }),
     } as unknown as AudioContext
   }
 

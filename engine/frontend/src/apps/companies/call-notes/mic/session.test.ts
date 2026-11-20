@@ -1,12 +1,19 @@
 /**
  * The mic session on its own (PLAN-V24 Part 1), with the fake mic, the fake voice tool and an
- * exact clock: the clean sound and one check a conversation (T1-1). Made-up names only: Vitera Pty
- * Ltd, Jo Sample, North Wind. No sound is ever kept.
+ * exact clock: the clean sound and one check a conversation (T1-1), and following the mic (T1-2).
+ * Made-up names only: Vitera Pty Ltd, Jo Sample, North Wind. No sound is ever kept.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { MIC_KEY } from './devices'
-import { FakeMic, HEADSET, LAPTOP_MIC, type FakeMicOptions } from './fake-mic'
+import { defaultMic, MIC_KEY } from './devices'
+import { FakeMic, HEADSET, LAPTOP_MIC, type FakeDevice, type FakeMicOptions } from './fake-mic'
 import { afterHanded, lettersOf, MicSession, SOUND, type MicSessionOptions } from './session'
+import { nowUsing } from './words'
+
+/** A USB mic, made up, for a third mic on the desk. */
+const DESK_MIC: FakeDevice = { id: 'mic-desk', label: 'Desk Microphone (USB)' }
+
+const HEADSET_NAME = 'Headset Microphone (Jabra Evolve2 65)'
+const LAPTOP_NAME = 'Microphone Array (Realtek)'
 
 function open(options: FakeMicOptions = {}, more: Partial<MicSessionOptions> = {}) {
   const mic = new FakeMic(options)
@@ -179,6 +186,190 @@ describe('one check a conversation (T1-1, choice 5)', () => {
     await tick(0)
     expect(now().phase).toBe('done')
     expect(session.text()).toBe('Add a task for Friday')
+  })
+})
+
+/** Opens the mic with one picked by hand on this computer, and waits until it listens. */
+async function listeningWithPick(devices: FakeDevice[], picked: FakeDevice) {
+  const mic = new FakeMic({ devices })
+  mic.storage.set(MIC_KEY, picked.id)
+  const session = new MicSession({
+    mode: 'note',
+    tool: 'browser_service',
+    env: mic.env(),
+    makeTool: mic.tool,
+  })
+  session.start()
+  await tick(100)
+  expect(session.getSnapshot()).toMatchObject({ phase: 'listening', device: { id: picked.id } })
+  return { mic, session, now: () => session.getSnapshot() }
+}
+
+describe('it follows the mic (T1-2, choice 3)', () => {
+  it('the mic unplugged mid-turn: the default one, the words kept, and "Now using {mic}"', async () => {
+    const { mic, session, now } = await listening({ devices: [HEADSET, LAPTOP_MIC] })
+    mic.say('Spoke to Jo Sample')
+    mic.hear('about the lease')
+    mic.unplug()
+    await tick(0)
+    expect(now()).toMatchObject({
+      phase: 'listening',
+      problem: null,
+      device: { id: 'mic-laptop', name: LAPTOP_NAME },
+      movedTo: { id: 'mic-laptop', name: LAPTOP_NAME },
+      chunks: ['Spoke to Jo Sample', 'about the lease'],
+      hearing: '',
+    })
+    expect(nowUsing(now().movedTo?.name ?? '')).toBe('Now using Microphone Array (Realtek).')
+    // The new mic opened with the clean sound, and the unplugged one was let go.
+    expect(mic.asked.at(-1)).toEqual({ audio: SOUND })
+    expect(mic.live()).toBe(1)
+    expect(now().bars).not.toBeNull()
+    // The voice tool hears the new mic: the old one was let go, a new one has its track.
+    expect(mic.tools).toHaveLength(2)
+    expect(mic.tools[0]?.aborted).toBe(true)
+    expect(mic.tools[1]?.track).toBe(mic.tracks[1])
+    mic.say('They want a test fit')
+    expect(session.text()).toBe('Spoke to Jo Sample about the lease They want a test fit')
+    // The check isn't run again.
+    expect(now().steps).toEqual({ found: 'pass', allowed: 'pass', hear: 'pass', ready: 'pass' })
+  })
+
+  it('a headset plugged in is used when no mic was picked by hand', async () => {
+    const { mic, now } = await listening({ devices: [LAPTOP_MIC] })
+    mic.say('Spoke to Jo Sample')
+    mic.plug(HEADSET)
+    await tick(0)
+    expect(now()).toMatchObject({
+      phase: 'listening',
+      device: { id: 'mic-headset', name: HEADSET_NAME },
+      movedTo: { id: 'mic-headset', name: HEADSET_NAME },
+      chunks: ['Spoke to Jo Sample'],
+    })
+    expect(now().devices.map((device) => device.id)).toEqual(['mic-headset', 'mic-laptop'])
+    expect(mic.live()).toBe(1)
+    expect(mic.tools[1]?.track).toBe(mic.tracks[1])
+  })
+
+  it('a mic plugged in that the computer doesn’t make its default changes nothing but the list', async () => {
+    const { mic, now } = await listening({ devices: [LAPTOP_MIC] })
+    mic.plug(DESK_MIC, { asDefault: false })
+    await tick(0)
+    expect(now()).toMatchObject({ device: { id: 'mic-laptop' }, movedTo: null })
+    expect(now().devices.map((device) => device.id)).toEqual(['mic-laptop', 'mic-desk'])
+    expect(mic.asked).toHaveLength(1)
+    expect(mic.tools).toHaveLength(1)
+  })
+
+  it('a mic picked by hand stays while it is there', async () => {
+    const { mic, now } = await listeningWithPick([LAPTOP_MIC], LAPTOP_MIC)
+    mic.plug(HEADSET)
+    await tick(0)
+    expect(now()).toMatchObject({ device: { id: 'mic-laptop' }, movedTo: null })
+    expect(mic.asked).toHaveLength(1)
+    expect(mic.storage.get(MIC_KEY)).toBe('mic-laptop')
+  })
+
+  it('a mic picked by hand that goes: the default one, and the pick is forgotten', async () => {
+    const { mic, now } = await listeningWithPick([HEADSET, LAPTOP_MIC], LAPTOP_MIC)
+    mic.say('Spoke to Jo Sample')
+    mic.unplug()
+    await tick(0)
+    expect(now()).toMatchObject({
+      phase: 'listening',
+      device: { id: 'mic-headset' },
+      movedTo: { id: 'mic-headset' },
+      chunks: ['Spoke to Jo Sample'],
+    })
+    expect(mic.asked.at(-1)).toEqual({ audio: SOUND })
+    expect(mic.storage.has(MIC_KEY)).toBe(false)
+  })
+
+  it('the only mic unplugged: it stops at once, with the words kept, as before', async () => {
+    const { mic, session, now } = await listening()
+    mic.say('Spoke to Jo Sample')
+    mic.unplug()
+    expect(now()).toMatchObject({ phase: 'failed', problem: 'cut_off' })
+    expect(session.text()).toBe('Spoke to Jo Sample')
+    expect(mic.live()).toBe(0)
+  })
+
+  it('a move that won’t open keeps the mic in use while it works', async () => {
+    const { mic, now } = await listening({ devices: [LAPTOP_MIC] })
+    mic.refuse = { name: 'NotReadableError' }
+    mic.plug(HEADSET)
+    await tick(0)
+    expect(now()).toMatchObject({ phase: 'listening', problem: null, device: { id: 'mic-laptop' } })
+    expect(mic.live()).toBe(1)
+    expect(mic.tools).toHaveLength(1)
+  })
+
+  it('the voice tool losing the mic first waits for the mic to be followed', async () => {
+    const { mic, session, now } = await listening({ devices: [HEADSET, LAPTOP_MIC] })
+    mic.say('Spoke to Jo Sample')
+    // The speech service says it lost the mic before the track says it ended.
+    mic.tools[0]?.events.onProblem('no_mic')
+    mic.unplug()
+    await tick(0)
+    expect(now()).toMatchObject({ phase: 'listening', problem: null, device: { id: 'mic-laptop' } })
+    expect(mic.tools).toHaveLength(2)
+    mic.say('They want a test fit')
+    expect(session.text()).toBe('Spoke to Jo Sample They want a test fit')
+  })
+
+  it('a voice tool that loses the mic while it is still there fails, as before', async () => {
+    const { mic, session, now } = await listening({ devices: [HEADSET, LAPTOP_MIC] })
+    mic.say('Spoke to Jo Sample')
+    mic.tools[0]?.events.onProblem('no_mic')
+    await tick(0)
+    expect(now()).toMatchObject({ phase: 'failed', problem: 'no_mic' })
+    expect(session.text()).toBe('Spoke to Jo Sample')
+    expect(mic.live()).toBe(0)
+  })
+
+  it('stops following once the mic is let go', async () => {
+    const { mic, session, now } = await listening({ devices: [LAPTOP_MIC] })
+    session.close()
+    mic.plug(HEADSET)
+    await tick(0)
+    expect(mic.asked).toHaveLength(1)
+    expect(now().movedTo).toBeNull()
+    expect(mic.live()).toBe(0)
+  })
+})
+
+describe('the computer’s default mic (defaultMic)', () => {
+  const device = (deviceId: string, label: string, groupId = deviceId): MediaDeviceInfo => ({
+    deviceId,
+    groupId,
+    kind: 'audioinput',
+    label,
+    toJSON: () => ({}),
+  })
+
+  it('is the first mic listed (Firefox, Safari)', () => {
+    expect(
+      defaultMic([device('a1', 'Microphone Array (Realtek)'), device('a2', 'Headset (Jabra)')]),
+    ).toEqual({ id: 'a1', name: 'Microphone Array (Realtek)' })
+    expect(defaultMic([])).toBeNull()
+  })
+
+  it('is the real mic behind Chrome’s "default" entry, by its name, then by its group', () => {
+    expect(
+      defaultMic([
+        device('default', 'Default - Headset (Jabra) (0b0e:24b8)', 'g2'),
+        device('communications', 'Communications - Microphone Array (Realtek)', 'g1'),
+        device('a1', 'Microphone Array (Realtek)', 'g1'),
+        device('a2', 'Headset (Jabra) (0b0e:24b8)', 'g2'),
+      ]),
+    ).toEqual({ id: 'a2', name: 'Headset (Jabra)' })
+    expect(
+      defaultMic([
+        device('default', 'Default - Headset', 'g2'),
+        device('a1', 'Microphone Array (Realtek)', 'g1'),
+        device('a2', 'Headset Microphone', 'g2'),
+      ]),
+    ).toEqual({ id: 'a2', name: 'Headset Microphone' })
   })
 })
 

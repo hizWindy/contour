@@ -1,6 +1,6 @@
 /**
- * The mics on this computer, by the names people know (PLAN-V18 T3-4, "Which mic"), and the one
- * the rep picked, remembered in this browser.
+ * The mics on this computer, by the names people know (PLAN-V18 T3-4, "Which mic"), the one the
+ * rep picked, remembered in this browser, and the computer's default one (PLAN-V24 T1-2).
  */
 
 export interface MicDevice {
@@ -20,22 +20,44 @@ export function micName(label: string): string {
   return name
 }
 
+/** Chrome's and Edge's other names for one of the real mics. */
+function isAlias(device: MediaDeviceInfo): boolean {
+  return device.deviceId === 'default' || device.deviceId === 'communications'
+}
+
+/** The real mics, as the browser lists them. */
+function realMics(devices: readonly MediaDeviceInfo[]): MediaDeviceInfo[] {
+  return devices.filter((device) => device.kind === 'audioinput' && !isAlias(device))
+}
+
 /**
  * The real mics, each once: the browser's "default" and "communications" entries are another
  * name for one of them, so they are left out. A mic with no name yet (before the mic is allowed)
  * is called "Mic 1", "Mic 2".
  */
 export function micsOf(devices: readonly MediaDeviceInfo[]): MicDevice[] {
-  const mics = devices.filter(
-    (device) =>
-      device.kind === 'audioinput' &&
-      device.deviceId !== 'default' &&
-      device.deviceId !== 'communications',
-  )
-  return mics.map((device, index) => ({
+  return realMics(devices).map((device, index) => ({
     id: device.deviceId,
     name: micName(device.label) || `Mic ${String(index + 1)}`,
   }))
+}
+
+/**
+ * The mic the computer uses when none is picked (PLAN-V24 T1-2): browsers list it first. Chrome
+ * and Edge list it as "default", another name for one of the real mics, which is found by its
+ * name, then by its group (the headset it belongs to). Null when there is no mic.
+ */
+export function defaultMic(devices: readonly MediaDeviceInfo[]): MicDevice | null {
+  const first = devices.find((device) => device.kind === 'audioinput')
+  if (!first) return null
+  const mics = micsOf(devices)
+  if (!isAlias(first)) return mics.find((mic) => mic.id === first.deviceId) ?? null
+  const name = micName(first.label)
+  const real = realMics(devices)
+  const same =
+    (name === '' ? undefined : real.find((device) => micName(device.label) === name)) ??
+    real.find((device) => device.groupId !== '' && device.groupId === first.groupId)
+  return mics.find((mic) => mic.id === same?.deviceId) ?? (name ? { id: first.deviceId, name } : null)
 }
 
 /** True when there is at least one mic, the browser's own entries included. */

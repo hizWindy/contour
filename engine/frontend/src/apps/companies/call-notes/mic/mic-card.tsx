@@ -62,6 +62,7 @@ import {
   MIC_NOT_READY,
   MIC_STOPPED,
   MIC_WORKS,
+  nowUsing,
   problemActions,
   problemWords,
   SPEAK_NOW,
@@ -113,6 +114,7 @@ const NO_SESSION_SNAPSHOT: MicSnapshot = {
   hearing: '',
   fixes: [],
   listeningSince: null,
+  movedTo: null,
 }
 
 const noSubscribe = (): (() => void) => () => undefined
@@ -358,7 +360,12 @@ export default function MicCard({
     }
   }
 
-  const status = [title, problem].filter(Boolean).join('. ')
+  // The mic moved by itself (PLAN-V24 T1-2): the mic's row shows its name, and a screen reader
+  // hears "Now using {mic}." once.
+  const said = [title, problem].filter(Boolean).join('. ')
+  const status = snapshot.movedTo
+    ? `${said}${/[.!?]$/.test(said) ? ' ' : '. '}${nowUsing(snapshot.movedTo.name)}`
+    : said
   const deviceName = snapshot.device?.name ?? null
 
   return (
