@@ -352,7 +352,7 @@ describe('saved at once (choice 17)', () => {
     expect(window.localStorage.getItem(DRAFTS)).toBeNull()
   })
 
-  it('a call still asking "Which Sample?" is saved on Later as "Needs a company"', async () => {
+  it('a call still asking "Which Sample?" stays in Call logs on Later, as "Needs a company"', async () => {
     const server = callServer()
     const { user, of } = show(
       callCommand({
@@ -368,9 +368,10 @@ describe('saved at once (choice 17)', () => {
     )
     const found = await card()
     expect(within(found).getByRole('group', { name: 'Which Sample?' })).toBeInTheDocument()
-    // A pick from the command's own choices would teach the mic nothing (PLAN-V23): the call waits
-    // for it before it is saved, as before.
-    expect(of(API.notes)).toHaveLength(0)
+    // Saved at once too (Al-khair, 21 Nov): its pick says not to teach (find-company.test.tsx).
+    await waitFor(() => {
+      expect(of(API.notes)).toHaveLength(1)
+    })
     await user.click(within(found).getByRole('button', { name: 'Later' }))
     expect(await screen.findByText(KEPT)).toBeInTheDocument()
     expect(of(API.notes)).toHaveLength(1)

@@ -116,9 +116,20 @@ export async function patchNote(id: string, patch: CallNotePatch): Promise<CallN
   )
 }
 
-/** Picks the company of a call saved before it: the server sorts it then (PLAN-V24 T3-1). */
-export async function pickNoteCompany(id: string, companyKey: string): Promise<CallNoteOut> {
-  return patchNote(id, { company_key: companyKey })
+/**
+ * Picks the company of a call saved before it: the server sorts it then (PLAN-V24 T3-1). It
+ * teaches the mic the words heard, unless `teach` is false: a pick from the command's own choices
+ * ("Which Sample?") teaches nothing (PLAN-V23; Al-khair, 21 Nov). Left out, the server teaches.
+ */
+export async function pickNoteCompany(
+  id: string,
+  companyKey: string,
+  teach?: false,
+): Promise<CallNoteOut> {
+  return patchNote(
+    id,
+    teach === false ? { company_key: companyKey, teach: false } : { company_key: companyKey },
+  )
 }
 
 // --- After the hold -------------------------------------------------------------------------------

@@ -7,10 +7,11 @@
  * - **So a page closed in the 5 seconds** sends nothing, and the draft is still here: the hold's
  *   timer dies with the page, and the next page offers it once, in a toast with Open.
  * - **A call isn't kept here** (PLAN-V24 T3-2, choice 17): the server has it from the first word,
- *   and it waits in Call logs, under "Needs a company" while its company isn't found. Only a call
- *   the server hasn't got is kept here, so nothing said is lost: one whose save failed (no
- *   connection, say), one with no company name heard, and one put off while "Which James?" is
- *   still to answer (it is saved once its person is picked, TBC).
+ *   and it waits in Call logs, under "Needs a company" until its company is picked, whether none
+ *   was found or two or more were ("Which Sample?"). Only a call the server hasn't got is kept
+ *   here, so nothing said is lost: one whose save failed twice (no connection, say), one with no
+ *   company name heard, and one put off while "Which James?" is still to answer (it is saved once
+ *   its person is picked, TBC).
  * - **Each person's drafts are their own** (as call notes' are): a signed-in person has an entry of
  *   their own. The newest 10 are kept.
  * - **A browser that blocks storage** keeps them while the page is open: every read and write is in

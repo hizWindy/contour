@@ -459,14 +459,10 @@ function DraftCard({
 
   // --- A call: saved at once, then read until sorted, then previewed -----------------------------
   // Its company found as the card opens: saved once its person is picked, as before. Not found,
-  // with no choice to make: saved at once with the name as heard, as "Needs a company" (PLAN-V24
-  // T3-2, choice 17), and the company picked later goes as a PATCH (below).
+  // or "Which Sample?": saved at once with the name as heard, as "Needs a company" (PLAN-V24 T3-2,
+  // choice 17), and the company picked later goes as a PATCH (below).
   const [heardFirst] = useState(
-    () =>
-      first.action === 'log_call' &&
-      first.noteId === null &&
-      first.company.found === null &&
-      first.company.choices.length === 0,
+    () => first.action === 'log_call' && first.noteId === null && first.company.found === null,
   )
   const noteBody =
     draft.action === 'log_call' && draft.noteId === null
@@ -721,7 +717,10 @@ function DraftCard({
   const picking = useRef<string | null>(null)
   const sendPick = useEffectEvent((id: string, companyKey: string) => {
     const before = unpicked.current
-    pickNoteCompany(id, companyKey).then(
+    // A pick from the command's own choices ("Which Sample?") teaches the mic nothing (PLAN-V23).
+    const now = latest.current.draft
+    const fromChoices = now.action !== 'email' && !now.company.byHand
+    pickNoteCompany(id, companyKey, fromChoices ? false : undefined).then(
       (updated) => {
         client.setQueryData(queryKeys.companies.callNote(updated.id), updated)
         markCountsOld(client)
@@ -846,10 +845,9 @@ function DraftCard({
 
   /**
    * Later on a call: it waits in Call logs, never only in this browser (PLAN-V24 T3-2). A save on
-   * its way is waited for; one that failed is tried once more, with the same key; and one still
-   * asking "Which Sample?" is saved now, as "Needs a company". Only a call the server can't take
-   * stays in this browser: its save failed again, no company name was heard, or "Which James?" is
-   * still to answer.
+   * its way is waited for, and one that failed is tried once more, with the same key. Only a call
+   * the server can't take stays in this browser: its save failed again, no company name was heard,
+   * or "Which James?" is still to answer.
    */
   const keepCall = (now: CallDraft): void => {
     const picked = now.company.found !== null

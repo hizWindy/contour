@@ -2,9 +2,10 @@
  * The card's own find for a company said or entered again (PLAN-V24 T3-2, choice 19; Al-khair, 21
  * Nov): its three answers by voice, and by typing then Enter (one found is the card's company at
  * once, with its line; two or more are choices, where "the first one" picks; none gives "Still no",
- * with Add to HubSpot); "North Wind" finds Northwind from the server's answer; a pick from the
- * find's results leaves `teach` out; a refusal shows plain words; and none of it asks the AI.
- * Against a fake server, a fake mic and a fake clock: nothing real is sent. Made-up names
+ * with Add to HubSpot); "North Wind" finds Northwind from the server's answer; a call asking "Which
+ * Sample?" is saved at once, and its pick from those choices says not to teach the mic, while a
+ * pick from the find's results leaves `teach` out; a refusal shows plain words; and none of it asks
+ * the AI. Against a fake server, a fake mic and a fake clock: nothing real is sent. Made-up names
  * only: Sample Logistics Pty Ltd, Sample Freight Pty Ltd, Northwind Pty Ltd, North Wind and
  * Southwind as heard, Jo Sample.
  */
@@ -64,6 +65,15 @@ function northWind(): AssistantCommand {
   return callCommand({
     read_back: CARD,
     company: { found: null, choices: [], from_page: false, heard: 'North Wind', can_add: false },
+    person: null,
+  })
+}
+
+/** "Log a call with Sample": the command found two. */
+function whichSample(): AssistantCommand {
+  return callCommand({
+    read_back: 'Log a call with Sample.',
+    company: { found: null, choices: [SAMPLE, OTHER_SAMPLE], from_page: false, heard: 'Sample' },
     person: null,
   })
 }
@@ -371,9 +381,33 @@ describe('a name typed in the company box, then Enter', () => {
   })
 })
 
+// --- "Which Sample?" on a call --------------------------------------------------------------------
+
+describe('a call asking "Which Sample?" (Al-khair, 21 Nov)', () => {
+  it('is saved at once, and a pick from those choices says not to teach the mic', async () => {
+    const { user, of } = show(whichSample())
+    const found = await card()
+    await waitFor(() => {
+      expect(of(API.notes)).toHaveLength(1)
+    })
+    expect(of(API.notes)[0]?.body).toMatchObject({ company_heard: 'Sample' })
+    expect(of(API.notes)[0]?.body).not.toHaveProperty('company_key')
+    const group = within(found).getByRole('group', { name: 'Which Sample?' })
+    await user.click(within(group).getByRole('button', { name: /Sample Freight/ }))
+    await waitFor(() => {
+      expect(of(notePath(), 'PATCH').map((call) => call.body)).toEqual([
+        { company_key: OTHER_SAMPLE.key, teach: false },
+      ])
+    })
+    expect(within(found).getByText(OTHER_SAMPLE.name)).toBeInTheDocument()
+    expect(of(API.command)).toHaveLength(0)
+  })
+})
+
 // --- By voice, in a conversation ------------------------------------------------------------------
 
 const CALL_WORDS = 'Log a call with North Wind, spoke to Jo about the lease'
+const SAMPLE_WORDS = 'Log a call with Sample, spoke to Jo about the lease'
 const BAR = 'Speak to the Assistant'
 
 /** The command step answers by the words said. */
@@ -471,6 +505,23 @@ describe('the company said again, by voice', () => {
     expect(within(found).getByRole('button', { name: 'Add to HubSpot' })).toBeInTheDocument()
     expect(within(found).getByRole('textbox', { name: 'Find a company' })).toHaveValue('Southwind')
     expect(of(notePath(), 'PATCH')).toHaveLength(0)
+    expect(of(API.command)).toHaveLength(1)
+  })
+
+  it('"the second one" from a call’s own "Which Sample?" says not to teach the mic', async () => {
+    vi.useFakeTimers(CLOCK)
+    const { mic, of, calls } = page({ [SAMPLE_WORDS]: whichSample() })
+    await callCard(mic, SAMPLE_WORDS, 'Log a call with Sample.')
+    await waitFor(() => {
+      expect(of(API.notes)).toHaveLength(1)
+    })
+    await say(mic, 'the second one')
+    await waitFor(() => {
+      expect(of(notePath(), 'PATCH').map((call) => call.body)).toEqual([
+        { company_key: OTHER_SAMPLE.key, teach: false },
+      ])
+    })
+    expect(finds(calls)).toEqual([])
     expect(of(API.command)).toHaveLength(1)
   })
 })
