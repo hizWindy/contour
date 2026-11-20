@@ -55,6 +55,46 @@
         }
       }
     },
+    "moonshine-base-full": {
+      "repo": "onnx-community/moonshine-base-ONNX",
+      "revision": "b1e9b6aae3c3c7298f10c3798393fdf38e8fbbad",
+      "folder": "moonshine-base-b1e9b6a",
+      "for": "s2",
+      "dtype": {
+        "encoder_model": "fp32",
+        "decoder_model_merged": "q4"
+      },
+      "files": {
+        "config.json": {
+          "bytes": 922,
+          "sha256": "fab7241d1e9fc6c2370c4c6dfb5da79bb54d67ed9ab6b507ac51d29d2abe01d1"
+        },
+        "generation_config.json": {
+          "bytes": 147,
+          "sha256": "f9b3f711b57be7def2e50a8942f64f36ee0a55fad5b84ff93a687b6c5bcc1d44"
+        },
+        "preprocessor_config.json": {
+          "bytes": 128,
+          "sha256": "fa43a7017ef85cd1d0fba0d9aae77c8adb16990ae6f11115631f41ec5d8aa679"
+        },
+        "tokenizer.json": {
+          "bytes": 3761754,
+          "sha256": "7b913404bdd039af4756783218af4440bc07fb7d6d8258d677e34f95b3ec416f"
+        },
+        "tokenizer_config.json": {
+          "bytes": 135735,
+          "sha256": "edaee394565d428ea98a663ae7209cdcfeefc5585c42d7a570ff7c986df2cd15"
+        },
+        "onnx/encoder_model.onnx": {
+          "bytes": 80818781,
+          "sha256": "153e128e7abd64a74ee47f2c3f585c3171c4d46cbb368b032827934c4e01e779"
+        },
+        "onnx/decoder_model_merged_q4.onnx": {
+          "bytes": 72781828,
+          "sha256": "9f26db50c9f3b2eb1962ab93e9753f908c56367817d791032af58cbf7dba3803"
+        }
+      }
+    },
     "moonshine-tiny": {
       "repo": "onnx-community/moonshine-tiny-ONNX",
       "revision": "a6da1241cd305dcd64eab1edbd615f2bb9aabb95",

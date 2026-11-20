@@ -21,8 +21,12 @@ import gpuWasm from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm?url'
 import listText from './files.json?raw'
 import { DownloadFailed, type Progress } from './engine'
 
-/** The models in the list. Whisper base is only for S2's test page (TBC at S2). */
-export type ModelName = 'moonshine-base' | 'moonshine-tiny' | 'whisper-base-en'
+/**
+ * The models in the list. Only S2's test page uses `moonshine-base-full` (Base's bigger files, for
+ * the GPU) and `whisper-base-en` (the backup, TBC at S2): the app's build never fetches them.
+ */
+export type ModelName =
+  'moonshine-base' | 'moonshine-base-full' | 'moonshine-tiny' | 'whisper-base-en'
 
 /** Where the model runs: the graphics chip (WebGPU) or the CPU (WebAssembly). */
 export type Device = 'webgpu' | 'wasm'
@@ -43,7 +47,13 @@ interface List {
   runtime: { package: string; version: string; files: Record<string, Facts> }
   models: Record<
     string,
-    { repo: string; revision: string; folder: string; files: Record<string, Facts> }
+    {
+      repo: string
+      revision: string
+      folder: string
+      dtype?: Record<string, string>
+      files: Record<string, Facts>
+    }
   >
 }
 
@@ -65,6 +75,14 @@ export const CHECKED_BYTES = 'x-contour-checked-bytes'
 
 /** Where the models are on our site (/voice/). Each has a folder of its own in there. */
 export const SERVED = LIST.served
+
+/**
+ * Which of a model's files each part of it uses: the 8-bit ones (q8) unless the list says (choice
+ * 23, TBC at S2). `moonshine-base-full` has the bigger ones a GPU may run faster.
+ */
+export function dtypeOf(name: ModelName): Record<string, string> {
+  return LIST.models[name]?.dtype ?? { encoder_model: 'q8', decoder_model_merged: 'q8' }
+}
 
 /** A model's folder, with its revision in the name, like `moonshine-base-b1e9b6a`. */
 export function modelFolder(name: ModelName | typeof DETECTOR): string {

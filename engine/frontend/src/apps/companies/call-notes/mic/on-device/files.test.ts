@@ -1,11 +1,13 @@
 import { createHash, webcrypto } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DownloadFailed, type Progress } from './engine'
+import listText from './files.json?raw'
 import {
   CACHE,
   CHECKED_BYTES,
   DEFAULT_MODEL,
   deviceHere,
+  dtypeOf,
   filesFor,
   fromKept,
   keepFiles,
@@ -169,6 +171,20 @@ describe('the files a device needs', () => {
     gpu.requestAdapter.mockResolvedValue(null)
     expect(await deviceHere()).toBe('wasm')
     Reflect.deleteProperty(navigator, 'gpu')
+  })
+
+  it("leave the bigger GPU files to S2's page: the app's build never fetches them", () => {
+    const list = JSON.parse(listText) as { models: Record<string, { for: string }> }
+    expect(list.models['moonshine-base-full']?.for).toBe('s2')
+    expect(list.models['whisper-base-en']?.for).toBe('s2')
+    expect(dtypeOf('moonshine-base')).toEqual({ encoder_model: 'q8', decoder_model_merged: 'q8' })
+    expect(dtypeOf('moonshine-base-full')).toEqual({
+      encoder_model: 'fp32',
+      decoder_model_merged: 'q4',
+    })
+    const full = filesFor('moonshine-base-full', 'webgpu').map((file) => file.url)
+    expect(full.some((url) => url.endsWith('/onnx/encoder_model.onnx'))).toBe(true)
+    expect(full.some((url) => url.endsWith('/onnx/decoder_model_merged_q4.onnx'))).toBe(true)
   })
 
   it('are at a fixed revision, named in the folder', () => {

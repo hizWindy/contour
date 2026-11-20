@@ -5,13 +5,14 @@
  * - Moonshine turns a turn's sound into words: on the graphics chip (WebGPU) where the browser has
  *   one, else on the CPU. A model that won't start on WebGPU starts again on the CPU.
  * - Silero VAD is the voice detector: tiny, so always on the CPU.
- * Both use their 8-bit files (q8), the smallest ones (TBC at S2).
+ * Both use their 8-bit files (q8), the smallest ones, unless the list says (TBC at S2).
  */
 
 import { AutoModel, env, LogLevel, pipeline, Tensor } from '@huggingface/transformers'
 import type { Models, Progress } from './engine'
 import {
   DETECTOR,
+  dtypeOf,
   filesFor,
   fromKept,
   keepFiles,
@@ -36,6 +37,7 @@ const CONTEXT = 64
  */
 const PAD_MS: Record<ModelName, number> = {
   'moonshine-base': 300,
+  'moonshine-base-full': 300,
   'moonshine-tiny': 0,
   'whisper-base-en': 0,
 }
@@ -79,7 +81,7 @@ async function setUp(device: Device): Promise<void> {
 async function transcriber(model: ModelName, device: Device): Promise<Transcriber> {
   const made = (await pipeline('automatic-speech-recognition', modelFolder(model), {
     device,
-    dtype: { encoder_model: 'q8', decoder_model_merged: 'q8' },
+    dtype: dtypeOf(model) as Record<string, 'fp32' | 'q4' | 'q8'>,
   })) as unknown as Transcriber
   // The first run is slow (shaders are built, the code warms up): do it now, on a second of quiet.
   await made(new Float32Array(RATE), { max_new_tokens: 2 })
