@@ -5,8 +5,8 @@ This plan makes the Assistant's mic strong on every device, and changes nothing 
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
-- **Last updated:** 21 Nov 2026 (Parts 1 and 2 and T3-1 done. T3-3 and Part 4's fixes are being built in helper copies at the same time, on Al-khair's ask to go faster).
-- **Progress:** Before the build: 1 of 3. Part 1: 5 of 5. Part 2: 6 of 6. Part 3: 1 of 4. Part 4: 0 of 4 (T4-1 and T4-2 built in a helper copy). Part 5: 0 of 3. M1 to M4: 0 of 4.
+- **Last updated:** 21 Nov 2026 (Parts 1 and 2, and T3-1 to T3-3, done. T4-3 is being built in a helper copy while Part 5 starts, on Al-khair's ask to go faster).
+- **Progress:** Before the build: 1 of 3. Part 1: 5 of 5. Part 2: 6 of 6. Part 3: 3 of 4. Part 4: 0 of 4 (T4-1 and T4-2 built, T4-3 being built, in a helper copy). Part 5: 0 of 3. M1 to M4: 0 of 4.
 - **Sources:**
   - Al-khair's chat on 21 Nov, after Levi tried the Assistant with him on 20 Nov;
   - the code on `master` (`b84c3cf`), read on 21 Nov;
@@ -334,13 +334,13 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
 
 ## Part 3: no call lost
 
-**Progress:** 1 of 4. T3-3 is being built in `../contour-v24-logs`.
+**Progress:** 3 of 4. T3-2 and T3-3 are built and wait for Al-khair's look.
 
 - [x] **T3-1. Calls saved before their company** Done 21 Nov 2026 (`866e20e` to `1e579e0`, built on `plan-v24-api` and cherry-picked). (backend: `apps/companies/schemas.py`, `tables.py`, `note_store.py`, `note_batch.py`, `api_notes.py`, and the migration). Choices 17, 18 and 21, and "The contract".
   - **Done when:** tests pass: a call with no company is saved as `needs_company`, with the name as heard, and isn't sorted; the PATCH sets its company and starts the sort; a company the person can't see gives 422; a company on a call already sorted gives 409; the send leaves a `needs_company` call out and says why; a Viewer can't do any of it; and the migration goes up and down cleanly.
-- [ ] **T3-2. The card saves at once, and hears the company again** (`card/card.tsx`, `card/company.tsx`, `card/send.ts` and `card/drafts.ts`). Choices 17 and 19.
+- [x] **T3-2. The card saves at once, and hears the company again** Done 21 Nov 2026 (`4cd8e3e` to `b5f0a2a`). Built, waiting for Al-khair's look. Its search reads our copy only: a gap against choice 19, in the Log. (`card/card.tsx`, `card/company.tsx`, `card/send.ts` and `card/drafts.ts`). Choices 17 and 19.
   - **Done when:** tests pass: a call whose company isn't found is saved at once as "Needs a company"; Later keeps it in Call logs, not in this browser; the next words fill the company search and show its results as choices; "the first one" picks, and the call is sorted; a name found nowhere says so and keeps the call; and tasks and emails are still kept in this browser, as now.
-- [ ] **T3-3. "Needs a company" in Call logs** (`apps/companies/call-logs/`). Choice 20.
+- [x] **T3-3. "Needs a company" in Call logs** Done 21 Nov 2026 (`c90e8be` to `4747216`, built on `plan-v24-logs` and cherry-picked). Built, waiting for Al-khair's look. (`apps/companies/call-logs/`). Choice 20.
   - **Done when:** tests at 1440 and 390 px pass: the group sits at the top with its count; each row shows the name as heard and "Pick company"; a pick moves the call to To confirm once it is sorted; a send leaves these calls out and says why; and Al-khair has seen it.
 - [ ] **T3-4. Part 3 check.** Backend: ruff, ruff format, mypy, the fast tests, the Companies tests and the contract gate (`RUN_GATES=1`). Website: as T2-6. The `security-check` skill on T3-1.
   - **Done when:** all pass, and the numbers are in the Log.
@@ -372,6 +372,69 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
 - **For Al-khair:** Today's counts and the 4:30 pm reminder email don't count calls that need a company yet (**TBC**).
 - A backend restart during a picked call's sort sends the call to To confirm at once, to be sorted by hand. A new call waits 2 minutes first.
 - On `plan-v24`, after T3-1, the website's types show 9 errors, all in `call-logs/` and `call-notes/call-notes.test.tsx`. T3-3 fixes them.
+
+- 21 Nov 2026: T3-3 was built by a frontend agent in 4 commits on `plan-v24-logs` (`4db6d0f` to `7d1226b`), and cherry-picked onto `plan-v24` as `c90e8be` to `4747216`. It is built and waiting for Al-khair's look.
+- T3-1's type errors are fixed with one helper, `callCompany` in `call-logs/words.ts`. It gives the company's name, or the name as heard, in quotes. History offers "Log another call" only when the call has a company.
+- A bug was found and fixed: `bumpCounts` (`src/api/hooks/call-notes.ts`) rebuilt the counts with 3 fields. So a save or a send would have hidden the group until the next read.
+- The tests are in `call-logs/needs-company.test.tsx`, each at 1440 and 390 px through the media-query fakes. They prove:
+  - the group sits at the top with its count;
+  - each row shows the name as heard and "Pick company";
+  - a pick moves the call to To confirm once it is sorted (the PATCH sends `company_key` only);
+  - a send leaves these calls out and says why.
+- The same file also covers:
+  - Esc puts the focus back;
+  - a 422 shows the server's words;
+  - a 409 `company_set` reads the call again;
+  - Remove with Undo;
+  - a Viewer sees no buttons.
+- The checks, in that copy (without Parts 1 and 2):
+  - lint 0 problems, and the types are clean;
+  - 2,512 tests passed in 166 files;
+  - the build passes. Call logs' file is 53.9 kB (16.1 kB gzip).
+- Words for Al-khair's look (**TBC**):
+  - the group: "Needs a company" with its count, then "We couldn't find the company for these calls, so they can't go to HubSpot yet. Pick each one, and its call moves to To confirm.";
+  - each row: '"North Wind" as heard', with Pick company and Remove;
+  - the pick panel: 'Heard as "North Wind". Which company was the call with?';
+  - a send: "2 calls need a company first. They stay in Call logs."
+- Its choices, **TBC** with Al-khair:
+  - Call logs waits for the counts as well as the switches before it draws the tabs, so the group never pushes them down;
+  - the group shows the newest 3 calls, with "Show all";
+  - "Pick company" is in the group only, not in History;
+  - a wrong pick can't be changed, because the server takes `company_key` once. The rep removes the call in To confirm and logs it again. Changing it would need a backend change.
+- Not checked yet: a browser, 1280 px, dark mode, reduced motion and a real screen reader. The bundle report wasn't run: Call logs is a late page.
+- The menu's count and Today don't count these calls yet, as T3-1 noted.
+- 21 Nov 2026: T3-2 was built by a frontend agent in 3 commits on `plan-v24` (`4cd8e3e` to `b5f0a2a`), after it cherry-picked T3-3. It is built and waiting for Al-khair's look.
+- What T3-2 does:
+  - a call whose company isn't found is saved at once as "Needs a company", with the name as heard;
+  - Later keeps it in Call logs, with the toast "Kept in Call logs, under Needs a company.";
+  - the next words fill the company search, and its matches show as choices;
+  - "the first one" picks: the company goes as a PATCH, the call is sorted, and the AI isn't asked;
+  - a name found nowhere says so and keeps the call.
+- T3-2 also:
+  - a send says why a call that needs a company waits, with Open Call logs, and never sends it to HubSpot;
+  - a spoken change waits until the call is sorted ("That change waits until the call is sorted."), while an outcome goes at once;
+  - tasks and emails are still kept in this browser.
+- T3-2's tests are in `card/needs-company.test.tsx`, `card/send.test.tsx` and `card/choose.test.ts`. Typing and the keyboard alone do the same.
+- T3-2's checks:
+  - lint 0 problems, and types 0 errors (T3-3 cleared the 9);
+  - 2,743 of 2,743 tests passed in 174 files. A first full run had 1 failure in `links.test.tsx`, a 1-second wait under load. It passes alone, and the second full run was clean;
+  - the build passes.
+- T3-2's size: the first visit is 248,771 B of JavaScript (gzip) in 40 files, +176 B on S0 and within 1 kB. The extra file is Lucide's Send icon, which became a file of its own before T3-2. The bar's late file grew from 26,755 B to 28,302 B gzip.
+- **A gap against choice 19, for Al-khair.** The card's search reads only our HubSpot copy, by names that contain the words said, so "North Wind" doesn't find "Northwind". The learned names and HubSpot's own search aren't asked. HubSpot's search is reached only through Add to HubSpot's check. Finding a company as the command step does, with no AI, needs a small backend route, and the plan says to ask first.
+- **"Which Sample?" calls** (two or more companies found) aren't saved at once. The server teaches the mic on every pick of a call that needs a company, but PLAN-V23 says a pick from the command's own choices shouldn't teach. So they are saved after the pick, or as "Needs a company" on Later. Saving them at once needs the PATCH to skip teaching, which is backend work.
+- Still kept only in this browser on Later (**TBC**):
+  - a "Which James?" still to answer;
+  - no company name heard, because the server needs 1 to 120 characters;
+  - a save that failed twice.
+- Known gaps (**TBC**):
+  - a change said before the call is sorted is lost if the card closes first (an outcome isn't);
+  - after a refused pick, the search box goes back to the name as heard;
+  - after a pick, the person stays "No one in particular";
+  - the conversation strip (Part 5's) still says "Say 'send it'" on these calls.
+- Words for Al-khair's look (**TBC**):
+  - "We couldn't find 'North Wind'. The call is saved. Say the company again, or pick it.";
+  - "Still no '{words}'. Say it again, or pick it later in Call logs.", and on a task card "Still no '{words}'. Say it again, or pick it.";
+  - "1 call needs a company first. It stays in Call logs.", with Open Call logs.
 
 ## Part 4: every device
 
@@ -422,6 +485,24 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - choice 28: the name fix needs capitals, but the model writes names in lower case;
   - "Send it." misheard: padding a short turn with silence is being tried.
 - The S2 page is in `plan/shots/v24/s2/` in `../contour-v24-device`, which git ignores. Its README has the iPhone steps.
+
+- 21 Nov 2026: the three fixes, in 4 more commits on `plan-v24-device` (`676657f` to `268c92e`). All 12 commits were cherry-picked onto `plan-v24-wire` (`6a1ea15` to `0cbf545`) in `../contour-v24-device`, a branch made from `plan-v24` at `c9b90a2`, where T4-3 is built.
+- **A wrong kept file never counts as kept.** Only a copy in our own store counts, and only if it carries the size written when its check passed. A failed check deletes the address from both stores, ours and the service worker's.
+- **Choice 28 on the model's words.** The model's tool says its words don't capitalise names. Then:
+  - a run of 2 or more words that is a name, ignoring case, gets the name's capitals: "sample logistics" becomes "Sample Logistics";
+  - one near miss inside such a run is fixed and shown;
+  - a word alone never changes, and a list of everyday words guards the rest: "shall" never becomes "Shell".
+  - The limit (**TBC** at S2): on the model's path, a one-word name heard wrong isn't fixed, and neither is a first name under 4 letters.
+- **"Send it." misheard.** With Windows' two voices, 16 short commands per model:
+  - Moonshine Base got 12 of 16 right with no quiet added, and 16 of 16 with 300 ms of quiet on each side;
+  - Tiny got 14 of 16 with none, and fewer with quiet.
+  - Kept: Base pads turns under 1.5 s with 300 ms; Tiny and Whisper don't (**TBC** at S2).
+- **The GPU is slow only with the 8-bit files.** On this laptop's Intel graphics, for 2.3 to 2.7 s of sound:
+  - Base, 8-bit files on the GPU: 2.8 to 3.2 s;
+  - Base, fp32 encoder and q4 decoder on the GPU: 0.5 s once warm. These files are 154 MB, for S2's page only;
+  - Base, 8-bit files on the CPU: 0.25 to 0.35 s, still the fastest;
+  - Whisper base on the CPU heard every line right, but took 3.5 s.
+- The fixes' checks: lint 0 problems, types 0 errors, 2,536 of 2,536 tests passed, and the build passes. The first visit is the same (+0 kB). The everyday-word list adds about 2 kB to the bar's and the mic card's late files.
 
 ## Part 5: listening you can see
 
