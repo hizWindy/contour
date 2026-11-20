@@ -31,6 +31,20 @@
  *   A mic picked by hand stays while it is there. With no other mic, it stops as before.
  * - **No lost words** (choice 4): the voice tool keeps what it was still hearing when it ends, and
  *   tries a network blip again quietly. `reconnecting` is on while it does, after a second.
+ *
+ * PLAN-V24 T4-3, **every device**:
+ *
+ * - **The engine picks itself** (choice 22, `voice-engine.ts`), at each start: the browser's
+ *   service, or the model on the device. With `browser_model` it is the model everywhere.
+ * - **The model gets ready before the mic opens** (choice 25): at once once it is loaded on this
+ *   page; else its download, with the progress (`preparing`), then its load. So the tool's 5
+ *   seconds to start never run out during a download. A failed download, a model that won't load
+ *   and a device too slow for it each have their own problem.
+ * - **A service that doesn't start within 5 seconds** moves to the model (with `browser_service`,
+ *   and not during a network blip), and this device remembers it: the session starts again on
+ *   the model.
+ * - **The name fix** reads the model's names by their words: it writes them in any case
+ *   (`nameCase`, choice 28).
  */
 import { BAR_COUNT, type BarSource } from '@/components/motion/bar-levels'
 import {
@@ -42,10 +56,21 @@ import {
   rememberMic,
   type MicDevice,
 } from './devices'
-import { fixNames, type NameFix } from './name-fix'
+import { fixNames, type NameCase, type NameFix } from './name-fix'
 import {
+  browserFacts,
+  deviceKind,
+  engineFor,
+  hereOf,
+  rememberModel,
+  type BrowserFacts,
+  type DeviceKind,
+  type Engine,
+} from './voice-engine'
+import { DEVICE_MODEL, whyNotReady, type ModelVoice } from './voice-ready'
+import {
+  browserService,
   speechRecognition,
-  voiceToolFor,
   type VoiceTool,
   type VoiceToolKind,
   type VoiceToolMaker,
@@ -98,6 +123,20 @@ export interface MicSnapshot {
    * T1-3): on once that has lasted a second, off once it hears again or stops.
    */
   reconnecting: boolean
+  /**
+   * The model on the device getting ready, before the mic opens (PLAN-V24 T4-3, choice 25): its
+   * download, then its load. Null when it isn't getting ready.
+   */
+  preparing: Preparing | null
+}
+
+/** The model on the device getting ready (`MicSnapshot.preparing`). */
+export interface Preparing {
+  /** Bytes downloaded so far, of `total`. A `total` of 0: nothing downloads, the model loads. */
+  loaded: number
+  total: number
+  /** For "Getting voice ready on this phone". */
+  device: DeviceKind
 }
 
 /** The browser, as the session uses it. Tests hand in a fake one. */
@@ -111,6 +150,10 @@ export interface MicEnv {
   speech: () => boolean
   now: () => number
   storage: () => Storage | null
+  /** What the browser is, for the engine choice (PLAN-V24 choice 22). Left out: this browser. */
+  browser?: () => BrowserFacts
+  /** The model on the device (PLAN-V24 Part 4). Left out: the real one, loaded late. */
+  model?: ModelVoice
 }
 
 export function browserEnv(): MicEnv {
@@ -142,6 +185,8 @@ export function browserEnv(): MicEnv {
         return null
       }
     },
+    browser: browserFacts,
+    model: DEVICE_MODEL,
   }
 }
 
@@ -334,7 +379,10 @@ export interface MicSessionOptions {
   /** The names the speech service listens for, in on-device mode only (PLAN-V23 T1-5). */
   hints?: readonly string[]
   env?: MicEnv
-  /** The tool to run; tests hand in a fake. By default, the one for `tool`. */
+  /**
+   * The browser's speech service as a voice tool; tests hand in a fake. By default, the real one.
+   * The model's tool comes from `env.model` once it is ready.
+   */
   makeTool?: VoiceToolMaker | null
 }
 
@@ -346,7 +394,14 @@ export class MicSession {
   private names: readonly string[]
   private hints: readonly string[]
   private readonly env: MicEnv
-  private readonly makeTool: VoiceToolMaker | null
+  /** The browser's speech service, as a voice tool. */
+  private readonly serviceTool: VoiceToolMaker | null
+  /** The engine of this opening (choice 22), picked at each start. */
+  private engine: Engine | null = null
+  /** The model's voice tool, once the model is ready. */
+  private modelTool: VoiceToolMaker | null = null
+  /** How the tool in use writes names, for the name fix of words it leaves behind (choice 28). */
+  private nameCase: NameCase = 'capitals'
   private readonly listeners = new Set<Listener>()
   private snapshot: MicSnapshot
   private run = 0
@@ -391,10 +446,7 @@ export class MicSession {
     this.names = names
     this.hints = hints
     this.env = env
-    // Only the browser service has a tool until Whisper is built (T3-3): with the others the check
-    // ends at "Voice to text ready", and nothing listens for words.
-    this.makeTool =
-      tool === 'browser_service' ? (makeTool === undefined ? voiceToolFor(tool) : makeTool) : null
+    this.serviceTool = makeTool === undefined ? browserService : makeTool
     this.snapshot = {
       phase: 'checking',
       steps: WAITING,
@@ -409,6 +461,7 @@ export class MicSession {
       listeningSince: null,
       movedTo: null,
       reconnecting: false,
+      preparing: null,
     }
   }
 
@@ -437,7 +490,10 @@ export class MicSession {
 
   // --- What the card asks -----------------------------------------------------------------------
 
-  /** Runs the check, with the mic the rep picked on this computer, if any. */
+  /**
+   * Runs the check, with the mic the rep picked on this computer, if any. The engine is picked
+   * again each time (choice 22): after the service didn't start, it is the model.
+   */
   start(): void {
     // A start after a close opens the mic again: React runs an effect twice while developing
     // (StrictMode), close then start, and the card must still work.
@@ -446,6 +502,7 @@ export class MicSession {
     this.toolReady = false
     this.pending = ''
     this.heardRaw = ''
+    this.engine = engineFor(this.kind, hereOf(this.env))
     this.set({
       phase: 'checking',
       steps: WAITING,
@@ -456,6 +513,7 @@ export class MicSession {
       listeningSince: null,
       movedTo: null,
       reconnecting: false,
+      preparing: null,
     })
     void this.check(this.run, rememberedMic(this.env.storage()))
   }
@@ -488,11 +546,16 @@ export class MicSession {
         if (run !== this.run || this.snapshot.phase !== 'writing') return
         this.tool?.abort()
         this.tool = null
-        this.set({ phase: 'failed', problem: 'too_slow', reconnecting: false })
+        this.set({ phase: 'failed', problem: this.slowProblem(), reconnecting: false })
       },
       Math.max(TOO_SLOW_TIMES * talk, TOO_SLOW_FLOOR_MS),
     )
     tool.stop()
+  }
+
+  /** Too slow: this computer, for the browser's service; the device, for the model (choice 24). */
+  private slowProblem(): MicProblem {
+    return this.engine === 'model' ? 'device_too_slow' : 'too_slow'
   }
 
   /** The card is shut: the mic is let go, and nothing more comes. */
@@ -570,6 +633,8 @@ export class MicSession {
       this.fail(run, 'found', 'old_browser')
       return
     }
+    // The model gets ready before the mic opens, so no mic waits on a download (choice 25).
+    if (this.engine === 'model' && !(await this.modelReady(run))) return
     const listed = await media.enumerateDevices().catch(() => [])
     if (this.stale(run)) return
     if (!hasMic(listed)) {
@@ -620,8 +685,45 @@ export class MicSession {
     this.watch(media)
 
     // A note's tool starts now, so the first words count while the check finishes.
-    if (this.mode === 'note' && this.makeTool) this.startTool(run, track)
+    if (this.mode === 'note' && this.maker()) this.startTool(run, track)
     this.listenForVoice(run)
+  }
+
+  /** The tool of the engine in use: the browser's service, or the model once it is ready. */
+  private maker(): VoiceToolMaker | null {
+    if (this.engine === 'service') return this.serviceTool
+    return this.engine === 'model' ? this.modelTool : null
+  }
+
+  /**
+   * The model on the device, ready before the mic opens (choice 25): at once when it is loaded on
+   * this page already; else its download, with the progress, then its load. False when it failed
+   * (its problem shows) or this opening is over.
+   */
+  private async modelReady(run: number): Promise<boolean> {
+    const model = this.env.model ?? DEVICE_MODEL
+    this.modelTool ??= model.loaded()
+    if (this.modelTool) return true
+    const device = deviceKind((this.env.browser ?? browserFacts)())
+    this.set({ preparing: { loaded: 0, total: 0, device } })
+    try {
+      const make = await model.prepare(({ loaded, total }) => {
+        if (!this.stale(run)) this.set({ preparing: { loaded, total, device } })
+      })
+      if (this.stale(run)) return false
+      this.modelTool = make
+      this.set({ preparing: null })
+      return true
+    } catch (error) {
+      if (this.stale(run)) return false
+      this.set({
+        phase: 'failed',
+        failedAt: null,
+        problem: whyNotReady(error) === 'download' ? 'download_failed' : 'model_failed',
+        preparing: null,
+      })
+      return false
+    }
   }
 
   private openSound(stream: MediaStream): void {
@@ -697,22 +799,20 @@ export class MicSession {
   /** The last line: is voice to text ready? */
   private toReady(run: number): void {
     if (this.stale(run)) return
-    if (this.kind !== 'browser_service') {
-      // Whisper waits for T3-3, and typing has no tool: the mic itself works.
-      this.fail(run, 'ready', 'not_set_up', true)
-      return
-    }
-    if (!this.env.speech()) {
+    if (this.engine === null) {
+      // Neither the browser's service nor the model can run here, or typing has no tool: the mic
+      // itself works.
       this.fail(run, 'ready', 'no_speech_tool', true)
       return
     }
     if (this.mode === 'check') {
-      // The service is there. A check doesn't start it: it would send the voice for nothing.
+      // The service is there, and a check doesn't start it: it would send the voice for nothing.
+      // The model got ready before the mic opened.
       this.set({ phase: 'checked', steps: this.step('ready', 'pass') })
       return
     }
-    if (!this.makeTool) {
-      this.fail(run, 'ready', 'not_set_up', true)
+    if (!this.maker()) {
+      this.fail(run, 'ready', 'no_speech_tool', true)
       return
     }
     if (this.toolReady) {
@@ -723,9 +823,33 @@ export class MicSession {
       if (!this.stale(run) && !this.toolReady && this.snapshot.phase === 'checking') {
         this.tool?.abort()
         this.tool = null
+        if (this.mayMoveToModel()) {
+          this.moveToModel()
+          return
+        }
         this.fail(run, 'ready', 'tool_failed', true)
       }
     }, TOOL_START_MS)
+  }
+
+  /**
+   * The browser's service didn't start within 5 seconds (choice 22): with `browser_service`, where
+   * the model can run, the session moves to it. Not during a network blip ("Reconnecting"): that
+   * is the connection, not the device.
+   */
+  private mayMoveToModel(): boolean {
+    return (
+      this.engine === 'service' &&
+      this.kind === 'browser_service' &&
+      !this.snapshot.reconnecting &&
+      (this.env.browser ?? browserFacts)().model
+    )
+  }
+
+  /** This device remembers the move, and the session starts again on the model. */
+  private moveToModel(): void {
+    rememberModel(this.env.storage())
+    this.start()
   }
 
   private listen(): void {
@@ -737,9 +861,12 @@ export class MicSession {
   }
 
   private startTool(run: number, track: MediaStreamTrack | null): void {
-    const make = this.makeTool
+    const make = this.maker()
     if (!make) return
     let tool: VoiceTool | null = null
+    // How this tool writes names (choice 28): known once `make` returns, which is before any of
+    // its words come.
+    let nameCase: NameCase = 'capitals'
     // Only the session's tool of the moment counts: one let go when the mic moved says no more.
     const current = (): boolean => !this.stale(run) && tool !== null && this.tool === tool
     tool = make({
@@ -754,14 +881,14 @@ export class MicSession {
         // Words handed over before they were final count once (`handOver`).
         const { rest, left } = afterHanded(chunk, this.pending)
         this.pending = left
-        this.addChunk(rest)
+        this.addChunk(rest, nameCase)
       },
       onHearing: (text) => {
         if (!current()) return
         // Nothing is still being heard: words handed over before they were final are all in.
         if (text.trim() === '') this.pending = ''
         this.heardRaw = afterHanded(text, this.pending).rest
-        this.set({ hearing: fixNames(this.heardRaw, this.names).text })
+        this.set({ hearing: fixNames(this.heardRaw, this.names, nameCase).text })
       },
       onFinished: () => {
         if (!current()) return
@@ -786,17 +913,19 @@ export class MicSession {
           void this.follow(run)
           return
         }
-        this.toolFailed(run, problem)
+        this.toolFailed(run, problem === 'too_slow' ? this.slowProblem() : problem)
       },
     })
+    nameCase = tool.nameCase ?? 'capitals'
+    this.nameCase = nameCase
     this.tool = tool
     tool.start(track, this.hints)
   }
 
-  /** A chunk of final words, with the names fixed. */
-  private addChunk(text: string): void {
+  /** A chunk of final words, with the names fixed as the tool writes them (choice 28). */
+  private addChunk(text: string, nameCase: NameCase = this.nameCase): void {
     if (text.trim() === '') return
-    const fixed = fixNames(text, this.names)
+    const fixed = fixNames(text, this.names, nameCase)
     const fixes = [...this.snapshot.fixes]
     for (const fix of fixed.fixes) {
       if (!fixes.some((kept) => kept.from === fix.from && kept.to === fix.to)) fixes.push(fix)

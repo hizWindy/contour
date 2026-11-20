@@ -261,8 +261,10 @@ describe('what can go wrong (the plan’s table, the mic)', () => {
     ],
     ['not the secure site', { secure: false }, 'No mic found', PROBLEMS.insecure.words, []],
     [
-      'a browser with no speech service',
-      { speech: false },
+      // With no speech service, the model on the device takes over (PLAN-V24 T4-3): this browser
+      // can run neither.
+      'a browser that can run neither voice to text',
+      { speech: false, browser: { model: false } },
       "Voice to text isn't ready",
       PROBLEMS.no_speech_tool.words,
       ['Type instead'],
@@ -458,24 +460,109 @@ describe('which mic', () => {
   })
 })
 
-describe('Whisper in the browser (waits for T3-3)', () => {
-  it('checks the mic, keeps the bars, and says plainly that speech to words isn’t set up yet', async () => {
+describe('a free model on the device (PLAN-V24 T4-3)', () => {
+  const BYTES = 83_000_000
+
+  it('with browser_model, gets the model ready, listens with it, and its names are fixed', async () => {
     const { mic, user, spies } = openCard({}, { tool: 'browser_model' })
-    expect(await screen.findByText(PROBLEMS.not_set_up.words)).toBeInTheDocument()
-    expect(screen.getByRole('dialog', { name: 'Your mic works' })).toBeInTheDocument()
-    await waitFor(() => {
-      expect(lines().slice(0, 3)).toEqual([
-        'Mic found pass',
-        'Allowed pass',
-        'We can hear you pass',
-      ])
+    await speakNow()
+    expect(mic.model.asked.prepare).toBe(1)
+    // The model's own tool, which writes names in any case (choice 28).
+    expect(mic.tools.map((tool) => tool.nameCase)).toEqual(['any'])
+    act(() => {
+      mic.say('log a call with jo sample')
     })
-    // The mic stays open while the card shows, so the bars follow the voice.
+    expect(await screen.findByText('log a call with Jo Sample')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Done' }))
+    await waitFor(() => {
+      expect(spies.onDone).toHaveBeenCalledWith('log a call with Jo Sample', [])
+    })
+  })
+
+  it('downloads it first where this browser doesn’t keep it: the line, its progress, no mic', async () => {
+    const { mic } = openCard({ modelBytes: BYTES }, { tool: 'browser_model' })
+    expect(
+      await screen.findByRole('dialog', { name: 'Getting voice ready on this computer' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Only this once.')).toBeInTheDocument()
+    expect(screen.getByText('0 of 83 MB')).toBeInTheDocument()
+    act(() => {
+      mic.model.progress(41_000_000)
+    })
+    expect(await screen.findByText('41 of 83 MB')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Voice download' })).toHaveAttribute(
+      'aria-valuenow',
+      '49',
+    )
+    // Said once to a screen reader, not at each megabyte.
+    expect(screen.getByRole('status')).toHaveTextContent('Getting voice ready on this computer')
+    // No mic opens while it downloads.
+    expect(mic.asked).toEqual([])
+    act(() => {
+      mic.model.done()
+    })
+    await speakNow()
     expect(mic.live()).toBe(1)
-    expect(mic.tools).toHaveLength(0)
+  })
+
+  it('Type instead skips the download: the mic never opens', async () => {
+    const { mic, user, spies } = openCard({ modelBytes: BYTES }, { tool: 'browser_model' })
+    await screen.findByText('Only this once.')
     await user.click(screen.getByRole('button', { name: 'Type instead' }))
     expect(spies.onTypeInstead).toHaveBeenCalledWith('')
-    expect(mic.live()).toBe(0)
+    act(() => {
+      mic.model.done()
+    })
+    expect(mic.asked).toEqual([])
+    expect(mic.tools).toHaveLength(0)
+  })
+
+  it.each<[string, 'download' | 'load', string, string[]]>([
+    [
+      'the download failed',
+      'download',
+      PROBLEMS.download_failed.words,
+      ['Try again', 'Type instead'],
+    ],
+    ['the model won’t start here', 'load', PROBLEMS.model_failed.words, ['Type instead']],
+  ])('%s: says so, with its buttons, and no mic opened', async (_, why, words, buttons) => {
+    const { mic } = openCard({ modelBytes: BYTES }, { tool: 'browser_model' })
+    await screen.findByText('Only this once.')
+    act(() => {
+      mic.model.fail(why)
+    })
+    expect(await screen.findByRole('alert')).toHaveTextContent(words)
+    expect(screen.getByRole('dialog', { name: "Voice to text isn't ready" })).toBeInTheDocument()
+    for (const name of buttons) expect(screen.getByRole('button', { name })).toBeInTheDocument()
+    expect(mic.asked).toEqual([])
+  })
+
+  it('Try again after a failed download downloads again, then listens', async () => {
+    const { mic, user } = openCard({ modelBytes: BYTES }, { tool: 'browser_model' })
+    await screen.findByText('Only this once.')
+    act(() => {
+      mic.model.fail('download')
+    })
+    await user.click(await screen.findByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('Only this once.')).toBeInTheDocument()
+    expect(mic.model.asked.prepare).toBe(2)
+    act(() => {
+      mic.model.done()
+    })
+    await speakNow()
+  })
+
+  it('a device too slow for the model says so, with Type instead, and the words stay', async () => {
+    const { mic, user, spies } = openCard({}, { tool: 'browser_model' })
+    await speakNow()
+    act(() => {
+      mic.say('log a call with jo sample')
+      mic.fail('too_slow')
+    })
+    expect(await screen.findByText(PROBLEMS.device_too_slow.words)).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'The mic stopped' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Type instead' }))
+    expect(spies.onTypeInstead).toHaveBeenCalledWith('log a call with Jo Sample')
   })
 })
 
@@ -499,10 +586,20 @@ describe('check only ("Check my mic")', () => {
     expect(mic.live()).toBe(0)
   })
 
-  it('with Whisper picked, says speech to words isn’t set up yet, with no Type instead', async () => {
-    openCard({}, { mode: 'check', tool: 'browser_model' })
-    expect(await screen.findByText(PROBLEMS.not_set_up.words)).toBeInTheDocument()
+  it('with the model on the device, gets it ready first, then says the mic works', async () => {
+    const { mic } = openCard({}, { mode: 'check', tool: 'browser_model' })
+    expect(await screen.findByRole('dialog', { name: 'Your mic works' })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(lines()).toEqual([
+        'Mic found pass',
+        'Allowed pass',
+        'We can hear you pass',
+        'Voice to text ready pass',
+      ])
+    })
+    expect(mic.model.asked.prepare).toBe(1)
+    // A check starts no tool.
+    expect(mic.tools).toHaveLength(0)
     expect(screen.queryByRole('button', { name: 'Type instead' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
   })
 })

@@ -3,14 +3,16 @@
  * words, whichever tool does it. The card starts it, stops it, hears the words as they come, and
  * hears its problems. Nothing else of a tool reaches the card.
  *
- * The tools, picked by the `voice_tool` setting (the contract, part 4):
+ * The tools, picked by the `voice_tool` setting (the contract, part 4) and the device
+ * (`voice-engine.ts`, PLAN-V24 choice 22):
  *
- * - `browser_service`: the browser's own speech service (the Web Speech API, `en-AU`, built here).
- *   The words come live. The browser sends the voice to its maker (Google for Chrome, Microsoft
- *   for Edge), which needs Levi's OK, so it runs only when the setting says so.
- * - `browser_model`: Whisper in the browser. It waits for T3-3 (Al-khair at the keyboard), so it
- *   has no tool here yet: the card checks the mic, shows the bars, and says plainly that turning
- *   speech into words isn't set up yet.
+ * - The browser's own speech service (the Web Speech API, `en-AU`, built here): with
+ *   `browser_service`, where the service is strong. The words come live. The browser sends the
+ *   voice to its maker (Google for Chrome, Microsoft for Edge), which needs Levi's OK, so it runs
+ *   only when the setting says so.
+ * - A free model on the device (`on-device/tool.ts`, PLAN-V24 Part 4): with `browser_model`
+ *   everywhere, and with `browser_service` where the browser's service is weak or missing. The
+ *   voice never leaves the device. It gets ready first (`voice-ready.ts`).
  * - `typing`: no mic at all. The note box has no mic button.
  *
  * Our code never stores or sends the audio. The browser service listens to the mic itself (or to
@@ -29,6 +31,7 @@
  */
 
 import type { VoiceToolKind } from '@/api/types'
+import type { NameCase } from './name-fix'
 
 export type { VoiceToolKind }
 
@@ -64,6 +67,11 @@ export interface VoiceTool {
   stop: () => void
   /** Throw away: nothing more comes. */
   abort: () => void
+  /**
+   * How the tool writes names (PLAN-V24 choice 28), for the name fix: with capitals (the
+   * browser's service, and the default), or in any case (the model on the device).
+   */
+  readonly nameCase?: NameCase
 }
 
 export type VoiceToolMaker = (events: VoiceToolEvents) => VoiceTool
@@ -485,9 +493,4 @@ export function browserService(
       }
     },
   }
-}
-
-/** The tool for the setting, or null where there is none to run (`browser_model` and `typing`). */
-export function voiceToolFor(kind: VoiceToolKind): VoiceToolMaker | null {
-  return kind === 'browser_service' ? browserService : null
 }

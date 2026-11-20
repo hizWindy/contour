@@ -2,9 +2,11 @@
  * The mic card's words (PLAN-V18 T3-4, T3-5 and "Words for when things go wrong", the mic): plain,
  * sentence case, no em dash, and no setting or file name (the screen-words test reads them). Each
  * problem says what happened, what still works, and the one thing to do. The wording is
- * Al-khair's to change. PLAN-V24 T1-4 changed the busy mic's words (TBC at his look).
+ * Al-khair's to change. PLAN-V24 T1-4 changed the busy mic's words, and T4-3 added the model's
+ * download and its problems (both TBC at his look).
  */
 import { isMac, isWindows } from '@/lib/platform'
+import type { DeviceKind } from './voice-engine'
 
 /** The mic button in the note box, for screen readers and its tooltip. */
 export const SPEAK = 'Speak'
@@ -57,8 +59,10 @@ export type MicProblem =
   | 'tool_failed'
   | 'too_slow'
   | 'cut_off'
-  | 'not_set_up'
   | 'no_speech_tool'
+  | 'download_failed'
+  | 'device_too_slow'
+  | 'model_failed'
 
 /** A problem's buttons, in the order they show. The first is the main one. */
 export type MicAction = 'try_again' | 'type_instead' | 'pick_mic' | 'carry_on'
@@ -131,15 +135,25 @@ export const PROBLEMS: Readonly<
     words: 'The mic stopped. What you said so far is kept.',
     actions: ['carry_on'],
   },
-  // Whisper in the browser waits for T3-3 (Al-khair at the keyboard), so with that tool picked the
-  // check ends here, after the mic itself passed.
-  not_set_up: {
-    words:
-      "Turning speech into words isn't set up here yet. Your mic works. Type the note for now.",
-    actions: ['type_instead'],
-  },
+  // Neither the browser's speech service nor the model on the device can run here.
   no_speech_tool: {
     words: "This browser can't turn speech into words. Use Chrome or Edge, or type the note.",
+    actions: ['type_instead'],
+  },
+  // The model on the device (PLAN-V24 T4-3, the plan's words): its download failed.
+  download_failed: {
+    words:
+      "Voice couldn't get ready. Check your connection, then try again. You can type meanwhile.",
+    actions: ['try_again', 'type_instead'],
+  },
+  // The model can't keep up with the talk on this device (choice 24).
+  device_too_slow: {
+    words: "This device is too slow for voice to text. Use your keyboard's mic, or type.",
+    actions: ['type_instead'],
+  },
+  // The model won't load on this device. Not in the plan's table: TBC at Al-khair's look.
+  model_failed: {
+    words: "Voice to text couldn't start on this device. Use your keyboard's mic, or type.",
     actions: ['type_instead'],
   },
 }
@@ -203,6 +217,29 @@ export const RECONNECTING = 'Reconnecting'
 export function nowUsing(mic: string): string {
   return `Now using ${mic}.`
 }
+
+// --- The model on the device getting ready (PLAN-V24 T4-3, choice 25) ----------------------------
+
+/** While the model loads from the files this browser keeps: no download, a moment only. */
+export const GETTING_VOICE_READY = 'Getting voice ready'
+
+/**
+ * While it downloads, the plan's line in two parts: the title, "Getting voice ready on this
+ * phone", then `ONLY_ONCE` with the progress (TBC at Al-khair's look).
+ */
+export function gettingVoiceReadyOn(device: DeviceKind): string {
+  return `Getting voice ready on this ${device}`
+}
+export const ONLY_ONCE = 'Only this once.'
+
+/** The download's progress in megabytes: "34 of 83 MB". */
+export function downloadedOf(loaded: number, total: number): string {
+  const mb = (bytes: number): string => String(Math.round(bytes / 1_000_000))
+  return `${mb(Math.min(loaded, total))} of ${mb(total)} MB`
+}
+
+/** The progress bar's name, for a screen reader. */
+export const VOICE_DOWNLOAD = 'Voice download'
 
 /** "Changed Vitara to Vitera." A name the mic heard nearly right, fixed once. */
 export function fixedWords(fixes: readonly { from: string; to: string }[]): string {

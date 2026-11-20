@@ -16,6 +16,10 @@
  * - **Keys:** Enter is Done, Esc is Cancel (nothing goes in the box).
  * - **Check only** ("Check my mic", from Ctrl+K or the profile menu): the same check, the bars,
  *   and Done. There is no note box, so no Type instead.
+ * - **The model on the device** (PLAN-V24 T4-3): where it is the engine, it gets ready before the
+ *   check. While it downloads, the title says "Getting voice ready on this computer", and its
+ *   bar fills in place of the check's lines, with "Only this once." Type instead skips it. A
+ *   failed download, a model that won't start and a device too slow for it each say so.
  *
  * It loads late, the first time a mic button is pressed or pointed at, so neither the first visit
  * nor the Companies page carries it. The mic is let go the moment the card closes.
@@ -43,12 +47,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Kbd } from '@/components/ui/kbd'
+import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
 import { ChoiceItem } from '../../choice-item'
 import { clockText } from '../words'
 import { LiveWords } from './live-words'
 import type { NameFix } from './name-fix'
-import { CHECK_STEPS, MicSession, type MicEnv, type MicSnapshot } from './session'
+import { CHECK_STEPS, MicSession, type MicEnv, type MicSnapshot, type Preparing } from './session'
 import type { VoiceToolKind, VoiceToolMaker } from './voice-tool'
 import {
   ACTION_WORDS,
@@ -58,18 +63,23 @@ import {
   CHECKING,
   DONE,
   DONE_TITLE,
+  downloadedOf,
   fixedWords,
+  GETTING_VOICE_READY,
+  gettingVoiceReadyOn,
   LISTENING,
   MIC_NOT_READY,
   MIC_STOPPED,
   MIC_WORKS,
   nowUsing,
+  ONLY_ONCE,
   problemActions,
   problemWords,
   RECONNECTING,
   SPEAK_NOW,
   speakingFor,
   STEP_WORDS,
+  VOICE_DOWNLOAD,
   WHICH_MIC,
   WRITING,
   type CheckStep,
@@ -118,6 +128,7 @@ const NO_SESSION_SNAPSHOT: MicSnapshot = {
   listeningSince: null,
   movedTo: null,
   reconnecting: false,
+  preparing: null,
 }
 
 const noSubscribe = (): (() => void) => () => undefined
@@ -135,12 +146,45 @@ function titleOf(snapshot: MicSnapshot): string {
     case 'checked':
       return MIC_WORKS
     case 'failed':
-      if (snapshot.problem === 'cut_off') return MIC_STOPPED
+      if (snapshot.problem === 'cut_off' || snapshot.problem === 'device_too_slow') {
+        return MIC_STOPPED
+      }
       if (snapshot.problem === 'too_slow') return WRITING
+      // The model on the device couldn't get ready (PLAN-V24 T4-3): the mic wasn't opened.
+      if (snapshot.problem === 'download_failed' || snapshot.problem === 'model_failed') {
+        return STEP_WORDS.ready.fail
+      }
       return snapshot.failedAt === 'ready' ? MIC_WORKS : MIC_NOT_READY
-    case 'checking':
-      return CHECKING
+    case 'checking': {
+      // The model on the device gets ready before the check (PLAN-V24 T4-3).
+      const preparing = snapshot.preparing
+      if (!preparing) return CHECKING
+      return preparing.total > 0 ? gettingVoiceReadyOn(preparing.device) : GETTING_VOICE_READY
+    }
   }
+}
+
+/**
+ * The model's download, in place of the check's lines and as tall (PLAN-V24 T4-3): "Only this
+ * once.", and a bar that fills with the megabytes.
+ */
+function VoiceDownload({ preparing }: { preparing: Preparing }) {
+  const { loaded, total } = preparing
+  const shown = downloadedOf(loaded, total)
+  return (
+    <div data-slot="mic-download" className="flex min-h-[6.5rem] flex-col justify-center gap-3">
+      <p className="text-ui text-pretty text-foreground">{ONLY_ONCE}</p>
+      <div className="flex items-center gap-3">
+        <Progress
+          value={Math.round((Math.min(loaded, total) / total) * 100)}
+          getValueLabel={() => shown}
+          aria-label={VOICE_DOWNLOAD}
+          className="flex-1"
+        />
+        <span className="shrink-0 text-caption text-muted-foreground tabular-nums">{shown}</span>
+      </div>
+    </div>
+  )
 }
 
 /**
@@ -346,6 +390,9 @@ export default function MicCard({
   const [main, ...others] = actions
   const title = titleOf(snapshot)
   const canFinish = noteBox && phase === 'listening'
+  // The model's download, before the check (PLAN-V24 T4-3): not while it only loads.
+  const preparing = phase === 'checking' ? snapshot.preparing : null
+  const download = preparing && preparing.total > 0 ? preparing : null
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     // The card's keys stay in the card: the note view and the panel behind it (Ctrl+Enter saves,
@@ -414,7 +461,9 @@ export default function MicCard({
 
         <FrequencyBars source={snapshot.bars} label={LISTENING} />
 
-        {showSteps ? (
+        {download ? (
+          <VoiceDownload preparing={download} />
+        ) : showSteps ? (
           <ul aria-label={CHECKING} className="flex flex-col gap-2 text-ui">
             {CHECK_STEPS.map((step, index) => {
               const state = snapshot.steps[step]

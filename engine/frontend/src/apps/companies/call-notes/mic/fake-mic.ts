@@ -14,15 +14,122 @@
  * `install()` puts the same fake in the window (the mic, the sound, the secure page and the
  * browser's speech service), for a test that presses the real mic button. It is taken out again
  * when the test ends. The service's recognisers are in `recognitions`, newest last.
+ *
+ * The engine (PLAN-V24 T4-3): the browser is Chrome on a Windows laptop unless told (`browser`),
+ * so the browser's service is the engine. On a browser that gets the model, `model` is a fake one:
+ * kept already and ready at once, or with `modelBytes` to download, which the test moves on.
+ *
+ *   const mic = new FakeMic({ browser: IPHONE, modelBytes: 83_000_000 })
+ *   mic.model.progress(41_000_000)          // the download has come this far
+ *   mic.model.done()                        // downloaded and loaded: the mic opens
  */
 import { onTestFinished, vi } from 'vitest'
+import type { NameCase } from './name-fix'
 import type { MicEnv } from './session'
+import type { BrowserFacts } from './voice-engine'
+import type { ModelVoice, NotReady } from './voice-ready'
+import type { Progress } from './on-device/engine'
 import type {
   SpeechRecognitionLike,
   VoiceTool,
   VoiceToolEvents,
   VoiceToolMaker,
 } from './voice-tool'
+
+/** Browsers, for the engine choice. Real shapes of user agents, made-up version numbers. */
+export const CHROME_LAPTOP: BrowserFacts = {
+  userAgent:
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+  touchPoints: 0,
+  model: true,
+}
+export const CHROME_ANDROID: BrowserFacts = {
+  userAgent:
+    'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36',
+  touchPoints: 5,
+  model: true,
+}
+export const IPHONE: BrowserFacts = {
+  userAgent:
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 26_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Mobile/15E148 Safari/604.1',
+  touchPoints: 5,
+  model: true,
+}
+/** The app installed on an iPhone's home screen. */
+export const IPHONE_APP: BrowserFacts = {
+  userAgent:
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 26_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+  touchPoints: 5,
+  model: true,
+}
+export const FIREFOX_LAPTOP: BrowserFacts = {
+  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0',
+  touchPoints: 0,
+  model: true,
+}
+
+/**
+ * The model on the device, as the mic session sees it (PLAN-V24 T4-3): kept already and ready at
+ * once, or with `bytes` to download, which the test moves on (`progress`, `done`) or fails.
+ */
+export class FakeModel implements ModelVoice {
+  /** Bytes still to download: 0 when this browser keeps the files. */
+  bytes: number
+  /** How many times each was asked for. */
+  readonly asked = { fetch: 0, prepare: 0 }
+  private tool: VoiceToolMaker | null = null
+  private waiting: {
+    onProgress: (progress: Progress) => void
+    resolve: (make: VoiceToolMaker) => void
+    reject: (error: Error) => void
+  }[] = []
+  private readonly make: VoiceToolMaker
+
+  constructor(bytes: number, make: VoiceToolMaker) {
+    this.bytes = bytes
+    this.make = make
+  }
+
+  loaded = (): VoiceToolMaker | null => this.tool
+
+  fetch = (): Promise<void> => {
+    this.asked.fetch += 1
+    return Promise.resolve()
+  }
+
+  prepare = (onProgress: (progress: Progress) => void): Promise<VoiceToolMaker> => {
+    this.asked.prepare += 1
+    if (this.bytes === 0) {
+      this.tool = this.make
+      return Promise.resolve(this.make)
+    }
+    onProgress({ loaded: 0, total: this.bytes })
+    return new Promise((resolve, reject) => {
+      this.waiting.push({ onProgress, resolve, reject })
+    })
+  }
+
+  /** The download has come this far. */
+  progress(loaded: number): void {
+    for (const one of this.waiting) one.onProgress({ loaded, total: this.bytes })
+  }
+
+  /** Downloaded and loaded: the browser keeps the files now. */
+  done(): void {
+    this.bytes = 0
+    this.tool = this.make
+    const waiting = this.waiting
+    this.waiting = []
+    for (const one of waiting) one.resolve(this.make)
+  }
+
+  /** The download failed, or the model won't load here. */
+  fail(why: NotReady): void {
+    const waiting = this.waiting
+    this.waiting = []
+    for (const one of waiting) one.reject(Object.assign(new Error('not ready'), { why }))
+  }
+}
 
 export interface FakeDevice {
   id: string
@@ -51,6 +158,10 @@ export interface FakeMicOptions {
   toolNeverFinishes?: boolean
   /** The browser can single out a voice from other sound (PLAN-V24 choice 1). */
   voiceIsolation?: boolean
+  /** What the browser is, for the engine choice (PLAN-V24 T4-3). Left out: a Chrome laptop. */
+  browser?: Partial<BrowserFacts>
+  /** The model's bytes still to download. Left out: 0, the browser keeps them already. */
+  modelBytes?: number
 }
 
 export const HEADSET: FakeDevice = {
@@ -89,6 +200,9 @@ export class FakeMic {
   toolNeverReady: boolean
   toolNeverFinishes: boolean
   voiceIsolation: boolean
+  browser: BrowserFacts
+  /** The model on the device, for a browser that gets it (PLAN-V24 T4-3). */
+  readonly model: FakeModel
   /** What each `getUserMedia` asked for. */
   readonly asked: MediaStreamConstraints[] = []
   readonly tracks: FakeTrack[] = []
@@ -102,6 +216,8 @@ export class FakeMic {
     hints: readonly string[]
     /** The mic's track it was told to listen to (PLAN-V24 T1-1). */
     track: MediaStreamTrack | null
+    /** The model's tool writes names in any case (PLAN-V24 choice 28); the service's, capitals. */
+    nameCase: NameCase
   }[] = []
   readonly storage = new Map<string, string>()
   audioClosed = 0
@@ -118,6 +234,8 @@ export class FakeMic {
     this.toolNeverReady = options.toolNeverReady ?? false
     this.toolNeverFinishes = options.toolNeverFinishes ?? false
     this.voiceIsolation = options.voiceIsolation ?? false
+    this.browser = { ...CHROME_LAPTOP, ...options.browser }
+    this.model = new FakeModel(options.modelBytes ?? 0, (events) => this.made(events, 'any'))
   }
 
   /** How many tracks are still open: 0 once the mic is let go. */
@@ -165,7 +283,7 @@ export class FakeMic {
   }
 
   /** The newest tool reports a problem. */
-  fail(problem: 'blocked_browser' | 'no_mic' | 'tool_failed'): void {
+  fail(problem: 'blocked_browser' | 'no_mic' | 'tool_failed' | 'too_slow'): void {
     this.tools.at(-1)?.events.onProblem(problem)
   }
 
@@ -289,11 +407,16 @@ export class FakeMic {
             this.storage.delete(key)
           },
         }) as unknown as Storage,
+      browser: () => this.browser,
+      model: this.model,
     }
   }
 
-  /** A fake voice tool: it is ready at once, and finishes as soon as it is stopped. */
-  readonly tool: VoiceToolMaker = (events) => {
+  /** A fake voice tool for the browser's service: ready at once, finished as soon as stopped. */
+  readonly tool: VoiceToolMaker = (events) => this.made(events, 'capitals')
+
+  /** A fake voice tool, recorded in `tools`. The model's says it writes names in any case. */
+  private made(events: VoiceToolEvents, nameCase: NameCase): VoiceTool {
     const record = {
       events,
       started: false,
@@ -301,6 +424,7 @@ export class FakeMic {
       aborted: false,
       hints: [] as readonly string[],
       track: null as MediaStreamTrack | null,
+      nameCase,
     }
     this.tools.push(record)
     const tool: VoiceTool = {
@@ -317,6 +441,7 @@ export class FakeMic {
       abort: () => {
         record.aborted = true
       },
+      ...(nameCase === 'any' ? { nameCase } : {}),
     }
     return tool
   }

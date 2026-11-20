@@ -435,7 +435,8 @@ describe('Check my mic (PLAN-V18 T3-4)', () => {
         (item) => item.textContent,
       )
       // "Use V to speak" (PLAN-V23 T4-1) comes first among the Assistant's rows, then "Keep
-      // listening" (PLAN-V24 T2-5).
+      // listening" (PLAN-V24 T2-5). "Get voice ready" (T4-3) isn't here: this test browser can't
+      // run the model on the device (it has no Web Worker).
       expect(names).toEqual([
         'Use V to speak',
         'Keep listening',
@@ -444,10 +445,11 @@ describe('Check my mic (PLAN-V18 T3-4)', () => {
         'Sign out',
       ])
       await user.click(screen.getByRole('menuitem', { name: 'Check my mic' }))
-      // Whisper waits for T3-3: the card checks the mic and says speech to words isn't set up yet.
+      // The model can't run here, and browser_model never falls back to the browser's service,
+      // so the voice never leaves the device: the card checks the mic and says so.
       expect(
         await screen.findByText(
-          "Turning speech into words isn't set up here yet. Your mic works. Type the note for now.",
+          "This browser can't turn speech into words. Use Chrome or Edge, or type the note.",
           undefined,
           { timeout: LAZY },
         ),

@@ -6,7 +6,6 @@ import {
   browserService,
   NETWORK,
   ON_DEVICE_HINTS,
-  voiceToolFor,
   type OnDeviceState,
   type SpeechRecognitionConstructor,
   type VoiceToolEvents,
@@ -157,12 +156,10 @@ describe('on-device mode with hints (PLAN-V23 T1-5, built and off until S1)', ()
   })
 })
 
-describe('the tool for each setting', () => {
-  it('runs the browser service only when the setting says so', () => {
-    expect(voiceToolFor('browser_service')).toBe(browserService)
-    // Whisper waits for T3-3, and typing has no mic.
-    expect(voiceToolFor('browser_model')).toBeNull()
-    expect(voiceToolFor('typing')).toBeNull()
+describe('how the tool writes names (PLAN-V24 choice 28)', () => {
+  it('says nothing, so the name fix reads names by their capitals, as the service writes them', () => {
+    // Which engine each setting and device gets is voice-engine.ts's (PLAN-V24 T4-3).
+    expect(browserService(events()).nameCase).toBeUndefined()
   })
 })
 

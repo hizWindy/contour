@@ -71,6 +71,25 @@ describe('the mic table', () => {
       ['Type instead'],
     ],
     ['Cut off', 'cut_off', 'The mic stopped. What you said so far is kept.', ['Carry on']],
+    // PLAN-V24 T4-3: the model on the device, in the plan's words (the last one TBC).
+    [
+      'The download failed',
+      'download_failed',
+      "Voice couldn't get ready. Check your connection, then try again. You can type meanwhile.",
+      ['Try again', 'Type instead'],
+    ],
+    [
+      'Too slow for the model',
+      'device_too_slow',
+      "This device is too slow for voice to text. Use your keyboard's mic, or type.",
+      ['Type instead'],
+    ],
+    [
+      "The model won't start",
+      'model_failed',
+      "Voice to text couldn't start on this device. Use your keyboard's mic, or type.",
+      ['Type instead'],
+    ],
   ])('%s', (_, problem, words, buttons) => {
     expect(problemWords(problem)).toBe(words)
     const actions = problemActions(problem, true).map(

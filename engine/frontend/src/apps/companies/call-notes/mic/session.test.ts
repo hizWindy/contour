@@ -1,13 +1,34 @@
 /**
  * The mic session on its own (PLAN-V24 Part 1), with the fake mic, the fake voice tool and an
  * exact clock: the clean sound and one check a conversation (T1-1), following the mic (T1-2), and
- * "Reconnecting" (T1-3). Made-up names only: Vitera Pty Ltd, Jo Sample, North Wind. No sound is
- * ever kept.
+ * "Reconnecting" (T1-3). T4-3: the engine picks itself, the move to the model after 5 seconds, the
+ * model's download before the mic opens, and the name fix on its words. Made-up names only:
+ * Vitera Pty Ltd, Jo Sample, North Wind, Sample Logistics Pty Ltd. No sound is ever kept.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultMic, MIC_KEY } from './devices'
-import { FakeMic, HEADSET, LAPTOP_MIC, type FakeDevice, type FakeMicOptions } from './fake-mic'
-import { afterHanded, lettersOf, MicSession, SOUND, type MicSessionOptions } from './session'
+import {
+  CHROME_ANDROID,
+  CHROME_LAPTOP,
+  FakeMic,
+  FIREFOX_LAPTOP,
+  HEADSET,
+  IPHONE,
+  IPHONE_APP,
+  LAPTOP_MIC,
+  type FakeDevice,
+  type FakeMicOptions,
+} from './fake-mic'
+import {
+  afterHanded,
+  lettersOf,
+  MicSession,
+  SOUND,
+  TOO_SLOW_FLOOR_MS,
+  TOOL_START_MS,
+  type MicSessionOptions,
+} from './session'
+import { ENGINE_KEY, type BrowserFacts } from './voice-engine'
 import { browserService, NETWORK } from './voice-tool'
 import { nowUsing } from './words'
 
@@ -395,6 +416,246 @@ describe('"Reconnecting" (T1-3, choice 4)', () => {
       'and a floor plan',
     ])
     session.close()
+  })
+})
+
+describe('the engine picks itself (PLAN-V24 T4-3, choice 22)', () => {
+  it.each<[string, BrowserFacts, boolean]>([
+    ['Safari on an iPhone', IPHONE, true],
+    ['the installed app on an iPhone', IPHONE_APP, true],
+    ['Firefox on a laptop, which has no speech service', FIREFOX_LAPTOP, false],
+  ])('%s gets the model on the device, not the browser’s service', async (_, browser, speech) => {
+    const { mic } = await listening({ browser, speech })
+    expect(mic.model.asked.prepare).toBe(1)
+    // One tool, the model's: it writes names in any case (choice 28).
+    expect(mic.tools.map((tool) => tool.nameCase)).toEqual(['any'])
+  })
+
+  it.each<[string, BrowserFacts]>([
+    ['Chrome on a laptop', CHROME_LAPTOP],
+    ['Chrome on an Android phone', CHROME_ANDROID],
+  ])('%s gets the browser’s speech service', async (_, browser) => {
+    const { mic } = await listening({ browser })
+    expect(mic.model.asked.prepare).toBe(0)
+    expect(mic.tools.map((tool) => tool.nameCase)).toEqual(['capitals'])
+  })
+
+  it('with browser_model, every device gets the model, Chrome on a laptop too', async () => {
+    for (const browser of [CHROME_LAPTOP, CHROME_ANDROID, IPHONE]) {
+      const { mic, session } = await listening({ browser }, { tool: 'browser_model' })
+      expect(mic.tools.map((tool) => tool.nameCase)).toEqual(['any'])
+      session.close()
+    }
+  })
+
+  it('with typing, nothing opens a tool', async () => {
+    const { mic, session, now } = open({}, { tool: 'typing' })
+    session.start()
+    await tick(100)
+    expect(now()).toMatchObject({ phase: 'failed', problem: 'no_speech_tool' })
+    expect(mic.tools).toHaveLength(0)
+    expect(mic.model.asked.prepare).toBe(0)
+  })
+})
+
+describe('a service that doesn’t start in 5 seconds (PLAN-V24 T4-3, choice 22)', () => {
+  it('moves to the model, and this device remembers it', async () => {
+    const { mic, session, now } = open({ toolNeverReady: true, modelBytes: 83_000_000 })
+    session.start()
+    await tick(100)
+    // The mic is open and hears a voice, but the service never says it listens.
+    expect(now()).toMatchObject({ phase: 'checking', steps: { hear: 'pass', ready: 'waiting' } })
+    await tick(TOOL_START_MS)
+    expect(mic.storage.get(ENGINE_KEY)).toBe('model')
+    expect(mic.tools[0]?.aborted).toBe(true)
+    // The model downloads with no mic open, and no problem shows.
+    expect(mic.live()).toBe(0)
+    expect(now()).toMatchObject({
+      phase: 'checking',
+      problem: null,
+      preparing: { loaded: 0, total: 83_000_000, device: 'computer' },
+    })
+    mic.toolNeverReady = false
+    mic.model.done()
+    await tick(100)
+    expect(now().phase).toBe('listening')
+    expect(mic.tools.at(-1)?.nameCase).toBe('any')
+    session.close()
+
+    // The next opening on this device goes straight to the model.
+    const again = new MicSession({
+      mode: 'note',
+      tool: 'browser_service',
+      env: mic.env(),
+      makeTool: mic.tool,
+    })
+    again.start()
+    await tick(100)
+    expect(again.getSnapshot().phase).toBe('listening')
+    expect(mic.tools.at(-1)?.nameCase).toBe('any')
+  })
+
+  it('during a network blip, it says the voice tool didn’t load, as before, and remembers nothing', async () => {
+    const { mic, session, now } = open({ toolNeverReady: true })
+    session.start()
+    await tick(100)
+    mic.reconnecting(true)
+    await tick(TOOL_START_MS)
+    expect(now()).toMatchObject({ phase: 'failed', problem: 'tool_failed' })
+    expect(mic.storage.has(ENGINE_KEY)).toBe(false)
+  })
+
+  it('where the model can’t run, it says the voice tool didn’t load, as before', async () => {
+    const { mic, session, now } = open({ toolNeverReady: true, browser: { model: false } })
+    session.start()
+    await tick(100 + TOOL_START_MS)
+    expect(now()).toMatchObject({ phase: 'failed', problem: 'tool_failed' })
+    expect(mic.storage.has(ENGINE_KEY)).toBe(false)
+  })
+
+  it('with browser_model, it never falls back to the service', async () => {
+    const { mic, session, now } = open({ toolNeverReady: true }, { tool: 'browser_model' })
+    session.start()
+    await tick(100 + TOOL_START_MS)
+    expect(now()).toMatchObject({ phase: 'failed', problem: 'tool_failed' })
+    expect(mic.tools.every((tool) => tool.nameCase === 'any')).toBe(true)
+  })
+})
+
+describe('the model gets ready before the mic opens (PLAN-V24 T4-3, choice 25)', () => {
+  const BYTES = 83_000_000
+
+  it('shows the download’s progress, and opens no mic until the model is ready', async () => {
+    const { mic, session, now } = open({ browser: IPHONE, modelBytes: BYTES })
+    session.start()
+    await tick(100)
+    expect(now()).toMatchObject({
+      phase: 'checking',
+      preparing: { loaded: 0, total: BYTES, device: 'phone' },
+    })
+    mic.model.progress(41_000_000)
+    expect(now().preparing).toEqual({ loaded: 41_000_000, total: BYTES, device: 'phone' })
+    expect(mic.asked).toEqual([])
+    mic.model.done()
+    await tick(100)
+    expect(now()).toMatchObject({ phase: 'listening', preparing: null })
+    expect(mic.live()).toBe(1)
+  })
+
+  it('kept from an earlier visit: no download shows, and the mic opens at once', async () => {
+    const { mic, session, now } = open({ browser: IPHONE })
+    const seen: (number | null)[] = []
+    session.subscribe(() => {
+      seen.push(now().preparing?.total ?? null)
+    })
+    session.start()
+    await tick(100)
+    expect(now().phase).toBe('listening')
+    expect(seen.some((total) => total !== null && total > 0)).toBe(false)
+    expect(mic.model.asked.prepare).toBe(1)
+  })
+
+  it('once loaded on this page, the next opening doesn’t wait for it at all', async () => {
+    const first = await listening({ browser: IPHONE })
+    first.session.close()
+    const again = new MicSession({
+      mode: 'note',
+      tool: 'browser_service',
+      env: first.mic.env(),
+      makeTool: first.mic.tool,
+    })
+    again.start()
+    expect(again.getSnapshot().preparing).toBeNull()
+    await tick(100)
+    expect(again.getSnapshot().phase).toBe('listening')
+    expect(first.mic.model.asked.prepare).toBe(1)
+  })
+
+  it('a closed opening never opens the mic, however the download ends', async () => {
+    const { mic, session } = open({ browser: IPHONE, modelBytes: BYTES })
+    session.start()
+    await tick(100)
+    session.close()
+    mic.model.done()
+    await tick(100)
+    expect(mic.asked).toEqual([])
+    expect(mic.tools).toHaveLength(0)
+  })
+
+  it.each<[string, 'download' | 'load', string]>([
+    ['a failed download', 'download', 'download_failed'],
+    ['a model that won’t load here', 'load', 'model_failed'],
+  ])('%s says so, with no mic opened', async (_, why, problem) => {
+    const { mic, session, now } = open({ browser: IPHONE, modelBytes: BYTES })
+    session.start()
+    await tick(100)
+    mic.model.fail(why)
+    await tick(0)
+    expect(now()).toMatchObject({ phase: 'failed', failedAt: null, problem, preparing: null })
+    expect(mic.asked).toEqual([])
+  })
+
+  it('Try again after a failed download downloads again, then listens', async () => {
+    const { mic, session, now } = open({ browser: IPHONE, modelBytes: BYTES })
+    session.start()
+    await tick(100)
+    mic.model.fail('download')
+    await tick(0)
+    session.retry()
+    await tick(100)
+    expect(now().preparing?.total).toBe(BYTES)
+    mic.model.done()
+    await tick(100)
+    expect(now().phase).toBe('listening')
+  })
+
+  it('a device too slow for the model says so, with the words kept', async () => {
+    const { mic, now } = await listening({ browser: IPHONE }, { names: ['Jo Sample'] })
+    mic.say('log a call with jo sample')
+    mic.fail('too_slow')
+    expect(now()).toMatchObject({
+      phase: 'failed',
+      problem: 'device_too_slow',
+      chunks: ['log a call with Jo Sample'],
+    })
+  })
+
+  it('writing out too slowly on the model is the device’s too-slow problem', async () => {
+    const { mic, session, now } = await listening({ browser: IPHONE, toolNeverFinishes: true })
+    mic.say('log a call')
+    session.finish()
+    await tick(TOO_SLOW_FLOOR_MS)
+    expect(now()).toMatchObject({ phase: 'failed', problem: 'device_too_slow' })
+  })
+})
+
+describe('the name fix on the model’s words (PLAN-V24 choice 28)', () => {
+  const NAMES = ['Sample Logistics Pty Ltd', 'Jo Sample']
+
+  it('reads the names by their words, in the words still heard and in the final ones', async () => {
+    const { mic, now } = await listening({ browser: IPHONE }, { names: NAMES })
+    mic.hear('log a call with sample logistix')
+    expect(now().hearing).toBe('log a call with Sample Logistics')
+    mic.say('log a call with sample logistix')
+    expect(now().chunks).toEqual(['log a call with Sample Logistics'])
+    expect(now().fixes).toEqual([{ from: 'logistix', to: 'Logistics' }])
+  })
+
+  it('keeps the capital-letter rule for the browser’s service', async () => {
+    const { mic, now } = await listening({}, { names: NAMES })
+    mic.say('log a call with sample logistix')
+    expect(now().chunks).toEqual(['log a call with sample logistix'])
+  })
+
+  it('reads the model’s names by their words when the mic moves mid-turn, too', async () => {
+    const { mic, now } = await listening(
+      { browser: IPHONE, devices: [LAPTOP_MIC] },
+      { names: NAMES },
+    )
+    mic.hear('log a call with sample logistix')
+    mic.plug(HEADSET)
+    await tick(100)
+    expect(now().chunks).toEqual(['log a call with Sample Logistics'])
   })
 })
 
