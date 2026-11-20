@@ -78,8 +78,10 @@ describe('the page head', () => {
   })
 
   it('still allows only our own files, and the worker and manifest need nothing more', () => {
-    // A worker needs `worker-src`, which falls back to `script-src 'self'`; the manifest falls back
-    // to `default-src 'self'`. So the policy of index.html did not have to open anything.
-    expect(html).toContain("default-src 'self'; script-src 'self';")
+    // A worker comes under `worker-src 'self'` (written out for the speech model's worker in
+    // PLAN-V24 T4-1); the manifest falls back to `default-src 'self'`. So the policy of index.html
+    // did not have to open anything for them.
+    expect(html).toContain("default-src 'self'; script-src 'self' 'wasm-unsafe-eval';")
+    expect(html).toContain("worker-src 'self';")
   })
 })

@@ -64,7 +64,10 @@ const outsideFiles = [
     )
     .map((entry) => entry.name),
   ...(existsSync(join(ROOT, 'public'))
-    ? collect(join(ROOT, 'public'), PUBLIC_TEXT_EXTENSIONS).map((full) => slashes(ROOT, full))
+    ? collect(join(ROOT, 'public'), PUBLIC_TEXT_EXTENSIONS)
+        .map((full) => slashes(ROOT, full))
+        // The speech model's files (PLAN-V24 T4-1): fetched at build time, not our own words.
+        .filter((path) => !path.startsWith('public/voice/'))
     : []),
 ].sort()
 
