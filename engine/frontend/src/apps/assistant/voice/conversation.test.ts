@@ -2,8 +2,9 @@
  * A long conversation (PLAN-V24 Part 2, T2-1), with a fake mic, a fake voice tool, a fake command
  * step and an exact clock: one V, many commands, each reaching the command step once and in order;
  * the quiet stop; "stop listening"; "um" alone; a long turn; hold V as one turn; and words over the
- * server's limit. Today's one command per V ("Keep listening" off) is `bar-session.test.ts`,
- * unchanged. Made-up names only: Sample Logistics Pty Ltd, Jo Sample. No sound is ever kept.
+ * server's limit. T2-2: smart pauses. Today's one command per V ("Keep listening" off) is
+ * `bar-session.test.ts`, unchanged. Made-up names only: Sample Logistics Pty Ltd, Jo Sample. No
+ * sound is ever kept.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AssistantCommand, AssistantCommandIn, AssistantOnPage } from '@/api/types'
@@ -190,7 +191,11 @@ describe('the quiet stop (choice 10)', () => {
     await tick(TIMES.quiet - 200)
     expect(now().phase).toBe('listening')
     await tick(200)
-    expect(now()).toMatchObject({ phase: 'problem', problem: { kind: 'quiet' }, conversation: null })
+    expect(now()).toMatchObject({
+      phase: 'problem',
+      problem: { kind: 'quiet' },
+      conversation: null,
+    })
     expect(mic.live()).toBe(0)
     expect(sent).toEqual([])
   })
@@ -250,15 +255,20 @@ describe('the end words (choice 10)', () => {
 })
 
 describe('short turns (choice 11)', () => {
-  it.each(['um', 'Hmm.', 'Um, uh', 'Monday'])('"%s" alone sends nothing, and it listens on', async (said) => {
-    const { mic, sent, now } = await listening()
-    await sayTurn(mic, said)
-    expect(sent).toEqual([])
-    expect(now().phase).toBe('listening')
-    // The next real command still goes.
-    await sayTurn(mic, OPEN_TODAY)
-    expect(sent.map((body) => body.text)).toEqual([OPEN_TODAY])
-  })
+  it.each(['um', 'Hmm.', 'Um, uh', 'Monday'])(
+    '"%s" alone sends nothing, and it listens on',
+    async (said) => {
+      const { mic, sent, now } = await listening()
+      // Sounds alone wait the long pause: more may be coming (T2-2).
+      mic.say(said)
+      await tick(TIMES.longPause)
+      expect(sent).toEqual([])
+      expect(now().phase).toBe('listening')
+      // The next real command still goes.
+      await sayTurn(mic, OPEN_TODAY)
+      expect(sent.map((body) => body.text)).toEqual([OPEN_TODAY])
+    },
+  )
 })
 
 describe('a long turn (choice 9)', () => {
@@ -303,7 +313,9 @@ describe('a long turn (choice 9)', () => {
     expect(sent).toEqual([])
     session.setDraft('Log a call with Jo Sample, they want three floors')
     session.sendTyped()
-    expect(sent).toEqual([{ text: 'Log a call with Jo Sample, they want three floors', source: 'typed' }])
+    expect(sent).toEqual([
+      { text: 'Log a call with Jo Sample, they want three floors', source: 'typed' },
+    ])
   })
 })
 
@@ -351,7 +363,11 @@ describe('V and Stop (choice 10)', () => {
     const { mic, session, now } = await listening()
     mic.say('Log a call with Jo')
     session.typeInstead()
-    expect(now()).toMatchObject({ phase: 'typing', draft: 'Log a call with Jo', conversation: null })
+    expect(now()).toMatchObject({
+      phase: 'typing',
+      draft: 'Log a call with Jo',
+      conversation: null,
+    })
     expect(mic.live()).toBe(0)
   })
 })
@@ -400,5 +416,73 @@ describe('with "Keep listening" off', () => {
     expect(texts()).toEqual([OPEN_TODAY])
     expect(mic.live()).toBe(0)
     expect(now().phase).toBe('answer')
+  })
+})
+
+describe('smart pauses (PLAN-V24 T2-2, choice 8)', () => {
+  it('the waits are in TIMES: 1.2 seconds, and 3 for words that sound unfinished (TBC at S1)', () => {
+    expect(TIMES.pause).toBe(1200)
+    expect(TIMES.longPause).toBe(3000)
+  })
+
+  it('"log a call with" waits the long pause', async () => {
+    const { mic, texts } = await listening()
+    mic.say('Log a call with')
+    await tick(TIMES.longPause - 1)
+    expect(texts()).toEqual([])
+    await tick(1)
+    expect(texts()).toEqual(['Log a call with'])
+  })
+
+  it('"log a call with Northwind" ends after the short one', async () => {
+    const { mic, texts } = await listening()
+    mic.say('Log a call with Northwind')
+    await tick(TIMES.pause - 1)
+    expect(texts()).toEqual([])
+    await tick(1)
+    expect(texts()).toEqual(['Log a call with Northwind'])
+  })
+
+  it('a half command waits the long pause too', async () => {
+    const { mic, texts } = await listening()
+    mic.say('Log a call')
+    await tick(TIMES.longPause - 1)
+    expect(texts()).toEqual([])
+    await tick(1)
+    expect(texts()).toEqual(['Log a call'])
+  })
+
+  it('a joining word and more words inside the long pause make one turn', async () => {
+    const { mic, texts } = await listening()
+    mic.say('Log a call with')
+    await tick(TIMES.longPause - 500)
+    mic.say('Jo Sample at Northwind')
+    await tick(TIMES.pause)
+    expect(texts()).toEqual(['Log a call with Jo Sample at Northwind'])
+  })
+
+  it('words still being heard count too: the pause follows the newest words', async () => {
+    const { mic, texts } = await listening()
+    mic.hear('log a call with')
+    await tick(TIMES.pause + 100)
+    expect(texts()).toEqual([])
+    mic.hear('log a call with Northwind')
+    await tick(TIMES.pause)
+    expect(texts()).toEqual(['log a call with Northwind'])
+  })
+
+  it('while V is held, no pause ends a turn, short or long', async () => {
+    const { mic, session, texts } = setUp()
+    session.start('browser_service')
+    session.vDown()
+    await tick(TIMES.hold)
+    mic.say('Log a call with')
+    await tick(TIMES.longPause * 2)
+    mic.say('Jo Sample at Northwind, they move in March')
+    await tick(TIMES.pause * 3)
+    expect(texts()).toEqual([])
+    session.vUp()
+    await tick(0)
+    expect(texts()).toEqual(['Log a call with Jo Sample at Northwind, they move in March'])
   })
 })

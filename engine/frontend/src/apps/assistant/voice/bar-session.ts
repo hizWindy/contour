@@ -31,8 +31,11 @@
  * - **One mic for the whole conversation** (choice 5): a tap of V starts it, and the mic, the bars
  *   and the voice tool run until it ends. Each turn is handed over (`MicSession.handOver`), and the
  *   next starts at once, with no check and no second mic.
- * - **A turn ends after a pause** (choice 8), or at 2 minutes (choice 9, TBC). Over the server's
- *   2,000 characters, the words wait in the text line with the plan's line, and listening stops.
+ * - **A turn ends after a smart pause** (choice 8, T2-2, `pauses.ts`): 1.2 seconds when the words
+ *   sound finished, 3 seconds when they end on a joining word or a half command ("log a call
+ *   with"), both TBC at S1. While V is held, no pause ends it. A turn also ends at 2 minutes
+ *   (choice 9, TBC). Over the server's 2,000 characters, the words wait in the text line with the
+ *   plan's line, and listening stops.
  * - **Turns are read in order** (choice 12): a turn said while the last is worked out waits for it.
  *   What each answer does is `handOver`'s, as with one command. A page opens and the conversation
  *   goes on; a card that can't hear the conversation (`cardOpen`) ends it, as one command did.
@@ -63,6 +66,7 @@ import type { NameFix } from '@/apps/companies/call-notes/mic/name-fix'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import type { MicProblem } from '@/apps/companies/call-notes/mic/words'
 import type { AfterAnswer, Heard } from './hand-over'
+import { pauseFor } from './pauses'
 import { endsConversation, isShortTurn } from './turns'
 
 export const TIMES = {
@@ -74,8 +78,13 @@ export const TIMES = {
   limit: 60_000,
   /** V still down this long is a hold: letting go ends the talk (PLAN-V23 choice 6, TBC). */
   hold: 400,
-  /** A conversation's turn ends after this pause (PLAN-V24 choice 8, TBC at S1). */
+  /** A conversation's turn ends after this pause, when its words sound finished (choice 8, TBC). */
   pause: 1200,
+  /**
+   * The pause when they sound unfinished: a joining word at the end, or a half command, like "log a
+   * call with" (choice 8, TBC at S1).
+   */
+  longPause: 3000,
   /** The longest turn of a conversation, and of a held V while it keeps listening (choice 9, TBC). */
   turn: 120_000,
   /** No words this long ends a conversation: the quiet stop (choice 10, TBC). */
@@ -624,8 +633,8 @@ export class BarSession {
 
   /**
    * New words: the talk goes on, and the silence counts from now (not while V is held). In a
-   * conversation, the turn ends after a pause, the quiet stop counts from now, and a turn's 2
-   * minutes from its first word.
+   * conversation, the turn ends after a smart pause (longer when the words sound unfinished), the
+   * quiet stop counts from now, and a turn's 2 minutes from its first word.
    */
   private heard(text: string): void {
     const words = wordsOf(text)
@@ -641,7 +650,7 @@ export class BarSession {
           this.endTurn()
         })
       }
-      this.restart('silence', this.times.pause, () => {
+      this.restart('silence', pauseFor(text, this.times), () => {
         this.endTurn()
       })
       return
