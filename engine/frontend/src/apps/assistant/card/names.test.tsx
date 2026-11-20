@@ -446,16 +446,41 @@ describe('the name the card teaches the mic (T1-5)', () => {
     expect(choices.of(API.learned)).toHaveLength(0)
   })
 
-  it('a call teaches it too, once it is on its way to HubSpot', async () => {
+  it('a call found by hand is taught by the server as its company is picked, not from here (PLAN-V24 T3-2)', async () => {
     vi.useFakeTimers(CLOCK)
+    // Saved at once with the name as heard; the pick is a PATCH, and the server teaches the mic
+    // then (T3-1). With the AI off it is ready to confirm at once.
+    let saved = note({
+      status: 'needs_company',
+      company_key: null,
+      company_name: null,
+      company_heard: 'North Wind',
+      person: null,
+    })
+    const picks: unknown[] = []
+    const one: Answer = (call) => {
+      if (call.method === 'PATCH') {
+        picks.push(call.body)
+        saved = note({ company_heard: 'North Wind', person: null })
+      }
+      return Response.json(saved)
+    }
     const { user, of } = show(
       callCommand({
         company: { found: null, choices: [], from_page: false, heard: 'North Wind', can_add: true },
         person: null,
       }),
+      {
+        [API.notes]: () => Response.json(saved, { status: 201 }),
+        [notePath()]: one,
+        [API.notePreview]: () => Response.json(notePreview(saved)),
+      },
     )
     const found = await card()
     await pickByHand(found, user)
+    await waitFor(() => {
+      expect(picks).toEqual([{ company_key: '201' }])
+    })
     await within(found).findByText('Connected')
     await waitFor(() => {
       expect(within(found).getByRole('button', { name: 'Send' })).not.toHaveAttribute(
@@ -465,9 +490,10 @@ describe('the name the card teaches the mic (T1-5)', () => {
     await user.click(within(found).getByRole('button', { name: 'Send' }))
     await wait(HOLD)
     await waitFor(() => {
-      expect(of(API.learned)).toHaveLength(1)
+      expect(of(API.confirm)).toHaveLength(1)
     })
-    expect(of(API.learned)[0]?.body).toEqual({ heard: 'North Wind', company_key: '201' })
+    await wait(100)
+    expect(of(API.learned)).toHaveLength(0)
   })
 })
 

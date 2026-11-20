@@ -2,7 +2,9 @@
  * Sending from the review card (PLAN-V22 T3-4, choices 22 and 23), with a fake clock, a fake mic
  * and a fake server: Undo inside the 5 seconds sends nothing, after them it sends once, a page
  * closed inside them sends nothing and keeps the draft, "send it" sends, other words are ignored,
- * and any key stops the listening. Made-up names only: Sample Logistics Pty Ltd, Jo Sample.
+ * and any key stops the listening. PLAN-V24 T3-2: a call saved before its company is saved with
+ * the name as heard, and never sent while it needs one. Made-up names only: Sample Logistics Pty
+ * Ltd, Jo Sample, North Wind as heard.
  */
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { StrictMode } from 'react'
@@ -28,7 +30,9 @@ import {
   teamEmail,
   write,
 } from './fixtures'
+import { draftOf, type CallDraft } from './draft'
 import { CardHost } from './host'
+import { heardNoteBodyOf, sendDraft } from './send'
 import { closeCard, openCard } from './store'
 
 const HOLD = 5000
@@ -342,5 +346,62 @@ describe('"send it" (choice 23)', () => {
     const card = await screen.findByRole('dialog')
     expect(card.querySelector('[data-slot=card-listen]')).toBeNull()
     expect(typed.mic.tools).toHaveLength(0)
+  })
+})
+
+describe('a call saved before its company (PLAN-V24 T3-2, choices 17 and 18)', () => {
+  /** A call whose company the command found nowhere, heard as these words. */
+  function heardAs(heard: string): CallDraft {
+    const made = draftOf(
+      {
+        command: callCommand({
+          company: { found: null, choices: [], from_page: false, heard },
+          person: null,
+        }),
+        words: 'the words',
+        source: 'mic',
+      },
+      null,
+    )
+    if (made?.action !== 'log_call') throw new Error('No call card for this command')
+    return made
+  }
+
+  it('is saved with the name as heard and no company, cut to the server’s 120 characters', () => {
+    expect(heardNoteBodyOf(heardAs('North Wind'))).toEqual({
+      company_heard: 'North Wind',
+      text: 'Spoke to Jo, the lease ends June 2027. Follow up Friday.',
+      source: 'mic',
+      called_at: expect.any(String) as string,
+    })
+    expect(heardNoteBodyOf(heardAs(`  ${'a'.repeat(130)}  `))?.company_heard).toHaveLength(120)
+    // No name heard: the server needs one, so it waits for a pick.
+    expect(heardNoteBodyOf(heardAs('  '))).toBeNull()
+  })
+
+  it('never goes to HubSpot while it needs its company, and says why', async () => {
+    const calls = mockApi({
+      [API.confirm]: { already_sending: false, sending: 1, notes: [] },
+    })
+    const said = vi.spyOn(toast, 'error')
+    const client = createTestQueryClient()
+    client.setQueryData(
+      queryKeys.companies.callNote(NOTE_ID),
+      note({
+        status: 'needs_company',
+        company_key: null,
+        company_name: null,
+        company_heard: 'North Wind',
+      }),
+    )
+    await sendDraft(
+      { ...heardAs('North Wind'), noteId: NOTE_ID },
+      { client, today: '2026-11-21', reopen: vi.fn(), go: vi.fn() },
+    )
+    expect(calls.filter((call) => call.path === API.confirm)).toHaveLength(0)
+    expect(said).toHaveBeenCalledWith('Not sent', {
+      description: '1 call needs a company first. It stays in Call logs.',
+      action: expect.objectContaining({ label: 'Open Call logs' }) as unknown,
+    })
   })
 })

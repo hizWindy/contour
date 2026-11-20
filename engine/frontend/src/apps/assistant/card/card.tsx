@@ -13,10 +13,17 @@
  *   Monday": the words go to the command step with the card's action and boxes, and its `change`,
  *   `send` or `cancel` is done here. Each box has its own mic, which writes straight into it.
  * - **The hint bar** (choice 20) shows the keys for where the focus is, on a laptop.
- * - **A call** is saved as the card opens (`POST /call-notes`, once its company is known), so the
- *   server sorts it while the rep reads. The card shows the sort when it is ready, with HubSpot's
- *   values now from a fresh `/call-notes/preview`. Each of its parts takes typing too (PLAN-V23
- *   T4-2): a box saves when it is left (`PATCH /call-notes/{id}`), and Esc leaves it, as above.
+ * - **A call** is saved as the card opens (`POST /call-notes`), so the server sorts it while the rep
+ *   reads. The card shows the sort when it is ready, with HubSpot's values now from a fresh
+ *   `/call-notes/preview`. Each of its parts takes typing too (PLAN-V23 T4-2): a box saves when it
+ *   is left (`PATCH /call-notes/{id}`), and Esc leaves it, as above.
+ * - **No call lost** (PLAN-V24 T3-2, choices 17 to 19): a call whose company isn't found is saved
+ *   at once too, with the name as heard, as "Needs a company". Its company picked later (a choice,
+ *   the search list, Add to HubSpot, or by voice) goes as a PATCH, and the call is sorted then.
+ *   Until then the call takes only its outcome, and while it sorts nothing: a change said meanwhile
+ *   waits on the card, and is made once it is sorted. Its Send says why it waits, and Later keeps
+ *   it in Call logs. While the card waits on its company, the words said fill its company search
+ *   (`choose.ts`), and "the first one" picks from what the search found.
  * - **Later, not Cancel, on a call** (PLAN-V23 T4-2): Later, or Esc, keeps the call in Call logs'
  *   To confirm, to send with the others ("Kept in Call logs, to send with the others.").
  * - **Sending** (T3-4): Enter, a click on Send or "send it" closes the card and starts the 5 second
@@ -45,11 +52,13 @@
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { Send } from 'lucide-react'
 import {
+  useCallback,
   useDeferredValue,
   useEffect,
   useEffectEvent,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -76,9 +85,11 @@ import type {
   AssistantEmailIn,
   AssistantMeetingHit,
   AssistantTaskIn,
+  CallNoteIn,
   CallNoteOut,
+  CallNotePatch,
 } from '@/api/types'
-import { NOT_CHANGED } from '@/apps/companies/call-logs/words'
+import { needsCompanySendWords, NOT_CHANGED } from '@/apps/companies/call-logs/words'
 import type { MicEnv } from '@/apps/companies/call-notes/mic/session'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import { problemWords } from '@/apps/companies/call-notes/mic/words'
@@ -122,12 +133,17 @@ import {
   emptyDraftOf,
   missingOf,
   noteBodyOf,
+  pickCompany,
   readBackOf,
   taskBodyOf,
   type Box,
+  type CallDraft,
   type CardDraft,
+  type Company,
+  type CompanyFind,
 } from './draft'
 import { pickByVoice } from './choose'
+import type { CompanySaid, CompanyVoice } from './company'
 import { keepCardDraft } from './drafts'
 import { inTextBox, typingKey } from './keys'
 import { startHold } from './hold'
@@ -136,14 +152,26 @@ import { cardLinesOf, unsureLeft } from './lines'
 import { listenForSendIt } from './listen'
 import { CARD_TIMES, type CardTimes } from './times'
 import { ConversationStrip, HintBar, ListenStrip, PartProblem, VoiceStrip } from './parts'
-import { previewEmail, previewTask, saveNote, sendDraft, patchNote, type SendTools } from './send'
+import {
+  heardNoteBodyOf,
+  patchNote,
+  pickNoteCompany,
+  previewEmail,
+  previewTask,
+  readNote,
+  saveNote,
+  sendDraft,
+  type SendTools,
+} from './send'
 import { openCard, openedCard, type CardRequest } from './store'
 import { isNoHubSpotUser, needsTeammate } from './teammate-rules'
 import {
   CALL_KEPT,
   CANCEL,
   CARD_CAN,
+  CHANGE_WAITS,
   DRAFT_KEPT,
+  KEPT_NEEDS_COMPANY,
   LATER,
   noOneHereWords,
   OPEN,
@@ -239,6 +267,23 @@ function refusal(error: unknown): string | null {
   const problem = toApiProblem(error)
   if (problem.status < 400 || problem.status >= 500 || problem.status === 429) return null
   return [problem.title, problem.detail].filter(Boolean).join('. ')
+}
+
+/**
+ * The changes said to a call before it was sorted (PLAN-V24 T3-2), as one PATCH of the sorted
+ * note, in the order said: a later change to the same part wins. Null when none can be made.
+ */
+function heldPatchOf(
+  note: CallNoteOut,
+  changes: readonly AssistantChange[],
+  outcomes: readonly string[],
+): CallNotePatch | null {
+  let patch: CallNotePatch | null = null
+  for (const change of changes) {
+    const one = callPatchOf(note, change, outcomes)
+    if (one) patch = { ...(patch ?? {}), ...one }
+  }
+  return patch
 }
 
 // --- A pre-read whose meeting the command couldn't pin down --------------------------------------
@@ -384,19 +429,45 @@ function DraftCard({
   // A screen reader hears "Say 'send it' or press Enter" with the read-back as the card opens.
   const listenId = useId()
 
-  // --- A call: saved once its company is known, then read until sorted, then previewed ---------
-  const noteBody = draft.action === 'log_call' && draft.noteId === null ? noteBodyOf(draft) : null
+  // --- A call: saved at once, then read until sorted, then previewed -----------------------------
+  // Its company found as the card opens: saved once its person is picked, as before. Not found,
+  // with no choice to make: saved at once with the name as heard, as "Needs a company" (PLAN-V24
+  // T3-2, choice 17), and the company picked later goes as a PATCH (below).
+  const [heardFirst] = useState(
+    () =>
+      first.action === 'log_call' &&
+      first.noteId === null &&
+      first.company.found === null &&
+      first.company.choices.length === 0,
+  )
+  const noteBody =
+    draft.action === 'log_call' && draft.noteId === null
+      ? heardFirst && draft.company.found === null
+        ? heardNoteBodyOf(draft)
+        : noteBodyOf(draft)
+      : null
   const noteAsk = noteBody ? JSON.stringify(noteBody) : null
   const { key } = draft
+  /** The newest save, on its way or done: Later waits for it. */
+  const saving = useRef<Promise<CallNoteOut> | null>(null)
+  const saveCall = (body: CallNoteIn): Promise<CallNoteOut> => {
+    const saved = saveNote(body, key).then((note) => {
+      client.setQueryData(queryKeys.companies.callNote(note.id), note)
+      markCountsOld(client)
+      void refreshCallNoteLists(client)
+      return note
+    })
+    saving.current = saved
+    return saved
+  }
+  const startSave = useEffectEvent(saveCall)
   useEffect(() => {
     if (noteAsk === null) return undefined
     let live = true
-    saveNote(JSON.parse(noteAsk) as Parameters<typeof saveNote>[0], key).then(
+    startSave(JSON.parse(noteAsk) as CallNoteIn).then(
       (note) => {
-        client.setQueryData(queryKeys.companies.callNote(note.id), note)
-        markCountsOld(client)
-        void refreshCallNoteLists(client)
         if (!live) return
+        setSaveProblem(null)
         setDraft((now) => (now.action === 'log_call' ? { ...now, noteId: note.id } : now))
       },
       (error: unknown) => {
@@ -408,7 +479,7 @@ function DraftCard({
     return () => {
       live = false
     }
-  }, [noteAsk, key, client])
+  }, [noteAsk])
 
   const noteId = draft.action === 'log_call' ? draft.noteId : null
   const note = useQuery({
@@ -416,7 +487,10 @@ function DraftCard({
     enabled: noteId !== null,
     refetchInterval: (query) => (query.state.data?.status === 'sorting' ? t.sort : false),
   })
-  const sortedId = note.data && note.data.status !== 'sorting' ? note.data.id : null
+  // Saved before its company, a call waits for it: neither sorted nor sorting (PLAN-V24 T3-2).
+  const waitsForCompany = note.data?.status === 'needs_company'
+  const sortedId =
+    note.data && note.data.status !== 'sorting' && !waitsForCompany ? note.data.id : null
   const notePreview = useQuery({
     ...callNotePreviewQueryOptions(sortedId ? [sortedId] : []),
     enabled: sortedId !== null,
@@ -472,6 +546,8 @@ function DraftCard({
         draft.forWhom === null &&
         (noUser || isNoHubSpotUser(taskPreview.error))
 
+  /** The company part as it was before its pick, to go back to if the server refuses it. */
+  const unpicked = useRef<CompanyFind | null>(null)
   const latest = useRef<Latest>({ draft, ready, today, note: note.data, outcomes: [], teammate })
   useLayoutEffect(() => {
     latest.current = {
@@ -482,7 +558,52 @@ function DraftCard({
       outcomes: options.data?.outcomes ?? [],
       teammate,
     }
+    if (draft.action !== 'email' && draft.company.found === null) unpicked.current = draft.company
   })
+
+  // --- The company said again (PLAN-V24 T3-2, choice 19) -------------------------------------------
+  // While the card waits on its company, words said to it fill its search box (`said`), and the
+  // matches it shows are what "the first one" picks from (`shownCompanies`).
+  const [said, setSaid] = useState<CompanySaid | null>(null)
+  const shownCompanies = useRef<readonly Company[] | null>(null)
+  const onShown = useCallback((shown: readonly Company[] | null) => {
+    shownCompanies.current = shown
+  }, [])
+  const companyVoice = useMemo<CompanyVoice>(() => ({ said, onShown }), [said, onShown])
+  /** Why a company picked for a call that needs one wasn't taken (choice 21). */
+  const [pickProblem, setPickProblem] = useState<string | null>(null)
+  /** Send was tried on a call that needs a company: the card says why (choice 18). */
+  const [sendWhy, setSendWhy] = useState(false)
+
+  /** A change to a call by voice, on the server. The read-back follows it. */
+  const sendCallPatch = (id: string, patch: CallNotePatch): void => {
+    patchNote(id, patch).then((updated) => {
+      client.setQueryData(queryKeys.companies.callNote(updated.id), updated)
+      setDraft((now) => (now.action === 'log_call' ? { ...now, edited: true } : now))
+      void client.invalidateQueries({
+        queryKey: queryKeys.companies.callNotePreview([updated.id]),
+      })
+    }, toastProblem)
+  }
+
+  // --- Changes said before a call is sorted (PLAN-V24 T3-2) ---------------------------------------
+  // Before its company is set a call takes only its outcome, and while it sorts it takes nothing.
+  // The card keeps the rest, in the order said, and makes them once the call is sorted.
+  const [held, setHeld] = useState<readonly AssistantChange[]>([])
+  /** How many of the changes kept have gone to the server. */
+  const heldSent = useRef(0)
+  const sortedNow = note.data?.status === 'to_confirm'
+  const sendHeld = useEffectEvent(() => {
+    const saved = note.data
+    if (!saved || held.length <= heldSent.current) return
+    const fresh = held.slice(heldSent.current)
+    heldSent.current = held.length
+    const patch = heldPatchOf(saved, fresh, options.data?.outcomes ?? [])
+    if (patch) sendCallPatch(saved.id, patch)
+  })
+  useEffect(() => {
+    if (sortedNow && held.length > 0) sendHeld()
+  }, [sortedNow, held])
 
   // --- The guard, the listening, and letting go ---------------------------------------------------
   useEffect(() => {
@@ -551,6 +672,51 @@ function DraftCard({
     if (before === null && pickedKey !== null) companyPicked()
   }, [pickedKey])
 
+  // A call saved before its company takes the one picked as a PATCH, however it was picked, and
+  // even before its save answered (PLAN-V24 T3-2, choice 21). The server sorts it then, and
+  // teaches the mic the words heard. A pick it refuses goes back, with why.
+  /** The company on its way to the server, so a pick goes once. */
+  const picking = useRef<string | null>(null)
+  const sendPick = useEffectEvent((id: string, companyKey: string) => {
+    const before = unpicked.current
+    pickNoteCompany(id, companyKey).then(
+      (updated) => {
+        client.setQueryData(queryKeys.companies.callNote(updated.id), updated)
+        markCountsOld(client)
+        void refreshCallNoteLists(client)
+      },
+      (error: unknown) => {
+        picking.current = null
+        const problem = toApiProblem(error)
+        if (problem.status === 409 && problem.code === 'company_set') {
+          // Picked already (a retry, or in Call logs): the call as the server has it now.
+          readNote(id).then((fresh) => {
+            client.setQueryData(queryKeys.companies.callNote(fresh.id), fresh)
+            const { company_key: there, company_name: name } = fresh
+            if (there === null || name === null) return
+            setDraft((now) =>
+              now.action === 'log_call' && now.company.found?.key !== there
+                ? { ...now, company: pickCompany(now.company, { key: there, name }, 'by_hand') }
+                : now,
+            )
+          }, toastProblem)
+          return
+        }
+        setDraft((now) =>
+          now.action === 'log_call' && before !== null ? { ...now, company: before } : now,
+        )
+        setSendWhy(false)
+        setPickProblem([problem.title, problem.detail].filter(Boolean).join('. '))
+      },
+    )
+  })
+  useEffect(() => {
+    if (!waitsForCompany || noteId === null || pickedKey === null) return
+    if (picking.current === pickedKey) return
+    picking.current = pickedKey
+    sendPick(noteId, pickedKey)
+  }, [waitsForCompany, noteId, pickedKey])
+
   const startSend = (now: CardDraft): void => {
     closing.current = 'send'
     stopListening()
@@ -601,6 +767,8 @@ function DraftCard({
     const box = missingOf(now, day) ?? (latest.current.teammate ? 'for-whom' : null)
     if (box) {
       setChecked(true)
+      // A call saved before its company never goes to HubSpot: the card says why (choice 18).
+      if (box === 'company' && latest.current.note?.status === 'needs_company') setSendWhy(true)
       focusBox(box)
       return false
     }
@@ -609,10 +777,65 @@ function DraftCard({
     return true
   }
 
+  /** A draft the server hasn't got, kept in this browser: a task, an email, or a call (below). */
+  const keepHere = (now: CardDraft): void => {
+    keepCardDraft(now)
+    toast(DRAFT_KEPT, {
+      action: {
+        label: OPEN,
+        onClick: () => {
+          openCard({ kind: 'draft', draft: now })
+        },
+      },
+    })
+  }
+
+  /** A call put off: it waits in Call logs, under "Needs a company" while it has none. */
+  const keptInCallLogs = (picked: boolean): void => {
+    toast(picked ? CALL_KEPT : KEPT_NEEDS_COMPANY, {
+      action: {
+        label: OPEN_CALL_LOGS,
+        onClick: () => {
+          void navigate(CALL_LOGS_PATH)
+        },
+      },
+    })
+  }
+
   /**
-   * Cancel, or Later on a call (PLAN-V23 T4-2), and Esc on the card. A call that is saved stays in
-   * Call logs' To confirm, with its words and every change typed in, to send with the others in one
-   * go. A call not saved yet (no company picked) and any other draft are kept in this browser.
+   * Later on a call: it waits in Call logs, never only in this browser (PLAN-V24 T3-2). A save on
+   * its way is waited for; one that failed is tried once more, with the same key; and one still
+   * asking "Which Sample?" is saved now, as "Needs a company". Only a call the server can't take
+   * stays in this browser: its save failed again, no company name was heard, or "Which James?" is
+   * still to answer.
+   */
+  const keepCall = (now: CallDraft): void => {
+    const picked = now.company.found !== null
+    if (now.noteId !== null) {
+      keptInCallLogs(picked)
+      return
+    }
+    const body = picked ? noteBodyOf(now) : heardNoteBodyOf(now)
+    const onItsWay = saveProblem === null ? saving.current : null
+    const pending = onItsWay ?? (body ? saveCall(body) : null)
+    if (!pending) {
+      keepHere(now)
+      return
+    }
+    pending.then(
+      () => {
+        keptInCallLogs(picked)
+      },
+      () => {
+        keepHere(now)
+      },
+    )
+  }
+
+  /**
+   * Cancel, or Later on a call (PLAN-V23 T4-2), and Esc on the card. A call stays in Call logs, with
+   * its words and every change typed in, to send with the others in one go (`keepCall`). A task or
+   * an email is kept in this browser.
    */
   const cancel = (): void => {
     if (closing.current) return
@@ -621,34 +844,44 @@ function DraftCard({
     voice?.dispose()
     leaveCallBox()
     const now = latest.current.draft
-    if (now.action === 'log_call' && now.noteId !== null) {
-      toast(CALL_KEPT, {
-        action: {
-          label: OPEN_CALL_LOGS,
-          onClick: () => {
-            void navigate(CALL_LOGS_PATH)
-          },
-        },
-      })
-    } else {
-      keepCardDraft(now)
-      toast(DRAFT_KEPT, {
-        action: {
-          label: OPEN,
-          onClick: () => {
-            openCard({ kind: 'draft', draft: now })
-          },
-        },
-      })
-    }
+    if (now.action === 'log_call') keepCall(now)
+    else keepHere(now)
     onClose()
+  }
+
+  /** Later, then Call logs: from the card's own "Open Call logs". */
+  const openCallLogs = (): void => {
+    cancel()
+    void navigate(CALL_LOGS_PATH)
+  }
+
+  /**
+   * The card's question answered by voice, in the code, with no AI (T2-4): "the second one", or a
+   * name from its list. While the card waits on its company, the list is the search list on
+   * screen, and a name that isn't there is searched (PLAN-V24 choice 19). Null: none of these.
+   */
+  const answerByVoice = (words: string): CardTook | null => {
+    const pick = pickByVoice(latest.current.draft, words, shownCompanies.current)
+    if (pick === null) return null
+    switch (pick.kind) {
+      case 'picked':
+        setDraft(pick.draft)
+        return { line: null }
+      case 'none':
+        return { line: noOneHereWords(pick.words) }
+      case 'which':
+        return { line: PICK_ONE }
+      case 'search':
+        setSaid((now) => ({ words: pick.words, n: (now?.n ?? 0) + 1 }))
+        return { line: null }
+    }
   }
 
   /**
    * A turn of the conversation, read by the card first, with no AI (PLAN-V24 T2-3): "send it" sends
    * (or goes to a choice still to make, as Enter does), and "later" or "cancel" does what Later or
-   * Cancel does. Then the card's question (T2-4): "the second one", or a name from its list. Null:
-   * none of these, and it goes to the command step.
+   * Cancel does. Then the card's question (T2-4), or the company said again (T3-2). Null: none of
+   * these, and it goes to the command step.
    */
   const takeTurn = (words: string): CardTook | null => {
     if (closing.current) return null
@@ -658,14 +891,7 @@ function DraftCard({
       cancel()
       return { line: null }
     }
-    const pick = pickByVoice(latest.current.draft, words)
-    if (pick?.kind === 'picked') {
-      setDraft(pick.draft)
-      return { line: null }
-    }
-    if (pick?.kind === 'none') return { line: noOneHereWords(pick.words) }
-    if (pick?.kind === 'which') return { line: PICK_ONE }
-    return null
+    return answerByVoice(words)
   }
 
   // The listening and V's answers run outside React: they call the newest of these.
@@ -733,20 +959,26 @@ function DraftCard({
   }, [])
 
   // --- A change by voice ----------------------------------------------------------------------------
-  const changeCall = (change: AssistantChange): boolean => {
+  /**
+   * A change to a call by voice: made on the server, or kept until the call is sorted (`waits`):
+   * before its company is set a call takes only its outcome, and while it sorts, nothing (PLAN-V24
+   * T3-2). Null: a change the card can't make.
+   */
+  const changeCall = (change: AssistantChange): 'made' | 'waits' | null => {
     const { note: saved, outcomes } = latest.current
-    if (!saved) return false
-    const patch = callPatchOf(saved, change, outcomes)
-    if (!patch) return false
-    patchNote(saved.id, patch).then((updated) => {
-      client.setQueryData(queryKeys.companies.callNote(updated.id), updated)
-      // The read-back follows the change.
-      setDraft((now) => (now.action === 'log_call' ? { ...now, edited: true } : now))
-      void client.invalidateQueries({
-        queryKey: queryKeys.companies.callNotePreview([updated.id]),
-      })
-    }, toastProblem)
-    return true
+    if (
+      saved &&
+      saved.status !== 'sorting' &&
+      (saved.status !== 'needs_company' || change.box === 'outcome')
+    ) {
+      const patch = callPatchOf(saved, change, outcomes)
+      if (!patch) return null
+      sendCallPatch(saved.id, patch)
+      return 'made'
+    }
+    if (saved && callPatchOf(saved, change, outcomes) === null) return null
+    setHeld((now) => [...now, change])
+    return 'waits'
   }
 
   // --- A change typed into a call's box (PLAN-V23 T4-2) ---------------------------------------------
@@ -790,16 +1022,6 @@ function DraftCard({
     }
     const { command } = heard
     switch (command.action) {
-      case 'log_call':
-      case 'task':
-      case 'email':
-      case 'pre_read':
-      case 'open':
-        // A new command while this card is open: this one first (PLAN-V24 choice 13, TBC).
-        return { kind: 'show', line: SEND_OR_KEEP, unsure: null, again: false }
-      case 'unclear':
-        // The words wait in the strip's text line, to fix or say again (PLAN-V23 T1-6).
-        return unclearAnswer(command, heard.words)
       case 'send':
         queueMicrotask(() => {
           trySendRef.current('voice')
@@ -815,7 +1037,11 @@ function DraftCard({
         if (!change) break
         const now = latest.current.draft
         if (now.action === 'log_call') {
-          if (changeCall(change)) return { kind: 'close' }
+          const made = changeCall(change)
+          if (made === 'made') return { kind: 'close' }
+          if (made === 'waits') {
+            return { kind: 'show', line: CHANGE_WAITS, unsure: null, again: false }
+          }
           break
         }
         const next = applyChange(now, change)
@@ -828,7 +1054,28 @@ function DraftCard({
       default:
         break
     }
-    return { kind: 'show', line: CARD_CAN, unsure: command.unsure, again: true }
+    // No action for this card: the code reads the words for its question, or the company said
+    // again, as in a conversation (PLAN-V24 T3-2).
+    const took = answerByVoice(heard.words)
+    if (took) {
+      return took.line === null
+        ? { kind: 'close' }
+        : { kind: 'show', line: took.line, unsure: null, again: true }
+    }
+    switch (command.action) {
+      case 'log_call':
+      case 'task':
+      case 'email':
+      case 'pre_read':
+      case 'open':
+        // A new command while this card is open: this one first (PLAN-V24 choice 13, TBC).
+        return { kind: 'show', line: SEND_OR_KEEP, unsure: null, again: false }
+      case 'unclear':
+        // The words wait in the strip's text line, to fix or say again (PLAN-V23 T1-6).
+        return unclearAnswer(command, heard.words)
+      default:
+        return { kind: 'show', line: CARD_CAN, unsure: command.unsure, again: true }
+    }
   }
 
   // The conversation's answers to turns said to the card come here too (PLAN-V24 T2-3).
@@ -992,6 +1239,8 @@ function DraftCard({
   const putOff = draft.action === 'log_call' ? LATER : CANCEL
   // The server's lines the parts don't say themselves (PLAN-V23 T1-6: "Say it once").
   const unsure = unsureLeft(draft.unsure, cardLinesOf(draft))
+  // A call saved before its company, still to pick (PLAN-V24 T3-2).
+  const callWaits = draft.action === 'log_call' && waitsForCompany && draft.company.found === null
 
   let layout
   switch (draft.action) {
@@ -1004,13 +1253,11 @@ function DraftCard({
           preview={notePreview.data}
           options={options.data}
           today={today}
-          onOpenCallLogs={() => {
-            cancel()
-            void navigate(CALL_LOGS_PATH)
-          }}
+          onOpenCallLogs={openCallLogs}
           onEdit={editCall}
           onLeaveBox={leaveBox}
           previewMs={t.preview}
+          voice={companyVoice}
         />
       )
       break
@@ -1025,6 +1272,7 @@ function DraftCard({
           checked={checked}
           needsTeammate={teammate}
           previewMs={t.preview}
+          voice={companyVoice}
         />
       )
       break
@@ -1095,6 +1343,33 @@ function DraftCard({
               {layout}
               {saveProblem ? <PartProblem>{saveProblem}</PartProblem> : null}
               {previewProblem ? <PartProblem>{previewProblem}</PartProblem> : null}
+              {callWaits ? (
+                <>
+                  {/* Why a pick wasn't taken, or why Send waits (choices 18 and 21), where a
+                      screen reader hears it. With neither it takes no room. */}
+                  <div
+                    role="status"
+                    data-slot="needs-company"
+                    className="flex flex-col gap-2 empty:sr-only"
+                  >
+                    {pickProblem ? <PartProblem>{pickProblem}</PartProblem> : null}
+                    {sendWhy ? <PartProblem>{needsCompanySendWords(1)}</PartProblem> : null}
+                  </div>
+                  {sendWhy ? (
+                    <div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="touch:h-11"
+                        onClick={openCallLogs}
+                      >
+                        {OPEN_CALL_LOGS}
+                      </Button>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
             </>
           ) : null}
         </div>
