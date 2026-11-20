@@ -335,7 +335,9 @@ function micActions(actions: readonly MicAction[]): BarAction[] {
 /** The buttons for where the bar stands, the main one first. */
 function actionsOf(snapshot: BarSnapshot): BarAction[] {
   const { phase, problem, answer } = snapshot
-  if (phase === 'answer') return answer?.again ? ['try_again'] : []
+  // Words that made no command: say them another way, or type them, with the words in the text
+  // line (PLAN-V24 T5-2: voice is never the only way).
+  if (phase === 'answer') return answer?.again ? ['try_again', 'type_instead'] : []
   if (!problem) return []
   if (phase === 'typing') {
     // Unclear words wait in the text line: say them again, where the voice works (T1-6).
