@@ -5,8 +5,8 @@ This plan makes the Assistant's mic strong on every device, and changes nothing 
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
-- **Last updated:** 21 Nov 2026 (written, then "every device" and "no call lost" added from the same chat. Nothing built).
-- **Progress:** Before the build: 0 of 3. Part 1: 0 of 5. Part 2: 0 of 6. Part 3: 0 of 4. Part 4: 0 of 4. Part 5: 0 of 3. M1 to M4: 0 of 4.
+- **Last updated:** 21 Nov 2026 (S0 done. Part 1, T3-1 and Part 4's model are being built at the same time, on Al-khair's ask to go faster).
+- **Progress:** Before the build: 1 of 3. Part 1: 0 of 5. Part 2: 0 of 6. Part 3: 0 of 4. Part 4: 0 of 4. Part 5: 0 of 3. M1 to M4: 0 of 4.
 - **Sources:**
   - Al-khair's chat on 21 Nov, after Levi tried the Assistant with him on 20 Nov;
   - the code on `master` (`b84c3cf`), read on 21 Nov;
@@ -213,7 +213,7 @@ One session builds every step, in order: S0, Part 1, Part 2, Part 3, Part 4, the
 
 ## Before the build starts
 
-- [ ] **S0. The branch and the copy.**
+- [x] **S0. The branch and the copy.** Done 21 Nov 2026 (`37791d8`).
   - Make `plan-v24` from `master` in `../contour-v24`. Don't switch the main folder's branch.
   - Its first commit holds this plan and its line in the plan list. The plan was written in the main folder and not committed, so copy it in, then delete the main folder's untracked copy.
   - On 21 Nov the main folder also had uncommitted work moving `CLAUDE.md` into `AGENTS.md`. Put the plan's line wherever the list is on `master` when S0 runs, and ask Al-khair if that work is still open.
@@ -397,3 +397,8 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
 - What phones allow (read 21 Nov): Android always gives the mic to a call, and another app gets silence unless it is the phone's built-in assistant (Android's "Sharing audio input"). For an iPhone, Apple developer forum replies say no other app can use the mic during a phone call. That is not an Apple document (**TBC**).
 - iPhone facts (read 21 Nov): WebKit's bug 225298 says the speech service isn't available in home-screen web apps or SafariViewController; the service can show as there but fail, because its permission prompt never appears. One site says otherwise, so S2 tests it. The mic itself (`getUserMedia`) works in an installed app, after a tap. Safari 26 ships WebGPU on iOS 26 (Apple's WebKit news). Moonshine Tiny (27 million parameters) and Base (61 million) are MIT, English, with ONNX builds for Transformers.js on Hugging Face. Their download sizes once quantized aren't confirmed.
 - Call notes today (read 21 Nov): a call needs a company to be saved on the server (`CallNoteIn.company_key`, and `call_notes.company_key` and `company_name` can't be empty), and the card saves it as it opens, once its company is known (`card.tsx`). Without a company, it is kept only in this browser (`card/drafts.ts`). The statuses are `sorting`, `to_confirm`, `sending`, `logged`, `partial`, `failed` and `uncertain`.
+- 21 Nov 2026, S0: `plan-v24` made from `master` (`b84c3cf`) in `../contour-v24`. Its first commit (`37791d8`) holds this plan and its line in the plan list, in `CLAUDE.md`, where the list is on `master`. The main folder's untracked copy was deleted after a byte-for-byte check. The main folder still has uncommitted work moving `CLAUDE.md` into `AGENTS.md` (with `.agents/`, a new agent and two new skills). It was left alone; whether it is still open is asked of Al-khair.
+- S0: the database `leadfinder_v24` is a copy of `leadfinder_v23`, at `0026_v23_names_and_hubspot_user`, the newest migration, so T3-1's `0027` follows it.
+- S0: fast backend tests on `plan-v24`: 3,556 passed, 28 skipped (132 s). Website tests: 2,477 passed (101 s). The first visit at `37791d8`: 248,595 B of JavaScript (gzip) in 39 files, and 25,200 B of CSS. That is the baseline for "within 1 kB".
+- S0: no uncommitted work in `contour-v22`, `contour-v22-web`, `contour-v23` or `contour-v23-web`, and no commits since `b84c3cf`. PLAN-V23's two fixes before `deploy v23` aren't started. PLAN-V22's and PLAN-V23's open look steps touch the bar and the card, so a fix from them should land on `plan-v24`, or be joined at `merge v24`.
+- S0, to go faster (Al-khair's ask, 21 Nov): two helper copies made from `plan-v24`. `../contour-v24-api` (branch `plan-v24-api`) builds T3-1, and `../contour-v24-device` (branch `plan-v24-device`) builds Part 4's model, worker and tool, while Part 1 is built on `plan-v24`. Their commits are cherry-picked onto `plan-v24`, as PLAN-V23 did with its web copy. Test database suffixes: `_v24` and `_v24api`.
