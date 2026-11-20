@@ -33,7 +33,8 @@ import type { VoiceToolKind } from '@/api/types'
 export type { VoiceToolKind }
 
 /** What a tool can tell the card went wrong. The card has the words for each. */
-export type VoiceProblem = 'blocked_browser' | 'no_mic' | 'tool_failed'
+// too_slow: the speech model on this device can't keep up with the talk (PLAN-V24 T4-2).
+export type VoiceProblem = 'blocked_browser' | 'no_mic' | 'tool_failed' | 'too_slow'
 
 export interface VoiceToolEvents {
   /** The tool is listening: the check's last line ticks. */
