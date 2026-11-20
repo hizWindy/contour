@@ -142,6 +142,9 @@ export default defineConfig({
       'zod',
     ],
   },
+  // The speech model's Web Worker (PLAN-V24 T4-1) is a module worker, built as one: ONNX Runtime
+  // inside it needs `import.meta.url` and loads its CPU build's JavaScript with `import()`.
+  worker: { format: 'es' },
   preview: {
     port: PORT,
     strictPort: true,
