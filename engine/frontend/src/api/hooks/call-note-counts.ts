@@ -15,10 +15,15 @@ import { queryKeys } from '../query'
 import type { CallNoteOptions, CallNoteSummary, VoiceToolKind } from '@/api/types'
 import { api } from '@/api/client'
 
-/** The voice tool setting's default (PLAN-V18, the contract part 4): Whisper in the browser. */
-export const DEFAULT_VOICE_TOOL: VoiceToolKind = 'browser_model'
+/**
+ * The voice tool while the setting isn't known yet, or couldn't be read: typing, so no mic shows
+ * on a guess. With `browser_model` here, a laptop would start the model on the device, and its
+ * download, before the real setting came (PLAN-V24 T4-3). The server's own default is
+ * `browser_service` (the contract).
+ */
+export const DEFAULT_VOICE_TOOL: VoiceToolKind = 'typing'
 
-/** The voice tool the options name, or the default while they aren't known yet. */
+/** The voice tool the options name, or typing while they aren't known. */
 export function voiceToolOf(options: CallNoteOptions | undefined): VoiceToolKind {
   return options?.voice_tool ?? DEFAULT_VOICE_TOOL
 }

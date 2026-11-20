@@ -132,8 +132,9 @@ describe('each layout (choice 24)', () => {
     )
     expect(within(found).getByText('You')).toBeInTheDocument()
     expect(within(found).getByRole('textbox', { name: 'More words' })).toHaveValue('')
-    // Each box has its own mic, which writes straight into it (choice 19).
-    expect(within(found).getAllByRole('button', { name: 'Speak' })).toHaveLength(2)
+    // Each box has its own mic, which writes straight into it (choice 19), once the voice tool
+    // setting is known (PLAN-V24 T4-3: no mic on a guess).
+    expect(await within(found).findAllByRole('button', { name: 'Speak' })).toHaveLength(2)
   })
 
   it('a task: the preview asks the server once the boxes settle, with the card’s key', async () => {
