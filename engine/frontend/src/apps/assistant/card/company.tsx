@@ -21,10 +21,22 @@
  *
  * A company found here, after the command found nothing, teaches the mic the words heard once the
  * card is sent (`learnedOf`, T1-5).
+ *
+ * PLAN-V24 T3-2, **the company said again** (choices 17 and 19):
+ *
+ * - **A call whose company isn't found is saved at once** as "Needs a company": the part says so,
+ *   "We couldn't find 'North Wind'. The call is saved. Say the company again, or pick it.", over
+ *   the search list, with Add to HubSpot where it was offered.
+ * - **The words said again fill the search box** (`CompanyVoice`), and its matches show as
+ *   choices, as for words typed. The card hears "the first one" from the list on screen
+ *   (`onShown`). A name said while "Which Sample?" shows, and not in its list, opens the search
+ *   list with it; one said while adding goes back to the search list too.
+ * - **Found nowhere:** "Still no 'Southwind'. Say it again, or pick it later in Call logs." takes
+ *   the line's place, where a screen reader hears it, and the call stays saved.
  */
 import { useQuery } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { newIdempotencyKey, toApiProblem } from '@/api/client'
 import { useCompanySearch } from '@/api/hooks'
 import { addCompany, previewCompany } from '@/api/hooks/assistant-names'
@@ -43,6 +55,7 @@ import {
   ADDING,
   ADDING_OFF,
   BACK,
+  callSavedWords,
   CHECKING_HUBSPOT,
   CITY,
   CITY_HINT,
@@ -53,6 +66,7 @@ import {
   noCompanyWords,
   NOTHING_LIKE_IT,
   pickWords,
+  stillNoWords,
   TRY_AGAIN,
   WHICH_COMPANY,
   whichWords,
@@ -62,6 +76,20 @@ import {
 export type PickedHow = 'choice' | 'by_hand' | 'added'
 
 export type OnPick = (company: Company, how: PickedHow) => void
+
+/** The company said again (PLAN-V24 choice 19), and which time: the same words twice search twice. */
+export interface CompanySaid {
+  words: string
+  n: number
+}
+
+/** What the card's voice gives its company part (PLAN-V24 T3-2). */
+export interface CompanyVoice {
+  /** The words said again for the company: they fill the search box. Null: none yet. */
+  said: CompanySaid | null
+  /** The companies the search list shows now, for "the first one". Null: no search list. */
+  onShown: (shown: readonly Company[] | null) => void
+}
 
 /** A line of the company part, in plain words. */
 function Line({ children }: { children: ReactNode }) {
@@ -76,28 +104,69 @@ function problemWords(error: unknown): string {
 
 // --- The search list ---------------------------------------------------------------------------
 
-/** Find a company in our HubSpot copy: the box, then the matches. `line` goes above the box. */
+/**
+ * Find a company in our HubSpot copy: the box, then the matches. `line` goes above the box, and
+ * `action` (Add to HubSpot) under it. The words said again fill the box (`voice`), and when they
+ * are found nowhere, `stillNo`'s words take the line's place.
+ */
 export function CompanyPicker({
   heard,
   line,
+  action = null,
   onPick,
+  voice = null,
+  stillNo = null,
 }: {
   heard: string
   line: ReactNode
+  action?: ReactNode
   onPick: (company: Company) => void
+  voice?: CompanyVoice | null
+  stillNo?: ((words: string) => string) | null
 }) {
-  const [text, setText] = useState(heard)
+  const said = voice?.said ?? null
+  const [text, setText] = useState(said?.words ?? heard)
+  // The words said again fill the box, each time they are said (choice 19).
+  const [seen, setSeen] = useState(said)
+  if (said !== seen) {
+    setSeen(said)
+    if (said) setText(said.words)
+  }
   const settled = useDebounced(text, 250)
   const search = useCompanySearch(settled)
-  const hits: readonly CompanyHit[] =
-    settled.trim().length >= 2 ? (search.data?.companies ?? []) : []
+  const asked = settled.trim().length >= 2
+  const data = search.data
+  const hits = useMemo<readonly CompanyHit[]>(
+    () => (asked ? (data?.companies ?? []) : []),
+    [asked, data],
+  )
+  const shown = useMemo(() => hits.slice(0, 6), [hits])
+  // The card hears "the first one" from the list on screen.
+  const onShown = voice?.onShown ?? null
+  useEffect(() => {
+    if (!onShown) return undefined
+    onShown(shown.map((hit) => ({ key: hit.key, name: hit.name })))
+    return () => {
+      onShown(null)
+    }
+  }, [onShown, shown])
+  // The words said again are in the box, and the search for them found nothing.
+  const nowhere =
+    said !== null &&
+    stillNo !== null &&
+    text === said.words &&
+    settled === text &&
+    asked &&
+    search.isSuccess &&
+    !search.isFetching &&
+    hits.length === 0
   const id = useId()
   const matches =
-    hits.length > 0 ? (
+    shown.length > 0 ? (
       <ChoiceList
         label={WHICH_COMPANY}
         box="company"
-        options={hits.slice(0, 6).map((hit) => ({
+        options={shown.map((hit) => ({
           id: hit.key,
           title: hit.name,
           detail: [hit.industry, hit.city].filter(Boolean).join(' · ') || null,
@@ -110,7 +179,12 @@ export function CompanyPicker({
     ) : null
   return (
     <div className="flex flex-col gap-3">
-      {line}
+      {/* Where the line changes ("The call is saved", "Still no"), a screen reader hears it. With
+          no line it takes no room, but stays there to be heard. */}
+      <div role="status" data-slot="company-line" className="empty:sr-only">
+        {nowhere && stillNo ? <Line>{stillNo(said.words)}</Line> : line}
+      </div>
+      {action}
       {/* The box with its label, like the card's other boxes, so it says what it is with words
           in it, and what the search found under it. */}
       <div className="flex flex-col gap-1.5">
@@ -137,7 +211,8 @@ export function CompanyPicker({
             first.focus()
           }}
         />
-        {!matches && settled.trim().length >= 2 ? (
+        {/* "Still no" says it once, above. */}
+        {!matches && asked && !nowhere ? (
           <p role="status" className="text-caption text-muted-foreground">
             {search.isFetching ? LOOKING : NO_MATCH}
           </p>
@@ -160,11 +235,14 @@ function AddForm({
   previewMs,
   onPick,
   onBack,
+  onShown = null,
 }: {
   heard: string
   previewMs: number
   onPick: OnPick
   onBack: () => void
+  /** The search list's matches, for a pick by voice, when adding is refused (T3-2). */
+  onShown?: CompanyVoice['onShown'] | null
 }) {
   const [name, setName] = useState(heard.trim())
   const [city, setCity] = useState('')
@@ -230,6 +308,7 @@ function AddForm({
       <CompanyPicker
         heard={name}
         line={<Line>{refused ?? ADDING_OFF}</Line>}
+        voice={onShown ? { said: null, onShown } : null}
         onPick={(company) => {
           onPick(company, 'by_hand')
         }}
@@ -365,17 +444,24 @@ function AddForm({
 }
 
 /**
- * Nowhere, after HubSpot was searched: the plan's line, "Add to HubSpot", and the search list.
- * Add to HubSpot opens the add, with the name as heard.
+ * Nowhere, after HubSpot was searched: the line, "Add to HubSpot", and the search list. Add to
+ * HubSpot opens the add, with the name as heard, or as said again. A name said while adding goes
+ * back to the search list (choice 19).
  */
 function AddCompany({
   heard,
+  line,
   previewMs,
   onPick,
+  voice,
+  stillNo,
 }: {
   heard: string
+  line: ReactNode
   previewMs: number
   onPick: OnPick
+  voice: CompanyVoice | null
+  stillNo: (words: string) => string
 }) {
   const [adding, setAdding] = useState(false)
   const addButton = useRef<HTMLButtonElement>(null)
@@ -385,12 +471,19 @@ function AddCompany({
     back.current = false
     addButton.current?.focus()
   }, [adding])
+  const said = voice?.said ?? null
+  const [seen, setSeen] = useState(said)
+  if (said !== seen) {
+    setSeen(said)
+    if (said) setAdding(false)
+  }
   if (adding) {
     return (
       <AddForm
-        heard={heard}
+        heard={said?.words ?? heard}
         previewMs={previewMs}
         onPick={onPick}
+        onShown={voice?.onShown ?? null}
         onBack={() => {
           back.current = true
           setAdding(false)
@@ -399,46 +492,55 @@ function AddCompany({
     )
   }
   return (
-    <div className="flex flex-col gap-3">
-      <Line>{isntInHubspotWords(heard)}</Line>
-      <div>
-        <Button
-          ref={addButton}
-          type="button"
-          variant="outline"
-          size="sm"
-          className="touch:h-11"
-          onClick={() => {
-            setAdding(true)
-          }}
-        >
-          <Plus aria-hidden="true" />
-          {ADD_TO_HUBSPOT}
-        </Button>
-      </div>
-      <CompanyPicker
-        heard={heard}
-        line={null}
-        onPick={(company) => {
-          onPick(company, 'by_hand')
-        }}
-      />
-    </div>
+    <CompanyPicker
+      heard={heard}
+      line={line}
+      action={
+        <div>
+          <Button
+            ref={addButton}
+            type="button"
+            variant="outline"
+            size="sm"
+            className="touch:h-11"
+            onClick={() => {
+              setAdding(true)
+            }}
+          >
+            <Plus aria-hidden="true" />
+            {ADD_TO_HUBSPOT}
+          </Button>
+        </div>
+      }
+      voice={voice}
+      stillNo={stillNo}
+      onPick={(company) => {
+        onPick(company, 'by_hand')
+      }}
+    />
   )
 }
 
 // --- The company part --------------------------------------------------------------------------
 
-/** The company: as found, to pick from two or more, to find, or to add. */
+/**
+ * The company: as found, to pick from two or more, to find, or to add. `voice`: the words said
+ * again (PLAN-V24 choice 19). `savedCall`: a call saved before its company, as "Needs a company"
+ * (choice 17), whose lines say so.
+ */
 export function CompanyPart({
   company,
   onPick,
   previewMs,
+  voice = null,
+  savedCall = false,
 }: {
   company: CompanyFind
   onPick: OnPick
   /** How long the add's check waits after the last key. */
   previewMs: number
+  voice?: CompanyVoice | null
+  savedCall?: boolean
 }) {
   if (company.found) {
     const note = foundNote(company, company.found.name)
@@ -456,7 +558,9 @@ export function CompanyPart({
       </CardLine>
     )
   }
-  if (isPending(company)) {
+  // A name said that isn't in "Which Sample?" opens the search list with it (choice 19).
+  const fromChoices = isPending(company)
+  if (fromChoices && !voice?.said) {
     return (
       <ChoiceList
         label={whichWords(company.heard, WHICH_COMPANY)}
@@ -469,14 +573,31 @@ export function CompanyPart({
       />
     )
   }
+  const { heard } = company
+  const words = savedCall
+    ? callSavedWords(heard)
+    : company.canAdd
+      ? isntInHubspotWords(heard)
+      : noCompanyWords(heard)
+  const line = fromChoices ? null : <Line>{words}</Line>
+  const stillNo = (said: string): string => stillNoWords(said, savedCall)
   return (
     <div data-slot="company-picker">
       {company.canAdd ? (
-        <AddCompany heard={company.heard} previewMs={previewMs} onPick={onPick} />
+        <AddCompany
+          heard={heard}
+          line={line}
+          previewMs={previewMs}
+          onPick={onPick}
+          voice={voice}
+          stillNo={stillNo}
+        />
       ) : (
         <CompanyPicker
-          heard={company.heard}
-          line={<Line>{noCompanyWords(company.heard)}</Line>}
+          heard={heard}
+          line={line}
+          voice={voice}
+          stillNo={stillNo}
           onPick={(picked) => {
             onPick(picked, 'by_hand')
           }}

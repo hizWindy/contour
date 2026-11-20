@@ -4,6 +4,7 @@
  * reads them). The plan's own sentences are kept word for word. Every other line here is new, so
  * it is TBC until Al-khair's look.
  */
+import { NEEDS_COMPANY_TITLE } from '@/apps/companies/call-logs/words'
 
 // --- The card -------------------------------------------------------------------------------------
 
@@ -149,6 +150,32 @@ export function noOneHereWords(words: string): string {
 
 /** Two or more fit what was said: the card asks again (TBC). */
 export const PICK_ONE = 'Pick one, or say its number.'
+
+// --- No call lost (PLAN-V24 T3-2, choices 17 to 19; TBC at Al-khair's look) ------------------------
+
+/** A call whose company isn't found, saved at once as "Needs a company" (the plan's words). */
+export function callSavedWords(heard: string): string {
+  return `We couldn't find '${heard.trim()}'. The call is saved. Say the company again, or pick it.`
+}
+
+/**
+ * The company said again, and found nowhere still (the plan's words). A task isn't in Call logs,
+ * so its line stops at "pick it" (TBC).
+ */
+export function stillNoWords(words: string, inCallLogs: boolean): string {
+  return inCallLogs
+    ? `Still no '${words}'. Say it again, or pick it later in Call logs.`
+    : `Still no '${words}'. Say it again, or pick it.`
+}
+
+// A send that holds a call that needs a company says Call logs' own words for it, from one place:
+// "1 call needs a company first. It stays in Call logs." (`needsCompanySendWords`, T3-3).
+
+/** Later on a call that still needs its company, under Call logs' group of that name (TBC). */
+export const KEPT_NEEDS_COMPANY = `Kept in Call logs, under ${NEEDS_COMPANY_TITLE}.`
+
+/** A change said to a call that isn't sorted yet: the card makes it once it is (TBC). */
+export const CHANGE_WAITS = 'That change waits until the call is sorted.'
 
 // --- Sending (T3-4) ---------------------------------------------------------------------------------
 

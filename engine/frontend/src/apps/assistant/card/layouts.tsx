@@ -4,7 +4,8 @@
  * - **A call:** who (the company and the person), then, once the server has sorted the note, how it
  *   went, the note, the field changes (HubSpot's value now, an arrow, the new one, from a fresh
  *   preview) and the follow-ups. Call logs' own fields show them (`note-parts.tsx`), so each part
- *   takes typing as well as voice (PLAN-V23 T4-2).
+ *   takes typing as well as voice (PLAN-V23 T4-2). A call saved before its company (PLAN-V24
+ *   T3-2) shows only its company part until the company is picked.
  * - **A task:** the company, what, when, the kind, for whom and more words.
  * - **An email:** to whom, the subject and the body. The body is text in a box, never HTML.
  * - **A pre-read** whose meeting the command couldn't pin down: "Which meeting?", or the plan's line
@@ -57,7 +58,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { dueDateText } from '@/lib/due-date'
 import { formatDateTime } from '@/lib/format'
-import { CompanyPart } from './company'
+import { CompanyPart, type CompanyVoice } from './company'
 import {
   BODY_MAX,
   dueOf,
@@ -346,6 +347,8 @@ export interface CallLayoutProps {
   onLeaveBox: () => void
   /** How long the company's add check waits after the last key (PLAN-V23 T1-6). */
   previewMs?: number
+  /** The company said again (PLAN-V24 T3-2). */
+  voice?: CompanyVoice | null
 }
 
 export function CallLayout({
@@ -359,16 +362,21 @@ export function CallLayout({
   onEdit,
   onLeaveBox,
   previewMs = 0,
+  voice = null,
 }: CallLayoutProps) {
   const { person } = draft
   const companyPicked = draft.company.found !== null
   const fresh = preview?.items.find((one) => one.id === note?.id)
-  const sorted = note !== undefined && note.status !== 'sorting'
+  // Saved before its company (PLAN-V24 T3-2): neither sorted nor sorting until it is picked.
+  const needsCompany = note?.status === 'needs_company'
+  const sorted = note !== undefined && note.status !== 'sorting' && !needsCompany
   return (
     <div className="flex flex-col gap-4">
       <CompanyPart
         company={draft.company}
         previewMs={previewMs}
+        voice={voice}
+        savedCall={needsCompany}
         onPick={(company, how) => {
           onDraft({ ...draft, company: pickCompany(draft.company, company, how), edited: true })
         }}
@@ -402,7 +410,7 @@ export function CallLayout({
           </CardLine>
         )
       ) : null}
-      {draft.noteId !== null ? (
+      {draft.noteId !== null && (companyPicked || !needsCompany) ? (
         sorted ? (
           <>
             <CallBoxes
@@ -562,6 +570,8 @@ export interface TaskLayoutProps {
   needsTeammate?: boolean
   /** How long the company's add check waits after the last key (PLAN-V23 T1-6). */
   previewMs?: number
+  /** The company said again (PLAN-V24 T3-2). */
+  voice?: CompanyVoice | null
 }
 
 export function TaskLayout({
@@ -573,6 +583,7 @@ export function TaskLayout({
   checked = true,
   needsTeammate = false,
   previewMs = 0,
+  voice = null,
 }: TaskLayoutProps) {
   const due = dueOf(draft, today)
   const change = (part: Partial<TaskDraft>): void => {
@@ -584,6 +595,7 @@ export function TaskLayout({
       <CompanyPart
         company={draft.company}
         previewMs={previewMs}
+        voice={voice}
         onPick={(company, how) => {
           change({ company: pickCompany(draft.company, company, how) })
         }}
