@@ -247,11 +247,13 @@ describe('Admin, Settings', () => {
     await user.click(screen.getByRole('radio', { name: 'Call notes' }))
     const notes = screen.getByRole('list', { name: 'Call notes' })
     const select = within(notes).getByRole('combobox')
-    expect(select).toHaveTextContent('Whisper in the browser: the voice stays on this computer')
+    expect(select).toHaveTextContent(
+      'A free model on the device: the voice never leaves the device',
+    )
     await user.click(select)
     // The browser's speech service sends the voice to Google or Microsoft: not offered.
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
-      'Whisper in the browser: the voice stays on this computer',
+      'A free model on the device: the voice never leaves the device',
       'Typing only: no mic button',
     ])
   })
@@ -301,7 +303,7 @@ describe('Admin, Settings', () => {
     )
     await user.click(select)
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
-      'Whisper in the browser: the voice stays on this computer',
+      'A free model on the device: the voice never leaves the device',
       "The browser's speech service: the voice goes to Google or Microsoft",
       'Typing only: no mic button',
     ])

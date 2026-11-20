@@ -81,7 +81,8 @@ const GROUP_OF: Record<string, GroupId> = {
  */
 const CHOICE_WORDS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   voice_tool: {
-    browser_model: 'Whisper in the browser: the voice stays on this computer',
+    // PLAN-V24 choice 27: the model runs on each device, phone or laptop.
+    browser_model: 'A free model on the device: the voice never leaves the device',
     browser_service: "The browser's speech service: the voice goes to Google or Microsoft",
     typing: 'Typing only: no mic button',
   },
