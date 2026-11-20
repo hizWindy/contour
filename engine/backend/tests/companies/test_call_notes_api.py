@@ -389,7 +389,7 @@ async def test_the_summary_counts_my_own_notes(world: World, settings: dict[str,
             world, notes[4]["id"], status="logged", finished_at=START - timedelta(days=1)
         )
         counts = (await client.get(f"{NOTES}/summary")).json()
-    assert counts == {"to_confirm": 2, "needs_look": 1, "logged_today": 1}
+    assert counts == {"to_confirm": 2, "needs_look": 1, "logged_today": 1, "needs_company": 0}
 
 
 # --- The rep's edits ----------------------------------------------------------------------------

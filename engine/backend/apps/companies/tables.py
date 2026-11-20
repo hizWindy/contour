@@ -13,7 +13,9 @@ go to Claude as style, never as facts.
 default.
 
 `companies.call_notes` keeps each call a rep logs (PLAN-V17 T2-2): the note as typed or said, what
-the sorter made of it, the rep's edits, what it cost, and the write it became in HubSpot.
+the sorter made of it, the rep's edits, what it cost, and the write it became in HubSpot. A call
+whose company isn't found yet is kept too, as `needs_company`, with the name as heard (PLAN-V24
+T3-1).
 
 `companies.meeting_forms` keeps each pre-read for a client meeting (PLAN-V17 T2-10): the meeting it
 is for, the facts and the three summaries, the rep's two blanks, who it went to, and its copy in
@@ -226,10 +228,12 @@ class ScriptPref(Base):
 
 
 NOTE_SOURCES: Final = ("mic", "typed", "transcript")
-# sorting: the sorter is at work. to_confirm: in the rep's batch. sending: on its way to HubSpot.
-# logged: every step landed. partial: some landed and some failed. failed: none landed.
+# needs_company: saved before its company was found (PLAN-V24): never sorted or sent until the rep
+# picks it. sorting: the sorter is at work. to_confirm: in the rep's batch. sending: on its way to
+# HubSpot. logged: every step landed. partial: some landed and some failed. failed: none landed.
 # uncertain: HubSpot didn't answer, so a person checks before anything more is sent.
 NOTE_STATUSES: Final = (
+    "needs_company",
     "sorting",
     "to_confirm",
     "sending",
@@ -239,6 +243,14 @@ NOTE_STATUSES: Final = (
     "uncertain",
 )
 NOTE_SORTERS: Final = ("ai", "person")  # Claude sorted it, or the rep picked by hand (AI off)
+COMPANY_HEARD_CHARS: Final = 120  # the longest company name as heard (PLAN-V24 T3-1)
+# A call has its company, or it waits for one with the name as heard: never neither, so a call
+# with no company can't reach the sorter or HubSpot (PLAN-V24 T3-1).
+NOTE_COMPANY_RULE: Final = (
+    "(status = 'needs_company' AND company_key IS NULL AND company_name IS NULL "
+    "AND company_heard IS NOT NULL) OR (status <> 'needs_company' AND company_key IS NOT NULL "
+    "AND company_name IS NOT NULL)"
+)
 
 
 class CallNote(Base):
@@ -249,6 +261,9 @@ class CallNote(Base):
     against what the rep sent. `card` is the note as it will be sent: the call (summary, outcome),
     the changes, the tasks, the unsure sentence, and what was dropped into the text. It starts as
     the sorter's answer (or the rep's own picks with the AI off) and takes the rep's edits.
+
+    A call saved before its company was found (PLAN-V24 T3-1) is `needs_company`: no company key
+    or name, the name as heard in `company_heard`, and no sort until the rep picks the company.
     """
 
     __tablename__ = "call_notes"
@@ -256,6 +271,7 @@ class CallNote(Base):
         CheckConstraint(_in_list("source", NOTE_SOURCES), name="source"),
         CheckConstraint(_in_list("status", NOTE_STATUSES), name="status"),
         CheckConstraint(_in_list("sorted_by", NOTE_SORTERS), name="sorted_by"),
+        CheckConstraint(NOTE_COMPANY_RULE, name="company"),
         # A double press is one note: one key for each person, and "no user" with sign-in off.
         Index(
             "ux_call_notes_idempotency",
@@ -282,8 +298,11 @@ class CallNote(Base):
         Uuid, ForeignKey(f"{CORE_SCHEMA}.users.id", ondelete="SET NULL")
     )
     idempotency_key: Mapped[str | None] = mapped_column(String(64))  # the Idempotency-Key header
-    company_key: Mapped[str] = mapped_column(String(64))  # a HubSpot id, or lead:<id>
-    company_name: Mapped[str] = mapped_column(String(300))
+    # A HubSpot id, or lead:<id>, and its name. None only while the call needs its company.
+    company_key: Mapped[str | None] = mapped_column(String(64))
+    company_name: Mapped[str | None] = mapped_column(String(300))
+    # The company's name as heard or typed, like "North Wind", when it wasn't found (PLAN-V24).
+    company_heard: Mapped[str | None] = mapped_column(String(COMPANY_HEARD_CHARS))
     contact_id: Mapped[str | None] = mapped_column(String(32))  # HubSpot's contact id, if any
     person_name: Mapped[str | None] = mapped_column(String(240))
     person_title: Mapped[str | None] = mapped_column(String(200))

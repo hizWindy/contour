@@ -260,12 +260,18 @@ async def called_companies(
             select(
                 CallNote.company_key, func.max(CallNote.called_at), func.max(CallNote.company_name)
             )
-            .where(CallNote.made_by == auth.user.id, CallNote.called_at >= since)
+            .where(
+                CallNote.made_by == auth.user.id,
+                CallNote.called_at >= since,
+                CallNote.company_key.is_not(None),  # not a call that needs its company (PLAN-V24)
+            )
             .group_by(CallNote.company_key)
             .order_by(func.max(CallNote.called_at).desc())
             .limit(CALLED_MAX)
         )
         for key, when, name in notes.all():
+            if key is None:
+                continue
             if key.startswith("lead:") and not leads:
                 continue  # a Lead Finder company, for someone without its tick now
             called[key] = (when, name if key.startswith("lead:") else None)

@@ -17,7 +17,8 @@
   HubSpot yet isn't sent;
 - a note a restart left "sending" settles from its write;
 - a card naming a field off the list is never sent;
-- a logged meeting (a transcript, T2-15) goes as a note, not a call.
+- a logged meeting (a transcript, T2-15) goes as a note, not a call;
+- a call that needs a company (PLAN-V24 T3-1) is never previewed or sent: it is skipped with why.
 
 Made-up companies and people only (Sample Logistics Pty Ltd, Jo Sample).
 """
@@ -38,7 +39,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies.app import stop_background
 from apps.companies.facts import day
-from apps.companies.note_batch import LEAD_ONLY, OFF_THE_LIST, ActivityWriter, NoteSender
+from apps.companies.note_batch import (
+    LEAD_ONLY,
+    NEEDS_COMPANY,
+    OFF_THE_LIST,
+    ActivityWriter,
+    NoteSender,
+    plan_send,
+)
 from apps.companies.note_fields import hubspot_property
 from apps.companies.notes import MELBOURNE, CardCall, CardChange, CardTask, Dropped, NoteCard
 from apps.companies.tables import CallNote
@@ -48,7 +56,14 @@ from core.hubspot.client import HubSpot, HubSpotWritesOff
 from core.hubspot.models import HubSpotWrite
 from core.hubspot.writer import FieldChange, StepResult, WriteOut, WritePlan, WriteStatus
 from tests.companies.helpers import add, deal, signed_in_as
-from tests.companies.test_call_notes_api import NOTES, a_company, log_call, notes_settings, set_note
+from tests.companies.test_call_notes_api import (
+    NOTES,
+    a_company,
+    log_call,
+    note_body,
+    notes_settings,
+    set_note,
+)
 from tests.companies.test_script_notes import as_admin
 from tests.core.auth_world import START, World
 
@@ -943,6 +958,50 @@ async def test_a_card_naming_a_field_off_the_list_is_never_sent(
     assert (retried.status_code, retried.json()["code"]) == (422, "change_off_the_list")
     assert retried.json()["detail"] == OFF_THE_LIST
     assert fake.previews == [] and fake.written == []
+
+
+# --- A call that needs a company (PLAN-V24 T3-1) ------------------------------------------------
+
+
+async def test_a_call_that_needs_a_company_is_never_previewed_or_sent(
+    world: World, fake: FakeWriter, sender: NoteSender
+) -> None:
+    """Choice 18: the preview and the send leave it out, with why, and it stays in Call logs.
+    Nothing of it reaches the writer, and the batch itself never plans a call with no company."""
+    await a_company(world)
+    body = note_body(company_heard="North Wind")
+    del body["company_key"]
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        waiting = (await client.post(NOTES, json=body)).json()
+        ready = await log_call(client)
+        both = {"ids": [waiting["id"], ready["id"]]}
+        preview = (await client.post(f"{NOTES}/preview", json=both)).json()
+        sent = await confirm(client, waiting, ready)
+        await sender.wait()
+        after = await one(client, waiting)
+        retried = await client.post(f"{NOTES}/{waiting['id']}/retry")
+    skipped = [{"id": waiting["id"], "why": NEEDS_COMPANY}]
+    assert NEEDS_COMPANY == "Needs a company first."
+    assert waiting["status"] == "needs_company"
+    assert preview["skipped"] == skipped
+    assert [item["id"] for item in preview["items"]] == [ready["id"]]
+    assert preview["totals"]["calls"] == 1
+    assert (sent["sending"], sent["skipped"]) == (1, skipped)
+    assert (after["status"], after["steps"], after["hubspot_url"]) == ("needs_company", [], None)
+    assert (retried.status_code, retried.json()["code"]) == (409, "nothing_to_retry")
+    assert fake.written == [subject(ready)]
+    assert {request.subject for request in fake.previews} == {subject(ready)}
+    row = await the_row(world, waiting)
+    async with world.factory() as db:
+        planned = await plan_send(
+            db,
+            row,
+            NoteCard(),
+            writer=fake.writer(),
+            settings=notes_settings(),
+            today=START.date(),
+        )
+    assert planned == NEEDS_COMPANY
 
 
 # --- A logged meeting ---------------------------------------------------------------------------

@@ -31,6 +31,8 @@ answer about an unsure step.
   user (or one not linked yet) logs a call that HubSpot shows with no owner, so its text starts
   "Logged by Jo Sample, Designer, in Contour." ("Logged by Jo Sample in Contour." with no
   position). A logged meeting's note too. A linked account's call has no such line.
+- **A call that needs a company is never sent** (PLAN-V24 T3-1, choice 18): the preview and the
+  send leave it out, with "Needs a company first.", and nothing for it reaches the writer.
 """
 
 import asyncio
@@ -96,6 +98,7 @@ LEAD_ONLY = (
     "This company isn't in HubSpot yet. Send it from the Lead Finder first, then send this note "
     "again."
 )
+NEEDS_COMPANY = "Needs a company first."  # a call saved before its company (PLAN-V24 choice 18)
 NOTHING_LEFT = "Everything in it is in HubSpot already."
 OFF_THE_LIST = (
     "A change on this note isn't one a call may change. Remove it, then send the note again."
@@ -272,14 +275,22 @@ def fyi_subject(caller: Caller, company_name: str) -> str:
     return f"FYI: {caller.name} logged a call with {company_name}"[:TITLE_CHARS]
 
 
-def fyi_body(note: CallNote, card: NoteCard, settings: Settings) -> str:
+@dataclass(frozen=True)
+class Company:
+    """The company a call is sent to: its HubSpot id and its name."""
+
+    key: str
+    name: str
+
+
+def fyi_body(note: CallNote, card: NoteCard, company: Company, settings: Settings) -> str:
     """The call's summary (or how its note starts, when it has none), then a link to the company
     in Contour: its Call history shows the call. No email address or phone number."""
     summary = " ".join(scrub(card.call.summary).split())
     if not summary:
         summary = " ".join(scrub(note.text).split())[:START_CHARS].rstrip()
-    link = company_link(settings, note.company_key)
-    parts = [summary, f"See the call on {note.company_name} in Contour: {link}"]
+    link = company_link(settings, company.key)
+    parts = [summary, f"See the call on {company.name} in Contour: {link}"]
     return "\n\n".join(part for part in parts if part)[:BODY_MAX_CHARS]
 
 
@@ -287,6 +298,7 @@ async def fyi_of(
     session: AsyncSession,
     note: CallNote,
     card: NoteCard,
+    company: Company,
     *,
     caller: Caller | None,
     rep: str | None,
@@ -297,13 +309,13 @@ async def fyi_of(
     None: the switch is off, nobody is signed in, or there is no one else to tell."""
     if not settings.notify_owner_calls:
         return None
-    owner = await owner_to_tell(session, note.company_key, rep) if caller is not None else None
+    owner = await owner_to_tell(session, company.key, rep) if caller is not None else None
     if caller is None or owner is None:
         return None
     return FyiIn(
         owner_id=owner,
-        subject=fyi_subject(caller, note.company_name),
-        body=fyi_body(note, card, settings),
+        subject=fyi_subject(caller, company.name),
+        body=fyi_body(note, card, company, settings),
         due=today,
     )
 
@@ -326,8 +338,12 @@ async def plan_send(
     today: date,
 ) -> Planned | str:
     """What the next send of this note carries, or why it can't be sent. `settings`: as the send
-    starts; `today`: its day, Melbourne time (an FYI task is due then)."""
-    if note.company_key.startswith("lead:"):
+    starts; `today`: its day, Melbourne time (an FYI task is due then). A call with no company
+    (it needs one, PLAN-V24) is never sent."""
+    if note.company_key is None or note.company_name is None:
+        return NEEDS_COMPANY
+    company = Company(key=note.company_key, name=note.company_name)
+    if company.key.startswith("lead:"):
         return LEAD_ONLY
     call, changes, tasks = unsent(card)
     if not (call or changes or tasks):
@@ -342,16 +358,18 @@ async def plan_send(
     caller = await caller_of(session, note)
     carries_call = call and not meeting
     fyi = (
-        await fyi_of(session, note, card, caller=caller, rep=rep, settings=settings, today=today)
+        await fyi_of(
+            session, note, card, company, caller=caller, rep=rep, settings=settings, today=today
+        )
         if carries_call
         else None
     )
     request = ActivityRequest(
         app=APP,
         subject=subject,
-        company_id=note.company_key,
+        company_id=company.key,
         contact_id=note.contact_id,
-        deal_id=await one_open_deal(session, note.company_key),
+        deal_id=await one_open_deal(session, company.key),
         owner_id=rep,
         call=(
             CallIn(

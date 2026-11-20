@@ -61,6 +61,13 @@ def learned_not_found() -> Problem:
 # --- Saving a pair -------------------------------------------------------------------------------
 
 
+def teaches(words: str, company_name: str) -> bool:
+    """Whether the words teach the mic anything about the company: they hold a word of 2 letters
+    or more, and differ from its name, case and spaces aside. Picking a company for a call that
+    needs one uses the same rule (note_company.py, PLAN-V24)."""
+    return bool(name_words(words)) and heard_key(words) != heard_key(company_name)
+
+
 async def learn(
     session: AsyncSession,
     body: LearnedNameIn,
@@ -77,7 +84,7 @@ async def learn(
     hit = await company_hit(session, body.company_key.strip(), leads)
     if hit is None:
         raise company_not_found()
-    if not name_words(words) or key == heard_key(hit.name):  # nothing to learn
+    if not teaches(words, hit.name):  # nothing to learn
         await session.rollback()
         return False
     if await learned_store.count_for(session, key) >= learned_store.MAX_FOR_WORDS:

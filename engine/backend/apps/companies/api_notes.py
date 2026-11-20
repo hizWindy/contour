@@ -6,7 +6,8 @@ notes. An Admin reads everyone's (TBC: a team view), but only the person who log
 changes, removes or sends it.
 
 The fixed paths (options, summary, preview, confirm) come before `/call-notes/{note_id}`. The
-service is note_store.py, the sorter notes.py, and the batch to HubSpot note_batch.py.
+service is note_store.py, the sorter notes.py, and the batch to HubSpot note_batch.py. A call
+saved before its company was found gets its company through the PATCH (note_company.py, PLAN-V24).
 """
 
 import uuid
@@ -15,7 +16,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 
-from apps.companies import note_store
+from apps.companies import note_company, note_store
 from apps.companies.deps import LeadsDep
 from apps.companies.note_batch import NoteSender
 from apps.companies.notes import NoteSorter
@@ -120,8 +121,9 @@ async def call_note_options(request: Request, settings: SettingsDep) -> CallNote
     summary="My call note counts",
     description=(
         "For Home and the menu: my notes to confirm (being sorted, or waiting for me), those "
-        "that need a look (failed, partly saved, or unsure in HubSpot), and those logged today, "
-        "Melbourne time. 409 `call_notes_off`."
+        "that need a look (failed, partly saved, or unsure in HubSpot), those logged today, "
+        "Melbourne time, and my calls that need a company (saved before their company was found, "
+        "PLAN-V24). 409 `call_notes_off`."
     ),
 )
 async def call_note_summary(
@@ -141,8 +143,9 @@ async def call_note_summary(
         "through the writer's preview (while HubSpot can't be written, our copy's value), "
         "whether sending is ready, and `totals`: the calls, follow-ups and field changes "
         "sending would add. A change whose value moved since I saw it says so "
-        "(`current_changed`). Notes that can't be sent are in `skipped`, with why. Nothing is "
-        "written. 409 `call_notes_off`."
+        "(`current_changed`). Notes that can't be sent are in `skipped`, with why: a call that "
+        "needs a company (`needs_company`) with 'Needs a company first.' Nothing is written. "
+        "409 `call_notes_off`."
     ),
 )
 async def preview_call_notes(
@@ -169,7 +172,9 @@ async def preview_call_notes(
         "each as one record (one failure never fails the rest). It answers at once: `sending` "
         "is how many started. While a batch is being sent, a second press starts nothing and "
         "says so (`already_sending`, still 202). A note left out, not mine, not waiting to be "
-        "sent, or for a company not in HubSpot yet is in `skipped`, with why. When a call is on "
+        "sent, or for a company not in HubSpot yet is in `skipped`, with why. A call that needs "
+        "a company is never sent: it is in `skipped` with 'Needs a company first.', and stays in "
+        "Call logs (PLAN-V24). When a call is on "
         "a company someone else owns, the owner gets one FYI task in HubSpot once the call is "
         "there, with an alert (PLAN-V23 T2-2; Settings can switch it off). A call by someone "
         "with no HubSpot user has no owner, and its text starts 'Logged by {name}, {position}, "
@@ -200,11 +205,14 @@ async def confirm_call_notes(
     summary="My call notes",
     description=(
         "A page of notes. `state`: `to_confirm` (being sorted, waiting for me, or being sent), "
-        "`logged`, `needs_look` (failed, partly saved, or unsure in HubSpot), or `history` "
-        "(every one of my own notes, in any status, for History in Call logs). `mine` is true "
+        "`logged`, `needs_look` (failed, partly saved, or unsure in HubSpot), `history` "
+        "(every one of my own notes, in any status, for History in Call logs), or "
+        "`needs_company` (calls saved before their company was found, waiting for me to pick "
+        "it, PLAN-V24; `total` is their count). `mine` is true "
         "by default: `mine=false` shows everyone's notes to an Admin, and anyone else still gets "
         "only their own; History is always my own. Filters, for any state: `q` (each word must "
-        "start a word of the company's name, the person's name, the note or the summary), "
+        "start a word of the company's name or its name as heard, the person's name, the note "
+        "or the summary), "
         "`outcome` (one of the call outcomes, or `none`), and `since` and `until` (Melbourne "
         f"days, both counted, {DAYS}). To confirm: the notes the sorter was unsure of first, "
         "then the oldest call first. Otherwise the newest call first. 422 `day_out_of_range` for "
@@ -262,10 +270,13 @@ async def list_call_notes(
         "answer needs no words). An email address or a phone number in it is saved as "
         "[email left out] or [number left out]. With Claude sorting, a note with words comes "
         "back `sorting` and is sorted in the background; otherwise it is ready to confirm at "
-        "once, and the rep adds the outcome and any follow-ups. Send an `Idempotency-Key`: the "
-        "same key from the "
-        "same person gives back the first note (200), so a double press is one note. 404 "
-        "`company_not_found`. 422 `note_too_long`, `note_empty`, `person_not_at_company`, "
+        "once, and the rep adds the outcome and any follow-ups. A call whose company isn't "
+        "found yet is saved too (PLAN-V24): leave `company_key` out and send `company_heard`, "
+        "the name as heard. It comes back `needs_company`, with no company, and isn't sorted or "
+        "sent until the rep picks its company (PATCH). Send an `Idempotency-Key`: the same key "
+        "from the same person gives back the first note (200), so a double press is one note. "
+        "404 `company_not_found`. 422 `company_needed` (neither `company_key` nor "
+        "`company_heard`), `note_too_long`, `note_empty`, `person_not_at_company`, "
         "`prep_not_found` or `called_later`. 409 `call_notes_off`."
     ),
     responses={200: {"model": CallNoteOut, "description": "The note saved first with this key"}},
@@ -339,11 +350,16 @@ async def get_call_note(
         "the follow-ups (with `due_words`, the words the day came from), and `left_out`. Only "
         "the parts sent change. Each change is checked as the sorter checks one (a listed "
         "field, an office the company has, a value that can be read), and no follow-up is due "
-        "before today. 409 `note_sorting` while it is being sorted, `note_sent` while it is "
-        "being sent or once it is logged, `part_sent` for a part already in HubSpot. 422 "
-        "`change_not_possible`, "
-        "`change_twice`, `task_in_past`, `task_empty`, `owner_not_found` or "
-        "`person_not_at_company`. 403 `not_your_note` for an Admin's look at someone else's. "
+        "before today. A call that needs a company (PLAN-V24) takes `company_key`, with only "
+        "`contact_id` and `outcome` beside it: then it is sorted as a new call is (it comes "
+        "back `sorting`, or `to_confirm` at once with the AI off), and the words heard teach "
+        "the mic, as the card's learned names do. Until then it takes only `outcome`. 409 "
+        "`company_set` for `company_key` on a call that has its company, `company_first` for "
+        "any other change to a call that needs one. 409 `note_sorting` while it is being "
+        "sorted, `note_sent` while it is being sent or once it is logged, `part_sent` for a "
+        "part already in HubSpot. 422 `company_not_found` (a company not open to me), "
+        "`change_not_possible`, `change_twice`, `task_in_past`, `task_empty`, `owner_not_found` "
+        "or `person_not_at_company`. 403 `not_your_note` for an Admin's look at someone else's. "
         "404 `note_not_found`. 409 `call_notes_off`."
     ),
 )
@@ -352,11 +368,20 @@ async def edit_call_note(
     body: CallNotePatch,
     session: SessionDep,
     settings: NotesOnDep,
+    leads: LeadsDep,
     auth: SignedInDep,
+    sorter: SorterDep,
     now: NowDep,
 ) -> CallNoteOut:
     note = await note_store.read_note(session, note_id, auth, change=True)
-    await note_store.edit_note(session, note, body, now)
+    if body.company_key is None:
+        await note_store.edit_note(session, note, body, now)
+        return await note_store.one_out(session, note)
+    await note_company.pick_company(
+        session, note, body, auth=auth, leads=leads, settings=settings, now=now
+    )
+    if note.status == "sorting":
+        sorter.start(note.id)
     return await note_store.one_out(session, note)
 
 
@@ -366,8 +391,9 @@ async def edit_call_note(
     dependencies=[Depends(need("companies.call_logs", write=True))],
     summary="Remove a call note",
     description=(
-        "Removes my note before it is sent (the toast's Undo), or a note that failed with "
-        "nothing in HubSpot. A sort still running stops first. 409 `note_sent` while it is "
+        "Removes my note before it is sent (the toast's Undo), a call that needs a company "
+        "(PLAN-V24), or a note that failed with nothing in HubSpot. A sort still running stops "
+        "first. 409 `note_sent` while it is "
         "being sent, or once any part of it is in HubSpot or may be. 403 `not_your_note`, 404 "
         "`note_not_found`, 409 `call_notes_off`."
     ),

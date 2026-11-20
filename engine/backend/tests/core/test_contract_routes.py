@@ -585,6 +585,36 @@ def test_a_call_cards_lists_can_go_back_as_they_came(schema: dict[str, Any]) -> 
         assert missing == set(), (answer, missing)
 
 
+def test_a_call_can_be_saved_before_its_company(schema: dict[str, Any]) -> None:
+    """PLAN-V24 T3-1, the contract: a new call may leave `company_key` out and give the name as
+    heard; a call's company may be empty while it is `needs_company`; the PATCH picks it; the
+    list and the counts have it; and the send says why it leaves such a call out."""
+    components = schema["components"]["schemas"]
+    saved = components["CallNoteIn"]
+    assert "company_key" not in saved.get("required", [])
+    heard = saved["properties"]["company_heard"]["anyOf"][0]
+    assert (heard["minLength"], heard["maxLength"]) == (1, 120)
+    answer = components["CallNoteOut"]
+    for name in ("company_key", "company_name"):
+        assert {"type": "null"} in answer["properties"][name]["anyOf"], name
+        assert name in answer["required"], name  # always sent, maybe as null
+    assert "company_heard" in answer["properties"]
+    assert answer["properties"]["status"]["enum"][0] == "needs_company"
+    assert "company_key" in components["CallNotePatch"]["properties"]
+    assert "needs_company" in components["CallNoteSummary"]["properties"]
+    notes = operation(schema, "get", f"{API}/companies/call-notes")
+    state = next(item for item in notes["parameters"] if item["name"] == "state")
+    assert "needs_company" in state["schema"]["anyOf"][0]["enum"]
+    save = operation(schema, "post", f"{API}/companies/call-notes")["description"]
+    edit = operation(schema, "patch", f"{API}/companies/call-notes/{{note_id}}")["description"]
+    assert "company_needed" in save and "needs_company" in save
+    for code in ("company_set", "company_first", "company_not_found"):
+        assert code in edit, code
+    for step in ("preview", "confirm"):
+        sending = operation(schema, "post", f"{API}/companies/call-notes/{step}")["description"]
+        assert "Needs a company first." in sending, step
+
+
 def test_run_days_are_melbourne_dates_and_the_run_filters_use_the_same_kind_of_date(
     schema: dict[str, Any],
 ) -> None:

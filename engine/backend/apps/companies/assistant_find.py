@@ -542,7 +542,8 @@ async def on_screen(session: AsyncSession, ctx: Context) -> OnScreen:
         company = await company_hit(session, meeting.company_key, ctx.leads)
     if company is None and page.note_id is not None:
         note = await session.get(CallNote, page.note_id)
-        if note is not None and may_read(note, ctx.auth):
+        # A call that needs its company (PLAN-V24) has none to give.
+        if note is not None and note.company_key is not None and may_read(note, ctx.auth):
             company = await company_hit(session, note.company_key, ctx.leads)
     return OnScreen(company=company, meeting=meeting)
 

@@ -751,7 +751,9 @@ class NoteSorter:
     async def _run(self, note_id: uuid.UUID) -> None:
         async with self.sessions() as session:
             note = await session.get(CallNote, note_id)
-            if note is None or note.status != "sorting":
+            # A call that needs its company is never sorted (PLAN-V24): it isn't `sorting`, and
+            # the table's check keeps every other call with a company.
+            if note is None or note.status != "sorting" or note.company_key is None:
                 return
             settings = await self._settings(session)
             in_hubspot = not note.company_key.startswith("lead:")

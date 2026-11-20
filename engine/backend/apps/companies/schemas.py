@@ -528,10 +528,15 @@ class StyleNoteIn(BaseModel):
 # --- Call notes (PLAN-V17 T2-5) -------------------------------------------------------------------
 
 NoteSource = Literal["mic", "typed", "transcript"]
-NoteStatus = Literal["sorting", "to_confirm", "sending", "logged", "partial", "failed", "uncertain"]
+# needs_company (PLAN-V24 T3-1): saved before its company was found. It is never sorted or sent
+# until the rep picks the company.
+NoteStatus = Literal[
+    "needs_company", "sorting", "to_confirm", "sending", "logged", "partial", "failed", "uncertain"
+]
 NoteSortedBy = Literal["ai", "person"]
-# history (PLAN-V18 T1-7): every one of my notes, in any status.
-NoteState = Literal["to_confirm", "logged", "needs_look", "history"]
+# history (PLAN-V18 T1-7): every one of my notes, in any status. needs_company (PLAN-V24): my calls
+# waiting for me to pick their company.
+NoteState = Literal["to_confirm", "logged", "needs_look", "history", "needs_company"]
 # HubSpot's six standard call outcomes (core.hubspot.activities.OUTCOME_NAMES; a test checks).
 OutcomeName = Literal[
     "Connected", "No answer", "Left voicemail", "Left live message", "Busy", "Wrong number"
@@ -547,6 +552,7 @@ NOTE_MAX_CHARS = 60_000  # the most a note can ever hold; the setting notes_max_
 NOTE_SUMMARY_MAX_CHARS = 600
 NOTE_SUBJECT_MAX_CHARS = 200
 NOTE_VALUE_MAX_CHARS = 120
+NOTE_HEARD_MAX_CHARS = 120  # a company's name as heard (PLAN-V24), as the table keeps it
 NOTE_BATCH_MAX = 50
 CARD_ID_PATTERN = r"^[ct][0-9]{1,3}$"  # c1 for a change, t2 for a task
 STEP_PATTERN = r"^(?:call|fields|note|task:[0-9]{1,2})$"
@@ -596,8 +602,23 @@ class CallNoteOptions(Out):
 
 
 class CallNoteIn(BaseModel):
-    company_key: str = Field(
-        min_length=1, max_length=64, description="A HubSpot company id, or lead:<id>"
+    company_key: str | None = Field(
+        None,
+        min_length=1,
+        max_length=64,
+        description="A HubSpot company id, or lead:<id>. Left out when the company isn't found "
+        "yet: then `company_heard` is needed, and the call is saved `needs_company`, unsorted, "
+        "until the rep picks its company (PLAN-V24)",
+    )
+    company_heard: SafeText | None = Field(
+        None,
+        min_length=1,
+        max_length=NOTE_HEARD_MAX_CHARS,
+        description="The company's name as heard or typed, like North Wind: 1 to 120 characters. "
+        "Needed when `company_key` is left out (422 `company_needed` otherwise). Kept with the "
+        "call. An email address or a phone number in it is kept as [email left out] or [number "
+        "left out]",
+        examples=["North Wind"],
     )
     contact_id: SafeText | None = Field(
         None, max_length=32, description="HubSpot's contact id: who the call was with, if known"
@@ -675,9 +696,24 @@ class CallNoteStep(Out):
 
 
 class CallNoteOut(Out):
+    # company_heard was added in PLAN-V24: the API always sends it, and the website's types leave
+    # it optional.
+    model_config = ConfigDict(json_schema_extra=optional_in_types("company_heard"))
+
     id: uuid.UUID
-    company_key: str
-    company_name: str
+    company_key: str | None = Field(
+        description="A HubSpot company id, or lead:<id>. None while the call needs its company "
+        "(`needs_company`)"
+    )
+    company_name: str | None = Field(
+        description="The company's name. None while the call needs its company"
+    )
+    company_heard: str | None = Field(
+        None,
+        description="The company's name as heard or typed when the call was saved without its "
+        "company, like North Wind. It stays once the company is picked. None when the company was "
+        "known",
+    )
     person: PrepPerson | None
     text: str
     source: NoteSource
@@ -744,8 +780,19 @@ class CallNoteTaskIn(BaseModel):
 
 class CallNotePatch(BaseModel):
     """The rep's edits. Only the parts sent change: `outcome` or `contact_id` sent as null clears
-    it, and `changes` or `tasks` replace the card's whole list."""
+    it, and `changes` or `tasks` replace the card's whole list. `company_key` picks the company of
+    a call that needs one (PLAN-V24)."""
 
+    company_key: str | None = Field(
+        None,
+        min_length=1,
+        max_length=64,
+        description="The company, for a call saved before it was found (`needs_company`): a "
+        "HubSpot company id, or lead:<id>. Taken only then: 409 `company_set` for a call that "
+        "has its company. Only `contact_id` and `outcome` may come with it. Once it is set, the "
+        "call is sorted as a new call is, then waits in To confirm. Left out or None: the "
+        "company stays as it is",
+    )
     summary: SafeText | None = Field(None, max_length=NOTE_SUMMARY_MAX_CHARS)
     outcome: OutcomeName | None = None
     contact_id: SafeText | None = Field(
@@ -810,9 +857,16 @@ class CallNoteResolve(BaseModel):
 
 
 class CallNoteSummary(Out):
+    # needs_company was added in PLAN-V24: the API always sends it, and the website's types leave
+    # it optional.
+    model_config = ConfigDict(json_schema_extra=optional_in_types("needs_company"))
+
     to_confirm: int = Field(description="My notes waiting for me to confirm them")
     needs_look: int = Field(description="My notes that failed, were partly saved, or are unsure")
     logged_today: int = Field(description="My notes logged in HubSpot today, Melbourne time")
+    needs_company: int = Field(
+        0, description="My calls saved before their company was found, waiting for me to pick it"
+    )
 
 
 class MyLastNote(Out):

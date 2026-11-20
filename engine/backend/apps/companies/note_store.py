@@ -15,6 +15,9 @@ sorter in notes.py.
 - **Sending** (preview, confirm, retry, resolve) goes through the batch (note_batch.py, T2-6). While
   HubSpot can't be written, preview shows each note with our copy's values, and the rest say what
   sending waits for.
+- **A call before its company** (PLAN-V24 T3-1, choices 17 and 18): a call saved with only the
+  name as heard is `needs_company`. It isn't sorted, its card takes only an outcome, and a send
+  leaves it out. Picking its company (note_company.py) sends it to be sorted as a new call is.
 """
 
 import uuid
@@ -35,6 +38,7 @@ from apps.companies.meeting_store import search_words
 from apps.companies.note_batch import (
     ALREADY_SENDING,
     LEAD_ONLY,
+    NEEDS_COMPANY,
     OFF_THE_LIST,
     STOPPED_MID_SEND,
     NoteSender,
@@ -89,7 +93,7 @@ from apps.companies.schemas import (
     PrepPerson,
 )
 from apps.companies.store import people_of, valid_key
-from apps.companies.tables import CallNote, Prep
+from apps.companies.tables import COMPANY_HEARD_CHARS, CallNote, Prep
 from core.api.errors import Problem
 from core.auth.features import is_admin
 from core.auth.models import User
@@ -109,9 +113,14 @@ STATES: Final[dict[NoteState, tuple[str, ...]]] = {
     "to_confirm": ("sorting", "to_confirm", "sending"),
     "logged": ("logged",),
     "needs_look": ("partial", "failed", "uncertain"),
+    "needs_company": ("needs_company",),  # PLAN-V24: waiting for the rep to pick the company
 }
 CHANGEABLE: Final = ("to_confirm", "partial", "failed")  # the parts not in HubSpot yet
-REMOVABLE: Final = ("sorting", "to_confirm", "failed")  # failed: only with nothing in HubSpot
+# failed: only with nothing in HubSpot. needs_company: never sent (PLAN-V24).
+REMOVABLE: Final = ("needs_company", "sorting", "to_confirm", "failed")
+# What a call that needs its company may change before it is picked: its outcome, which the sort
+# keeps as the rep's own pick. The sort makes the rest of the card anew (PLAN-V24).
+BEFORE_COMPANY: Final = frozenset({"outcome"})
 NOTE_START_CHARS: Final = 200  # a note with no summary shows its first 200 characters
 SEARCH_WORDS: Final = 12  # the most words of a search that count
 CARD_PARTS: Final = frozenset({"summary", "outcome", "changes", "tasks"})
@@ -167,6 +176,29 @@ def still_sorting() -> Problem:
         "Still sorting",
         "This note is still being sorted. Try again in a moment.",
         code="note_sorting",
+    )
+
+
+def company_needed() -> Problem:
+    """A call saved with neither its company nor its name as heard (PLAN-V24)."""
+    return Problem(
+        422,
+        "Which company was it?",
+        "A call needs its company, or the company's name as you said it. Say or type the name, "
+        "or pick the company.",
+        code="company_needed",
+    )
+
+
+def company_first() -> Problem:
+    """A change to a call that needs its company, other than its outcome (PLAN-V24): the sort
+    makes the card anew once the company is picked, so the change would be lost."""
+    return Problem(
+        409,
+        "Pick the company first",
+        "This call needs its company before anything else on it can change. Pick the company on "
+        "its own, then make the other changes.",
+        code="company_first",
     )
 
 
@@ -274,6 +306,7 @@ def note_out(
         id=note.id,
         company_key=note.company_key,
         company_name=note.company_name,
+        company_heard=note.company_heard,
         person=person,
         text=note.text,
         source=note.source,  # the table's checks keep these three to their lists
@@ -428,10 +461,16 @@ async def company_named(
     return None
 
 
-async def person_at(session: AsyncSession, key: str, contact_id: str) -> HubSpotContact:
-    """One of the company's people in our copy (a 422 in plain words otherwise)."""
+async def person_at(session: AsyncSession, key: str | None, contact_id: str) -> HubSpotContact:
+    """One of the company's people in our copy (a 422 in plain words otherwise, and always for a
+    call with no company yet)."""
     contact = await session.get(HubSpotContact, contact_id)
-    if contact is None or key.startswith("lead:") or contact.hubspot_company_id != key:
+    if (
+        contact is None
+        or key is None
+        or key.startswith("lead:")
+        or contact.hubspot_company_id != key
+    ):
         raise refused(
             "That person isn't at this company",
             "Pick someone from this company's people, or leave the person out.",
@@ -450,9 +489,11 @@ async def _by_key(session: AsyncSession, maker: uuid.UUID | None, key: str) -> C
 
 @dataclass(frozen=True)
 class NewNote:
-    """A note to save: from Log call, or a meeting's transcript (Log meeting, PLAN-V17 T2-15)."""
+    """A note to save: from Log call, or a meeting's transcript (Log meeting, PLAN-V17 T2-15).
+    `company_key` None: the company isn't found yet, and `company_heard` is its name as heard
+    (PLAN-V24)."""
 
-    company_key: str
+    company_key: str | None
     text: str
     source: str
     called_at: datetime
@@ -460,6 +501,32 @@ class NewNote:
     prep_id: uuid.UUID | None = None
     outcome: str | None = None
     meeting_id: str | None = None  # the HubSpot meeting a transcript came from
+    company_heard: str | None = None
+
+
+def as_heard(text: str | None) -> str:
+    """A company's name as heard, as it is kept: one line, spaces tidied, no email address or
+    phone number, cut to fit. Empty when nothing was said."""
+    return " ".join(scrub(text or "").split())[:COMPANY_HEARD_CHARS].rstrip()
+
+
+async def start_sort(
+    session: AsyncSession, note: CallNote, *, settings: Settings, now: datetime
+) -> None:
+    """A call with its company goes to be sorted, as every new call does. With Claude sorting
+    and words to sort, it is `sorting`, and the caller starts the sorter once it is saved.
+    Otherwise code finds the person the note names, and it goes to the rep's batch at once,
+    sorted by hand, free. A call with no company yet waits as it is (PLAN-V24). The caller
+    saves it."""
+    key = note.company_key
+    if key is None:
+        return
+    if ai_sorts(settings) and note.text.strip():
+        note.status = "sorting"
+        return
+    if note.contact_id is None and not key.startswith("lead:"):
+        match_person(note, await people_of(session, key))
+    settle_by_hand(note, now)
 
 
 async def save_note(
@@ -481,6 +548,7 @@ async def save_note(
         contact_id=body.contact_id,
         prep_id=body.prep_id,
         outcome=body.outcome,
+        company_heard=body.company_heard,
     )
     return await store_note(
         session,
@@ -508,15 +576,22 @@ async def store_note(
     """Saves a note, and says whether it is new. The same person and key give back the first
     note. With the AI on it is saved `sorting` (the caller starts the sorter); with it off, or
     with no words to sort (just an outcome), it goes to the rep's batch at once, sorted by hand.
-    Either way nothing reaches HubSpot until the rep confirms it."""
+    With no company, only its name as heard, it is saved `needs_company` and isn't sorted until
+    the rep picks the company (PLAN-V24). Either way nothing reaches HubSpot until the rep
+    confirms it."""
     maker = maker_of(auth)
     if idempotency_key is not None:
         first = await _by_key(session, maker, idempotency_key)
         if first is not None:
             return first, False
-    name = await company_named(session, new.company_key, leads)
-    if name is None:
-        raise company_not_found()
+    heard = as_heard(new.company_heard)
+    name: str | None = None
+    if new.company_key is not None:
+        name = await company_named(session, new.company_key, leads)
+        if name is None:
+            raise company_not_found()
+    elif not heard:
+        raise company_needed()
     text = new.text.strip()
     if not text and new.outcome is None:  # "No answer" needs no words, but something must be said
         raise refused(
@@ -544,12 +619,12 @@ async def store_note(
                 "It may have been removed. Save the note without it.",
                 code="prep_not_found",
             )
-    sorts = ai_sorts(settings) and bool(text)  # no words: nothing for Claude to sort
     note = CallNote(
         made_by=maker,
         idempotency_key=idempotency_key,
         company_key=new.company_key,
         company_name=name,
+        company_heard=heard or None,
         contact_id=contact.hubspot_id if contact is not None else None,
         person_name=contact.name if contact is not None else None,
         person_title=contact.job_title if contact is not None else None,
@@ -557,15 +632,12 @@ async def store_note(
         text=scrub(text),
         source=new.source,
         called_at=new.called_at.astimezone(UTC),
-        status="sorting" if sorts else "to_confirm",
+        status="needs_company" if new.company_key is None else "sorting",
         # The rep's own pick, kept on the card: it wins over the sorter's.
         card={"call": {"summary": "", "outcome": new.outcome}},
         meeting_id=new.meeting_id,
     )
-    if not sorts:  # free: code finds the person the note names, and the rep sorts it by hand
-        if contact is None and not new.company_key.startswith("lead:"):
-            match_person(note, await people_of(session, new.company_key))
-        settle_by_hand(note, now)
+    await start_sort(session, note, settings=settings, now=now)
     session.add(note)
     try:
         await session.commit()
@@ -639,11 +711,13 @@ class NoteFilters:
     until: date | None = None
 
     def where(self) -> list[ColumnElement[bool]]:
-        """The conditions, in SQL. Each word of `q` must start a word of the company's name, the
-        person's name, the note or the summary, in any case."""
+        """The conditions, in SQL. Each word of `q` must start a word of the company's name (or
+        its name as heard, for a call saved before its company, PLAN-V24), the person's name, the
+        note or the summary, in any case."""
         found: list[ColumnElement[bool]] = []
         searched = (
             CallNote.company_name,
+            CallNote.company_heard,
             CallNote.person_name,
             CallNote.text,
             CallNote.card["call"]["summary"].astext,
@@ -679,8 +753,9 @@ async def list_notes(
 ) -> CallNotePage:
     """A page of notes. Only an Admin sees other people's (`mine` false), and never in History,
     which is every one of my own notes, in any status (PLAN-V18 T1-7). To confirm: the unsure
-    ones first, then the oldest call first. The others: the newest call first. `filters` work
-    for any state. With sign-in off, every note is open, as everything else is then."""
+    ones first, then the oldest call first. The others, Needs a company too (PLAN-V24): the
+    newest call first. `filters` work for any state. With sign-in off, every note is open, as
+    everything else is then."""
     filters = filters or NoteFilters()
     if filters.since is not None and filters.until is not None and filters.since > filters.until:
         raise dates_out_of_order()
@@ -732,6 +807,7 @@ async def summary(
         to_confirm=counts.get("sorting", 0) + counts.get("to_confirm", 0),
         needs_look=sum(counts.get(status, 0) for status in STATES["needs_look"]),
         logged_today=logged_today or 0,
+        needs_company=counts.get("needs_company", 0),
     )
 
 
@@ -945,12 +1021,26 @@ async def _edited_tasks(
     return out
 
 
+def _edit_before_company(note: CallNote, patch: CallNotePatch) -> None:
+    """A call that needs its company takes only its outcome, kept on the card as the rep's own
+    pick: the sort keeps it, and makes the rest of the card anew once the company is picked
+    (PLAN-V24). Anything else is refused (409 `company_first`). The caller commits."""
+    given = patch.model_fields_set
+    if given - BEFORE_COMPANY:
+        raise company_first()
+    if "outcome" in given:
+        card = NoteCard.model_validate(note.card or {})
+        card.call.outcome = patch.outcome
+        note.card = card.model_dump(mode="json")
+
+
 async def edit_note(
     session: AsyncSession, note: CallNote, patch: CallNotePatch, now: datetime
 ) -> None:
     """The rep's edits to a note waiting for them, or to the parts not yet in HubSpot of a note
     that failed or was partly saved. Each change and follow-up is checked as the sorter checks
-    them. The card is marked edited; `sorted` keeps what the sorter made.
+    them. The card is marked edited; `sorted` keeps what the sorter made. A call that needs its
+    company takes only its outcome (PLAN-V24); its company is picked in note_company.py.
 
     The note is read again under a lock first, as Send and Retry lock it, so an edit from a
     second tab waits for a send that started, and then finds it sent. Only database reads happen
@@ -959,14 +1049,21 @@ async def edit_note(
     if locked is None:
         raise note_not_found()
     note = locked  # the same object, as the database has it now
+    if note.status == "needs_company":
+        _edit_before_company(note, patch)
+        await session.commit()
+        return
     if note.status == "sorting":
         raise still_sorting()
     if note.status not in CHANGEABLE:
         raise already_sent(note.status)
+    key = note.company_key
+    if key is None:  # never: the table keeps every call but one that needs a company with one
+        raise company_first()
     given = patch.model_fields_set
     card = NoteCard.model_validate(note.card or {})
     today = now.astimezone(MELBOURNE).date()
-    in_hubspot = not note.company_key.startswith("lead:")
+    in_hubspot = not key.startswith("lead:")
     summary = _card_text(patch.summary or "", lines=True) if "summary" in given else None
     if card.call.state == "landed" and (
         (summary is not None and summary != card.call.summary)
@@ -979,18 +1076,14 @@ async def edit_note(
     if "outcome" in given:
         card.call.outcome = patch.outcome
     if "changes" in given:
-        offices = await _offices(session, note.company_key)
+        offices = await _offices(session, key)
         card.changes = _edited_changes(
             patch.changes or [], card.changes, today=today, offices=offices, in_hubspot=in_hubspot
         )
     if "tasks" in given:
         card.tasks = await _edited_tasks(session, patch.tasks or [], card.tasks, today)
     if "contact_id" in given and (patch.contact_id or None) != note.contact_id:
-        contact = (
-            await person_at(session, note.company_key, patch.contact_id)
-            if patch.contact_id
-            else None
-        )
+        contact = await person_at(session, key, patch.contact_id) if patch.contact_id else None
         note.contact_id = contact.hubspot_id if contact is not None else None
         note.person_name = contact.name if contact is not None else None
         note.person_title = contact.job_title if contact is not None else None
@@ -1012,9 +1105,10 @@ def removable(note: CallNote) -> bool:
 
 
 async def remove_note(session: AsyncSession, note: CallNote, sorter: NoteSorter) -> None:
-    """Removes a note not yet sent (the toast's Undo), or one that failed with nothing in
-    HubSpot. A sort still running is stopped first; what it spent stays in the search log. The
-    sends of a failed note stay in the log of writes to HubSpot."""
+    """Removes a note not yet sent (the toast's Undo), a call that needs its company (PLAN-V24),
+    or one that failed with nothing in HubSpot. A sort still running is stopped first; what it
+    spent stays in the search log. The sends of a failed note stay in the log of writes to
+    HubSpot."""
     if not removable(note):
         raise already_sent(note.status)
     note_id, sorting = note.id, note.status == "sorting"
@@ -1036,6 +1130,7 @@ async def remove_note(session: AsyncSession, note: CallNote, sorter: NoteSorter)
 # --- Sending (the batch is note_batch.py) ---------------------------------------------------------
 
 NOT_SENDABLE: Final = {
+    "needs_company": NEEDS_COMPANY,  # PLAN-V24 choice 18: it stays in Call logs
     "sorting": "It is still being sorted.",
     "sending": "It is being sent now.",
     "logged": "It is in HubSpot already.",
@@ -1051,8 +1146,8 @@ async def batch_notes(
     allowed: tuple[str, ...],
     skip_left_out: bool,
 ) -> tuple[list[CallNote], list[CallNoteSkipped]]:
-    """The notes to preview or send, in the order given, and the rest with why. A company that
-    isn't in HubSpot yet is the rest too."""
+    """The notes to preview or send, in the order given, and the rest with why. A call that
+    needs its company (PLAN-V24), or a company that isn't in HubSpot yet, is the rest too."""
     notes: list[CallNote] = []
     skipped: list[CallNoteSkipped] = []
     for note_id in dict.fromkeys(ids):
@@ -1066,6 +1161,8 @@ async def batch_notes(
             why = NOT_SENDABLE.get(note.status, "It can't be sent now.")
         elif skip_left_out and note.left_out:
             why = "You left it out of this send."
+        elif note.company_key is None:
+            why = NEEDS_COMPANY
         elif note.company_key.startswith("lead:"):
             why = LEAD_ONLY
         elif off_the_list(NoteCard.model_validate(note.card or {})):
@@ -1081,11 +1178,10 @@ async def refresh_current(session: AsyncSession, note: CallNote) -> None:
     """Each change's `current` from our copy now, when HubSpot can't be asked. One that moved
     since the rep saw it says so."""
     card = NoteCard.model_validate(note.card or {})
-    if not card.changes or note.company_key.startswith("lead:"):
+    key = note.company_key
+    if not card.changes or key is None or key.startswith("lead:"):
         return
-    offices = {
-        office.label.casefold(): office for office in await _offices(session, note.company_key)
-    }
+    offices = {office.label.casefold(): office for office in await _offices(session, key)}
     moved = False
     for change in card.changes:
         if change.state == "landed":
