@@ -119,7 +119,7 @@ async def test_the_browser_speech_service_waits_for_levis_ok_on_the_server(
         "browser_speech_off",
         "The browser's speech service is off",
         "The browser's speech service sends the voice to Google or Microsoft, so it stays off "
-        "until Levi says yes. Pick Whisper in the browser or Typing only.",
+        "until Levi says yes. Pick a free model on the device or Typing only.",
     )
     assert body["request_id"]
     given = await client.patch(SETTINGS, json={"values": {"browser_speech_ok": True}})

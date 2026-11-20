@@ -47,8 +47,8 @@ PLAIN_DOMAIN = re.compile(rf"{_DOMAIN_LABEL}(?:\.{_DOMAIN_LABEL})+")  # like con
 
 ClaudeModel = Literal["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]
 ClaudeEffort = Literal["low", "medium", "high", "xhigh", "max"]
-# The mic's voice to text tool (PLAN-V18): Whisper in the browser, the browser's own speech
-# service, or no mic.
+# The mic's voice to text tool (PLAN-V18): a free model on the device (PLAN-V24), the
+# browser's own speech service, or no mic.
 VoiceTool = Literal["browser_model", "browser_service", "typing"]
 MODEL_CHOICES: Final[tuple[str, ...]] = get_args(ClaudeModel)
 EFFORT_CHOICES: Final[tuple[str, ...]] = get_args(ClaudeEffort)
@@ -332,9 +332,9 @@ class Settings(BaseSettings):
     hubspot_names_to_signalhire_ok: StrictBool = False
     # The same kind of OK for the mic (PLAN-V18): may Log call use the browser's own speech
     # service (voice_tool browser_service)? It sends each rep's voice to Google or Microsoft, so it
-    # is off until Levi says yes. While it is off, browser_service reads as browser_model (Whisper
-    # in the browser), whether it is in .env or saved on the Settings page, and the Settings page
-    # refuses to save it. Same exact-text rule.
+    # is off until Levi says yes. While it is off, browser_service reads as browser_model (a free
+    # model on the device), whether it is in .env or saved on the Settings page, and the Settings
+    # page refuses to save it. Same exact-text rule.
     browser_speech_ok: StrictBool = False
     # A ceiling can't sit below the lowest value its editable settings allow (a test checks this
     # against CEILINGS), or a valid setting would be clamped to something its own minimum refuses.
@@ -517,8 +517,8 @@ class Settings(BaseSettings):
     # Which voice to text tool the mic uses (PLAN-V18, the contract's part 4). browser_service,
     # the default since PLAN-V22 (choice 10), is the browser's own speech service, which sends the
     # voice to Google or Microsoft: used only while browser_speech_ok is on (Levi's OK, TBC), and
-    # browser_model until then. browser_model is Whisper in the browser: the voice stays on the
-    # laptop. typing hides the mic.
+    # browser_model until then. browser_model is a free model on the device (PLAN-V24 choice
+    # 27): the voice never leaves the device. typing hides the mic.
     voice_tool: VoiceTool = "browser_service"
     meeting_forms_enabled: StrictBool = False  # shows Meetings and the pre-read
     model_meeting_form: ClaudeModel = "claude-sonnet-5-5"
@@ -870,7 +870,7 @@ class Settings(BaseSettings):
         """The browser's own speech service sends each rep's voice to Google or Microsoft, so the
         mic uses it only while browser_speech_ok is on (Levi's OK, PLAN-V18). Until then
         voice_tool browser_service, from .env or saved on the Settings page, reads as
-        browser_model: Whisper in the browser, where the voice stays on the laptop. Every reader
+        browser_model: a free model on the device, where the voice never leaves it. Every reader
         gets the safe value. The Settings page refuses to save it (core.prefs.service)."""
         if self.voice_tool == "browser_service" and not self.browser_speech_ok:
             self.voice_tool = "browser_model"

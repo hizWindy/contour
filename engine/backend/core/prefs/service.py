@@ -79,7 +79,7 @@ BROWSER_SERVICE = "browser_service"
 BROWSER_SPEECH_OFF_TITLE = "The browser's speech service is off"
 BROWSER_SPEECH_OFF_DETAIL = (
     "The browser's speech service sends the voice to Google or Microsoft, so it stays off until "
-    "Levi says yes. Pick Whisper in the browser or Typing only."
+    "Levi says yes. Pick a free model on the device or Typing only."
 )
 
 # key: (label, what it does). Plain words, shown on the Settings page.
@@ -287,7 +287,7 @@ TEXT: dict[str, tuple[str, str]] = {
         "Which tool turns a rep's voice into words, on Log call and for the Assistant's V key. "
         "The browser's own speech service, the default, sends the voice to Google or Microsoft, "
         "so it is offered only once the server allows it, after Levi's OK (TBC). Until then the "
-        "mic uses Whisper in the browser in its place, which keeps the voice on the laptop. "
+        "mic uses a free model on the device in its place, so the voice never leaves the device. "
         "Typing hides the mic.",
     ),
     "meeting_forms_enabled": (
@@ -335,8 +335,8 @@ TEXT: dict[str, tuple[str, str]] = {
     "browser_speech_ok": (
         "The mic may use the browser's speech service",
         "Levi's OK for the mic to send a rep's voice to Google or Microsoft, through the "
-        "browser's own speech service. While it is off, Voice to text offers Whisper in the "
-        "browser and Typing only. " + ENV_ONLY_NOTE,
+        "browser's own speech service. While it is off, Voice to text offers a free model on the "
+        "device and Typing only. " + ENV_ONLY_NOTE,
     ),
     "hard_run_cap_usd": (
         "Highest run cap (US$)",

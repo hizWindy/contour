@@ -389,7 +389,7 @@ async def test_the_browser_speech_service_cant_be_saved_until_the_server_allows_
     assert await stored(session) == {}  # the default since PLAN-V22 T1-6: nothing to keep
     out = await patch_settings(session, {"voice_tool": "browser_model"})
     assert fields_of(out)["voice_tool"].overridden is True
-    assert await stored(session) == {"voice_tool": "browser_model"}  # Whisper, by choice
+    assert await stored(session) == {"voice_tool": "browser_model"}  # the model, by choice
 
 
 @pytest.mark.integration

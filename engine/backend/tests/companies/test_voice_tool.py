@@ -2,8 +2,8 @@
 
 The browser's own speech service (`browser_service`) sends a rep's voice to Google or Microsoft,
 so the mic uses it only once the server allows it (`BROWSER_SPEECH_OK=true`). Until then
-`GET /call-notes/options` gives `browser_model` (Whisper in the browser) in its place, whether it
-was saved on the Settings page or set on the server. With the OK, both come through. The
+`GET /call-notes/options` gives `browser_model` (a free model on the device) in its place, whether
+it was saved on the Settings page or set on the server. With the OK, both come through. The
 Settings page's side (the 422 `browser_speech_off`) is in tests/core/test_prefs.py and
 tests/core/test_settings_api.py.
 """

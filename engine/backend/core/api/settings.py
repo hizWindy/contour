@@ -32,7 +32,7 @@ BROWSER_SPEECH = (
     description=(
         "Every setting a person may change, then the ones set only on the server, as read-only "
         f"rows (`editable` false). {BROWSER_SPEECH}, `voice_tool` doesn't list it in `choices`, "
-        "and a saved or server value of it shows as `browser_model` (Whisper in the browser)."
+        "and a saved or server value of it shows as `browser_model` (a free model on the device)."
     ),
 )
 async def read_settings(session: SessionDep, admin: PlatformAdminDep) -> SettingsOut:

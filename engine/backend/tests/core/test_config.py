@@ -477,7 +477,7 @@ def test_the_browser_speech_ok_starts_off_and_turns_on_only_with_the_exact_text_
 @pytest.mark.parametrize(
     ("asked", "allowed", "used"),
     [
-        ("browser_service", False, "browser_model"),  # Whisper in the browser in its place
+        ("browser_service", False, "browser_model"),  # the model on the device in its place
         ("browser_service", True, "browser_service"),
         ("browser_model", False, "browser_model"),
         ("browser_model", True, "browser_model"),
@@ -485,7 +485,7 @@ def test_the_browser_speech_ok_starts_off_and_turns_on_only_with_the_exact_text_
         ("typing", True, "typing"),
     ],
 )
-def test_the_browser_speech_service_is_whisper_in_the_browser_until_levis_ok(
+def test_the_browser_speech_service_is_the_model_on_the_device_until_levis_ok(
     asked: str, allowed: bool, used: str
 ) -> None:
     assert make(voice_tool=asked, browser_speech_ok=allowed).voice_tool == used
@@ -504,7 +504,7 @@ def test_the_speech_service_is_the_default_once_levi_says_yes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """PLAN-V22 T1-6 (choice 10): the browser's speech service is the default. While its switch
-    is off, it still reads as Whisper in the browser, as before."""
+    is off, it still reads as the free model on the device (PLAN-V24), as before."""
     assert Settings.model_fields["voice_tool"].default == "browser_service"
     assert Settings(_env_file=None).voice_tool == "browser_model"
     monkeypatch.setenv("BROWSER_SPEECH_OK", "true")
