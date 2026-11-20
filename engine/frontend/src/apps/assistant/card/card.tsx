@@ -36,6 +36,9 @@
  *   V stops the conversation. After a send, the bar comes back and says "Sent.".
  * - **V with "Keep listening" on** and the bar closed starts a conversation, which the card hears
  *   (`converse`). With it off, V speaks one change, as before.
+ * - **Its question by voice** (PLAN-V24 T2-4, choice 14): while it asks "Which Sample?", "the
+ *   second one" or a name from its list picks it, in the code, with no AI (`choose.ts`). A person's
+ *   or a teammate's name that isn't there changes nothing, and the card says so.
  *
  * Its code loads with the voice bar's, late, never in the first visit (`host.tsx`).
  */
@@ -122,6 +125,7 @@ import {
   type Box,
   type CardDraft,
 } from './draft'
+import { pickByVoice } from './choose'
 import { keepCardDraft } from './drafts'
 import { inTextBox, typingKey } from './keys'
 import { startHold } from './hold'
@@ -139,8 +143,10 @@ import {
   CARD_CAN,
   DRAFT_KEPT,
   LATER,
+  noOneHereWords,
   OPEN,
   OPEN_CALL_LOGS,
+  PICK_ONE,
   SEND,
   SEND_OR_KEEP,
   SENT,
@@ -637,7 +643,8 @@ function DraftCard({
   /**
    * A turn of the conversation, read by the card first, with no AI (PLAN-V24 T2-3): "send it" sends
    * (or goes to a choice still to make, as Enter does), and "later" or "cancel" does what Later or
-   * Cancel does. Null: not one of these, and it goes to the command step.
+   * Cancel does. Then the card's question (T2-4): "the second one", or a name from its list. Null:
+   * none of these, and it goes to the command step.
    */
   const takeTurn = (words: string): CardTook | null => {
     if (closing.current) return null
@@ -647,6 +654,13 @@ function DraftCard({
       cancel()
       return { line: null }
     }
+    const pick = pickByVoice(latest.current.draft, words)
+    if (pick?.kind === 'picked') {
+      setDraft(pick.draft)
+      return { line: null }
+    }
+    if (pick?.kind === 'none') return { line: noOneHereWords(pick.words) }
+    if (pick?.kind === 'which') return { line: PICK_ONE }
     return null
   }
 

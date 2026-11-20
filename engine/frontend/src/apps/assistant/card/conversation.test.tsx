@@ -3,8 +3,9 @@
  * conversation's turns for as long as it is open, through the conversation's one mic. "Send it"
  * sends, even 30 seconds on; "later" keeps a call in Call logs; a spoken change still works; a new
  * command waits for the card; and after a send the next turn is a new command. Outside a
- * conversation the card's own 5 second listen works as before. A fake mic, a fake clock and a fake
- * server; nothing real is sent. Made-up names only: Sample Logistics Pty Ltd, Jo Sample.
+ * conversation the card's own 5 second listen works as before. T2-4: the card's question is
+ * answered by voice, with no AI. A fake mic, a fake clock and a fake server; nothing real is sent.
+ * Made-up names only: Sample Logistics Pty Ltd, Sample Freight Pty Ltd, Jo Sample, James Sample.
  */
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -24,11 +25,15 @@ import {
   callCommand,
   CLOCK,
   command,
+  JAMES,
+  JAMES_TOO,
   note,
   notePath,
   notePreview,
   options,
+  OTHER_SAMPLE,
   SAM,
+  SAMPLE,
   taskCommand,
   teamEmail,
   write,
@@ -312,5 +317,58 @@ describe('outside a conversation ("Keep listening" off)', () => {
     await waitFor(() => {
       expect(of(API.tasks)).toHaveLength(1)
     })
+  })
+})
+
+describe('a choice by voice in a conversation (T2-4)', () => {
+  it('"the second one" picks the second company, and nothing asks the AI', async () => {
+    vi.useFakeTimers(CLOCK)
+    const which = taskCommand({
+      company: {
+        found: null,
+        choices: [SAMPLE, OTHER_SAMPLE],
+        from_page: false,
+        heard: 'Sample',
+      },
+    })
+    const { mic, of } = page({ [TASK_WORDS]: which })
+    await listening()
+    await say(mic, TASK_WORDS)
+    const card = await screen.findByRole('dialog', { name: TASK_CARD })
+    expect(within(card).getByRole('group', { name: 'Which Sample?' })).toBeInTheDocument()
+    await say(mic, 'the second one')
+    await waitFor(() => {
+      expect(within(card).queryByRole('group', { name: 'Which Sample?' })).toBeNull()
+    })
+    expect(within(card).getByText(OTHER_SAMPLE.name)).toBeInTheDocument()
+    expect(of(API.command)).toHaveLength(1)
+  })
+
+  it('a person’s name that isn’t there changes nothing and says so; a name that is picks', async () => {
+    vi.useFakeTimers(CLOCK)
+    const which = callCommand({
+      person: { found: null, choices: [JAMES, JAMES_TOO], heard: 'James' },
+    })
+    const { mic, of } = page({ [CALL_WORDS]: which })
+    await listening()
+    await say(mic, CALL_WORDS)
+    const card = await screen.findByRole('dialog', { name: CALL_CARD })
+    const group = within(card).getByRole('group', { name: 'Which James?' })
+    await say(mic, 'James Smith')
+    await waitFor(() => {
+      expect(strip(card)).toHaveTextContent(
+        "There's no 'James Smith' here. Pick one, or say its number.",
+      )
+    })
+    expect(group).toBeInTheDocument()
+    // Nothing is saved until the person is picked, and the AI wasn't asked.
+    expect(of(API.notes)).toHaveLength(0)
+    expect(of(API.command)).toHaveLength(1)
+    await say(mic, 'James Example')
+    await waitFor(() => {
+      expect(of(API.notes)).toHaveLength(1)
+    })
+    expect(of(API.notes)[0]?.body).toMatchObject({ contact_id: JAMES_TOO.id })
+    expect(of(API.command)).toHaveLength(1)
   })
 })
