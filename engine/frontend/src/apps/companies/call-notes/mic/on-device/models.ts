@@ -54,7 +54,7 @@ async function setUp(device: Device): Promise<void> {
   const wasm = env.backends.onnx.wasm
   if (!wasm) throw new Error('ONNX Runtime has no WebAssembly settings')
   const runtime = runtimeFor(device)
-  const kept = await keptFile(runtime.wasm.url)
+  const kept = await keptFile(runtime.wasm)
   if (!kept) throw new Error('the runtime is not kept')
   wasm.wasmBinary = await kept.arrayBuffer()
   // The GPU build's JavaScript is inside the library; the CPU build's comes from our own site.

@@ -9,8 +9,10 @@
  *
  * The first time, the files are downloaded once, checked against the list (size and sha256), and
  * kept in the browser's Cache Storage (`CACHE`). After that they come from there: a second visit
- * downloads nothing. The service worker may already keep the /assets/ files; a file kept by either
- * counts, so none is kept twice.
+ * downloads nothing. Only our own checked copy counts as kept. The service worker keeps /assets/
+ * files as they pass, before anyone checks them, and our site answers a missing file with its
+ * index.html and a 200, so its copy may be wrong: a file that fails its check leaves both stores,
+ * and a good one stays in ours only.
  */
 
 import cpuGlue from 'onnxruntime-web/ort-wasm-simd-threaded.mjs?url'
@@ -54,6 +56,12 @@ export interface VoiceFile extends Facts {
 
 /** The browser's store for these files. */
 export const CACHE = 'contour-voice'
+
+/** The service worker's own store of /assets/ files (src/pwa/sw.js), filled as they pass. */
+export const SW_ASSETS = 'contour-assets'
+
+/** On our kept copies: the size each had when it passed its check. Reading it reads no file. */
+export const CHECKED_BYTES = 'x-contour-checked-bytes'
 
 /** Where the models are on our site (/voice/). Each has a folder of its own in there. */
 export const SERVED = LIST.served
@@ -114,19 +122,38 @@ export async function deviceHere(): Promise<Device> {
   }
 }
 
-/** The kept copy of a file, from any of this site's caches. */
-export async function keptFile(url: string): Promise<Response | undefined> {
+/** Every file this build lists, for any model and either runtime, by its address. */
+function listed(): Map<string, VoiceFile> {
+  const names = Object.keys(LIST.models) as (ModelName | typeof DETECTOR)[]
+  const files = [
+    ...names.flatMap((name) => modelFiles(name)),
+    runtimeFor('webgpu').wasm,
+    runtimeFor('wasm').wasm,
+  ]
+  return new Map(files.map((file) => [file.url, file]))
+}
+
+/** Our checked copy of a file, or nothing: a copy only counts with the file's listed size. */
+export async function keptFile(file: VoiceFile): Promise<Response | undefined> {
   if (typeof caches === 'undefined') return undefined
   try {
-    return await caches.match(url)
+    const kept = await (await caches.open(CACHE)).match(file.url)
+    return kept?.headers.get(CHECKED_BYTES) === String(file.bytes) ? kept : undefined
   } catch {
     return undefined
   }
 }
 
+/** Takes a file out of both stores: ours, and the service worker's. */
+async function forget(url: string): Promise<void> {
+  for (const name of [CACHE, SW_ASSETS]) {
+    if (await caches.has(name)) await (await caches.open(name)).delete(url)
+  }
+}
+
 /** The files not kept on this device yet. */
 export async function missingFiles(files: readonly VoiceFile[]): Promise<VoiceFile[]> {
-  const kept = await Promise.all(files.map((file) => keptFile(file.url)))
+  const kept = await Promise.all(files.map((file) => keptFile(file)))
   return files.filter((_, index) => !kept[index])
 }
 
@@ -185,7 +212,8 @@ async function sha256Of(bytes: Uint8Array<ArrayBuffer>): Promise<string | null> 
 /**
  * Downloads the files not kept yet, one at a time, checks each against the list, and keeps it.
  * Any failure (no network, a stall, a wrong size or sha256) is a `DownloadFailed`, and a file that
- * failed its check is never kept. A page served as index.html for a missing file fails the size.
+ * failed takes no place in either store, so the next try fetches it fresh. A page served as
+ * index.html for a missing file fails the size.
  */
 export async function keepFiles(
   files: readonly VoiceFile[],
@@ -199,27 +227,29 @@ export async function keepFiles(
   let done = 0
   onProgress?.({ loaded: 0, total })
   for (const file of missing) {
-    const bytes = await download(file, (got) => onProgress?.({ loaded: done + got, total }))
-    const sha256 = await sha256Of(bytes)
-    if (sha256 !== null && sha256 !== file.sha256) throw new DownloadFailed(`${file.url}: checksum`)
-    // The service worker keeps /assets/ files as they pass: then it has this one already.
-    if (!(await keptFile(file.url))) await cache.put(file.url, new Response(bytes))
+    let bytes: Uint8Array<ArrayBuffer>
+    try {
+      bytes = await download(file, (got) => onProgress?.({ loaded: done + got, total }))
+      const sha256 = await sha256Of(bytes)
+      if (sha256 !== null && sha256 !== file.sha256)
+        throw new DownloadFailed(`${file.url}: checksum`)
+    } catch (error) {
+      await forget(file.url)
+      throw error
+    }
+    const headers = { [CHECKED_BYTES]: String(bytes.length) }
+    await cache.put(file.url, new Response(bytes, { headers }))
+    // The service worker kept its own copy as the file passed: one copy, the checked one, is enough.
+    if (await caches.has(SW_ASSETS)) await (await caches.open(SW_ASSETS)).delete(file.url)
     done += file.bytes
     onProgress?.({ loaded: done, total })
   }
 }
 
-/** Every file this build lists, for any model and either runtime. */
-function everyFile(): Set<string> {
-  const names = Object.keys(LIST.models) as (ModelName | typeof DETECTOR)[]
-  const urls = names.flatMap((name) => modelFiles(name).map((file) => file.url))
-  return new Set([...urls, gpuWasm, cpuWasm])
-}
-
 /** Takes out kept files that this build no longer lists, like an older model revision. */
 export async function tidyKept(): Promise<void> {
   if (typeof caches === 'undefined') return
-  const current = everyFile()
+  const current = listed()
   const cache = await caches.open(CACHE)
   for (const request of await cache.keys()) {
     if (!current.has(new URL(request.url).pathname)) await cache.delete(request)
@@ -233,6 +263,6 @@ export async function tidyKept(): Promise<void> {
  */
 export async function fromKept(input: string | URL): Promise<Response> {
   const url = new URL(input, self.location.href)
-  const listed = url.origin === self.location.origin && everyFile().has(url.pathname)
-  return (listed ? await keptFile(url.pathname) : undefined) ?? new Response(null, { status: 404 })
+  const file = url.origin === self.location.origin ? listed().get(url.pathname) : undefined
+  return (file ? await keptFile(file) : undefined) ?? new Response(null, { status: 404 })
 }

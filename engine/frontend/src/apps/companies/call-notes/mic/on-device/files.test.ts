@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DownloadFailed, type Progress } from './engine'
 import {
   CACHE,
+  CHECKED_BYTES,
   DEFAULT_MODEL,
   deviceHere,
   filesFor,
@@ -12,6 +13,7 @@ import {
   missingFiles,
   modelFolder,
   SERVED,
+  SW_ASSETS,
   tidyKept,
   voiceIsKept,
   WEBGPU_FIRST,
@@ -24,28 +26,42 @@ import {
   the files are a few made-up bytes.
 */
 
-/** The browser's Cache Storage, kept in memory: each cache is a map from address to bytes. */
+interface Kept {
+  bytes: Uint8Array
+  headers: [string, string][]
+}
+
+/** The browser's Cache Storage, kept in memory: each cache maps an address to bytes and headers. */
 class FakeCaches {
-  readonly stores = new Map<string, Map<string, Uint8Array>>()
+  readonly stores = new Map<string, Map<string, Kept>>()
 
   private static key(request: RequestInfo | URL): string {
     const url = request instanceof Request ? request.url : String(request)
     return new URL(url, window.location.href).href
   }
 
-  private static store(entries: Map<string, Uint8Array>) {
+  private static store(entries: Map<string, Kept>) {
     return {
       match: (request: RequestInfo | URL) => {
-        const bytes = entries.get(FakeCaches.key(request))
-        return Promise.resolve(bytes ? new Response(bytes.slice()) : undefined)
+        const kept = entries.get(FakeCaches.key(request))
+        return Promise.resolve(
+          kept ? new Response(kept.bytes.slice(), { headers: kept.headers }) : undefined,
+        )
       },
       put: async (request: RequestInfo | URL, response: Response) => {
-        entries.set(FakeCaches.key(request), new Uint8Array(await response.arrayBuffer()))
+        entries.set(FakeCaches.key(request), {
+          bytes: new Uint8Array(await response.arrayBuffer()),
+          headers: [...response.headers.entries()],
+        })
       },
       keys: () => Promise.resolve([...entries.keys()].map((url) => new Request(url))),
       delete: (request: RequestInfo | URL) =>
         Promise.resolve(entries.delete(FakeCaches.key(request))),
     }
+  }
+
+  has(name: string) {
+    return Promise.resolve(this.stores.has(name))
   }
 
   open(name: string) {
@@ -80,18 +96,34 @@ function served(url: string, text: string): { file: VoiceFile; bytes: Uint8Array
   return { file: { url, bytes: bytes.length, sha256: sha256(bytes) }, bytes }
 }
 
-/** Our site, answering what `pages` holds: every request it gets is kept in `asked`. */
+const INDEX_HTML = bytesOf('<!doctype html><title>Contour</title>')
+
+/**
+ * Our site, answering what `pages` holds: every request that reaches it is kept in `asked`. Like
+ * App Platform, an address with no file gets index.html with a 200. In front of it, like
+ * src/pwa/sw.js, the service worker answers /assets/ files from its store when it has them, and
+ * keeps each good answer from the site as it passes, unchecked.
+ */
 function site(pages: Record<string, Uint8Array<ArrayBuffer>>) {
   const asked: { url: string; method: string; body: unknown }[] = []
-  const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+  const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input)
+    const worker = url.startsWith('/assets/') ? await caches.open(SW_ASSETS) : null
+    const kept = await worker?.match(url)
+    if (kept) return kept
     asked.push({ url, method: init?.method ?? 'GET', body: init?.body })
-    const page = pages[url]
-    // Like App Platform: an address with no file gets index.html, with a 200.
-    return Promise.resolve(new Response(page ?? bytesOf('<!doctype html><title>Contour</title>')))
+    const answer = new Response(pages[url] ?? INDEX_HTML)
+    await worker?.put(url, answer.clone())
+    return answer
   })
   vi.stubGlobal('fetch', fetch)
   return { fetch, asked }
+}
+
+/** A copy in our store, as keepFiles leaves one once it has passed its check. */
+async function keepChecked(url: string, bytes: Uint8Array<ArrayBuffer>, size = bytes.length) {
+  const headers = { [CHECKED_BYTES]: String(size) }
+  await (await caches.open(CACHE)).put(url, new Response(bytes, { headers }))
 }
 
 let caches: FakeCaches
@@ -165,7 +197,7 @@ describe('keepFiles', () => {
 
     await keepFiles([one.file, two.file])
     expect(asked).toHaveLength(2)
-    expect(new TextDecoder().decode(await (await keptFile(one.file.url))?.arrayBuffer())).toBe(
+    expect(new TextDecoder().decode(await (await keptFile(one.file))?.arrayBuffer())).toBe(
       '{"model_type":"moonshine"}',
     )
   })
@@ -175,6 +207,18 @@ describe('keepFiles', () => {
     site({ [good.file.url]: bytesOf('the fake weights') })
 
     await expect(keepFiles([good.file])).rejects.toBeInstanceOf(DownloadFailed)
+    expect(caches.paths(CACHE)).toEqual([])
+  })
+
+  it("takes a runtime file that failed its check out of the service worker's store too", async () => {
+    const runtime = served('/assets/ort-wasm-simd-threaded-abc123.wasm', 'the real runtime')
+    const { asked } = site({ [runtime.file.url]: bytesOf('the fake runtime') })
+
+    await expect(keepFiles([runtime.file])).rejects.toBeInstanceOf(DownloadFailed)
+
+    // The service worker kept the fake as it passed; the failed check took it out again.
+    expect(asked).toHaveLength(1)
+    expect(caches.paths(SW_ASSETS)).toEqual([])
     expect(caches.paths(CACHE)).toEqual([])
   })
 
@@ -207,15 +251,36 @@ describe('keepFiles', () => {
     await failed
   })
 
-  it("doesn't keep a second copy of a file the service worker keeps already", async () => {
+  it("never counts the service worker's unchecked copy: a bad one goes from both stores", async () => {
     const runtime = served('/assets/ort-wasm-simd-threaded-abc123.wasm', 'wasm bytes')
-    const { asked } = site({})
-    await (await caches.open('contour-assets')).put(runtime.file.url, new Response(runtime.bytes))
+    // The service worker kept our site's index.html under the runtime's name, with a 200.
+    await (await caches.open(SW_ASSETS)).put(runtime.file.url, new Response(INDEX_HTML))
+    const { asked } = site({ [runtime.file.url]: runtime.bytes })
 
-    await keepFiles([runtime.file])
-
+    expect(await missingFiles([runtime.file])).toEqual([runtime.file])
+    await expect(keepFiles([runtime.file])).rejects.toBeInstanceOf(DownloadFailed)
     expect(asked).toEqual([])
-    expect(caches.paths(CACHE)).toEqual([])
+    expect(caches.paths(SW_ASSETS)).toEqual([])
+    expect(await missingFiles([runtime.file])).toEqual([runtime.file])
+
+    // The next try reaches the site, and keeps one copy: ours, checked.
+    await keepFiles([runtime.file])
+    expect(asked).toHaveLength(1)
+    expect(caches.paths(CACHE)).toEqual([runtime.file.url])
+    expect(caches.paths(SW_ASSETS)).toEqual([])
+    expect(await missingFiles([runtime.file])).toEqual([])
+  })
+
+  it('counts a kept copy only when its checked size is the listed one', async () => {
+    const file = served('/voice/model-1/onnx/model.onnx', 'weights')
+    await (await caches.open(CACHE)).put(file.file.url, new Response(file.bytes))
+    expect(await missingFiles([file.file])).toEqual([file.file])
+
+    await keepChecked(file.file.url, file.bytes, file.bytes.length + 1)
+    expect(await missingFiles([file.file])).toEqual([file.file])
+
+    await keepChecked(file.file.url, file.bytes)
+    expect(await missingFiles([file.file])).toEqual([])
   })
 
   it('only ever asks our own site for listed files, with plain GETs that carry nothing', async () => {
@@ -233,7 +298,8 @@ describe('fromKept, the fetch Transformers.js gets', () => {
 
   it('gives a kept listed file with no request', async () => {
     const { fetch } = site({})
-    await (await caches.open(CACHE)).put(listed, new Response(bytesOf('{"kept":true}')))
+    const config = filesFor(DEFAULT_MODEL, 'wasm').find((file) => file.url === listed)
+    await keepChecked(listed, bytesOf('{"kept":true}'), config?.bytes)
 
     const response = await fromKept(listed)
 
@@ -244,6 +310,8 @@ describe('fromKept, the fetch Transformers.js gets', () => {
 
   it("is a 404 for a file that isn't kept, isn't listed, or is on another site: never the network", async () => {
     const { fetch } = site({})
+    // A copy that isn't checked doesn't count either.
+    await (await caches.open(CACHE)).put(listed, new Response(bytesOf('{}')))
 
     for (const address of [
       listed,
@@ -258,12 +326,16 @@ describe('fromKept, the fetch Transformers.js gets', () => {
 
 describe('voiceIsKept', () => {
   it('is true once every file the model needs here is kept, so a second visit downloads nothing', async () => {
-    const files = filesFor(DEFAULT_MODEL, 'wasm')
-    const cache = await caches.open(CACHE)
-    for (const file of files.slice(1)) await cache.put(file.url, new Response(bytesOf('kept')))
+    const [runtime, ...rest] = filesFor(DEFAULT_MODEL, 'wasm')
+    if (!runtime) throw new Error('no runtime')
+    for (const file of rest) await keepChecked(file.url, bytesOf('kept'), file.bytes)
     expect(await voiceIsKept({ device: 'wasm' })).toBe(false)
 
-    await cache.put(files[0]?.url ?? '', new Response(bytesOf('kept')))
+    // The service worker's copy of the runtime, unchecked, doesn't count.
+    await (await caches.open(SW_ASSETS)).put(runtime.url, new Response(bytesOf('kept')))
+    expect(await voiceIsKept({ device: 'wasm' })).toBe(false)
+
+    await keepChecked(runtime.url, bytesOf('kept'), runtime.bytes)
     expect(await voiceIsKept({ device: 'wasm' })).toBe(true)
     // The GPU's runtime is another file: a device with WebGPU would still download it.
     expect(await voiceIsKept({ device: 'webgpu' })).toBe(false)
