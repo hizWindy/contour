@@ -193,6 +193,26 @@ describe('speaking', () => {
     expect(spies.onClose).toHaveBeenCalled()
   })
 
+  it('a network blip: the title says Reconnecting, and the words stay (PLAN-V24 T1-3)', async () => {
+    const { mic, spies, user } = openCard()
+    await speakNow()
+    act(() => {
+      mic.say('Jo wants a floor plan')
+      mic.reconnecting(true)
+    })
+    expect(await screen.findByRole('dialog', { name: 'Reconnecting' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting')
+    act(() => {
+      mic.reconnecting(false)
+      mic.say('by Friday')
+    })
+    await speakNow()
+    await user.keyboard('{Enter}')
+    await waitFor(() => {
+      expect(spies.onDone).toHaveBeenCalledWith('Jo wants a floor plan by Friday', [])
+    })
+  })
+
   it('never sends the sound anywhere: no request at all while the mic is open', async () => {
     const fetchSpy = vi.fn(() => Promise.resolve(Response.json({})))
     vi.stubGlobal('fetch', fetchSpy)

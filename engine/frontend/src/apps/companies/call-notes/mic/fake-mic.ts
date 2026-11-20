@@ -169,6 +169,11 @@ export class FakeMic {
     this.tools.at(-1)?.events.onProblem(problem)
   }
 
+  /** The newest tool lost its connection and tries again (true), or hears again (false). */
+  reconnecting(on: boolean): void {
+    this.tools.at(-1)?.events.onReconnecting?.(on)
+  }
+
   /** Where "devicechange" is heard: the same mic list every time, as in a browser. */
   private readonly deviceEvents = new EventTarget()
   private mediaDevices: MediaDevices | null = null

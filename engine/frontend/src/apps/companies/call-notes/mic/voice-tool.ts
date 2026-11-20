@@ -22,6 +22,10 @@
  * listen on the laptop (`processLocally`) with the hint list as phrases, so neither the voice nor
  * the names leave the laptop. Anything else, or a browser without phrases, is the server mode with
  * no hints, as before: Chrome refuses phrases in the server mode (`phrases-not-supported`).
+ *
+ * **No lost words** (PLAN-V24 T1-3, choice 4): when the service ends, by itself or for any other
+ * reason, the words it was still hearing are kept as final words, once. A network blip gets a few
+ * quiet tries (`NETWORK`) before it is a problem, and `onReconnecting` says so after a second.
  */
 
 import type { VoiceToolKind } from '@/api/types'
@@ -41,6 +45,12 @@ export interface VoiceToolEvents {
   /** After `stop`: everything heard is written out. */
   onFinished: () => void
   onProblem: (problem: VoiceProblem) => void
+  /**
+   * The tool lost its connection and is trying again quietly (PLAN-V24 T1-3): true once that has
+   * lasted a second, false once it hears again. Optional: a tool that needs no connection never
+   * calls it, and a card that shows nothing for it can leave it out.
+   */
+  onReconnecting?: (reconnecting: boolean) => void
 }
 
 export interface VoiceTool {
@@ -146,6 +156,25 @@ export interface BrowserServiceOptions {
 /** After `stop`, the last words get this long before the tool says it is finished anyway. */
 const FINISH_WAIT_MS = 4000
 
+/**
+ * A network blip (PLAN-V24 choice 4; every number TBC until S1): the service is tried again
+ * quietly, after a short wait each time, and "Reconnecting" shows once the blip has lasted a
+ * second. A fourth network error inside 10 seconds is the problem, with the words kept. Words
+ * coming again end the blip; a try that listens 2 seconds with no error ends "Reconnecting".
+ */
+export const NETWORK = {
+  /** Quiet tries before a network error is a problem. */
+  tries: 3,
+  /** The errors count over this long. */
+  windowMs: 10_000,
+  /** The wait before the first, second and third try, so the blip can pass. */
+  waitsMs: [500, 1500, 3000],
+  /** "Reconnecting" shows once the blip has lasted this long. */
+  reconnectingAfterMs: 1000,
+  /** A try that listens this long with no new error has its connection back. */
+  steadyMs: 2000,
+} as const
+
 /** The service's errors, as the card's problems. Silence and our own stop are not problems. */
 function problemOf(error: string): VoiceProblem | null {
   switch (error) {
@@ -164,7 +193,8 @@ function problemOf(error: string): VoiceProblem | null {
 
 /**
  * The browser service as a voice tool. It listens until it is stopped: the service ends by itself
- * after a silence or a minute, so it starts again then, until `stop` or a problem.
+ * after a silence or a minute, so it starts again then, until `stop` or a problem. Words it was
+ * still hearing as it ended are kept, once, and a network blip is tried again quietly (T1-3).
  *
  * In on-device mode (`onDevice`, off by default) with hints, it asks `available` first, and
  * listens on the laptop with the hints only at `available`. If the on-device service fails before
@@ -183,6 +213,67 @@ export function browserService(
   let waiting = 0
   /** Listening on the laptop, with the hints. */
   let local = false
+  /** The words still being heard, as last given: kept if the service ends before they are final. */
+  let heard = ''
+  /** When each network error of this blip came (the clock's ms). Words coming again clear it. */
+  let blip: number[] = []
+  /** The wait before the service starts again, after a network error. */
+  let pause = 0
+  let retryTimer = 0
+  let reconnectTimer = 0
+  let steadyTimer = 0
+  let reconnecting = false
+
+  const clearTimers = (): void => {
+    for (const timer of [waiting, retryTimer, reconnectTimer, steadyTimer]) {
+      window.clearTimeout(timer)
+    }
+    retryTimer = 0
+    reconnectTimer = 0
+    steadyTimer = 0
+  }
+
+  /** Words still being heard become final, once: the service ended before it wrote them out. */
+  const keepHeard = (): void => {
+    if (heard === '') return
+    const words = heard
+    heard = ''
+    events.onWords(words)
+    events.onHearing('')
+  }
+
+  const setReconnecting = (on: boolean): void => {
+    if (reconnecting === on) return
+    reconnecting = on
+    events.onReconnecting?.(on)
+  }
+
+  /** The connection works again: "Reconnecting" goes. With `heardAgain`, the blip is over. */
+  const reconnected = (heardAgain: boolean): void => {
+    window.clearTimeout(reconnectTimer)
+    window.clearTimeout(steadyTimer)
+    reconnectTimer = 0
+    steadyTimer = 0
+    if (heardAgain) blip = []
+    setReconnecting(false)
+  }
+
+  /** A network error: true when it gets a quiet try, false once the blip has had its tries. */
+  const quietTry = (): boolean => {
+    const now = Date.now()
+    blip = [...blip.filter((at) => now - at < NETWORK.windowMs), now]
+    if (blip.length > NETWORK.tries) return false
+    pause = NETWORK.waitsMs[blip.length - 1] ?? NETWORK.waitsMs[NETWORK.waitsMs.length - 1]
+    window.clearTimeout(steadyTimer)
+    steadyTimer = 0
+    if (!reconnecting && reconnectTimer === 0) {
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = 0
+        if (!over) setReconnecting(true)
+      }, NETWORK.reconnectingAfterMs)
+    }
+    return true
+  }
 
   /** The hints as the service's phrases, or null where on-device mode can't take them. */
   const phrasesOf = (hints: readonly string[]): unknown[] | null => {
@@ -211,15 +302,19 @@ export function browserService(
   const finish = (): void => {
     if (over) return
     over = true
-    window.clearTimeout(waiting)
-    // Words still being heard stay with the card: the service makes them final first, if it can.
+    clearTimers()
+    // Words still being heard stay with the card: the service makes them final first if it can,
+    // and they are made final here if it didn't.
+    keepHeard()
     events.onFinished()
   }
 
   const fail = (problem: VoiceProblem): void => {
     if (over) return
     over = true
-    window.clearTimeout(waiting)
+    clearTimers()
+    // The words so far stay, those still being heard too.
+    keepHeard()
     recognition?.abort()
     events.onProblem(problem)
   }
@@ -290,36 +385,72 @@ export function browserService(
       recognition.interimResults = true
       recognition.maxAlternatives = 1
       recognition.onstart = () => {
-        if (ready || over) return
+        if (over) return
+        if (blip.length > 0) {
+          // A try listens: once it has listened a while with no new error, it is connected.
+          window.clearTimeout(steadyTimer)
+          steadyTimer = window.setTimeout(() => {
+            steadyTimer = 0
+            if (!over) reconnected(false)
+          }, NETWORK.steadyMs)
+        }
+        if (ready) return
         ready = true
         events.onReady()
       }
       recognition.onresult = (event) => {
         if (over) return
         let hearing = ''
+        let any = false
         for (let index = event.resultIndex; index < event.results.length; index += 1) {
           const result = event.results[index]
           const text = result?.[0]?.transcript.trim() ?? ''
           if (!result || text === '') continue
+          any = true
           if (result.isFinal) events.onWords(text)
           else hearing = hearing ? `${hearing} ${text}` : text
         }
+        heard = hearing
         events.onHearing(hearing)
+        // Words came: the connection works.
+        if (any && (blip.length > 0 || reconnecting)) reconnected(true)
       }
       recognition.onerror = (event) => {
-        if (local && !ready && !over) {
+        if (over) return
+        if (local && !ready) {
           // The laptop's own speech failed before it listened (like `phrases-not-supported`):
           // the server mode, with no hints. The service's end that follows starts it again.
           leaveDevice()
           return
+        }
+        if (event.error === 'network') {
+          // After Done there is nothing to try again for: the words so far are all there is.
+          if (stopping) {
+            finish()
+            return
+          }
+          // A blip: the service's end that follows starts it again, after a short wait.
+          if (quietTry()) return
         }
         const problem = problemOf(event.error)
         if (problem) fail(problem)
       }
       recognition.onend = () => {
         if (over) return
+        // Words it was still hearing as it ended are kept, once.
+        keepHeard()
         if (stopping) {
           finish()
+          return
+        }
+        if (pause > 0) {
+          // After a network error: a quiet try, once the wait is over.
+          const wait = pause
+          pause = 0
+          retryTimer = window.setTimeout(() => {
+            retryTimer = 0
+            if (!over && !stopping) begin()
+          }, wait)
           return
         }
         // It ended by itself (a silence, or its own time limit): listen on.
@@ -330,6 +461,11 @@ export function browserService(
     stop() {
       if (over || stopping) return
       stopping = true
+      if (retryTimer !== 0) {
+        // A quiet try is waiting, so nothing listens: the words so far are all there is.
+        finish()
+        return
+      }
       waiting = window.setTimeout(finish, FINISH_WAIT_MS)
       try {
         recognition?.stop()
@@ -340,7 +476,7 @@ export function browserService(
     abort() {
       if (over) return
       over = true
-      window.clearTimeout(waiting)
+      clearTimers()
       try {
         recognition?.abort()
       } catch {

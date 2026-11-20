@@ -29,6 +29,8 @@
  * - **It follows the mic** (choice 3): when a headset is plugged in, or the mic in use goes, it
  *   moves to the computer's default mic, keeps the words, and says "Now using {mic}." (`movedTo`).
  *   A mic picked by hand stays while it is there. With no other mic, it stops as before.
+ * - **No lost words** (choice 4): the voice tool keeps what it was still hearing when it ends, and
+ *   tries a network blip again quietly. `reconnecting` is on while it does, after a second.
  */
 import { BAR_COUNT, type BarSource } from '@/components/motion/bar-levels'
 import {
@@ -91,6 +93,11 @@ export interface MicSnapshot {
    * or the mic in use gone. Null until it moves.
    */
   movedTo: MicDevice | null
+  /**
+   * The voice tool lost its connection and tries again quietly, for "Reconnecting" (PLAN-V24
+   * T1-3): on once that has lasted a second, off once it hears again or stops.
+   */
+  reconnecting: boolean
 }
 
 /** The browser, as the session uses it. Tests hand in a fake one. */
@@ -401,6 +408,7 @@ export class MicSession {
       fixes: [],
       listeningSince: null,
       movedTo: null,
+      reconnecting: false,
     }
   }
 
@@ -447,6 +455,7 @@ export class MicSession {
       hearing: '',
       listeningSince: null,
       movedTo: null,
+      reconnecting: false,
     })
     void this.check(this.run, rememberedMic(this.env.storage()))
   }
@@ -479,7 +488,7 @@ export class MicSession {
         if (run !== this.run || this.snapshot.phase !== 'writing') return
         this.tool?.abort()
         this.tool = null
-        this.set({ phase: 'failed', problem: 'too_slow' })
+        this.set({ phase: 'failed', problem: 'too_slow', reconnecting: false })
       },
       Math.max(TOO_SLOW_TIMES * talk, TOO_SLOW_FLOOR_MS),
     )
@@ -490,7 +499,7 @@ export class MicSession {
   close(): void {
     this.run += 1
     this.release()
-    this.set({ bars: null })
+    this.set({ bars: null, reconnecting: false })
   }
 
   /**
@@ -547,6 +556,7 @@ export class MicSession {
       failedAt: at,
       problem,
       bars: keepOpen ? this.snapshot.bars : null,
+      reconnecting: false,
     })
   }
 
@@ -758,8 +768,11 @@ export class MicSession {
         if (this.snapshot.phase === 'writing') {
           this.tool = null
           // Words still heard at the end stay: they are part of the note.
-          this.set({ phase: 'done' })
+          this.set({ phase: 'done', reconnecting: false })
         }
+      },
+      onReconnecting: (reconnecting) => {
+        if (current()) this.set({ reconnecting })
       },
       onProblem: (problem) => {
         if (!current()) return
@@ -798,7 +811,9 @@ export class MicSession {
       this.fail(run, 'ready', problem, problem !== 'no_mic')
     } else if (phase === 'listening' || phase === 'writing') {
       this.release()
-      this.set({ phase: 'failed', problem, bars: null })
+      this.set({ phase: 'failed', problem, bars: null, reconnecting: false })
+    } else {
+      this.set({ reconnecting: false })
     }
   }
 
@@ -823,7 +838,7 @@ export class MicSession {
     const { phase } = this.snapshot
     if (phase === 'listening' || phase === 'writing') {
       this.release()
-      this.set({ phase: 'failed', problem: 'cut_off', bars: null })
+      this.set({ phase: 'failed', problem: 'cut_off', bars: null, reconnecting: false })
     } else if (phase === 'checking' || phase === 'checked') {
       const at = CHECK_STEPS.find((step) => this.snapshot.steps[step] !== 'pass') ?? 'hear'
       this.fail(run, at, 'no_mic')
@@ -955,6 +970,7 @@ export class MicSession {
       device,
       devices,
       movedTo: device.id === before?.id ? this.snapshot.movedTo : device,
+      reconnecting: false,
     })
     // The voice tool hears the new mic. What it was still hearing is kept as said.
     const lost = this.toolLost !== null

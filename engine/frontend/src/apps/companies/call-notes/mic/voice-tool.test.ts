@@ -4,6 +4,7 @@ import { FakeRecognition } from './fake-mic'
 import { fixNames, lettersApart, nameWords } from './name-fix'
 import {
   browserService,
+  NETWORK,
   ON_DEVICE_HINTS,
   voiceToolFor,
   type OnDeviceState,
@@ -13,7 +14,8 @@ import {
 
 /*
   The voice tool seam (PLAN-V18 T3-5): the browser's speech service as a tool, the name fix, and
-  the mics' names. Made-up names only: Vitera Pty Ltd, Jo Sample.
+  the mics' names. PLAN-V24 T1-3: no lost words when the service ends, and quiet tries on a
+  network blip. Made-up names only: Vitera Pty Ltd, Jo Sample.
 */
 
 function events() {
@@ -23,6 +25,7 @@ function events() {
     onHearing: vi.fn<VoiceToolEvents['onHearing']>(),
     onFinished: vi.fn<VoiceToolEvents['onFinished']>(),
     onProblem: vi.fn<VoiceToolEvents['onProblem']>(),
+    onReconnecting: vi.fn<(reconnecting: boolean) => void>(),
   }
 }
 
@@ -216,10 +219,10 @@ describe('the browser’s speech service', () => {
     expect(heard.onFinished).toHaveBeenCalledTimes(1)
   })
 
+  // A network error is tried again quietly first (PLAN-V24 T1-3, below).
   it.each([
     ['not-allowed', 'blocked_browser'],
     ['audio-capture', 'no_mic'],
-    ['network', 'tool_failed'],
     ['service-not-allowed', 'tool_failed'],
     ['language-not-supported', 'tool_failed'],
   ])('reads the service’s %s as %s, once, and stops', (error, problem) => {
@@ -274,6 +277,198 @@ describe('the browser’s speech service', () => {
     expect(made[0]?.aborted).toBe(true)
     expect(heard.onProblem).not.toHaveBeenCalled()
     expect(made[0]?.started).toBe(1)
+  })
+})
+
+describe('no lost words (PLAN-V24 T1-3, choice 4)', () => {
+  it('words still being heard when the service ends by itself are kept, once', () => {
+    const made = installService()
+    const heard = events()
+    browserService(heard).start(null)
+    made[0]?.result('Spoke to Jo Sample')
+    made[0]?.result('about the lease', false)
+    // It ends by itself before it wrote them out, and listens on.
+    made[0]?.end()
+    expect(heard.onWords.mock.calls).toEqual([['Spoke to Jo Sample'], ['about the lease']])
+    expect(heard.onHearing).toHaveBeenLastCalledWith('')
+    expect(made[0]?.started).toBe(2)
+    made[0]?.end()
+    expect(heard.onWords).toHaveBeenCalledTimes(2)
+    expect(heard.onProblem).not.toHaveBeenCalled()
+  })
+
+  it('words the service wrote out before it ended are not kept twice', () => {
+    const made = installService()
+    const heard = events()
+    browserService(heard).start(null)
+    made[0]?.result('about the lease', false)
+    made[0]?.result('About the lease.')
+    made[0]?.end()
+    expect(heard.onWords.mock.calls).toEqual([['About the lease.']])
+  })
+
+  it('after Done, words still being heard come before it says it is finished', async () => {
+    const made = installService()
+    const heard = events()
+    const tool = browserService(heard)
+    tool.start(null)
+    made[0]?.result('follow up Friday', false)
+    tool.stop()
+    await flush()
+    expect(heard.onWords).toHaveBeenCalledWith('follow up Friday')
+    expect(heard.onFinished).toHaveBeenCalledTimes(1)
+    expect(heard.onWords.mock.invocationCallOrder[0]).toBeLessThan(
+      heard.onFinished.mock.invocationCallOrder[0] ?? 0,
+    )
+  })
+})
+
+describe('a network blip (PLAN-V24 T1-3, choice 4)', () => {
+  const [FIRST_WAIT = 0, SECOND_WAIT = 0, THIRD_WAIT = 0] = NETWORK.waitsMs
+
+  /** The service fails with a network error, then ends, as Chrome does. */
+  function blip(service: FakeRecognition | undefined): void {
+    service?.error('network')
+    service?.end()
+  }
+
+  it('two network errors, then words: they carry on, and no problem shows', async () => {
+    vi.useFakeTimers()
+    const made = installService()
+    const heard = events()
+    browserService(heard).start(null)
+    await vi.advanceTimersByTimeAsync(0)
+    made[0]?.result('Spoke to Jo Sample')
+    blip(made[0])
+    await vi.advanceTimersByTimeAsync(FIRST_WAIT)
+    expect(made[0]?.started).toBe(2)
+    blip(made[0])
+    await vi.advanceTimersByTimeAsync(SECOND_WAIT)
+    expect(made[0]?.started).toBe(3)
+    made[0]?.result('about the lease')
+    expect(heard.onProblem).not.toHaveBeenCalled()
+    expect(heard.onWords.mock.calls).toEqual([['Spoke to Jo Sample'], ['about the lease']])
+    // "Reconnecting" showed once the blip had lasted a second, and went when the words came.
+    expect(heard.onReconnecting.mock.calls).toEqual([[true], [false]])
+  })
+
+  it('says "Reconnecting" only once the blip has lasted a second', async () => {
+    vi.useFakeTimers()
+    const made = installService()
+    const heard = events()
+    browserService(heard).start(null)
+    await vi.advanceTimersByTimeAsync(0)
+    blip(made[0])
+    await vi.advanceTimersByTimeAsync(NETWORK.reconnectingAfterMs - 1)
+    expect(heard.onReconnecting).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(heard.onReconnecting).toHaveBeenLastCalledWith(true)
+    // The try listens, with no new error: the connection is back, words or not.
+    await vi.advanceTimersByTimeAsync(NETWORK.steadyMs)
+    expect(heard.onReconnecting).toHaveBeenLastCalledWith(false)
+    expect(heard.onProblem).not.toHaveBeenCalled()
+  })
+
+  it('a quick blip that mends itself says nothing', async () => {
+    vi.useFakeTimers()
+    const made = installService()
+    const heard = events()
+    browserService(heard).start(null)
+    await vi.advanceTimersByTimeAsync(0)
+    blip(made[0])
+    await vi.advanceTimersByTimeAsync(FIRST_WAIT)
+    made[0]?.result('about the lease')
+    await vi.advanceTimersByTimeAsync(NETWORK.windowMs)
+    expect(heard.onReconnecting).not.toHaveBeenCalled()
+    expect(heard.onWords).toHaveBeenCalledWith('about the lease')
+  })
+
+  it('a fourth network error inside 10 seconds is the problem, with the words kept', async () => {
+    vi.useFakeTimers()
+    const made = installService()
+    const heard = events()
+    browserService(heard).start(null)
+    await vi.advanceTimersByTimeAsync(0)
+    made[0]?.result('Spoke to Jo Sample')
+    made[0]?.result('about the', false)
+    for (const wait of [FIRST_WAIT, SECOND_WAIT, THIRD_WAIT]) {
+      blip(made[0])
+      await vi.advanceTimersByTimeAsync(wait)
+    }
+    expect(made[0]?.started).toBe(4)
+    expect(heard.onProblem).not.toHaveBeenCalled()
+    made[0]?.error('network')
+    expect(heard.onProblem).toHaveBeenCalledTimes(1)
+    expect(heard.onProblem).toHaveBeenCalledWith('tool_failed')
+    expect(made[0]?.aborted).toBe(true)
+    // Every word said is kept, the ones still being heard at the first blip too, once.
+    expect(heard.onWords.mock.calls).toEqual([['Spoke to Jo Sample'], ['about the']])
+    expect(FIRST_WAIT + SECOND_WAIT + THIRD_WAIT).toBeLessThan(NETWORK.windowMs)
+  })
+
+  it('errors more than 10 seconds apart are each a new blip', async () => {
+    vi.useFakeTimers()
+    const made = installService()
+    const heard = events()
+    browserService(heard).start(null)
+    await vi.advanceTimersByTimeAsync(0)
+    for (const wait of [FIRST_WAIT, SECOND_WAIT, THIRD_WAIT]) {
+      blip(made[0])
+      await vi.advanceTimersByTimeAsync(wait)
+    }
+    await vi.advanceTimersByTimeAsync(NETWORK.windowMs)
+    blip(made[0])
+    await vi.advanceTimersByTimeAsync(FIRST_WAIT)
+    expect(heard.onProblem).not.toHaveBeenCalled()
+    expect(made[0]?.started).toBe(5)
+  })
+
+  it('Done while a quiet try waits finishes at once, with the words', async () => {
+    vi.useFakeTimers()
+    const made = installService()
+    const heard = events()
+    const tool = browserService(heard)
+    tool.start(null)
+    await vi.advanceTimersByTimeAsync(0)
+    made[0]?.result('follow up Friday', false)
+    blip(made[0])
+    tool.stop()
+    expect(heard.onFinished).toHaveBeenCalledTimes(1)
+    expect(heard.onWords).toHaveBeenCalledWith('follow up Friday')
+    await vi.advanceTimersByTimeAsync(NETWORK.windowMs)
+    // No try starts after Done.
+    expect(made[0]?.started).toBe(1)
+    expect(heard.onProblem).not.toHaveBeenCalled()
+  })
+
+  it('a network error after Done finishes with the words so far', async () => {
+    const made = installService()
+    const heard = events()
+    const tool = browserService(heard)
+    tool.start(null)
+    made[0]?.result('follow up Friday', false)
+    if (made[0]) made[0].stop = () => undefined
+    tool.stop()
+    made[0]?.error('network')
+    await flush()
+    expect(heard.onFinished).toHaveBeenCalledTimes(1)
+    expect(heard.onWords).toHaveBeenCalledWith('follow up Friday')
+    expect(heard.onProblem).not.toHaveBeenCalled()
+  })
+
+  it('thrown away while a quiet try waits: nothing more starts or comes', async () => {
+    vi.useFakeTimers()
+    const made = installService()
+    const heard = events()
+    const tool = browserService(heard)
+    tool.start(null)
+    await vi.advanceTimersByTimeAsync(0)
+    blip(made[0])
+    tool.abort()
+    await vi.advanceTimersByTimeAsync(NETWORK.windowMs)
+    expect(made[0]?.started).toBe(1)
+    expect(heard.onReconnecting).not.toHaveBeenCalled()
+    expect(heard.onProblem).not.toHaveBeenCalled()
   })
 })
 

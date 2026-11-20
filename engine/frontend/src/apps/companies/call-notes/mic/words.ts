@@ -176,6 +176,12 @@ export function speakingFor(clock: string): string {
 }
 
 /**
+ * A network blip (PLAN-V24 T1-3): the speech service is tried again quietly, and the card's title
+ * says so once it has lasted a second. The words so far stay.
+ */
+export const RECONNECTING = 'Reconnecting'
+
+/**
  * The mic moved by itself (PLAN-V24 T1-2, "The mic changed"): a headset plugged in, or the mic in
  * use gone. "Now using Headset Microphone (Jabra Evolve2 65)."
  */

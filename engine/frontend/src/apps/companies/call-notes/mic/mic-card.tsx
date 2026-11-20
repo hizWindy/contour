@@ -4,7 +4,8 @@
  * with live bars that follow the voice (`FrequencyBars`), a timer, and the words as they come.
  *
  * - **Its title says what is happening:** "Checking your mic", "Speak now", "Writing it out",
- *   "Done". A screen reader hears each change once (a status line), and never each word.
+ *   "Done", and "Reconnecting" during a network blip (PLAN-V24 T1-3). A screen reader hears each
+ *   change once (a status line), and never each word.
  * - **The check:** four lines, each ticked by its real result, at least 40ms apart. A failure
  *   turns its line Terracotta, with its fix under it and its buttons (the plan's table), and the
  *   card never shakes. Everything else still works: Type instead, or Cancel.
@@ -65,6 +66,7 @@ import {
   nowUsing,
   problemActions,
   problemWords,
+  RECONNECTING,
   SPEAK_NOW,
   speakingFor,
   STEP_WORDS,
@@ -115,6 +117,7 @@ const NO_SESSION_SNAPSHOT: MicSnapshot = {
   fixes: [],
   listeningSince: null,
   movedTo: null,
+  reconnecting: false,
 }
 
 const noSubscribe = (): (() => void) => () => undefined
@@ -123,7 +126,8 @@ const noSubscribe = (): (() => void) => () => undefined
 function titleOf(snapshot: MicSnapshot): string {
   switch (snapshot.phase) {
     case 'listening':
-      return SPEAK_NOW
+      // A network blip, tried again quietly (PLAN-V24 T1-3): the words so far stay.
+      return snapshot.reconnecting ? RECONNECTING : SPEAK_NOW
     case 'writing':
       return WRITING
     case 'done':

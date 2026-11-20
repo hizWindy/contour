@@ -1,12 +1,14 @@
 /**
  * The mic session on its own (PLAN-V24 Part 1), with the fake mic, the fake voice tool and an
- * exact clock: the clean sound and one check a conversation (T1-1), and following the mic (T1-2).
- * Made-up names only: Vitera Pty Ltd, Jo Sample, North Wind. No sound is ever kept.
+ * exact clock: the clean sound and one check a conversation (T1-1), following the mic (T1-2), and
+ * "Reconnecting" (T1-3). Made-up names only: Vitera Pty Ltd, Jo Sample, North Wind. No sound is
+ * ever kept.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultMic, MIC_KEY } from './devices'
 import { FakeMic, HEADSET, LAPTOP_MIC, type FakeDevice, type FakeMicOptions } from './fake-mic'
 import { afterHanded, lettersOf, MicSession, SOUND, type MicSessionOptions } from './session'
+import { browserService, NETWORK } from './voice-tool'
 import { nowUsing } from './words'
 
 /** A USB mic, made up, for a third mic on the desk. */
@@ -335,6 +337,64 @@ describe('it follows the mic (T1-2, choice 3)', () => {
     expect(mic.asked).toHaveLength(1)
     expect(now().movedTo).toBeNull()
     expect(mic.live()).toBe(0)
+  })
+})
+
+describe('"Reconnecting" (T1-3, choice 4)', () => {
+  it('is on while the voice tool tries a network blip again, and the words stay', async () => {
+    const { mic, session, now } = await listening()
+    mic.say('Spoke to Jo Sample')
+    mic.reconnecting(true)
+    expect(now()).toMatchObject({ phase: 'listening', reconnecting: true, problem: null })
+    mic.reconnecting(false)
+    mic.say('about the lease')
+    expect(now().reconnecting).toBe(false)
+    expect(session.text()).toBe('Spoke to Jo Sample about the lease')
+  })
+
+  it('goes when the tool fails after its tries, and the words stay', async () => {
+    const { mic, session, now } = await listening()
+    mic.say('Spoke to Jo Sample')
+    mic.reconnecting(true)
+    mic.fail('tool_failed')
+    expect(now()).toMatchObject({ phase: 'failed', problem: 'tool_failed', reconnecting: false })
+    expect(session.text()).toBe('Spoke to Jo Sample')
+  })
+
+  it('with the browser’s own speech service: a blip, "Reconnecting", then the words carry on', async () => {
+    const mic = new FakeMic()
+    mic.install()
+    const session = new MicSession({
+      mode: 'note',
+      tool: 'browser_service',
+      env: mic.env(),
+      makeTool: browserService,
+    })
+    session.start()
+    await tick(100)
+    expect(session.getSnapshot().phase).toBe('listening')
+    const [service] = mic.recognitions
+    // It hears the mic's own track.
+    expect(service?.track).toBe(mic.tracks[0])
+    service?.result('Spoke to Jo Sample')
+    service?.result('about the', false)
+    service?.error('network')
+    service?.end()
+    await tick(NETWORK.reconnectingAfterMs)
+    expect(session.getSnapshot()).toMatchObject({
+      phase: 'listening',
+      reconnecting: true,
+      problem: null,
+    })
+    expect(session.text()).toBe('Spoke to Jo Sample about the')
+    service?.result('and a floor plan')
+    expect(session.getSnapshot().reconnecting).toBe(false)
+    expect(session.getSnapshot().chunks).toEqual([
+      'Spoke to Jo Sample',
+      'about the',
+      'and a floor plan',
+    ])
+    session.close()
   })
 })
 
