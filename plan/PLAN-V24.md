@@ -6,7 +6,7 @@ This plan makes the Assistant's mic strong on every device, and changes nothing 
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
 - **Last updated:** 21 Nov 2026 (S0 done. Part 1, T3-1 and Part 4's model are being built at the same time, on Al-khair's ask to go faster).
-- **Progress:** Before the build: 1 of 3. Part 1: 0 of 5. Part 2: 0 of 6. Part 3: 0 of 4. Part 4: 0 of 4. Part 5: 0 of 3. M1 to M4: 0 of 4.
+- **Progress:** Before the build: 1 of 3. Part 1: 5 of 5. Part 2: 0 of 6. Part 3: 0 of 4. Part 4: 0 of 4. Part 5: 0 of 3. M1 to M4: 0 of 4.
 - **Sources:**
   - Al-khair's chat on 21 Nov, after Levi tried the Assistant with him on 20 Nov;
   - the code on `master` (`b84c3cf`), read on 21 Nov;
@@ -259,21 +259,29 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
 
 ## Part 1: a cleaner mic
 
-**Progress:** 0 of 5.
+**Progress:** 5 of 5. Built and checked with the fake mic only: not yet tried in a real browser.
 
-- [ ] **T1-1. Clean sound, one check** (`call-notes/mic/session.ts`, `voice-tool.ts`). Choices 1, 2 and 5.
+- [x] **T1-1. Clean sound, one check** Done 21 Nov 2026 (`044f141`). (`call-notes/mic/session.ts`, `voice-tool.ts`). Choices 1, 2 and 5.
   - The mic session gains a way to hand over the words so far and keep listening, for Part 2's turns.
   - **Done when:** tests with the fake mic pass: the sound settings are asked for, with and without a picked mic; a picked mic keeps its exact id; the voice tool gets the mic's track; and handing over the words leaves the mic and the tool running, so the next turn has no check and opens no second mic.
-- [ ] **T1-2. Follow the mic** (`session.ts`, `devices.ts`). Choice 3.
+- [x] **T1-2. Follow the mic** Done 21 Nov 2026 (`ba847d0`). (`session.ts`, `devices.ts`). Choice 3.
   - **Done when:** tests with fake devices pass: the mic unplugged mid-turn moves to the default, keeps the words, and says "Now using {mic}"; a headset plugged in is used when no mic was picked by hand; and a hand-picked mic stays while it is there.
-- [ ] **T1-3. No lost words** (`voice-tool.ts`). Choice 4.
+- [x] **T1-3. No lost words** Done 21 Nov 2026 (`bc04183`). (`voice-tool.ts`). Choice 4.
   - **Done when:** tests with a fake voice tool pass: words still being heard when the service ends are kept, once; two `network` errors and then words carry on with no problem shown; and a fourth error inside 10 seconds shows the problem, with the words kept.
-- [ ] **T1-4. The busy mic's words** (`call-notes/mic/words.ts`, the bar and the mic card). The first two rows of "Words for when things go wrong".
+- [x] **T1-4. The busy mic's words** Done 21 Nov 2026 (`9222f09`). Built, waiting for Al-khair's look at the words. (`call-notes/mic/words.ts`, the bar and the mic card). The first two rows of "Words for when things go wrong".
   - **Done when:** `screen-words.test.ts` passes; the busy problem shows Type instead in the bar and in the mic card; and the Windows line shows on Windows only.
-- [ ] **T1-5. Part 1 check.** Website: lint, types, the tests, the build and `node scripts/bundle-report.js`.
+- [x] **T1-5. Part 1 check.** Done 21 Nov 2026 (numbers in the Log). Website: lint, types, the tests, the build and `node scripts/bundle-report.js`.
   - **Done when:** all pass, the first visit grew by 1 kB at most, and the numbers are in the Log.
 
 ### Part 1 Log
+
+- 21 Nov 2026: Part 1 built in 4 commits (`044f141` to `9222f09`) by a frontend agent on `plan-v24`. Every result comes from tests with the fake mic, tool and clock. Nothing was tried in a real browser yet.
+- T1-1: the mic opens with echo cancellation, noise suppression and auto gain on, in one channel. Voice isolation is asked for only where the browser says it has it (which browsers do is **TBC**). The voice tool gets the mic's track. `MicSession.handOver()` gives a turn's words and keeps the mic, the bars and the tool running, so three turns open one mic and one check (`mic/session.test.ts`).
+- T1-2: a mic unplugged mid-turn moves to the default, keeps the words and says "Now using {mic}." A headset plugged in is used when no mic was picked by hand. A hand-picked mic stays while it is there. Finding the default relies on browsers listing it first, and on Chrome's "default" entry (not tried with real devices, **TBC**).
+- T1-3: words still being heard when the service ends are kept, once. A `network` error gets 3 quiet tries in 10 seconds (waits of 0.5, 1.5 and 3 seconds), "Reconnecting" shows after 1 second, and 2 seconds with no error counts as back (all **TBC** at S1). A network error after Done now finishes with the words so far.
+- T1-4: the busy mic's words, with Try again and Type instead, in the bar and the mic card. The Windows line shows on Windows only. In the bar, a busy mic now shows as a problem, where before it opened on the text line. The words wait for Al-khair's look.
+- Not built: choice 2's "the bar names that mic", for a browser that ignores the mic's track. The tool can't tell when that happens, so S1 checks Chrome first.
+- T1-5: lint 0 problems, types 0 errors, 166 test files and 2,530 tests pass (S0: 2,477), and the build passes. The first visit: 248,593 B of JavaScript gzip (S0: 248,595), the CSS unchanged, 39 files. Opening later: the voice bar adds 1,871 B, the mic card 1,929 B.
 
 ## Part 2: a long conversation
 
