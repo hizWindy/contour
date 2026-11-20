@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CallNotePage, CallNoteSummary } from '@/api/types'
 import { createQueryClient, queryKeys } from '../query'
-import { markNotesOld, refreshCallNoteLists } from './call-notes'
+import { bumpCounts, markNotesOld, refreshCallNoteLists } from './call-notes'
 
 const HISTORY = [...queryKeys.companies.callNotes(), 'history', { state: 'history' }] as const
 const TO_CONFIRM = queryKeys.companies.callNoteList({ state: 'to_confirm' })
@@ -39,5 +39,29 @@ describe('after a note is saved or removed', () => {
     expect(client.getQueryState(SUMMARY)?.isInvalidated).toBe(true)
     expect(client.getQueryState(TO_CONFIRM)?.isInvalidated).toBe(true)
     expect(client.getQueryState(HISTORY)?.isInvalidated).toBe(true)
+  })
+})
+
+describe('moving the counts at once (PLAN-V24)', () => {
+  it('keeps the calls that need a company through a move of the others, and moves them too', async () => {
+    const client = createQueryClient()
+    client.setQueryData<CallNoteSummary>(SUMMARY, { ...COUNTS, to_confirm: 2, needs_company: 3 })
+    await bumpCounts(client, { to_confirm: -1 })
+    expect(client.getQueryData(SUMMARY)).toEqual({
+      to_confirm: 1,
+      needs_look: 0,
+      logged_today: 0,
+      needs_company: 3,
+    })
+    // A company picked: one fewer needs it, and one more waits to be confirmed.
+    await bumpCounts(client, { needs_company: -1, to_confirm: 1 })
+    expect(client.getQueryData(SUMMARY)).toMatchObject({ to_confirm: 2, needs_company: 2 })
+  })
+
+  it('adds no such count for an older server that sends none, and never goes below 0', async () => {
+    const client = createQueryClient()
+    client.setQueryData<CallNoteSummary>(SUMMARY, COUNTS)
+    await bumpCounts(client, { to_confirm: -1 })
+    expect(client.getQueryData(SUMMARY)).toEqual(COUNTS)
   })
 })

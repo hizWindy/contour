@@ -7,7 +7,8 @@
  *   count moves to Logged);
  * - partial, failed or uncertain: its card says "Needs a look", holds a little longer so the words
  *   can be read, then leaves (and the count moves to Needs a look);
- * - back to "to confirm" (the server stopped half way, or didn't take it): the card stays.
+ * - back to "to confirm" (the server stopped half way, or didn't take it): the card stays. A call
+ *   that still needs its company (PLAN-V24) is never taken, so it counts as come back.
  *
  * The bar counts the notes that have landed or come back. When every one has, and the landed ones
  * have left, a toast says what happened and the pages of notes are read afresh.
@@ -54,8 +55,10 @@ export function landingOf(note: CallNoteOut | undefined): Landing {
     case 'failed':
     case 'uncertain':
       return 'needs_look'
+    // Not sent, or not taken. A call that needs its company is never sent (PLAN-V24).
     case 'to_confirm':
     case 'sorting':
+    case 'needs_company':
       return 'back'
   }
 }

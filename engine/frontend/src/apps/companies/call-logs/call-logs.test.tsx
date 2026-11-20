@@ -25,7 +25,7 @@ import { asPhone } from '@/test/screen'
 import { dueWords } from '../call-notes/words'
 import CallLogsPage from './index'
 import { ToConfirm } from './to-confirm'
-import { useBatch } from './use-batch'
+import { landingOf, useBatch } from './use-batch'
 import { batchSentence } from './words'
 
 /*
@@ -214,8 +214,19 @@ const IN_STATE: Record<CallNoteState | 'history', readonly CallNoteStatus[]> = {
   to_confirm: ['sorting', 'to_confirm', 'sending'],
   logged: ['logged'],
   needs_look: ['partial', 'failed', 'uncertain'],
+  // PLAN-V24: the calls saved before their company was found.
+  needs_company: ['needs_company'],
   // History (PLAN-V18 T3-6): every note, in any status.
-  history: ['sorting', 'to_confirm', 'sending', 'logged', 'partial', 'failed', 'uncertain'],
+  history: [
+    'needs_company',
+    'sorting',
+    'to_confirm',
+    'sending',
+    'logged',
+    'partial',
+    'failed',
+    'uncertain',
+  ],
 }
 
 function json(value: unknown, status = 200): Response {
@@ -1384,6 +1395,21 @@ describe('the batch while it lands', () => {
       { timeout: 3000 },
     )
     expect(result.current).not.toBe(landed)
+  })
+})
+
+describe('a call that needs its company, in a batch (PLAN-V24)', () => {
+  it('counts as come back: the server never sends it', () => {
+    expect(
+      landingOf(
+        note('x1', {
+          company_key: null,
+          company_name: null,
+          company_heard: 'North Wind',
+          status: 'needs_company',
+        }),
+      ),
+    ).toBe('back')
   })
 })
 

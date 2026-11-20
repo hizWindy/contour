@@ -1,8 +1,12 @@
 /**
  * Removing a note not yet sent (PLAN-V17 T3-6; DESIGN.md "Act at once, undo after"). The card goes
- * at once, "to confirm" goes down, and a toast says "Removed the call with ..." with Undo. The
- * DELETE goes when the toast closes without an Undo, so Undo needs nothing from the server. If
- * the DELETE fails, the card comes back and a toast says why.
+ * at once, its count goes down, and a toast says "Removed the call with ..." with Undo. The DELETE
+ * goes when the toast closes without an Undo, so Undo needs nothing from the server. If the DELETE
+ * fails, the card comes back and a toast says why.
+ *
+ * A call that still needs its company (PLAN-V24 T3-3) is removed the same way, from the group at
+ * the top of Call logs: its own count goes down ("Needs a company"), and the toast names it as
+ * heard, in quotes: "Removed the call with "North Wind".".
  *
  * It runs outside React, like Log call's save (`call-notes/save.ts`), because the toast outlives
  * the page. The notes being removed are kept here, so a page that reads its notes again in the
@@ -13,14 +17,22 @@ import { useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { toApiProblem } from '@/api/client'
 import {
-  bumpToConfirm,
+  bumpCounts,
   deleteCallNoteOptions,
   dropNoteFromLists,
   markCountsOld,
   refreshCallNoteLists,
 } from '@/api/hooks/call-notes'
+import type { CallNoteOut } from '@/api/types'
 import { changeDetail } from '@/lib/problems'
-import { NOT_REMOVED, PUT_BACK_DONE, removedWords, UNDO } from './words'
+import {
+  callCompany,
+  NOT_REMOVED,
+  NOT_REMOVED_NEEDS_COMPANY,
+  PUT_BACK_DONE,
+  removedWords,
+  UNDO,
+} from './words'
 
 let removing: ReadonlySet<string> = new Set()
 const listeners = new Set<() => void>()
@@ -52,14 +64,18 @@ export function useRemoving(): ReadonlySet<string> {
   )
 }
 
+/** What removing needs of a note: which count it is in, and its company's name. */
+export type RemovedNote = Pick<CallNoteOut, 'id' | 'status' | 'company_name' | 'company_heard'>
+
 /** Removes the note at once, with Undo. The server hears of it when the toast closes. */
-export function removeCallNote(
-  client: QueryClient,
-  note: { id: string; company_name: string },
-): void {
+export function removeCallNote(client: QueryClient, note: RemovedNote): void {
   if (removing.has(note.id)) return
+  // The count the note is in: "Needs a company" while it waits for its company, else To confirm.
+  const needsCompany = note.status === 'needs_company'
+  const move = (by: number): Promise<void> =>
+    bumpCounts(client, needsCompany ? { needs_company: by } : { to_confirm: by })
   setRemoving(new Set(removing).add(note.id))
-  void bumpToConfirm(client, -1)
+  void move(-1)
   // Undo, the timer and a dismissal can each end it; only the first one counts.
   let ended = false
   const finish = (): void => {
@@ -75,20 +91,23 @@ export function removeCallNote(
       },
       (error: unknown) => {
         forget(note.id)
-        void bumpToConfirm(client, 1)
+        void move(1)
         const detail = changeDetail(toApiProblem(error))
-        toast.error(NOT_REMOVED, detail ? { description: detail } : undefined)
+        toast.error(
+          needsCompany ? NOT_REMOVED_NEEDS_COMPANY : NOT_REMOVED,
+          detail ? { description: detail } : undefined,
+        )
       },
     )
   }
-  toast(removedWords(note.company_name), {
+  toast(removedWords(callCompany(note)), {
     action: {
       label: UNDO,
       onClick: () => {
         if (ended) return
         ended = true
         forget(note.id)
-        void bumpToConfirm(client, 1)
+        void move(1)
         toast(PUT_BACK_DONE)
       },
     },

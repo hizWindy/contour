@@ -91,6 +91,27 @@ export function personLine(person: CallNoteOut['person']): string {
   return person.title ? `${person.name}, ${person.title}` : person.name
 }
 
+/** A company's name as heard or typed, in quotes, so it never reads as a real company: "North Wind". */
+export function heardWords(words: string): string {
+  return `"${words}"`
+}
+
+/** After the name as heard, in the quieter text (PLAN-V24 T3-3; TBC at Al-khair's look). */
+export const AS_HEARD = 'as heard'
+
+/** A call with neither its company nor the name as heard, which the server never sends. */
+export const NO_COMPANY_YET = 'Company not picked yet'
+
+/**
+ * The company a call was with, as a person reads it: its name, or, while the call needs one
+ * (PLAN-V24), the name as heard in quotes: "North Wind".
+ */
+export function callCompany(note: Pick<CallNoteOut, 'company_name' | 'company_heard'>): string {
+  if (note.company_name) return note.company_name
+  const heard = note.company_heard?.trim()
+  return heard ? heardWords(heard) : NO_COMPANY_YET
+}
+
 /** "Today, 3:05 pm", or "12 Nov 2026, 3:05 pm", in Melbourne time. */
 export function callWhen(at: string, today: string = melbourneDate()): string {
   return melbourneDate(at) === today ? `Today, ${formatTime(at)}` : formatDateTime(at)
@@ -107,10 +128,11 @@ export function isMeetingNotes(note: Pick<CallNoteOut, 'source'>): boolean {
 /**
  * The line under a card's company: who, when and the outcome, "Jo Sample, Office Manager · Today,
  * 3:05 pm · Connected". A logged meeting reads as meeting notes, with no call outcome: "Meeting
- * notes · 12 Nov 2026, 9:00 am".
+ * notes · 12 Nov 2026, 9:00 am". A call that still needs its company (PLAN-V24) has no one yet,
+ * so it says when and how it went: "Today, 3:05 pm · Connected".
  */
 export function noteLine(
-  note: Pick<CallNoteOut, 'source' | 'person' | 'called_at' | 'call'>,
+  note: Pick<CallNoteOut, 'source' | 'person' | 'called_at' | 'call' | 'company_key'>,
   today: string = melbourneDate(),
 ): string {
   if (isMeetingNotes(note)) {
@@ -123,10 +145,12 @@ export function noteLine(
       .join(' · ')
   }
   return [
-    personLine(note.person),
+    note.person || note.company_key !== null ? personLine(note.person) : null,
     callWhen(note.called_at, today),
     note.call.outcome ?? NO_OUTCOME,
-  ].join(' · ')
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 /** "Lease end · Perth", or the label alone when the change is for the whole company. */
@@ -303,8 +327,10 @@ export function batchDoneWords(logged: number, needsLook: number, back: number):
 export const UNDO = 'Undo'
 export const PUT_BACK_DONE = 'Undone. The call is back.'
 export const NOT_REMOVED = 'Not removed. The call is still waiting for you to confirm.'
+/** A call that needs its company, not removed (PLAN-V24 T3-3). */
+export const NOT_REMOVED_NEEDS_COMPANY = 'Not removed. The call still needs its company.'
 
-/** "Removed the call with Sample Logistics Pty Ltd." */
+/** "Removed the call with Sample Logistics Pty Ltd.", or with "North Wind" (`callCompany`). */
 export function removedWords(companyName: string): string {
   return `Removed the call with ${companyName}.`
 }
@@ -394,6 +420,7 @@ export const STANDING_WORDS = {
   to_confirm: 'To confirm',
   sending: 'Sending',
   needs_look: 'Needs a look',
+  needs_company: 'Needs a company',
 } as const
 
 /** The line under an opened call that says how it was logged (PLAN-V18 T3-6, 17 Nov 2026). */

@@ -18,11 +18,15 @@
  * - **The search and the filters** are in `history-filters.tsx`: all in the open, or behind one
  *   Filters button on a phone. All of them live in the address, so Back and a link keep them.
  * - **"Show older"** brings 50 more; the older days rise 4px and fade in.
+ * - **A call saved before its company** (PLAN-V24): the name as heard in quotes, "as heard", and
+ *   "Needs a company" where it stands. It has no company to log another call with; its company is
+ *   picked in the group at the top of Call logs (`needs-company.tsx`).
  * - **Keys:** J and K move, Enter opens, and / goes to the search.
  *
  * A list used all day barely moves: rows never fade in on their own, and nothing moves on hover.
  */
 import {
+  Building2,
   ChevronDown,
   CircleCheck,
   FileText,
@@ -64,6 +68,8 @@ import {
 } from './params'
 import { CallNotesOff, RowsPending } from './states'
 import {
+  AS_HEARD,
+  callCompany,
   CHANGES,
   changeLabel,
   changeWords,
@@ -118,7 +124,10 @@ function standingOf(note: Pick<CallNoteOut, 'status'>): Standing {
     case 'failed':
     case 'uncertain':
       return 'needs_look'
-    default:
+    case 'needs_company':
+      return 'needs_company'
+    case 'sorting':
+    case 'to_confirm':
       return 'to_confirm'
   }
 }
@@ -128,6 +137,8 @@ const STANDING_LOOK: Readonly<Record<Standing, { icon: LucideIcon; tone: string 
   to_confirm: { icon: Hourglass, tone: 'text-muted-foreground' },
   sending: { icon: SendHorizontal, tone: 'text-muted-foreground' },
   needs_look: { icon: TriangleAlert, tone: 'text-destructive-ink' },
+  // Saved before its company was found (PLAN-V24): it waits for the rep, at the top of Call logs.
+  needs_company: { icon: Building2, tone: 'text-review-ink' },
 }
 
 /** How it went, as a dot's colour (TBC at the look). The word always goes with it. */
@@ -275,6 +286,10 @@ function Opened({
   const still = useStill()
   const kinds = new Map(options.fields.map((field) => [field.id, field.kind]))
   const summary = note.call.summary.trim()
+  const company: LogTarget | null =
+    note.company_key !== null && note.company_name !== null
+      ? { companyKey: note.company_key, companyName: note.company_name }
+      : null
   return (
     <m.div
       data-slot="history-opened"
@@ -342,21 +357,22 @@ function Opened({
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <OpenInHubSpot
           href={note.hubspot_url}
-          company={note.company_name}
+          company={callCompany(note)}
           meeting={isMeetingNotes(note)}
         />
-        {onLogCall ? (
+        {/* A call that still needs its company has none to log another call with (PLAN-V24). */}
+        {onLogCall && company ? (
           <Button
             type="button"
             variant="outline"
             size="sm"
             className="touch:h-11 max-sm:w-full"
             onClick={() => {
-              onLogCall({ companyKey: note.company_key, companyName: note.company_name })
+              onLogCall(company)
             }}
           >
             <NotebookPen aria-hidden="true" />
-            {logAnotherWords(note.company_name)}
+            {logAnotherWords(company.companyName)}
           </Button>
         ) : null}
       </div>
@@ -420,7 +436,15 @@ function Row({
           {time}
         </span>
         <span className="col-start-1 row-start-1 flex min-w-0 items-baseline gap-1.5 @2xl:col-start-2">
-          <span className="truncate font-semibold text-foreground">{note.company_name}</span>
+          <span className="truncate font-semibold text-foreground">{callCompany(note)}</span>
+          {/* Saved before its company was found (PLAN-V24): the name in quotes is as heard. The
+              space keeps the two apart for a screen reader; the gap does it for the eye. */}
+          {note.company_name === null ? (
+            <>
+              {' '}
+              <span className="shrink-0 text-caption text-muted-foreground">{AS_HEARD}</span>
+            </>
+          ) : null}
           {person ? (
             <span className="hidden truncate text-caption text-muted-foreground @2xl:inline">
               {person}

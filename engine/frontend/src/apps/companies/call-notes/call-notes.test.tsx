@@ -179,7 +179,9 @@ function options(changes: Partial<CallNoteOptions> = {}): CallNoteOptions {
 function noteOut(body: CallNoteIn, id: string): CallNoteOut {
   return {
     id,
-    company_key: body.company_key,
+    // Log call always sends its company. Only a call saved before its company was found has none
+    // (PLAN-V24).
+    company_key: body.company_key ?? null,
     company_name: 'Sample Logistics Pty Ltd',
     person: body.contact_id ? { id: body.contact_id, name: 'Jo Sample', title: null } : null,
     text: body.text,

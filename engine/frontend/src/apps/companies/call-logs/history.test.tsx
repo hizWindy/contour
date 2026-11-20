@@ -118,15 +118,33 @@ function threeDays(): CallNoteOut[] {
 }
 
 const STATES: Record<string, readonly CallNoteOut['status'][]> = {
-  history: ['sorting', 'to_confirm', 'sending', 'logged', 'partial', 'failed', 'uncertain'],
+  history: [
+    'needs_company',
+    'sorting',
+    'to_confirm',
+    'sending',
+    'logged',
+    'partial',
+    'failed',
+    'uncertain',
+  ],
   to_confirm: ['sorting', 'to_confirm', 'sending'],
   logged: ['logged'],
   needs_look: ['partial', 'failed', 'uncertain'],
 }
 
-/** Each word must start a word of the company, the person, the note or the summary. */
+/**
+ * Each word must start a word of the company (or its name as heard, PLAN-V24), the person, the note
+ * or the summary.
+ */
 function matches(item: CallNoteOut, q: string): boolean {
-  const words = [item.company_name, item.person?.name ?? '', item.text, item.call.summary]
+  const words = [
+    item.company_name ?? '',
+    item.company_heard ?? '',
+    item.person?.name ?? '',
+    item.text,
+    item.call.summary,
+  ]
     .join(' ')
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
@@ -277,6 +295,40 @@ describe('History', () => {
     expect(await screen.findByRole('dialog', { name: 'Log call' })).toHaveTextContent(
       'Sample Mining Pty Ltd',
     )
+  })
+
+  it('shows a call saved before its company by the name as heard, with no company to log a call with', async () => {
+    // PLAN-V24 T3-3: saved from the first word, before its company was found.
+    server([
+      note('h1', {
+        company_key: null,
+        company_name: null,
+        company_heard: 'North Wind',
+        person: null,
+        status: 'needs_company',
+        sorted_by: 'person',
+        text: 'Spoke to Jo about the Perth lease.',
+        call: { summary: '', outcome: 'Connected', in_hubspot: false },
+        hubspot_url: null,
+        confirmed_at: null,
+      }),
+    ])
+    const { user } = renderHistory()
+    const list = await historyList()
+    const row = within(list).getByRole('button', { name: /"North Wind"/ })
+    // In quotes, said to be as heard, and where it stands in a mark and a word.
+    expect(row).toHaveTextContent('"North Wind" as heard')
+    expect(row).toHaveTextContent('Spoke to Jo about the Perth lease.')
+    expect(row).toHaveTextContent('Connected')
+    expect(row).toHaveTextContent('Needs a company')
+    expect(row).not.toHaveTextContent('No one in particular')
+
+    await user.click(row)
+    const opened = document.querySelector<HTMLElement>('[data-slot=history-opened]')
+    expect(opened).toHaveTextContent('Spoke to Jo about the Perth lease.')
+    // No company yet: nothing to log another call with, and nothing in HubSpot.
+    expect(within(list).queryByRole('button', { name: /^Log another call/ })).toBeNull()
+    expect(within(list).queryByRole('link', { name: /^Open in HubSpot/ })).toBeNull()
   })
 
   it('filters by how it went, when, and where it stands, and keeps them in the address', async () => {

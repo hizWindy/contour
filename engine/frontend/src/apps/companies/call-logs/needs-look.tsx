@@ -52,6 +52,7 @@ import { callLogsQuery } from './params'
 import { CallNotesOff, CardsPending, TabEmpty } from './states'
 import { HOLD_LOGGED_MS } from './use-batch'
 import {
+  callCompany,
   CHECK_HUBSPOT,
   firstOfWords,
   isMeetingNotes,
@@ -218,7 +219,7 @@ function LookCard({
           </>
         ) : null}
         <span className="sm:ml-auto">
-          <OpenInHubSpot href={note.hubspot_url} company={note.company_name} meeting={meeting} />
+          <OpenInHubSpot href={note.hubspot_url} company={callCompany(note)} meeting={meeting} />
         </span>
       </>
     )
@@ -247,7 +248,7 @@ function LookCard({
           </>
         ) : null}
         <span className="sm:ml-auto">
-          <OpenInHubSpot href={note.hubspot_url} company={note.company_name} meeting={meeting} />
+          <OpenInHubSpot href={note.hubspot_url} company={callCompany(note)} meeting={meeting} />
         </span>
       </>
     )
@@ -261,7 +262,7 @@ function LookCard({
       <div className="flex flex-col gap-3 p-4 sm:p-5">
         <header className="flex flex-col gap-0.5">
           <h2 id={titleId} className="text-section font-semibold text-balance text-foreground">
-            {note.company_name}
+            {callCompany(note)}
           </h2>
           <p className="text-caption text-muted-foreground">{noteLine(note, today)}</p>
         </header>

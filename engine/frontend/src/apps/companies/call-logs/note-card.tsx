@@ -60,6 +60,7 @@ import { cn } from '@/lib/utils'
 import { NEW_PART, CardText, ChangeList, SummaryField, TaskList } from './note-parts'
 import type { Landing } from './use-batch'
 import {
+  callCompany,
   changeLabel,
   CHECK_THIS_ONE,
   DONE,
@@ -379,7 +380,7 @@ export function NoteCard({
             ) : null}
             <SummaryField
               value={storedSummary}
-              label={`${SUMMARY}: ${note.company_name}`}
+              label={`${SUMMARY}: ${callCompany(note)}`}
               autoFocus
               onSave={(text) => {
                 edit({ summary: text }, (now) => ({ ...now, call: { ...now.call, summary: text } }))
@@ -506,7 +507,7 @@ export function NoteCard({
       >
         <header className="flex flex-col gap-0.5">
           <h2 id={titleId} className="text-section font-semibold text-balance">
-            {note.company_name}
+            {callCompany(note)}
           </h2>
           <p className="text-caption text-muted-foreground">{noteLine(note, today)}</p>
         </header>

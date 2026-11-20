@@ -67,7 +67,8 @@ const PREVIEW_FRESH_MS = 30_000
 /**
  * Moves the counts in the cache at once (`{ to_confirm: -1, needs_look: 1 }`), so every place
  * that shows them rolls. A read of the counts still on its way is stopped first, or its older
- * answer would land on top. With no counts in the cache yet, nothing changes.
+ * answer would land on top. With no counts in the cache yet, nothing changes. The calls that need
+ * a company (PLAN-V24) keep their count through a move of the others.
  */
 export async function bumpCounts(
   client: QueryClient,
@@ -75,15 +76,19 @@ export async function bumpCounts(
 ): Promise<void> {
   const queryKey = queryKeys.companies.callNoteSummary()
   await client.cancelQueries({ queryKey })
-  client.setQueryData<CallNoteSummary>(queryKey, (summary) =>
-    summary
-      ? {
-          to_confirm: Math.max(0, summary.to_confirm + (by.to_confirm ?? 0)),
-          needs_look: Math.max(0, summary.needs_look + (by.needs_look ?? 0)),
-          logged_today: Math.max(0, summary.logged_today + (by.logged_today ?? 0)),
-        }
-      : summary,
-  )
+  client.setQueryData<CallNoteSummary>(queryKey, (summary) => {
+    if (!summary) return summary
+    const moved: CallNoteSummary = {
+      to_confirm: Math.max(0, summary.to_confirm + (by.to_confirm ?? 0)),
+      needs_look: Math.max(0, summary.needs_look + (by.needs_look ?? 0)),
+      logged_today: Math.max(0, summary.logged_today + (by.logged_today ?? 0)),
+    }
+    // An older server sends no such count: it stays left out unless it is moved.
+    if (summary.needs_company !== undefined || by.needs_company !== undefined) {
+      moved.needs_company = Math.max(0, (summary.needs_company ?? 0) + (by.needs_company ?? 0))
+    }
+    return moved
+  })
 }
 
 /** Moves the "to confirm" count by `by` (+1 for a save, -1 for an Undo), as `bumpCounts`. */
