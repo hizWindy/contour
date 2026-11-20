@@ -1,8 +1,10 @@
 /**
  * A choice by voice (PLAN-V24 choice 14, T2-4): "the second one" or a name from the card's list
  * picks it, for a company, a person and a teammate; a person's or a teammate's name that isn't
- * there changes nothing and says so; and nothing here asks the AI (it is plain code). Made-up names
- * only: Sample Logistics Pty Ltd, Sample Freight Pty Ltd, James Sample, Sam Example.
+ * there changes nothing and says so; and nothing here asks the AI (it is plain code). T3-2: while
+ * the card waits on its company, a name that isn't on screen is searched, and "the first one" picks
+ * from the search list. Made-up names only: Sample Logistics Pty Ltd, Sample Freight Pty Ltd,
+ * Northwind Pty Ltd, North Wind (as misheard), James Sample, Sam Example.
  */
 import { describe, expect, it } from 'vitest'
 import type { AssistantCommand, TeamMember } from '@/api/types'
@@ -13,6 +15,7 @@ import {
   emailCommand,
   JAMES,
   JAMES_TOO,
+  NORTHWIND,
   OTHER_SAMPLE,
   SAM,
   SAM_TOO,
@@ -102,13 +105,85 @@ describe('a company (T2-4)', () => {
     expect(pickByVoice(whichSample(), 'Sample')).toEqual({ kind: 'which' })
   })
 
-  it('a name not in the list goes on to the command step, for now (T3-2 searches it)', () => {
-    expect(pickByVoice(whichSample(), 'North Wind')).toBeNull()
+  it('a name not in the list is searched (PLAN-V24 choice 19)', () => {
+    expect(pickByVoice(whichSample(), 'North Wind')).toEqual({
+      kind: 'search',
+      words: 'North Wind',
+    })
   })
 
   it('a change goes on to the command step', () => {
     expect(pickByVoice(whichSample(), 'make it Monday')).toBeNull()
     expect(pickByVoice(whichSample(), 'the third one')).toBeNull()
+  })
+})
+
+describe('the company said again (PLAN-V24 T3-2, choice 19)', () => {
+  /** A call whose company the command found nowhere. */
+  function northWind(): CallDraft {
+    return draft(
+      callCommand({
+        company: { found: null, choices: [], from_page: false, heard: 'North Wind', can_add: true },
+        person: null,
+      }),
+    ) as CallDraft
+  }
+  const found = [
+    { key: NORTHWIND.key, name: NORTHWIND.name },
+    { key: SAMPLE.key, name: SAMPLE.name },
+  ]
+
+  it.each([
+    ['Northwind', 'Northwind'],
+    ['Northwind.', 'Northwind'],
+    ["It's North Wind Freight, please.", 'North Wind Freight'],
+    ['use Sample Freight', 'Sample Freight'],
+  ])('with no list on screen, "%s" is searched as "%s"', (said, words) => {
+    expect(pickByVoice(northWind(), said)).toEqual({ kind: 'search', words })
+  })
+
+  it('"the first one" picks the first company the search list shows, found by hand', () => {
+    const next = picked(pickByVoice(northWind(), 'the first one', found)) as CallDraft
+    expect(next.company.found).toEqual({ key: NORTHWIND.key, name: NORTHWIND.name })
+    // By hand: the name heard can teach the mic (for a call, the server does it on the pick).
+    expect(next.company.byHand).toBe(true)
+    expect(next.company.heard).toBe('North Wind')
+    expect(picked(pickByVoice(northWind(), 'second', found))).toMatchObject({
+      company: { found: { key: SAMPLE.key } },
+    })
+  })
+
+  it('a name the search list shows picks it; one it doesn’t is searched', () => {
+    expect(picked(pickByVoice(northWind(), 'Sample Logistics', found))).toMatchObject({
+      company: { found: { key: SAMPLE.key } },
+    })
+    expect(pickByVoice(northWind(), 'Southwind', found)).toEqual({
+      kind: 'search',
+      words: 'Southwind',
+    })
+  })
+
+  it('the search list takes the place of "Which Sample?" once a name was searched', () => {
+    const next = picked(pickByVoice(whichSample(), 'the first one', found)) as TaskDraft
+    expect(next.company.found).toEqual({ key: NORTHWIND.key, name: NORTHWIND.name })
+    expect(next.company.byHand).toBe(true)
+  })
+
+  it('a place with nothing there, a change, a filler or a long sentence is never searched', () => {
+    expect(pickByVoice(northWind(), 'the first one')).toBeNull()
+    expect(pickByVoice(northWind(), 'the third one', found)).toBeNull()
+    expect(pickByVoice(northWind(), 'make the follow-up Monday')).toBeNull()
+    expect(pickByVoice(northWind(), 'log a call with Northwind')).toBeNull()
+    expect(pickByVoice(northWind(), 'um')).toBeNull()
+    expect(pickByVoice(northWind(), 'B')).toBeNull()
+    expect(
+      pickByVoice(northWind(), 'they said the move is going ahead after all this year'),
+    ).toBeNull()
+  })
+
+  it('once the company is picked, the person is the question again', () => {
+    const next = picked(pickByVoice(northWind(), 'the first one', found))
+    expect(pickByVoice(next, 'Northwind')).toBeNull()
   })
 })
 

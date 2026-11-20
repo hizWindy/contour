@@ -11,8 +11,11 @@
  *   Logistics", "James the director". Two that fit pick neither, and the card asks again.
  * - **A person's or a teammate's name that isn't there** ("James Smith" for James Sample and James
  *   Example) changes nothing, and the card says so. Other words go to the command step, as now:
- *   "make the follow-up Monday" is a change. A company's name that isn't in the list goes there
- *   too, for now (Part 3 searches it, T3-2).
+ *   "make the follow-up Monday" is a change.
+ * - **The company said again** (PLAN-V24 choice 19, T3-2): while the card waits on its company,
+ *   its question is the search list on screen, if there is one, else the command's own choices.
+ *   A name that is in neither, like "Northwind", is searched: the card fills its search box with
+ *   it. A place said ("the third one") or a change is never searched.
  */
 import type { CallNotePerson, TeamMember } from '@/api/types'
 import { pickCompany, type CardDraft, type Company } from './draft'
@@ -25,6 +28,8 @@ export type VoicePick =
   | { kind: 'none'; words: string }
   /** Two or more fit what was said: nothing changes, and the card asks again. */
   | { kind: 'which' }
+  /** A company's name that isn't on screen (choice 19): the card searches these words. */
+  | { kind: 'search'; words: string }
 
 /** One option of the card's question, in its place on screen. */
 interface Option {
@@ -51,20 +56,22 @@ function wordsIn(text: string): string[] {
     .filter((word) => word !== '')
 }
 
-/** The card's first choice still to make, as a question with its options, or null. */
-function questionOf(draft: CardDraft): Question | null {
-  if (
-    draft.action !== 'email' &&
-    draft.company.found === null &&
-    draft.company.choices.length > 0
-  ) {
+/**
+ * The card's first choice still to make, as a question with its options, or null. `search`: the
+ * companies the card's search list shows now, or null when it shows none (choice 19).
+ */
+function questionOf(draft: CardDraft, search: readonly Company[] | null): Question | null {
+  if (draft.action !== 'email' && draft.company.found === null) {
     const { company } = draft
+    // The search list on screen was found by hand; the command's own choices weren't (PLAN-V23).
+    const [list, how] =
+      search !== null ? ([search, 'by_hand'] as const) : ([company.choices, 'choice'] as const)
     return {
       people: false,
       heard: company.heard,
-      options: company.choices.map((one: Company) => ({
+      options: list.map((one: Company) => ({
         words: wordsIn(one.name),
-        pick: () => ({ ...draft, company: pickCompany(company, one, 'choice'), edited: true }),
+        pick: () => ({ ...draft, company: pickCompany(company, one, how), edited: true }),
       })),
     }
   }
@@ -200,17 +207,24 @@ const PLACES: Readonly<Record<string, number>> = {
   '5': 4,
 }
 
-/** The place said ("the second one", "number two", "the last one"), or null. */
-function placeOf(words: readonly string[], count: number): number | null {
+/** The place said ("the second one", "number two", "the last one"), whatever the count, or null. */
+function placeSaid(words: readonly string[]): number | 'last' | null {
   const left = words.filter((word) => !AROUND.has(word))
   // "The second one": the "one" after a place is no place of its own.
   const [place, after, ...more] = left
   if (place === undefined || more.length > 0 || (after !== undefined && after !== 'one')) {
     return null
   }
-  if (place === 'last') return count - 1
-  const index = PLACES[place]
-  return index !== undefined && index < count ? index : null
+  if (place === 'last') return 'last'
+  return PLACES[place] ?? null
+}
+
+/** The place said, among `count` options, or null. */
+function placeOf(words: readonly string[], count: number): number | null {
+  const place = placeSaid(words)
+  if (place === null) return null
+  const index = place === 'last' ? count - 1 : place
+  return index >= 0 && index < count ? index : null
 }
 
 /**
@@ -263,6 +277,9 @@ const CHANGE_WORDS: ReadonlySet<string> = new Set([
 /** The most words a name said on its own has (TBC). */
 const NAME_WORDS = 3
 
+/** The most words a company's name said on its own has, "Sample Logistics Pty Ltd" (TBC). */
+const COMPANY_WORDS = 5
+
 /** One word said fits one of the option's: the same, or one starts the other ("logistic"). */
 function fits(said: string, known: readonly string[]): boolean {
   return known.some(
@@ -273,11 +290,37 @@ function fits(said: string, known: readonly string[]): boolean {
 }
 
 /**
- * What a turn picks on the card, with no AI, or null when it isn't an answer to the card's
- * question (it goes to the command step, as now).
+ * A company's name as said, to search: without the words around it ("It's", "please") or the full
+ * stop the speech service adds. "It's North Wind, please." is "North Wind".
  */
-export function pickByVoice(draft: CardDraft, said: string): VoicePick | null {
-  const question = questionOf(draft)
+function searchWordsOf(said: string): string {
+  const parts = said.trim().split(/\s+/)
+  const around = (part: string | undefined): boolean => {
+    const plain = wordsIn(part ?? '').join(' ')
+    return plain === '' || AROUND.has(plain)
+  }
+  let start = 0
+  let end = parts.length
+  while (start < end && around(parts[start])) start += 1
+  while (end > start && around(parts[end - 1])) end -= 1
+  return parts
+    .slice(start, end)
+    .join(' ')
+    .replace(/[.,!?;:]+$/, '')
+    .trim()
+}
+
+/**
+ * What a turn picks on the card, with no AI, or null when it isn't an answer to the card's
+ * question (it goes to the command step, as now). `search`: the companies the card's search list
+ * shows now, or null when it shows none (PLAN-V24 choice 19).
+ */
+export function pickByVoice(
+  draft: CardDraft,
+  said: string,
+  search: readonly Company[] | null = null,
+): VoicePick | null {
+  const question = questionOf(draft, search)
   if (!question) return null
   const words = wordsIn(said)
   const { options } = question
@@ -286,6 +329,8 @@ export function pickByVoice(draft: CardDraft, said: string): VoicePick | null {
     const option = options[place]
     return option ? { kind: 'picked', draft: option.pick() } : null
   }
+  // "The third one" of two companies: a place, not a name to search.
+  if (!question.people && placeSaid(words) !== null) return null
   if (question.people && draft.action === 'log_call' && NO_ONE_SAID.has(words.join(' '))) {
     const noOne = options.at(-1)
     return noOne ? { kind: 'picked', draft: noOne.pick() } : null
@@ -296,9 +341,15 @@ export function pickByVoice(draft: CardDraft, said: string): VoicePick | null {
   const [only] = fitting
   if (fitting.length === 1 && only) return { kind: 'picked', draft: only.pick() }
   if (fitting.length > 1) return { kind: 'which' }
+  if (!question.people) {
+    // A company's name that isn't on screen is searched (choice 19). Words of a change aren't.
+    if (name.length > COMPANY_WORDS || name.some((word) => CHANGE_WORDS.has(word))) return null
+    const found = searchWordsOf(said)
+    return found.length >= 2 ? { kind: 'search', words: found } : null
+  }
   // No one fits. A short name that shares a word with the question, or has no word of a change,
-  // was meant as one: for a person or a teammate the card says so. A company's goes on.
-  if (!question.people || name.length > NAME_WORDS) return null
+  // was meant as one: for a person or a teammate the card says so.
+  if (name.length > NAME_WORDS) return null
   const heard = new Set(wordsIn(question.heard))
   const named =
     name.some((word) => heard.has(word) || options.some((option) => option.words.includes(word))) ||
