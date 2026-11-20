@@ -13,9 +13,12 @@
  * **The voice stays on the device.** The sound goes from the mic to the worker, and nowhere else:
  * the tool makes no request, and the worker's only requests are for the model's own files.
  *
- * For T4-3 (the engine picks itself, and the download):
+ * For T4-3 (the engine picks itself, and the download; `voice-ready.ts` uses these):
  * - `onDeviceModel` is a `VoiceToolMaker`;
- * - `voiceIsKept()` says whether this browser has the files already (then nothing downloads);
+ * - `voiceIsKept()` says whether this browser has the files already (then nothing downloads), and
+ *   `voiceMissing()` how many bytes it still has to download;
+ * - `downloadVoice(onProgress)` downloads what's missing, without loading the model: ahead of
+ *   Speak, on a laptop after the page is idle, or from "Get voice ready" (choice 25);
  * - `prepareVoice(onProgress)` downloads what's missing and loads the model, ahead of Speak; it
  *   fails with `VoiceNotReady` ('download': the connection; 'load': the model won't run here);
  * - the worker stays loaded for the next tool; `releaseVoice()` lets it go.
@@ -27,7 +30,15 @@ import type { NameCase } from '../name-fix'
 import type { VoiceProblem, VoiceTool, VoiceToolEvents } from '../voice-tool'
 import { captureSound } from './capture'
 import type { FromEngine, Progress, ToEngine } from './engine'
-import { DEFAULT_MODEL, deviceHere, type Device, type ModelName } from './files'
+import {
+  DEFAULT_MODEL,
+  deviceHere,
+  filesFor,
+  keepFiles,
+  missingFiles,
+  type Device,
+  type ModelName,
+} from './files'
 // Vite builds the worker as a file of its own; this is only a way to start it.
 import VoiceWorker from './worker.ts?worker'
 
@@ -327,6 +338,31 @@ export function prepareVoice(
   options: OnDeviceOptions = {},
 ): Promise<Device> {
   return connect(options).prepare(onProgress)
+}
+
+/**
+ * Downloads the files this browser doesn't keep yet, with progress in bytes, and keeps them, but
+ * doesn't load the model (choice 25): no worker starts, so it holds no memory. Speak then loads
+ * the model from the kept files. Any failure is `VoiceNotReady('download')`.
+ */
+export async function downloadVoice(
+  onProgress?: (progress: Progress) => void,
+  { model = DEFAULT_MODEL, device }: Pick<OnDeviceOptions, 'model' | 'device'> = {},
+): Promise<void> {
+  try {
+    await keepFiles(filesFor(model, device ?? (await deviceHere())), onProgress)
+  } catch {
+    throw new VoiceNotReady('download')
+  }
+}
+
+/** How many bytes this browser still has to download for the model here: 0 once it keeps them. */
+export async function voiceMissing({
+  model = DEFAULT_MODEL,
+  device,
+}: Pick<OnDeviceOptions, 'model' | 'device'> = {}): Promise<number> {
+  const missing = await missingFiles(filesFor(model, device ?? (await deviceHere())))
+  return missing.reduce((sum, file) => sum + file.bytes, 0)
 }
 
 /** Lets the worker and its model go (they hold memory). The next tool loads them again. */
