@@ -26,6 +26,8 @@ import type { VoiceProblem, VoiceTool, VoiceToolEvents } from '../voice-tool'
 import { captureSound } from './capture'
 import type { FromEngine, Progress, ToEngine } from './engine'
 import { DEFAULT_MODEL, deviceHere, type Device, type ModelName } from './files'
+// Vite builds the worker as a file of its own; this is only a way to start it.
+import VoiceWorker from './worker.ts?worker'
 
 export { voiceIsKept } from './files'
 
@@ -48,7 +50,7 @@ export interface OnDeviceEnv {
 }
 
 export const ON_DEVICE: OnDeviceEnv = {
-  worker: () => new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' }),
+  worker: () => new VoiceWorker(),
   capture: captureSound,
 }
 
