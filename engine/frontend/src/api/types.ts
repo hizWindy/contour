@@ -237,6 +237,8 @@ export type LearnedNamePage = Schemas['LearnedNamePage']
 export type AssistantCompanyIn = Schemas['AssistantCompanyIn']
 export type AssistantCompanyPreview = Schemas['AssistantCompanyPreview']
 export type AssistantCompanyAdded = Schemas['AssistantCompanyAdded']
+// The card's own find for a company said or entered again (PLAN-V24 T3-2, choice 19)
+export type AssistantCompanyFind = Schemas['AssistantCompanyFind']
 
 // The Assistant (PLAN-V22): Today (T1-3, the contract part 2) and its tasks (T1-4)
 export type Today = Schemas['Today']

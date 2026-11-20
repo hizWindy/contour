@@ -153,7 +153,8 @@ import {
   type CompanyFind,
 } from './draft'
 import { pickByVoice } from './choose'
-import type { CompanySaid, CompanyVoice } from './company'
+import type { CompanyVoice } from './company'
+import { useCompanyFind } from './find'
 import { keepCardDraft } from './drafts'
 import { inTextBox, typingKey } from './keys'
 import { startHold } from './hold'
@@ -589,14 +590,28 @@ function DraftCard({
   })
 
   // --- The company said again (PLAN-V24 T3-2, choice 19) -------------------------------------------
-  // While the card waits on its company, words said to it fill its search box (`said`), and the
-  // matches it shows are what "the first one" picks from (`shownCompanies`).
-  const [said, setSaid] = useState<CompanySaid | null>(null)
+  // While the card waits on its company, words said to it, or a name entered in its search box, go
+  // to the card's own find, with no AI (`find.ts`): one found is the card's company at once, as a
+  // command's is. The matches on screen are what "the first one" picks from (`shownCompanies`).
+  const { said, find } = useCompanyFind((hit, fromHubspot) => {
+    setDraft((now) =>
+      now.action === 'email' || now.company.found !== null
+        ? now
+        : {
+            ...now,
+            company: { ...pickCompany(now.company, hit, 'by_hand'), fromHubspot },
+            edited: true,
+          },
+    )
+  })
   const shownCompanies = useRef<readonly Company[] | null>(null)
   const onShown = useCallback((shown: readonly Company[] | null) => {
     shownCompanies.current = shown
   }, [])
-  const companyVoice = useMemo<CompanyVoice>(() => ({ said, onShown }), [said, onShown])
+  const companyVoice = useMemo<CompanyVoice>(
+    () => ({ said, onShown, onSubmit: find }),
+    [said, onShown, find],
+  )
   /** Why a company picked for a call that needs one wasn't taken (choice 21). */
   const [pickProblem, setPickProblem] = useState<string | null>(null)
   /** Send was tried on a call that needs a company: the card says why (choice 18). */
@@ -899,7 +914,7 @@ function DraftCard({
       case 'which':
         return { line: PICK_ONE }
       case 'search':
-        setSaid((now) => ({ words: pick.words, n: (now?.n ?? 0) + 1 }))
+        find(pick.words)
         return { line: null }
     }
   }
