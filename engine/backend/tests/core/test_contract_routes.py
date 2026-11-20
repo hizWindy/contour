@@ -112,6 +112,7 @@ ROUTES = [
     ("DELETE", f"{API}/companies/assistant/learned/{{pair_id}}"),
     ("POST", f"{API}/companies/assistant/companies/preview"),  # PLAN-V23 T1-4
     ("POST", f"{API}/companies/assistant/companies"),
+    ("GET", f"{API}/companies/assistant/companies/find"),  # PLAN-V24 T3-2
     ("POST", f"{API}/auth/login"),
     ("POST", f"{API}/auth/logout"),
     ("POST", f"{API}/auth/logout-everywhere"),

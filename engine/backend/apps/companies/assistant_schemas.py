@@ -603,3 +603,25 @@ class AssistantCompanyAdded(Out):
     company_key: str = Field(description="The company's HubSpot id: use it on the card")
     company: CompanyHit = Field(description="The company as our copy has it now")
     hubspot_url: str | None = Field(description="The company in HubSpot, when HubSpot gave it")
+
+
+# --- The card's own company find (PLAN-V24 T3-2, choice 19) -------------------------------------
+
+FIND_WORDS_MAX_CHARS = 120
+
+
+class AssistantCompanyFind(Out):
+    """A company said or typed again on the review card, found as a command finds it. Free: no
+    Claude request."""
+
+    company: AssistantCompany = Field(
+        description="As a command's `company`: the words as heard, then `found` (one match) or "
+        "`choices` (two or more, best first), with `from_hubspot`, and `can_add` when it is found "
+        "nowhere. `from_page` is always false: the card sends no company on screen"
+    )
+    line: str | None = Field(
+        description="The company's line, as a command gives it in `unsure`: like 'Northwind Pty "
+        "Ltd is new in HubSpot. We'll use it.', 'Which North Wind?' or 'North Wind isn't in "
+        "HubSpot. Add it, or pick another company.' None when one company was found in our copy "
+        "or by a learned name"
+    )

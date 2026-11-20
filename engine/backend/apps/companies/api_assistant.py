@@ -4,7 +4,8 @@
 Behind the Call logs or the Meetings tick. Viewers get no V (choice 18), so the command step
 refuses one, though it changes nothing; every route that changes something refuses one too. The
 services are assistant.py (the command), today.py (Today), assistant_tasks.py (a task on its
-own, Done and reopen) and team_email.py (the team email).
+own, Done and reopen), team_email.py (the team email) and assistant_find.py (a company said again
+on the card, PLAN-V24).
 """
 
 import uuid
@@ -14,6 +15,7 @@ from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 
 from apps.companies import (
     assistant_add,
+    assistant_find,
     assistant_learned,
     assistant_names,
     assistant_tasks,
@@ -25,9 +27,11 @@ from apps.companies.assistant import Assistant, CommandLimit, check_on, read_com
 from apps.companies.assistant_add import CompanyAdds
 from apps.companies.assistant_names import HintCache
 from apps.companies.assistant_schemas import (
+    FIND_WORDS_MAX_CHARS,
     AssistantCommand,
     AssistantCommandIn,
     AssistantCompanyAdded,
+    AssistantCompanyFind,
     AssistantCompanyIn,
     AssistantCompanyPreview,
     AssistantEmailIn,
@@ -465,6 +469,50 @@ async def reopen_assistant_task(
         now=now,
     )
     return Response(status_code=204)
+
+
+# --- Finding a company said again on the card (PLAN-V24 T3-2, choice 19) ------------------------
+
+
+@router.get(
+    "/companies/find",
+    response_model=AssistantCompanyFind,
+    dependencies=[Depends(CHANGES)],
+    summary="Find a company said again",
+    description=(
+        "Finds the company a rep says (or types) again on the review card, as the command step "
+        "finds it, with no Claude request and no company on screen: the team's learned names, "
+        "then our copy, then HubSpot's own search (free, at most 8 seconds), which reads what it "
+        "finds into our copy (`from_hubspot`). `company` has the command's shape: `heard`, then "
+        "`found` (one match) or `choices` (two or more, best first, at most 5). Found nowhere "
+        "after HubSpot was searched: `can_add`, so the card may offer Add to HubSpot. With no "
+        "HubSpot connection, or HubSpot not answering, it isn't searched, and `can_add` is false. "
+        "`line` is the command's line for the company. It writes nothing to HubSpot and keeps no "
+        "copy of the words. It works while the AI sort is off. Meant for a name said or entered, "
+        "not for each key typed: a name our copy doesn't have asks HubSpot each time. Behind the "
+        "Call logs or the Meetings tick; a Viewer gets 403 `viewer_read_only`. 422 when `words` "
+        "is empty or over 120 characters, `words_empty` when nothing is left to search for once "
+        "tidied, and `contact_details` for an email address or a phone number in the words."
+    ),
+)
+async def find_assistant_company(
+    request: Request,
+    session: SessionDep,
+    settings: SettingsDep,
+    leads: LeadsDep,
+    words: Annotated[
+        SafeText,
+        Query(
+            min_length=1,
+            max_length=FIND_WORDS_MAX_CHARS,
+            description="The company's name as said or typed, 1 to 120 characters",
+            examples=["North Wind"],
+        ),
+    ],
+) -> AssistantCompanyFind:
+    return await assistant_find.find_said(
+        session, words, settings=settings, leads=leads, app=request.app
+    )
 
 
 # --- Adding a company (PLAN-V23 T1-4) -----------------------------------------------------------

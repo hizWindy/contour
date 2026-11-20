@@ -12,6 +12,8 @@ heard.
   Sample Logistics Pty Ltd). Then HubSpot's own search (assistant_live.py), which reads what it
   finds into our copy (`from_hubspot`); found nowhere, the card may offer to add it (`can_add`).
   With no company named, the one on screen (`on_page`). Among several, the one on screen wins.
+  The card's own find (PLAN-V24 choice 19, `find_said`) runs the same steps from the learned
+  names on, for a company said again, with no Claude request and no company on screen.
 - **The person:** among that company's people (`people_of`): the full name (`find_person`, the
   call note sorter's test), else every word said matching a word of their name. A word of 4
   letters or more may be spelled slightly wrong ("Sampel").
@@ -42,6 +44,7 @@ from apps.companies.assistant_live import NOT_SEARCHED, live_search
 from apps.companies.assistant_schemas import (
     AssistantCardIn,
     AssistantCompany,
+    AssistantCompanyFind,
     AssistantMeeting,
     AssistantMeetingHit,
     AssistantOnPage,
@@ -410,12 +413,14 @@ async def companies_named(session: AsyncSession, text: str, fuzzy_min: int) -> l
     return await hubspot_hits(session, keys)
 
 
-async def learned_hits(session: AsyncSession, words: str, ctx: Context) -> list[CompanyHit]:
+async def learned_hits(
+    session: AsyncSession, words: str, leads: Sequence[CompanyLeads]
+) -> list[CompanyHit]:
     """The companies the team taught for these words (PLAN-V23 choice 3), the newest pair first,
     each open to this person."""
     hits: list[CompanyHit] = []
     for key in await learned_store.taught_for(session, heard_key(words)):
-        hit = await company_hit(session, key, ctx.leads)
+        hit = await company_hit(session, key, leads)
         if hit is not None:
             hits.append(hit)
     return hits
@@ -456,15 +461,34 @@ async def find_company(
     fuzzy_min = ctx.settings.match_fuzzy_min
     if page is not None and names_are_close(words, page.name, fuzzy_min):
         return AssistantCompany(heard=words, from_page=True, found=page, choices=[]), None
-    learned = await learned_hits(session, words, ctx)
+    return await company_for_words(
+        session, words, page, fuzzy_min=fuzzy_min, leads=ctx.leads, app=ctx.app
+    )
+
+
+async def company_for_words(
+    session: AsyncSession,
+    words: str,
+    page: CompanyHit | None,
+    *,
+    fuzzy_min: int,
+    leads: Sequence[CompanyLeads],
+    app: FastAPI | None,
+) -> tuple[AssistantCompany, str | None]:
+    """The company these words (tidied by `heard`) name, and a line when it isn't clear: the
+    learned names, then our copy, then HubSpot's own search (which reads what it finds into our
+    copy; `app` None asks HubSpot nothing). Among several, the one on screen wins. Found nowhere:
+    the card may add it, when HubSpot was searched. The command step and the card's own find
+    (`find_said`) both use it."""
+    learned = await learned_hits(session, words, leads)
     if learned:
         return picked(words, learned, page)
     hits = await companies_named(session, words, fuzzy_min)
     if hits:
         return picked(words, hits, page)
     live = NOT_SEARCHED
-    if ctx.app is not None:
-        live = await live_search(session, ctx.app, words, fuzzy_min=fuzzy_min)
+    if app is not None:
+        live = await live_search(session, app, words, fuzzy_min=fuzzy_min)
     found = await hubspot_hits(session, live.keys)
     if found:
         return picked(words, found, page, from_hubspot=True)
@@ -473,6 +497,52 @@ async def find_company(
         heard=words, from_page=False, found=None, choices=[], can_add=live.searched
     )
     return company, line
+
+
+# --- The card's own find (PLAN-V24 T3-2, choice 19) ----------------------------------------------
+
+
+def words_empty() -> Problem:
+    return Problem(
+        422,
+        "No company to find",
+        "We didn't hear a company's name. Say it again, or type it.",
+        code="words_empty",
+    )
+
+
+def words_with_contact_details() -> Problem:
+    return Problem(
+        422,
+        "Contact details left out",
+        "Phone numbers and emails can't be searched for. Take them out of the company's name, "
+        "then try again.",
+        code="contact_details",
+    )
+
+
+async def find_said(
+    session: AsyncSession,
+    words: str,
+    *,
+    settings: Settings,
+    leads: Sequence[CompanyLeads],
+    app: FastAPI | None,
+) -> AssistantCompanyFind:
+    """The company a rep says (or types) again on the card, found as the command step finds it,
+    with no Claude request and no company on screen: the learned names, our copy, then HubSpot's
+    own search. HubSpot is only read; what it finds goes into our copy. Words with an email
+    address or a phone number are refused, so none goes to HubSpot, and so are words that leave
+    nothing to search for once tidied (422)."""
+    if scrub(words) != words:
+        raise words_with_contact_details()
+    tidied = heard(words)
+    if not tidied:
+        raise words_empty()
+    company, line = await company_for_words(
+        session, tidied, None, fuzzy_min=settings.match_fuzzy_min, leads=leads, app=app
+    )
+    return AssistantCompanyFind(company=company, line=line)
 
 
 # --- What is on screen ---------------------------------------------------------------------------
