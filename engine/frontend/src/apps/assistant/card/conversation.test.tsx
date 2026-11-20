@@ -289,6 +289,10 @@ describe('the card in a conversation (T2-3)', () => {
     const bar = await screen.findByRole('dialog', { name: BAR })
     expect(bar.querySelector('[data-slot=voice-title]')).toHaveTextContent('Listening')
     expect(mic.live()).toBe(1)
+    // The bar takes the focus back, for its keys and the Tab key (T2-6).
+    await waitFor(() => {
+      expect(bar).toHaveFocus()
+    })
   })
 })
 

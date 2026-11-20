@@ -19,7 +19,12 @@ import type {
   CallNoteOptions,
   CompanyDetail,
 } from '@/api/types'
-import { FakeMic, type FakeMicOptions } from '@/apps/companies/call-notes/mic/fake-mic'
+import {
+  FakeMic,
+  HEADSET,
+  LAPTOP_MIC,
+  type FakeMicOptions,
+} from '@/apps/companies/call-notes/mic/fake-mic'
 import { busyWords, PROBLEMS } from '@/apps/companies/call-notes/mic/words'
 import type { SignIn } from '@/api/hooks/auth'
 import { queryKeys } from '@/api/query'
@@ -916,9 +921,11 @@ describe('a long conversation on screen (PLAN-V24 T2-1)', () => {
     const again = within(found).getByRole('button', { name: /^Start again/ })
     expect(again).toHaveAttribute('aria-keyshortcuts', 'V')
     expect(buttons(found)).toEqual(['Close', 'Start again'])
+    // V starts again: the mic opens a second time (its own quiet, 40 ms here, may end it again).
     await user.keyboard('v')
-    await listening()
-    expect(mic.live()).toBe(1)
+    await waitFor(() => {
+      expect(mic.asked).toHaveLength(2)
+    })
   })
 
   it('words over 2,000 characters wait in the text line with the plan’s line, and Send waits for them to be shortened', async () => {
@@ -973,5 +980,31 @@ describe('a phone that leaves the page (PLAN-V24 T2-5)', () => {
     expect(within(found).getByRole('textbox', { name: 'Type what to do' })).toHaveValue(
       'Log a call with Jo Sample',
     )
+  })
+})
+
+describe('the mic’s own lines in the bar (PLAN-V24 T1-2, T1-3)', () => {
+  it('says Reconnecting while the speech service is tried again after a blip', async () => {
+    const { mic } = openBar()
+    const found = await listening()
+    act(() => {
+      mic.reconnecting(true)
+    })
+    expect(title(found)).toHaveTextContent('Reconnecting')
+    act(() => {
+      mic.reconnecting(false)
+    })
+    expect(title(found)).toHaveTextContent('Listening')
+  })
+
+  it('says once which mic it moved to, a headset plugged in, and listens on', async () => {
+    const { mic } = openBar({ mic: { devices: [LAPTOP_MIC] } })
+    const found = await listening()
+    act(() => {
+      mic.plug(HEADSET)
+    })
+    const moved = await within(found).findByText('Now using Headset Microphone (Jabra Evolve2 65).')
+    expect(moved).toHaveAttribute('role', 'status')
+    expect(title(found)).toHaveTextContent('Listening')
   })
 })

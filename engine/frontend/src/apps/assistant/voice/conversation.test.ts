@@ -166,6 +166,22 @@ describe('a conversation (PLAN-V24 T2-1)', () => {
     expect(texts()).toEqual(['add a task to send the quote'])
   })
 
+  it('a line shows until the next answer: a page a command opens says nothing (T2-6)', async () => {
+    let answers = 0
+    const { mic, now } = await listening({
+      after: () => {
+        answers += 1
+        return answers === 1
+          ? { kind: 'show', line: 'The Assistant can open a page.', unsure: null, again: true }
+          : { kind: 'close' }
+      },
+    })
+    await sayTurn(mic, 'what is the weather today')
+    expect(now().conversation?.line).toBe('The Assistant can open a page.')
+    await sayTurn(mic, OPEN_TODAY)
+    expect(now().conversation?.line).toBeNull()
+  })
+
   it('reads what is on screen at each command, as the conversation crosses pages', async () => {
     let page: AssistantOnPage | null = null
     const { mic, sent } = await listening({ where: () => page })

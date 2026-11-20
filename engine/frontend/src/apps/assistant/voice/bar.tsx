@@ -40,6 +40,9 @@
  * - **Words over 2,000 characters** wait in the text line, with the plan's line, to shorten.
  * - **On a phone** (T2-5), the screen stays on while it listens; leaving the page stops it, with
  *   "The mic stopped when you left the page. What you said so far is kept." and Carry on.
+ * - **The mic's own lines** (PLAN-V24 T1-2, T1-3), plainly until Part 5 polishes them (T5-1): the
+ *   title says "Reconnecting" while the speech service is tried again, and "Now using {mic}." shows
+ *   once under the words when the mic moved, said once to a screen reader.
  * - **A review card** a command opens hears the conversation (T2-3): the bar gives way to it while
  *   it is open, and the card's foot says the mic is on, with Stop (V). The bar comes back as it
  *   closes, still listening. V on a card with the bar closed starts a conversation.
@@ -70,8 +73,10 @@ import type { MicEnv } from '@/apps/companies/call-notes/mic/session'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import {
   fixedWords,
+  nowUsing,
   problemActions,
   problemWords,
+  RECONNECTING,
   STEP_WORDS,
   type MicAction,
 } from '@/apps/companies/call-notes/mic/words'
@@ -201,6 +206,8 @@ function titleOf(snapshot: BarSnapshot): string {
       return steps?.found === 'pass' ? STEP_WORDS.allowed.waiting : STEP_WORDS.found.waiting
     }
     case 'listening':
+      // The speech service is tried again after a blip (PLAN-V24 T1-3).
+      if (snapshot.mic?.reconnecting) return RECONNECTING
       // A conversation listens on while a command is read (PLAN-V24 T2-1).
       return snapshot.conversation?.working ? WORKING : LISTENING
     case 'working':
@@ -327,7 +334,9 @@ function statusOf(snapshot: BarSnapshot): string {
   // A line said without alarm has no alert of its own: the quiet stop is said here.
   if (snapshot.phase === 'problem') return problem && isQuiet(problem) ? problemLine(problem) : ''
   if (waits(problem)) return ''
-  const line = snapshot.phase === 'listening' ? snapshot.conversation?.line : null
+  // While a command is worked out, the title says so.
+  const talk = snapshot.phase === 'listening' ? snapshot.conversation : null
+  const line = talk && !talk.working ? talk.line : null
   return line ?? titleOf(snapshot)
 }
 
@@ -539,7 +548,8 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   const title = titleOf(snapshot)
   const listening = phase === 'starting' || phase === 'listening'
   const actions = actionsOf(snapshot)
-  // One Navy button: Done while listening, Send in the text line, else the first action.
+  // One Navy button: Done (Stop, in a conversation) while listening, Send in the text line, else
+  // the first action.
   const [first, ...rest] = actions
   const main = phase === 'typing' ? undefined : first
   const others = phase === 'typing' ? actions : rest
@@ -555,8 +565,8 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   // The rep's own next company, for "Try saying" (PLAN-V23 T4-3).
   const nextCompany = firstCompanyOf(names ?? cachedNames(client, screen.key))
   // Words that wait in the text line: the line comes before it (T1-6, PLAN-V24 choice 9).
-  const unclear = waits(problem)
-  // A conversation listens (PLAN-V24 T2-1): the command being read, and the next words as they come.
+  const waiting = waits(problem)
+  // A conversation listens (PLAN-V24 T2-1): the command being read, and the next words.
   const conversation = listening ? snapshot.conversation : null
   // Over the server's limit, the words can't go until they are shortened.
   const tooLong = snapshot.draft.trim().length > MAX_CHARS
@@ -568,7 +578,7 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
       </p>
     ) : (
       <p
-        id={unclear ? whyId : undefined}
+        id={waiting ? whyId : undefined}
         role="alert"
         data-slot="voice-problem"
         className="flex items-start gap-2 text-pretty text-destructive-ink"
@@ -626,7 +636,7 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
               ) : null}
             </div>
 
-            {unclear ? problemView : null}
+            {waiting ? problemView : null}
 
             {phase === 'typing' ? (
               <form
@@ -640,7 +650,7 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
                   ref={line}
                   className="touch:text-body"
                   // Why the voice can't work here, or why the words wait here, read with the line.
-                  aria-describedby={problem && (isQuiet(problem) || unclear) ? whyId : undefined}
+                  aria-describedby={problem && (isQuiet(problem) || waiting) ? whyId : undefined}
                   value={snapshot.draft}
                   maxLength={MAX_CHARS}
                   aria-label={TYPE_WHAT}
@@ -708,7 +718,18 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
               </p>
             ) : null}
 
-            {unclear ? null : problemView}
+            {listening && snapshot.mic?.movedTo ? (
+              // The mic moved by itself, a headset plugged in (PLAN-V24 T1-2): said once.
+              <p
+                role="status"
+                data-slot="voice-moved"
+                className="text-caption text-muted-foreground"
+              >
+                {nowUsing(snapshot.mic.movedTo.name)}
+              </p>
+            ) : null}
+
+            {waiting ? null : problemView}
 
             <div className="flex flex-wrap items-center gap-2">
               {listening ? (

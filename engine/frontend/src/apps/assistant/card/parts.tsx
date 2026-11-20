@@ -14,7 +14,7 @@ import { CircleAlert } from 'lucide-react'
 import { forwardRef, useId, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import type { VoiceToolKind } from '@/api/types'
 import { LiveWords } from '@/apps/companies/call-notes/mic/live-words'
-import { STEP_WORDS } from '@/apps/companies/call-notes/mic/words'
+import { RECONNECTING, STEP_WORDS } from '@/apps/companies/call-notes/mic/words'
 import { NoteMic } from '@/apps/companies/call-notes/note-mic'
 import { FrequencyBars } from '@/components/motion/frequency-bars'
 import { Button } from '@/components/ui/button'
@@ -326,9 +326,11 @@ export function ConversationStrip({ snapshot, hintId, ended, onStop }: Conversat
       ? snapshot.mic?.steps.found === 'pass'
         ? STEP_WORDS.allowed.waiting
         : STEP_WORDS.found.waiting
-      : conversation.working
-        ? WORKING
-        : LISTENING
+      : snapshot.mic?.reconnecting
+        ? RECONNECTING
+        : conversation.working
+          ? WORKING
+          : LISTENING
   const line = conversation.working ? null : conversation.line
   return (
     <div data-slot="card-conversation" data-phase={phase} className="flex flex-col gap-2">

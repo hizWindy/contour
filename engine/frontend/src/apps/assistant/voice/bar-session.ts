@@ -1114,11 +1114,12 @@ export class BarSession {
         this.settle(after)
         return
       }
+      // A read-back or a stop line shows until the next answer; a page or a card says nothing.
       if (after.kind === 'show') this.setConversation({ line: after.line })
       else if (after.kind === 'unclear') {
         this.lastUnclear = after.words
         this.setConversation({ line: after.line })
-      }
+      } else this.setConversation({ line: null })
       this.next()
       return
     }

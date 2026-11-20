@@ -12,6 +12,7 @@ import {
   missingOf,
   readBackOf,
   sendOrCancel,
+  cardWordsOf,
   taskBodyOf,
   type TaskDraft,
 } from './draft'
@@ -189,6 +190,23 @@ describe('"send it" and "cancel" (choice 23)', () => {
     ['', null],
   ])('%j is %s', (heard, meant) => {
     expect(sendOrCancel(heard)).toBe(meant)
+  })
+})
+
+describe('the card’s own words in a conversation (PLAN-V24 T2-3)', () => {
+  it.each([
+    ['Send it.', 'send'],
+    ['send', 'send'],
+    ['Later.', 'later'],
+    ['do it later', 'later'],
+    // "Send it later" is Later, not Send: the whole turn counts.
+    ['send it later', 'later'],
+    ['Cancel that', 'later'],
+    ["don't send it", null],
+    ['make the follow-up later', null],
+    ['', null],
+  ])('%j is %s', (heard, meant) => {
+    expect(cardWordsOf(heard)).toBe(meant)
   })
 })
 

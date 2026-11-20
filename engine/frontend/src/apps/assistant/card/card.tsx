@@ -99,6 +99,7 @@ import {
   type AfterAnswer,
   type Heard,
 } from '../voice/hand-over'
+import { VOICE_BAR } from '../voice/keys'
 import { isVKeyOn } from '../voice/v-switch'
 import {
   CANT_READ_YET,
@@ -136,7 +137,7 @@ import { listenForSendIt } from './listen'
 import { CARD_TIMES, type CardTimes } from './times'
 import { ConversationStrip, HintBar, ListenStrip, PartProblem, VoiceStrip } from './parts'
 import { previewEmail, previewTask, saveNote, sendDraft, patchNote, type SendTools } from './send'
-import { openCard, type CardRequest } from './store'
+import { openCard, openedCard, type CardRequest } from './store'
 import { isNoHubSpotUser, needsTeammate } from './teammate-rules'
 import {
   CALL_KEPT,
@@ -1050,6 +1051,18 @@ function DraftCard({
       }}
       onKeyDown={onKeyDown}
       onEscapeKeyDown={onEscape}
+      onCloseAutoFocus={(event) => {
+        // The conversation listens on: the bar comes back as the card goes, and takes the focus
+        // for its keys (PLAN-V24 T2-6), unless another card took its place. Without one, the
+        // focus goes back as before.
+        const back =
+          conversation?.isLive() && openedCard() === null
+            ? document.querySelector<HTMLElement>(VOICE_BAR)
+            : null
+        if (!back) return
+        event.preventDefault()
+        back.focus()
+      }}
       describedBy={listening || talking ? listenId : undefined}
       onOpenAutoFocus={(event) => {
         event.preventDefault()
