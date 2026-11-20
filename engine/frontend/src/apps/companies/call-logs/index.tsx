@@ -150,7 +150,7 @@ function CallLogsContent() {
             {waitingLine(notes.waiting_for)}
           </p>
         )}
-        <NeedsCompany count={needsCompany} today={today} />
+        <NeedsCompany count={needsCompany} today={today} onPhone={onPhone} />
         <Tabs
           value={tab}
           onValueChange={(next) => {

@@ -508,6 +508,24 @@ export function needsCompanyLead(count: number): string {
     : "We couldn't find the company for these calls, so they can't go to HubSpot yet. Pick each one, and its call moves to To confirm."
 }
 
+export const PICK_COMPANY = 'Pick company'
+
+/**
+ * The line under Pick company's title: what was heard, then the question. "Heard as "North Wind".
+ * Which company was the call with?" (`heard` is in quotes already, from `callCompany`).
+ */
+export function pickCompanyLine(heard: string | null): string {
+  return heard ? `Heard as ${heard}. ${WHICH_COMPANY}` : WHICH_COMPANY
+}
+
+/** After a pick: where the call went. "The call with Sample Logistics Pty Ltd is in To confirm." */
+export function pickedWords(company: string): string {
+  return `The call with ${company} is in To confirm.`
+}
+
+/** A pick the server refused: the toast's title, over the server's own words. */
+export const NOT_PICKED = "The company wasn't picked"
+
 /** Folded: the group shows its newest calls, and this opens the rest. "Show all 5 calls". */
 export function showAllCallsWords(count: number): string {
   return `Show all ${pluralise(count, 'call')}`

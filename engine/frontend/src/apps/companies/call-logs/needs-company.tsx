@@ -6,15 +6,19 @@
  * - **One row a call,** newest first, in one box with lines between: the name as heard in quotes
  *   ("North Wind", "as heard"), when the call was and how it went, and its words folded to two
  *   lines (`CardText`). The newest three show; "Show all 5 calls" opens the rest (TBC).
+ * - **Pick company** opens Log call's company search, with the name as heard already in it
+ *   (`pick-company.tsx`). A pick leaves the group at once; the call is sorted as a new call is,
+ *   then waits in To confirm (choice 21, `use-pick.ts`). The focus moves to the next call, or to
+ *   the tabs when it was the last; after Esc it goes back to the call's own Pick company.
  * - **Remove** takes it away at once, with Undo in a toast, as on To confirm (`remove.ts`). The
- *   focus moves to the next call, or to the tabs when it was the last.
+ *   focus moves on the same way.
  * - **Loading** keeps the room of the rows it knows of (the count says how many). A list that
  *   can't be read says so in the group, with Try again; the tabs under it still work.
  * - Viewers see the calls and no buttons, as on To confirm.
  */
 import { useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, Trash2 } from 'lucide-react'
-import { useId, useState } from 'react'
+import { Building2, ChevronDown, Trash2 } from 'lucide-react'
+import { useId, useRef, useState } from 'react'
 import { useCallNotes } from '@/api/hooks/call-notes'
 import type { CallNoteOut } from '@/api/types'
 import { useCanWrite } from '@/auth/can'
@@ -22,10 +26,13 @@ import { ErrorState } from '@/components/error-state'
 import { ListExit, ListExitItem, RollingNumber } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import type { CompanyPick } from './company-list'
 import { CardText } from './note-parts'
 import { callLogsQuery, NEEDS_COMPANY_SHOWN } from './params'
+import { PickCompanySheet } from './pick-company'
 import { removeCallNote, useRemoving } from './remove'
 import { RowsPending } from './states'
+import { usePickCompany } from './use-pick'
 import {
   AS_HEARD,
   callCompany,
@@ -36,6 +43,7 @@ import {
   NEEDS_COMPANY_TITLE,
   needsCompanyLead,
   noteLine,
+  PICK_COMPANY,
   REMOVE,
   SHOW_FEWER,
   showAllCallsWords,
@@ -46,23 +54,26 @@ const ROW = 'data-needs-company'
 /** On a row's first button: it takes the focus when the row next to it leaves. */
 const FIRST_ACTION = 'data-row-action'
 
-/** The focus goes to a call's first button, or to the tab on show when no call is left. */
+/** The focus goes to a call's first button, or to the tab on show when that call isn't there. */
 function focusAfter(id: string | null): void {
-  const target = id
+  const row = id
     ? document.querySelector<HTMLElement>(`[${ROW}="${CSS.escape(id)}"] [${FIRST_ACTION}]`)
-    : document.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
-  target?.focus()
+    : null
+  const tab = document.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+  ;(row ?? tab)?.focus()
 }
 
 function NeedsCompanyRow({
   note,
   today,
   canWrite,
+  onPick,
   onRemove,
 }: {
   note: CallNoteOut
   today: string
   canWrite: boolean
+  onPick: () => void
   onRemove: () => void
 }) {
   const titleId = useId()
@@ -92,10 +103,20 @@ function NeedsCompanyRow({
           <div className="flex flex-wrap items-center gap-2 @xl:col-start-2 @xl:row-span-2 @xl:row-start-1 @xl:self-start">
             <Button
               type="button"
+              variant="outline"
+              size="sm"
+              className="touch:h-11"
+              {...{ [FIRST_ACTION]: '' }}
+              onClick={onPick}
+            >
+              <Building2 aria-hidden="true" />
+              {PICK_COMPANY}
+            </Button>
+            <Button
+              type="button"
               variant="ghost"
               size="sm"
               className="ml-auto text-muted-foreground touch:h-11 @xl:ml-0"
-              {...{ [FIRST_ACTION]: '' }}
               onClick={onRemove}
             >
               <Trash2 aria-hidden="true" />
@@ -113,22 +134,26 @@ export interface NeedsCompanyProps {
   count: number
   /** Melbourne's day, for "Today". */
   today: string
+  /** Pick company's panel is the whole screen on a phone. */
+  onPhone: boolean
 }
 
-export function NeedsCompany({ count, today }: NeedsCompanyProps) {
+export function NeedsCompany({ count, today, onPhone }: NeedsCompanyProps) {
   const client = useQueryClient()
   const canWrite = useCanWrite('companies.call_logs')
   const removing = useRemoving()
   const list = useCallNotes(callLogsQuery('needs_company'), { enabled: count > 0 })
+  const pick = usePickCompany()
   const [open, setOpen] = useState(false)
+  const [picking, setPicking] = useState<CallNoteOut | null>(null)
+  // Where the focus goes as Pick company's panel closes: back to the call it opened for, or, after
+  // a pick, to the call next to it (null: the tabs).
+  const openedFor = useRef<string | null>(null)
+  const afterPick = useRef<{ next: string | null } | null>(null)
   const headingId = useId()
   const listId = useId()
 
-  if (count <= 0) return null
-  const items = (list.data?.items ?? []).filter((note) => !removing.has(note.id))
-  // The counts were older than the list: nothing is waiting after all.
-  if (list.data && items.length === 0) return null
-
+  const items = count > 0 ? (list.data?.items ?? []).filter((note) => !removing.has(note.id)) : []
   const folded = !open && items.length > NEEDS_COMPANY_SHOWN
   const shown = folded ? items.slice(0, NEEDS_COMPANY_SHOWN) : items
 
@@ -156,6 +181,40 @@ export function NeedsCompany({ count, today }: NeedsCompanyProps) {
     removeCallNote(client, note)
     moveFocus(next)
   }
+  const startPick = (note: CallNoteOut): void => {
+    openedFor.current = note.id
+    afterPick.current = null
+    setPicking(note)
+  }
+  const finishPick = (note: CallNoteOut, company: CompanyPick): void => {
+    afterPick.current = { next: neighbour(note.id) }
+    setPicking(null)
+    pick.mutate({ id: note.id, companyKey: company.key })
+  }
+  const focusBack = (): void => {
+    const picked = afterPick.current
+    afterPick.current = null
+    if (picked) {
+      moveFocus(picked.next)
+    } else {
+      focusAfter(openedFor.current)
+    }
+  }
+
+  // The panel stays on the page when the group goes (its last call picked), so it can close.
+  const sheet = (
+    <PickCompanySheet
+      note={picking}
+      onPhone={onPhone}
+      onPick={finishPick}
+      onClose={() => {
+        setPicking(null)
+      }}
+      focusBack={focusBack}
+    />
+  )
+  // None, or the counts were older than the list: nothing is waiting after all.
+  if (count <= 0 || (list.data && items.length === 0)) return sheet
 
   let body
   if (list.error && !list.data) {
@@ -182,6 +241,9 @@ export function NeedsCompany({ count, today }: NeedsCompanyProps) {
                 note={note}
                 today={today}
                 canWrite={canWrite}
+                onPick={() => {
+                  startPick(note)
+                }}
                 onRemove={() => {
                   remove(note)
                 }}
@@ -221,22 +283,29 @@ export function NeedsCompany({ count, today }: NeedsCompanyProps) {
   }
 
   return (
-    <section aria-labelledby={headingId} data-slot="needs-company" className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <h2
-          id={headingId}
-          className="flex items-baseline gap-2 text-section font-semibold text-foreground"
-        >
-          {NEEDS_COMPANY_TITLE}{' '}
-          <span className="text-ui font-normal text-muted-foreground">
-            <RollingNumber value={count} />
-          </span>
-        </h2>
-        <p className="max-w-prose text-ui text-pretty text-muted-foreground">
-          {needsCompanyLead(count)}
-        </p>
-      </div>
-      {body}
-    </section>
+    <>
+      <section
+        aria-labelledby={headingId}
+        data-slot="needs-company"
+        className="flex flex-col gap-3"
+      >
+        <div className="flex flex-col gap-1">
+          <h2
+            id={headingId}
+            className="flex items-baseline gap-2 text-section font-semibold text-foreground"
+          >
+            {NEEDS_COMPANY_TITLE}{' '}
+            <span className="text-ui font-normal text-muted-foreground">
+              <RollingNumber value={count} />
+            </span>
+          </h2>
+          <p className="max-w-prose text-ui text-pretty text-muted-foreground">
+            {needsCompanyLead(count)}
+          </p>
+        </div>
+        {body}
+      </section>
+      {sheet}
+    </>
   )
 }

@@ -1,5 +1,7 @@
 /**
- * The company list inside Log call's panel (PLAN-V19 T2-2, choice 15):
+ * The company list inside Log call's panel (PLAN-V19 T2-2, choice 15), and inside Pick company for
+ * a call saved before its company was found (PLAN-V24 T3-3: its own title and line, and the search
+ * starts with the name as heard):
  *
  * - Focused search box on top (with a clear button once typed).
  * - With fewer than 2 letters typed: every company from `GET /companies` in newest-activity order,
@@ -59,10 +61,23 @@ export interface CompanyListProps {
   active: boolean
   inputRef: RefObject<HTMLInputElement | null>
   onPick: (company: CompanyPick) => void
+  /** The panel's title: "Log call" unless given. */
+  title?: string
+  /** The line under it: "Which company was the call with?" unless given. */
+  description?: string
+  /** What the search starts with, like the name as heard: "North Wind". Empty unless given. */
+  startWith?: string
 }
 
-export function CompanyList({ active, inputRef, onPick }: CompanyListProps) {
-  const [text, setText] = useState('')
+export function CompanyList({
+  active,
+  inputRef,
+  onPick,
+  title = LOG_CALL,
+  description = WHICH_COMPANY,
+  startWith = '',
+}: CompanyListProps) {
+  const [text, setText] = useState(startWith)
   const settled = useDebounced(text, SETTLE_MS)
   const searching = text.trim().length >= 2
   const settledQuery = settled.trim()
@@ -265,9 +280,9 @@ export function CompanyList({ active, inputRef, onPick }: CompanyListProps) {
     <div data-slot="log-call-list" className="flex h-full flex-col">
       <div className="glass-surface flex flex-col gap-3 border-b p-5 pr-14 max-sm:p-4 max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pr-14">
         <div className="flex flex-col gap-0.5">
-          <PanelTitle className="text-section">{LOG_CALL}</PanelTitle>
+          <PanelTitle className="text-section">{title}</PanelTitle>
           <PanelDescription className="text-ui text-muted-foreground">
-            {WHICH_COMPANY}
+            {description}
           </PanelDescription>
         </div>
         <div className="relative flex items-center">

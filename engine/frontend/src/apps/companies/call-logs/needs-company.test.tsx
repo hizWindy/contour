@@ -115,13 +115,56 @@ interface Sent {
   body: unknown
 }
 
+interface Company {
+  key: string
+  name: string
+  city: string | null
+  industry: string | null
+}
+
+/** The companies the rep may see: the search and the list find them. */
+const COMPANIES: readonly Company[] = [
+  { key: '107', name: 'Northwind Sample Pty Ltd', city: 'Perth', industry: 'Logistics' },
+  { key: '101', name: 'Sample Logistics Pty Ltd', city: 'Perth', industry: 'Logistics' },
+  { key: '103', name: 'Sample Mining Pty Ltd', city: 'Perth', industry: 'Mining' },
+]
+
 interface Server {
   notes: CallNoteOut[]
   options: CallNoteOptions
   user?: { role: 'platform_admin' | 'admin' | 'staff' | 'viewer'; features: string[] }
   /** The list of calls that need a company fails. */
   listFails: boolean
+  /** Companies a pick may name but the rep can't see: 422 `company_not_found`. */
+  hidden: readonly string[]
+  /** Calls picked in another tab just before this pick, by id, with the company's key. */
+  pickedElsewhere: Record<string, string>
   sent: Sent[]
+}
+
+/** The words the server's 422 `company_not_found` has for a pick (`note_company.py`). */
+const NOT_OPEN =
+  "It may have been removed, or it isn't open to your account. Pick another company, or search for it again."
+
+/** What a pick does on the server: the company set, and the call sent to be sorted. */
+function picked(item: CallNoteOut, company: Company, ai: boolean): CallNoteOut {
+  return {
+    ...item,
+    company_key: company.key,
+    company_name: company.name,
+    status: ai ? 'sorting' : 'to_confirm',
+  }
+}
+
+/** The sorter's work on a picked call: a summary, and the person the call was with. */
+function sorted(item: CallNoteOut): CallNoteOut {
+  return {
+    ...item,
+    status: 'to_confirm',
+    sorted_by: 'ai',
+    person: { id: '201', name: 'Jo Sample', title: 'Office Manager' },
+    call: { ...item.call, summary: 'Jo says the Perth lease now ends in June 2028.' },
+  }
 }
 
 function json(value: unknown, status = 200): Response {
@@ -145,8 +188,16 @@ function mockServer(changes: Partial<Omit<Server, 'sent'>> = {}): Server {
     notes: threeCalls(),
     options: options(),
     listFails: false,
+    hidden: [],
+    pickedElsewhere: {},
     sent: [],
     ...changes,
+  }
+  // A call being sorted is sorted by the time it has been read once (the page asks again).
+  const read = new Set<string>()
+  const put = (next: CallNoteOut): CallNoteOut => {
+    server.notes = server.notes.map((item) => (item.id === next.id ? next : item))
+    return next
   }
   const respond = async (request: Request): Promise<Response> => {
     const url = new URL(request.url)
@@ -178,6 +229,12 @@ function mockServer(changes: Partial<Omit<Server, 'sent'>> = {}): Server {
       if (state === 'needs_company' && server.listFails) {
         return json({ title: 'Something went wrong', status: 500, detail: 'It broke.' }, 500)
       }
+      if (state === 'to_confirm') {
+        for (const item of server.notes) {
+          if (item.status === 'sorting' && read.has(item.id)) put(sorted(item))
+          else if (item.status === 'sorting') read.add(item.id)
+        }
+      }
       const at = (item: CallNoteOut): number => Date.parse(item.called_at)
       const matching = server.notes
         .filter((item) => (IN_STATE[state] ?? []).includes(item.status))
@@ -196,7 +253,68 @@ function mockServer(changes: Partial<Omit<Server, 'sent'>> = {}): Server {
         server.notes = server.notes.filter((note) => note.id !== id)
         return new Response(null, { status: 204 })
       }
+      if (method === 'PATCH') {
+        const key = (body as { company_key?: string }).company_key
+        const elsewhere = COMPANIES.find((one) => one.key === server.pickedElsewhere[id])
+        if (elsewhere && item.status === 'needs_company') {
+          put(picked(item, elsewhere, server.options.ai_enabled))
+        }
+        const now = server.notes.find((note) => note.id === id) ?? item
+        if (now.status !== 'needs_company') {
+          return json(
+            {
+              title: 'The company is set already',
+              status: 409,
+              code: 'company_set',
+              detail:
+                "This call has its company already, so it can't be picked again. Reload Call logs to see it.",
+            },
+            409,
+          )
+        }
+        const company = COMPANIES.find((one) => one.key === key)
+        if (!company || server.hidden.includes(company.key)) {
+          return json(
+            {
+              title: "We can't find that company",
+              status: 422,
+              code: 'company_not_found',
+              detail: NOT_OPEN,
+            },
+            422,
+          )
+        }
+        return json(put(picked(now, company, server.options.ai_enabled)))
+      }
       return json(item)
+    }
+    if (path === '/api/v1/companies/search') {
+      // Each word as typed, spaces aside: "North Wind" finds Northwind Sample Pty Ltd.
+      const q = (url.searchParams.get('q') ?? '').toLowerCase().replace(/\s+/g, '')
+      return json({
+        people: [],
+        companies: COMPANIES.filter((one) => one.name.toLowerCase().replace(/\s+/g, '').includes(q))
+          .slice(0, 4)
+          .map((one) => ({ ...one, source: 'hubspot' })),
+      })
+    }
+    if (path === '/api/v1/companies') {
+      return json({
+        items: COMPANIES.map((one) => ({
+          ...one,
+          staff: null,
+          source: 'hubspot',
+          domain: null,
+          website: null,
+          state: null,
+          owner: null,
+          last_talk: null,
+          deal: null,
+          lead: null,
+        })),
+        total: COMPANIES.length,
+        leads_shown: false,
+      })
     }
     return json({ title: 'Not found', status: 404, detail: 'Not here.' }, 404)
   }
@@ -275,9 +393,160 @@ describe.each([
         'Spoke to Jo about the Perth lease. She wants a floor plan by Friday.',
       ),
     ).toBeInTheDocument()
+    expect(within(north).getByRole('button', { name: 'Pick company' })).toBeInTheDocument()
     expect(within(north).getByRole('button', { name: 'Remove' })).toBeInTheDocument()
     const mines = within(needs).getByRole('article', { name: '"Sample Mines" as heard' })
     expect(within(mines).getByText('10 Nov 2026, 1:00 pm · Left voicemail')).toBeInTheDocument()
+  })
+
+  it('a pick searches for the name as heard, and the call moves to To confirm once it is sorted', async () => {
+    size()
+    const server = mockServer()
+    const { user } = renderCallLogs()
+    const needs = await group()
+    const north = await within(needs).findByRole('article', { name: '"North Wind" as heard' })
+    // By keyboard, as the rest of Call logs works.
+    within(north).getByRole('button', { name: 'Pick company' }).focus()
+    await user.keyboard('{Enter}')
+
+    // Log call's search, titled for the pick, already holding the name as heard.
+    const panel = await screen.findByRole('dialog', { name: 'Pick company' })
+    expect(panel).toHaveAccessibleDescription(
+      'Heard as "North Wind". Which company was the call with?',
+    )
+    const search = within(panel).getByRole('combobox', {
+      name: 'Which company was the call with?',
+    })
+    expect(search).toHaveValue('North Wind')
+    expect(search).toHaveFocus()
+    expect(
+      await within(panel).findByRole('option', { name: /Northwind Sample Pty Ltd/ }),
+    ).toBeInTheDocument()
+    await user.keyboard('{Enter}')
+
+    // Sent once, with the company alone.
+    await waitFor(() => {
+      expect(sent(server, 'PATCH', `${NOTES}/h1`)).toHaveLength(1)
+    })
+    expect(sent(server, 'PATCH', `${NOTES}/h1`)[0]?.body).toEqual({ company_key: '107' })
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Pick company' })).toBeNull()
+    })
+    // It left the group at once, the count moved, and the next call has the focus.
+    await waitFor(() => {
+      expect(rowNames(needs)).toEqual(['"Sample Mines" as heard'])
+    })
+    expect(within(needs).getByRole('heading', { level: 2 })).toHaveTextContent('Needs a company 1')
+    await waitFor(() => {
+      expect(
+        within(needs)
+          .getByRole('article', { name: '"Sample Mines" as heard' })
+          .querySelector('[data-row-action]'),
+      ).toHaveFocus()
+    })
+    expect(
+      await screen.findByText('The call with Northwind Sample Pty Ltd is in To confirm.'),
+    ).toBeInTheDocument()
+
+    // In To confirm: sorted first, as a new call is, then there to check and send.
+    const list = await screen.findByRole('list', { name: 'Calls to confirm' })
+    const card = await within(list).findByRole('article', { name: 'Northwind Sample Pty Ltd' })
+    expect(within(card).getByText('Sorting the note.')).toBeInTheDocument()
+    expect(
+      await within(card).findByText(
+        'Jo says the Perth lease now ends in June 2028.',
+        {},
+        { timeout: 5000 },
+      ),
+    ).toBeInTheDocument()
+    expect(within(card).queryByText('Sorting the note.')).toBeNull()
+    expect(screen.getByRole('tab', { name: /^To confirm/ })).toHaveTextContent('To confirm 2')
+  }, 15_000)
+
+  it('Esc closes the search, sends nothing, and puts the focus back on the call', async () => {
+    size()
+    const server = mockServer()
+    const { user } = renderCallLogs()
+    const needs = await group()
+    const north = await within(needs).findByRole('article', { name: '"North Wind" as heard' })
+    const pick = within(north).getByRole('button', { name: 'Pick company' })
+    await user.click(pick)
+    const panel = await screen.findByRole('dialog', { name: 'Pick company' })
+    // The name heard is chosen, so typing replaces it, and the search follows.
+    await user.keyboard('sample min')
+    expect(
+      within(panel).getByRole('combobox', { name: 'Which company was the call with?' }),
+    ).toHaveValue('sample min')
+    expect(
+      await within(panel).findByRole('option', { name: /Sample Mining Pty Ltd/ }),
+    ).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Pick company' })).toBeNull()
+    })
+    await waitFor(() => {
+      expect(pick).toHaveFocus()
+    })
+    expect(sent(server, 'PATCH', `${NOTES}/h1`)).toEqual([])
+    expect(rowNames(needs)).toHaveLength(2)
+  })
+
+  it('the last call picked takes the group away, and the focus goes to the tabs', async () => {
+    size()
+    mockServer({ notes: [heard('h1', 'North Wind'), call('n1')] })
+    const { user } = renderCallLogs()
+    const needs = await group()
+    const north = await within(needs).findByRole('article', { name: '"North Wind" as heard' })
+    await user.click(within(north).getByRole('button', { name: 'Pick company' }))
+    const panel = await screen.findByRole('dialog', { name: 'Pick company' })
+    await user.click(await within(panel).findByRole('option', { name: /Northwind Sample/ }))
+    await waitFor(() => {
+      expect(screen.queryByRole('region', { name: /^Needs a company/ })).toBeNull()
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /^To confirm/ })).toHaveFocus()
+    })
+  })
+
+  it("brings the call back when the server refuses the company, and says why in the server's words", async () => {
+    size()
+    const server = mockServer({ hidden: ['107'] })
+    const { user } = renderCallLogs()
+    const needs = await group()
+    const north = await within(needs).findByRole('article', { name: '"North Wind" as heard' })
+    await user.click(within(north).getByRole('button', { name: 'Pick company' }))
+    const panel = await screen.findByRole('dialog', { name: 'Pick company' })
+    await user.click(await within(panel).findByRole('option', { name: /Northwind Sample/ }))
+    const shown = (await screen.findByText("The company wasn't picked")).closest(
+      '[data-sonner-toast]',
+    )
+    if (!(shown instanceof HTMLElement)) throw new Error('No toast')
+    expect(within(shown).getByText(NOT_OPEN)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(rowNames(needs)).toEqual(['"North Wind" as heard', '"Sample Mines" as heard'])
+    })
+    expect(within(needs).getByRole('heading', { level: 2 })).toHaveTextContent('Needs a company 2')
+    expect(sent(server, 'PATCH', `${NOTES}/h1`)).toHaveLength(1)
+  })
+
+  it('reads the call again when the server has its company already, with no error', async () => {
+    size()
+    // Picked in another tab a moment before: the server answers 409 `company_set`.
+    const server = mockServer({ pickedElsewhere: { h1: '107' } })
+    const { user } = renderCallLogs()
+    const needs = await group()
+    const north = await within(needs).findByRole('article', { name: '"North Wind" as heard' })
+    await user.click(within(north).getByRole('button', { name: 'Pick company' }))
+    const panel = await screen.findByRole('dialog', { name: 'Pick company' })
+    await user.click(await within(panel).findByRole('option', { name: /Northwind Sample/ }))
+    expect(
+      await screen.findByText('The call with Northwind Sample Pty Ltd is in To confirm.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText("The company wasn't picked")).toBeNull()
+    expect(sent(server, 'GET', `${NOTES}/h1`)).toHaveLength(1)
+    await waitFor(() => {
+      expect(rowNames(needs)).toEqual(['"Sample Mines" as heard'])
+    })
   })
 
   it('is not there when no call needs a company', async () => {

@@ -33,6 +33,13 @@ export interface LogTarget {
 export type LogCallState =
   { from: 'picker'; picked: LogTarget | null } | { from: 'direct'; target: LogTarget }
 
+/**
+ * The panel from the right, 576px wide, or the whole screen on a phone, sliding in on `smooth` and
+ * out in 150ms: Log call's, and Pick company's (`pick-company.tsx`, PLAN-V24 T3-3).
+ */
+export const SIDE_PANEL =
+  'w-full max-w-full gap-0 p-0 outline-none data-[side=right]:w-full data-[side=right]:sm:max-w-xl data-open:duration-(--duration-smooth) data-open:ease-(--spring-smooth) data-closed:duration-(--duration-exit)'
+
 export function LogCallButton({ onOpen }: { onOpen: () => void }) {
   return (
     <Button type="button" variant="outline" data-slot="log-call" onClick={onOpen}>
@@ -118,7 +125,7 @@ export function LogCallSheet({
       <SheetContent
         ref={panel}
         side="right"
-        className="w-full max-w-full gap-0 p-0 outline-none data-[side=right]:w-full data-[side=right]:sm:max-w-xl data-open:duration-(--duration-smooth) data-open:ease-(--spring-smooth) data-closed:duration-(--duration-exit)"
+        className={SIDE_PANEL}
         onInteractOutside={(event) => {
           event.preventDefault()
         }}
