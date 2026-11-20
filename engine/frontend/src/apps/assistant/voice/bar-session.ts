@@ -25,6 +25,24 @@
  *   the bar opened (`setNames`).
  * - **Unclear words** (PLAN-V23 T1-6): the answer `unclear` stops before the card. The words wait
  *   in the text line, with the stop line and "Say it again".
+ *
+ * PLAN-V24 Part 2, **a long conversation** (`conversation`, from "Keep listening"):
+ *
+ * - **One mic for the whole conversation** (choice 5): a tap of V starts it, and the mic, the bars
+ *   and the voice tool run until it ends. Each turn is handed over (`MicSession.handOver`), and the
+ *   next starts at once, with no check and no second mic.
+ * - **A turn ends after a pause** (choice 8), or at 2 minutes (choice 9, TBC). Over the server's
+ *   2,000 characters, the words wait in the text line with the plan's line, and listening stops.
+ * - **Turns are read in order** (choice 12): a turn said while the last is worked out waits for it.
+ *   What each answer does is `handOver`'s, as with one command. A page opens and the conversation
+ *   goes on; a card that can't hear the conversation (`cardOpen`) ends it, as one command did.
+ * - **The code reads some turns itself** (choices 10, 11): "stop listening" or "that's all" ends
+ *   the conversation and sends nothing, and fewer than 2 real words are dropped quietly.
+ * - **It ends** on V or Stop (the turn in progress goes first), "stop listening" or "that's all",
+ *   or 2 minutes with no words (TBC: "Stopped listening after 2 minutes of quiet.", with Start
+ *   again). Turns already said are still worked out. Esc throws away the turn and everything still
+ *   on its way, and closes the bar, as it did. A problem ends it too, with its words and buttons.
+ * - **Hold V is one turn** (choice 7): held, it is today's one command, up to 2 minutes.
  */
 import { isAbort, toApiProblem } from '@/api/client'
 import type {
@@ -45,6 +63,7 @@ import type { NameFix } from '@/apps/companies/call-notes/mic/name-fix'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import type { MicProblem } from '@/apps/companies/call-notes/mic/words'
 import type { AfterAnswer, Heard } from './hand-over'
+import { endsConversation, isShortTurn } from './turns'
 
 export const TIMES = {
   /** No new words for this long ends the talk (PLAN-V22 T3-1: about 1.5 seconds, S1 may change it). */
@@ -55,6 +74,12 @@ export const TIMES = {
   limit: 60_000,
   /** V still down this long is a hold: letting go ends the talk (PLAN-V23 choice 6, TBC). */
   hold: 400,
+  /** A conversation's turn ends after this pause (PLAN-V24 choice 8, TBC at S1). */
+  pause: 1200,
+  /** The longest turn of a conversation, and of a held V while it keeps listening (choice 9, TBC). */
+  turn: 120_000,
+  /** No words this long ends a conversation: the quiet stop (choice 10, TBC). */
+  quiet: 120_000,
 }
 
 export type Times = typeof TIMES
@@ -90,12 +115,28 @@ export type BarProblem =
    * words wait in the text line.
    */
   | { kind: 'unclear'; line: string }
+  /** A conversation heard no words for 2 minutes and stopped (PLAN-V24 choice 10). */
+  | { kind: 'quiet' }
+  /** The words are over the server's 2,000 characters: they wait in the text line (choice 9). */
+  | { kind: 'too_long' }
 
 export interface ShownAnswer {
   line: string
   unsure: string | null
   /** Offer Try again: the command step didn't find an action in the words. */
   again: boolean
+}
+
+/** A conversation while it listens (PLAN-V24 Part 2). */
+export interface ConversationSnapshot {
+  /** The words of the turn the command step is working out, or null. */
+  working: string | null
+  /** Turns said since, waiting for it (choice 12). */
+  waiting: number
+  /** What the conversation said last, like a read-back: shown until the next one. */
+  line: string | null
+  /** How many turns it has taken: the examples of what to say are for the first only. */
+  turns: number
 }
 
 export interface BarSnapshot {
@@ -112,11 +153,21 @@ export interface BarSnapshot {
   voice: boolean
   /** Names the mic heard nearly right and the name fix put right, kept once the talk is over. */
   fixes: readonly NameFix[]
+  /** The conversation, while one listens (PLAN-V24 Part 2). Null: one command per V. */
+  conversation: ConversationSnapshot | null
 }
+
+/** The review card open now: one that hears the conversation, another kind, or none. */
+export type CardShown = 'hears' | 'other' | null
 
 export interface BarSessionOptions {
   /** What is on screen, for a command that names no company. */
   onPage?: AssistantOnPage | null
+  /**
+   * What is on screen now, read at each turn of a conversation, which may cross pages. Left out:
+   * `onPage`, as the bar opened.
+   */
+  where?: () => AssistantOnPage | null
   /** The names on screen and the hint list's, for the name fix. */
   names?: readonly string[]
   /** The hint list, for the speech service (on-device mode only, PLAN-V23 T1-5). */
@@ -133,6 +184,13 @@ export interface BarSessionOptions {
    * names of its boxes go with the words, so the command step answers change, send or cancel.
    */
   card?: AssistantCardIn | null
+  /**
+   * "Keep listening" (PLAN-V24 choice 6): a V starts a conversation that listens across commands.
+   * Left out or false: one command per V, as before.
+   */
+  conversation?: boolean
+  /** The review card open now. A card that can't hear the conversation ends it. */
+  cardOpen?: () => CardShown
   /** The bar is done with: it closes. */
   onClose: () => void
   /** For tests: the browser, the voice tool and the clock's waits. */
@@ -150,7 +208,10 @@ const STARTING: BarSnapshot = {
   answer: null,
   voice: true,
   fixes: [],
+  conversation: null,
 }
+
+const NEW_CONVERSATION: ConversationSnapshot = { working: null, waiting: 0, line: null, turns: 0 }
 
 /** The words alone, for telling new words from the same words written out ("Log a call."). */
 function wordsOf(text: string): string {
@@ -160,20 +221,35 @@ function wordsOf(text: string): string {
     .trim()
 }
 
-type TimerName = 'silence' | 'first' | 'limit'
+type TimerName = 'silence' | 'first' | 'limit' | 'turn' | 'quiet'
 type Listener = () => void
 
 /** The V that started listening: not down, down for less than the hold, or held. */
 type Hold = 'none' | 'down' | 'held'
 
+/** A turn of a conversation, or a command typed while its turns are still worked out. */
+interface Turn {
+  text: string
+  source: CommandSource
+}
+
+/**
+ * After a conversation stops listening, the turns already said are still worked out: in the bar
+ * (`shown`: after V, Stop or "that's all", the last answer shows as one command's did), or behind
+ * another view (`quiet`: a problem or the text line, which stays; a card or a page still opens).
+ */
+type Drain = 'shown' | 'quiet'
+
 export class BarSession {
   private readonly onPage: AssistantOnPage | null
+  private readonly where: (() => AssistantOnPage | null) | null
   private readonly card: AssistantCardIn | null
   private names: readonly string[]
   private hints: readonly string[]
   private readonly read: BarSessionOptions['read']
   private readonly hand: BarSessionOptions['hand']
   private readonly onClose: () => void
+  private readonly cardOpen: () => CardShown
   private readonly env: MicEnv
   private readonly makeTool: VoiceToolMaker | null | undefined
   private readonly times: Times
@@ -184,8 +260,11 @@ export class BarSession {
   private readonly timers = new Map<TimerName, number>()
   /** The words heard so far, as `wordsOf` gives them: a change is a new word. */
   private heardWords = ''
-  /** The talk is over, and the last words are on their way. */
-  private finishing = false
+  /**
+   * The talk is over, and the last words are on their way: as one command's talk (`talk`), or as
+   * a conversation's last turn (`stop`).
+   */
+  private finishing: 'talk' | 'stop' | null = null
   /** The mic whose words are due a look, once the tool's updates of this moment are all in. */
   private lookingAt: MicSession | null = null
   private request: AbortController | null = null
@@ -194,14 +273,32 @@ export class BarSession {
   private hold: Hold = 'none'
   private holdTimer = 0
 
+  // --- A conversation (PLAN-V24 Part 2) ---------------------------------------------------------
+
+  /** "Keep listening": each listening is a conversation, unless V is held. */
+  readonly keepsListening: boolean
+  /** The conversation listens now: the mic stays on across turns. */
+  private live = false
+  /** Turns said and not yet worked out, in order (choice 12). */
+  private queue: Turn[] = []
+  /** A turn is with the command step, or its answer is still settling. */
+  private busy = false
+  private turnRequest: AbortController | null = null
+  private drain: Drain = 'shown'
+  /** The last words the command step found unclear: Type instead offers them. */
+  private lastUnclear = ''
+
   constructor(options: BarSessionOptions) {
     this.onPage = options.onPage ?? null
+    this.where = options.where ?? null
     this.card = options.card ?? null
     this.names = options.names ?? []
     this.hints = options.hints ?? []
     this.read = options.read
     this.hand = options.hand
     this.onClose = options.onClose
+    this.cardOpen = options.cardOpen ?? (() => null)
+    this.keepsListening = options.conversation === true
     this.env = options.env ?? browserEnv()
     this.makeTool = options.makeTool
     this.times = { ...TIMES, ...options.times }
@@ -221,6 +318,17 @@ export class BarSession {
   private set(change: Partial<BarSnapshot>): void {
     this.snapshot = { ...this.snapshot, ...change }
     for (const listener of this.listeners) listener()
+  }
+
+  /** The conversation's part of the snapshot, while it listens. */
+  private setConversation(change: Partial<ConversationSnapshot>): void {
+    const now = this.snapshot.conversation
+    if (now) this.set({ conversation: { ...now, ...change } })
+  }
+
+  /** True while a conversation listens. */
+  isLive(): boolean {
+    return this.live
   }
 
   // --- What the bar asks ------------------------------------------------------------------------
@@ -254,7 +362,10 @@ export class BarSession {
     this.listen()
   }
 
-  /** Listens, from the start: the mic check, then the words. */
+  /**
+   * Listens, from the start: the mic check, then the words. With "Keep listening", a conversation;
+   * turns of an earlier one that are still worked out go on, and come first.
+   */
   listen(): void {
     this.stopListening()
     this.abortRequest()
@@ -268,22 +379,35 @@ export class BarSession {
     })
     this.mic = mic
     this.heardWords = ''
+    this.lastUnclear = ''
+    this.live = this.keepsListening
     this.unsubscribe = mic.subscribe(() => {
       this.onMic(mic)
     })
-    this.set({ ...STARTING, mic: mic.getSnapshot() })
+    this.set({
+      ...STARTING,
+      mic: mic.getSnapshot(),
+      conversation: this.live ? { ...NEW_CONVERSATION, waiting: this.queue.length } : null,
+    })
     mic.start()
   }
 
-  /** V or Done while listening: the talk is over, and the words go to the command step. */
+  /**
+   * V or Done while listening: the talk is over, and the words go to the command step. In a
+   * conversation, V or Stop ends it: the turn in progress goes first.
+   */
   done(): void {
     const { phase } = this.snapshot
     const mic = this.mic
     if ((phase !== 'starting' && phase !== 'listening') || !mic) return
     this.clearTimers()
+    if (this.live) {
+      this.stop(mic)
+      return
+    }
     if (mic.getSnapshot().phase === 'listening' && mic.text().trim() !== '') {
       // The tool writes out its last words first ("Working it out" meanwhile).
-      this.finishing = true
+      this.finishing = 'talk'
       this.set({ phase: 'working', words: mic.text() })
       mic.finish()
       return
@@ -297,11 +421,17 @@ export class BarSession {
     this.onClose()
   }
 
-  /** Type instead (or Carry on): the mic stops, and the words so far go in the text line. */
+  /**
+   * Type instead (or Carry on): the mic stops, and the words so far go in the text line. In a
+   * conversation with no words in progress, the last words found unclear go there. Turns already
+   * said are still worked out, behind the text line.
+   */
   typeInstead(): void {
     if (this.snapshot.phase === 'typing') return
-    const said = this.mic ? this.mic.text() : this.snapshot.words
+    const heard = this.mic?.text() ?? ''
+    const said = this.mic ? (heard.trim() !== '' ? heard : this.lastUnclear) : this.snapshot.words
     this.keepFixes()
+    this.drain = 'quiet'
     this.stopListening()
     this.abortRequest()
     this.set({
@@ -310,18 +440,32 @@ export class BarSession {
       draft: said.slice(0, MAX_CHARS),
       problem: null,
       answer: null,
+      conversation: null,
     })
   }
 
+  /**
+   * The text line changed. It holds the longest command the server takes, but for words that came
+   * in longer (choice 9): they stay whole, to be shortened.
+   */
   setDraft(text: string): void {
-    this.set({ draft: text.slice(0, MAX_CHARS) })
+    this.set({ draft: text.slice(0, Math.max(MAX_CHARS, this.snapshot.draft.length)) })
   }
 
-  /** Enter in the text line. An empty line sends nothing. */
+  /**
+   * Enter in the text line. An empty line sends nothing, nor one over the server's limit. While a
+   * conversation's turns are still worked out, it waits for them.
+   */
   sendTyped(): void {
     if (this.snapshot.phase !== 'typing') return
     const text = this.snapshot.draft.trim()
-    if (text === '') return
+    if (text === '' || text.length > MAX_CHARS) return
+    if (this.busy || this.queue.length > 0) {
+      this.drain = 'shown'
+      this.queue.push({ text, source: 'typed' })
+      this.set({ phase: 'working', mic: null, words: text, problem: null, answer: null })
+      return
+    }
     this.send(text, 'typed')
   }
 
@@ -339,8 +483,8 @@ export class BarSession {
   }
 
   /**
-   * A plain V while the bar is open: while it listens, the talk is over; while it shows a problem
-   * or a line, it listens again. True when V did something.
+   * A plain V while the bar is open: while it listens, the talk is over (in a conversation, it
+   * ends); while it shows a problem or a line, it listens again. True when V did something.
    */
   pressV(): boolean {
     const { phase, voice } = this.snapshot
@@ -371,13 +515,18 @@ export class BarSession {
     window.clearTimeout(this.holdTimer)
     this.stopListening()
     this.abortRequest()
+    this.queue = []
+    this.busy = false
+    this.turnRequest?.abort()
+    this.turnRequest = null
   }
 
   // --- Hold V (PLAN-V23 choice 6) -----------------------------------------------------------------
 
   /**
    * V went down, and started (or is) the listening: held past `times.hold`, it is a hold, and no
-   * silence ends the talk while it is. Anywhere else, nothing.
+   * silence ends the talk while it is. In a conversation, a hold is one turn (PLAN-V24 choice 7).
+   * Anywhere else, nothing.
    */
   vDown(): void {
     const { phase } = this.snapshot
@@ -389,6 +538,7 @@ export class BarSession {
       this.hold = 'held'
       this.clear('silence')
       this.clear('first')
+      if (this.live) this.oneTurn()
     }, this.times.hold)
   }
 
@@ -398,6 +548,22 @@ export class BarSession {
     const held = this.hold === 'held'
     this.hold = 'none'
     if (held) this.done()
+  }
+
+  /**
+   * V held as a conversation starts (choice 7): this listening is one turn, as before PLAN-V24.
+   * Letting go ends it and lets the mic go, up to the 2 minutes of a turn.
+   */
+  private oneTurn(): void {
+    this.live = false
+    this.clear('quiet')
+    this.clear('turn')
+    if (this.snapshot.phase === 'listening') {
+      this.restart('limit', this.times.turn, () => {
+        this.done()
+      })
+    }
+    this.set({ conversation: null })
   }
 
   // --- The mic ----------------------------------------------------------------------------------
@@ -411,22 +577,30 @@ export class BarSession {
       return
     }
     if (this.finishing) {
-      if (snap.phase === 'done') this.talkOver()
-      else this.set({ mic: snap })
+      if (snap.phase !== 'done') this.set({ mic: snap })
+      else if (this.finishing === 'stop') this.lastTurn()
+      else this.talkOver()
       return
     }
     if (this.snapshot.phase === 'starting' && snap.steps.allowed === 'pass') {
       // The mic is open and the tool listens: the words count from now. While V is held, only
       // letting go ends the talk.
       this.set({ phase: 'listening', mic: snap })
-      if (this.hold !== 'held') {
-        this.restart('first', this.times.firstWords, () => {
+      if (this.live) {
+        // A conversation: no first-words wait, only the quiet stop (choice 10).
+        this.restart('quiet', this.times.quiet, () => {
+          this.quietStop()
+        })
+      } else {
+        if (this.hold !== 'held') {
+          this.restart('first', this.times.firstWords, () => {
+            this.done()
+          })
+        }
+        this.restart('limit', this.keepsListening ? this.times.turn : this.times.limit, () => {
           this.done()
         })
       }
-      this.restart('limit', this.times.limit, () => {
-        this.done()
-      })
     } else {
       this.set({ mic: snap })
     }
@@ -448,12 +622,30 @@ export class BarSession {
     })
   }
 
-  /** New words: the talk goes on, and the silence counts from now (not while V is held). */
+  /**
+   * New words: the talk goes on, and the silence counts from now (not while V is held). In a
+   * conversation, the turn ends after a pause, the quiet stop counts from now, and a turn's 2
+   * minutes from its first word.
+   */
   private heard(text: string): void {
     const words = wordsOf(text)
     if (words === '' || words === this.heardWords) return
     this.heardWords = words
     this.clear('first')
+    if (this.live) {
+      this.restart('quiet', this.times.quiet, () => {
+        this.quietStop()
+      })
+      if (!this.timers.has('turn')) {
+        this.restart('turn', this.times.turn, () => {
+          this.endTurn()
+        })
+      }
+      this.restart('silence', this.times.pause, () => {
+        this.endTurn()
+      })
+      return
+    }
     if (this.hold === 'held') return
     this.restart('silence', this.times.silence, () => {
       this.done()
@@ -469,6 +661,10 @@ export class BarSession {
       this.set({ phase: 'problem', mic: null, words: '', problem: { kind: 'nothing_heard' } })
       return
     }
+    if (text.length > MAX_CHARS) {
+      this.tooLong(text)
+      return
+    }
     this.send(text, 'mic')
   }
 
@@ -482,32 +678,296 @@ export class BarSession {
    * The mic can't go on. Words said so far are kept, with the problem and its buttons. With no
    * words, the bar opens on the text line and says why, but for a mic another app holds: muted
    * there, it works again, so Try again comes first, with Type instead beside it (PLAN-V24 T1-4).
+   * A conversation's turns already said are still worked out, behind the problem.
    */
   private micFailed(problem: MicProblem): void {
     const said = (this.mic?.text() ?? '').trim()
     this.keepFixes()
+    this.drain = 'quiet'
     this.stopListening()
     if (said === '' && problem === 'busy') {
-      this.set({ phase: 'problem', mic: null, words: '', problem: { kind: 'mic', problem } })
+      this.set({
+        phase: 'problem',
+        mic: null,
+        words: '',
+        problem: { kind: 'mic', problem },
+        conversation: null,
+      })
       return
     }
     if (said === '') {
-      this.set({ phase: 'typing', mic: null, draft: '', problem: { kind: 'mic', problem } })
+      this.set({
+        phase: 'typing',
+        mic: null,
+        draft: '',
+        problem: { kind: 'mic', problem },
+        conversation: null,
+      })
       return
     }
     // Words came, so the mic worked: one gone now (unplugged, or taken) has stopped. The mic
     // card's check calls it "no mic" while its own check runs, which may still be the case here.
     const shown: MicProblem = problem === 'no_mic' ? 'cut_off' : problem
-    this.set({ phase: 'problem', mic: null, words: said, problem: { kind: 'mic', problem: shown } })
+    this.set({
+      phase: 'problem',
+      mic: null,
+      words: said,
+      problem: { kind: 'mic', problem: shown },
+      conversation: null,
+    })
   }
 
+  /** The mic is let go, and every wait with it. A conversation stops listening. */
   private stopListening(): void {
     this.clearTimers()
-    this.finishing = false
+    this.finishing = null
+    this.live = false
     this.unsubscribe?.()
     this.unsubscribe = null
     this.mic?.close()
     this.mic = null
+  }
+
+  /**
+   * Words over the server's limit wait in the text line, to shorten (choice 9). A conversation's
+   * turns already said are still worked out, behind it.
+   */
+  private tooLong(text: string): void {
+    this.drain = 'quiet'
+    this.stopListening()
+    this.set({
+      phase: 'typing',
+      mic: null,
+      draft: text,
+      problem: { kind: 'too_long' },
+      answer: null,
+      conversation: null,
+    })
+  }
+
+  // --- A conversation's turns (PLAN-V24 Part 2) ---------------------------------------------------
+
+  /** A pause, or a turn's 2 minutes: the turn goes, and the mic listens on. */
+  private endTurn(): void {
+    const mic = this.mic
+    if (!mic || !this.live) return
+    this.clear('silence')
+    this.clear('turn')
+    const { text } = mic.handOver()
+    this.heardWords = ''
+    this.take({ text: text.trim(), source: 'mic' })
+  }
+
+  /** A turn is said: the code reads the end words itself, and the rest waits its turn. */
+  private take(turn: Turn): void {
+    if (turn.text === '') return
+    this.setConversation({ turns: (this.snapshot.conversation?.turns ?? 0) + 1 })
+    if (endsConversation(turn.text)) {
+      // "Stop listening", "that's all": nothing is sent, and the mic stops at once (choice 10).
+      if (this.live) this.stopConversation()
+      return
+    }
+    this.queue.push(turn)
+    this.setConversation({ waiting: this.queue.length })
+    this.next()
+  }
+
+  /**
+   * V or Stop in a conversation: the turn in progress is the last (once the tool has written it
+   * out), then the conversation is over. Turns already said are still worked out, in the bar.
+   */
+  private stop(mic: MicSession): void {
+    this.live = false
+    this.drain = 'shown'
+    const said = mic.getSnapshot().phase === 'listening' ? mic.text().trim() : ''
+    if (said !== '') {
+      this.finishing = 'stop'
+      this.set({ phase: 'working', words: said, conversation: null })
+      mic.finish()
+      return
+    }
+    this.lastTurn()
+  }
+
+  /** The conversation's last words are in: the mic is let go, and they take their turn. */
+  private lastTurn(): void {
+    const text = (this.mic?.text() ?? '').trim()
+    this.keepFixes()
+    // "That's all" said last sends nothing either.
+    const said = text !== '' && !endsConversation(text)
+    if (said) this.queue.push({ text, source: 'mic' })
+    this.stopConversation(said)
+  }
+
+  /**
+   * The conversation stops listening (V, Stop, "that's all"): the mic is let go, and the turns
+   * already said are worked out in the bar. With none, the bar closes, or says it heard nothing.
+   */
+  private stopConversation(said = false): void {
+    const heardAny = said || (this.snapshot.conversation?.turns ?? 0) > 0
+    const working = this.busy ? (this.snapshot.conversation?.working ?? '') : null
+    this.drain = 'shown'
+    this.stopListening()
+    if (this.busy || this.queue.length > 0) {
+      const head = working ?? this.queue[0]?.text ?? ''
+      this.set({ phase: 'working', mic: null, words: head, conversation: null })
+      this.next()
+      return
+    }
+    this.finishShown(heardAny)
+  }
+
+  /** Everything said is worked out: the bar closes, or says it heard nothing at all. */
+  private finishShown(heardAny: boolean): void {
+    if (heardAny) {
+      this.cancel()
+      return
+    }
+    this.set({
+      phase: 'problem',
+      mic: null,
+      words: '',
+      problem: { kind: 'nothing_heard' },
+      conversation: null,
+    })
+  }
+
+  /** No words for 2 minutes (choice 10): the conversation stops, with Start again. */
+  private quietStop(): void {
+    if (!this.live) return
+    this.drain = 'quiet'
+    this.stopListening()
+    this.set({
+      phase: 'problem',
+      mic: null,
+      words: '',
+      problem: { kind: 'quiet' },
+      conversation: null,
+    })
+  }
+
+  /** The next turn, once the last is worked out. Fewer than 2 real words are dropped quietly. */
+  private next(): void {
+    if (this.busy || this.over) return
+    const turn = this.queue.shift()
+    if (!turn) {
+      this.idle()
+      return
+    }
+    this.setConversation({ waiting: this.queue.length })
+    if (turn.source === 'mic' && isShortTurn(turn.text)) {
+      // A cough or an "um" never asks the AI (choice 11).
+      this.next()
+      return
+    }
+    if (turn.text.length > MAX_CHARS) {
+      this.tooLong(turn.text)
+      this.next()
+      return
+    }
+    this.ask(turn)
+  }
+
+  /** Nothing is waiting. A conversation that has stopped, in the bar, is over. */
+  private idle(): void {
+    if (this.live) {
+      this.setConversation({ working: null, waiting: 0 })
+      return
+    }
+    if (this.drain === 'shown' && this.snapshot.phase === 'working') this.finishShown(true)
+  }
+
+  /** A turn goes to the command step, with what is on screen now. */
+  private ask(turn: Turn): void {
+    this.busy = true
+    const request = new AbortController()
+    this.turnRequest = request
+    if (this.live) {
+      this.setConversation({ working: turn.text })
+    } else if (this.drain === 'shown') {
+      this.set({ phase: 'working', mic: null, words: turn.text, problem: null, answer: null })
+    }
+    const onPage = this.where ? this.where() : this.onPage
+    const body: AssistantCommandIn = {
+      text: turn.text,
+      source: turn.source,
+      ...(onPage ? { on_page: onPage } : {}),
+    }
+    this.read(body, request.signal).then(
+      (command) => {
+        if (this.turnRequest !== request || this.over) return
+        this.turnRequest = null
+        this.turnAnswered({ kind: 'command', command, words: turn.text, source: turn.source })
+      },
+      (error: unknown) => {
+        if (this.turnRequest !== request || this.over || isAbort(error)) return
+        this.turnRequest = null
+        this.turnFailed(error, turn)
+      },
+    )
+  }
+
+  private turnAnswered(heard: Heard): void {
+    const after = this.hand(heard)
+    if (after instanceof Promise) {
+      // A pre-read starting first: the turns wait for it.
+      const request = new AbortController()
+      this.turnRequest = request
+      void after.then((settled) => {
+        if (this.turnRequest !== request || this.over) return
+        this.turnRequest = null
+        this.turnSettled(settled)
+      })
+      return
+    }
+    this.turnSettled(after)
+  }
+
+  /**
+   * A turn's answer has gone where it belongs. While the conversation listens, a line shows and
+   * it goes on; a card that can't hear it ends it, as one command did. After it stopped, the last
+   * answer shows as one command's would.
+   */
+  private turnSettled(after: AfterAnswer): void {
+    this.busy = false
+    if (this.live) {
+      this.setConversation({ working: null })
+      if (after.kind === 'close' && this.cardOpen() !== null) {
+        this.stopListening()
+        this.queue = []
+        this.settle(after)
+        return
+      }
+      if (after.kind === 'show') this.setConversation({ line: after.line })
+      else if (after.kind === 'unclear') {
+        this.lastUnclear = after.words
+        this.setConversation({ line: after.line })
+      }
+      this.next()
+      return
+    }
+    if (this.drain === 'shown' && this.queue.length === 0) {
+      this.settle(after)
+      return
+    }
+    this.next()
+  }
+
+  /**
+   * A turn the command step refused. Behind another view, nothing shows. Otherwise the
+   * conversation ends with the problem, as one command's did, and later turns are dropped.
+   */
+  private turnFailed(error: unknown, turn: Turn): void {
+    this.busy = false
+    if (!this.live && this.drain === 'quiet') {
+      this.next()
+      return
+    }
+    this.stopListening()
+    this.queue = []
+    this.source = turn.source
+    this.set({ phase: 'working', mic: null, words: turn.text, conversation: null })
+    this.failed(error, turn.text, turn.source)
   }
 
   // --- The command step -------------------------------------------------------------------------

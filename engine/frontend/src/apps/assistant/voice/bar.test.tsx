@@ -10,7 +10,7 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useLocation } from 'react-router'
 import type {
   AssistantCommand,
@@ -28,6 +28,7 @@ import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import VoiceBar from './bar'
 import type { Times } from './bar-session'
 import { closeCard } from '../card/store'
+import { setKeepListening } from './keep-listening'
 import { closeVoiceBar, isVoiceBarOpen, openVoiceBar, openVoiceBarByKey } from './store'
 import { setVKeyOn } from './v-switch'
 
@@ -156,12 +157,19 @@ async function listening() {
   return found
 }
 
+// One command per V, as these tests were written (PLAN-V24 T2-1: "Keep listening" off). The
+// conversation's own tests switch it back on.
+beforeEach(() => {
+  setKeepListening(false)
+})
+
 afterEach(() => {
   act(() => {
     closeVoiceBar()
     // A task's answer opens the review card (T3-3): it closes with the test.
     closeCard()
     setVKeyOn(true)
+    setKeepListening(true)
   })
 })
 
@@ -822,5 +830,119 @@ describe('unclear words (PLAN-V23 T1-6)', () => {
     await user.keyboard('um the north{Enter}')
     expect(await within(found).findByRole('alert')).toHaveTextContent(LINE)
     expect(within(found).queryByRole('button', { name: 'Say it again' })).toBeNull()
+  })
+})
+
+describe('a long conversation on screen (PLAN-V24 T2-1)', () => {
+  beforeEach(() => {
+    setKeepListening(true)
+  })
+
+  /** A short pause, so a turn ends in the test's own time. */
+  const TALK: Partial<Times> = { ...QUIET, pause: 30, quiet: 600_000 }
+
+  it('listens on after a command: Working it out with its words, then its line, and Stop (V) is the main button', async () => {
+    let answer: (made: AssistantCommand) => void = () => undefined
+    const { mic } = openBar({
+      times: TALK,
+      read: () =>
+        new Promise((resolve) => {
+          answer = resolve
+        }),
+    })
+    const found = await listening()
+    expect(buttons(found)).toEqual(['Type instead', 'Cancel', 'Stop'])
+    expect(within(found).getByRole('button', { name: /^Stop/ })).toHaveAttribute(
+      'aria-keyshortcuts',
+      'V',
+    )
+    act(() => {
+      mic.say(SAID)
+    })
+    await waitFor(() => {
+      expect(title(found)).toHaveTextContent('Working it out')
+    })
+    // The command being read stays, quieter, and the bars still show: the mic is on.
+    expect(found.querySelector('[data-slot=voice-working]')).toHaveTextContent(SAID)
+    expect(found.querySelector('[data-slot=frequency-bars]')).not.toBeNull()
+    expect(mic.live()).toBe(1)
+    act(() => {
+      answer(command({ action: 'unknown', read_back: 'The Assistant can open a page.' }))
+    })
+    await waitFor(() => {
+      expect(found.querySelector('[data-slot=voice-line]')).toHaveTextContent(
+        'The Assistant can open a page.',
+      )
+    })
+    expect(title(found)).toHaveTextContent('Listening')
+    // A screen reader hears the line once, in place of "Listening".
+    expect(screen.getByRole('status')).toHaveTextContent('The Assistant can open a page.')
+    expect(mic.live()).toBe(1)
+  })
+
+  it('Stop sends the command in progress, then stops listening', async () => {
+    // No pause ends the turn here: Stop does.
+    const { mic, commands, user } = openBar({
+      times: { ...TALK, pause: 600_000 },
+      answer: command({ action: 'unknown' }),
+    })
+    const found = await listening()
+    act(() => {
+      mic.say(SAID)
+    })
+    await user.click(within(found).getByRole('button', { name: /^Stop/ }))
+    await waitFor(() => {
+      expect(commands().map((call) => call.body)).toEqual([{ text: SAID, source: 'mic' }])
+    })
+    await waitFor(() => {
+      expect(found.querySelector('[data-slot=voice-answer]')).not.toBeNull()
+    })
+    expect(mic.live()).toBe(0)
+  })
+
+  it('the quiet stop: the plan’s line, said once, with Start again (V), and V listens again', async () => {
+    const { mic, user } = openBar({ times: { ...TALK, quiet: 40 } })
+    const found = await bar()
+    await waitFor(() => {
+      expect(found.querySelector('[data-slot=voice-problem]')).toHaveTextContent(
+        'Stopped listening after 2 minutes of quiet.',
+      )
+    })
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Stopped listening after 2 minutes of quiet.',
+    )
+    expect(mic.live()).toBe(0)
+    const again = within(found).getByRole('button', { name: /^Start again/ })
+    expect(again).toHaveAttribute('aria-keyshortcuts', 'V')
+    expect(buttons(found)).toEqual(['Close', 'Start again'])
+    await user.keyboard('v')
+    await listening()
+    expect(mic.live()).toBe(1)
+  })
+
+  it('words over 2,000 characters wait in the text line with the plan’s line, and Send waits for them to be shortened', async () => {
+    const { mic, commands, user } = openBar({ times: TALK })
+    const found = await listening()
+    const long = `Log a call with Jo Sample. ${'They want three floors. '.repeat(90)}`.trim()
+    act(() => {
+      mic.say(long)
+    })
+    expect(await within(found).findByRole('alert')).toHaveTextContent(
+      "That's too long for one command. Your words are in the text line: shorten them, then press Enter.",
+    )
+    const line = within(found).getByRole('textbox', { name: 'Type what to do' })
+    expect(line).toHaveValue(long)
+    expect(line).toHaveAccessibleDescription(
+      "That's too long for one command. Your words are in the text line: shorten them, then press Enter.",
+    )
+    expect(within(found).getByRole('button', { name: /^Send/ })).toBeDisabled()
+    await user.clear(line)
+    await user.type(line, 'Log a call with Jo Sample{Enter}')
+    await waitFor(() => {
+      expect(commands().map((call) => call.body)).toEqual([
+        { text: 'Log a call with Jo Sample', source: 'typed' },
+      ])
+    })
+    expect(mic.live()).toBe(0)
   })
 })

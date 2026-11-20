@@ -88,7 +88,15 @@ import {
   type Heard,
 } from '../voice/hand-over'
 import { isVKeyOn } from '../voice/v-switch'
-import { CANT_READ_YET, NOTHING_HEARD, TOO_MANY, TOO_SLOW, VOICE_NOT_SET_UP } from '../voice/words'
+import {
+  CANT_READ_YET,
+  NOTHING_HEARD,
+  QUIET_STOP,
+  TOO_LONG,
+  TOO_MANY,
+  TOO_SLOW,
+  VOICE_NOT_SET_UP,
+} from '../voice/words'
 import {
   applyChange,
   BOXES,
@@ -159,6 +167,7 @@ const IDLE: BarSnapshot = {
   answer: null,
   voice: true,
   fixes: [],
+  conversation: null,
 }
 const idleSnapshot = (): BarSnapshot => IDLE
 
@@ -179,6 +188,10 @@ function stripProblem(problem: BarProblem): string {
       return problem.title
     case 'unclear':
       return problem.line
+    case 'quiet':
+      return QUIET_STOP
+    case 'too_long':
+      return TOO_LONG
   }
 }
 

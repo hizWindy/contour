@@ -89,3 +89,22 @@ export const VOICE_NOT_SET_UP = "Speaking isn't available here yet."
  * commands is off, so nothing more happens with the words.
  */
 export const CANT_READ_YET = "The Assistant can't read commands yet."
+
+// --- A long conversation (PLAN-V24 Part 2; TBC at Al-khair's look) ---------------------------------
+
+/** The account menu's switch: one V listens across commands (choice 6, the plan's words). */
+export const KEEP_LISTENING = 'Keep listening'
+
+/** V or the button while a conversation listens: it ends, after the turn in progress. */
+export const STOP = 'Stop'
+
+/** After the first command, while the bar waits for the next (TBC). */
+export const NEXT_COMMAND = "Say the next command, or “that's all” to stop."
+
+/** The quiet stop (choice 10, the plan's words), with Start again (V). */
+export const QUIET_STOP = 'Stopped listening after 2 minutes of quiet.'
+export const START_AGAIN = 'Start again'
+
+/** A turn over the server's 2,000 characters (choice 9, the plan's words). */
+export const TOO_LONG =
+  "That's too long for one command. Your words are in the text line: shorten them, then press Enter."

@@ -28,6 +28,16 @@
  * - **Unclear words** (T1-6) stop here, before any card: the stop line, the words in the text line
  *   (Enter sends them), and "Say it again".
  * - **"Try saying"** (T4-3) names the first company of the hint list, or Acme until it is in.
+ *
+ * PLAN-V24 Part 2, **a long conversation** (while "Keep listening" is on, `keep-listening.ts`):
+ *
+ * - **One V, many commands.** The bar listens on after each command: "Working it out" while a
+ *   command is read, its line once it is answered, and the next words as they come. A page a
+ *   command opens opens under it, and what is on screen is read again for each command.
+ * - **Stop (V)** is its main button: the command in progress goes, then it stops listening. Esc
+ *   throws that command away and closes the bar, as before. "That's all" stops it too, and 2
+ *   minutes of quiet stops it with Start again (V).
+ * - **Words over 2,000 characters** wait in the text line, with the plan's line, to shorten.
  */
 import { CircleAlert, RotateCcw } from 'lucide-react'
 import { AnimatePresence, m } from 'motion/react'
@@ -70,9 +80,10 @@ import { Kbd } from '@/components/ui/kbd'
 import { isTyping } from '@/lib/is-typing'
 import { useBarRoom } from '@/lib/use-bar-room'
 import { CardHost } from '../card/host'
-import { openCard } from '../card/store'
+import { cardShownOf, openCard, openedCard } from '../card/store'
 import { BarSession, MAX_CHARS, type BarProblem, type BarSnapshot, type Times } from './bar-session'
 import { handOver } from './hand-over'
+import { isKeepListeningOn } from './keep-listening'
 import { isPlainV, somethingElseOpen, VOICE_BAR } from './keys'
 import { cachedNames, firstCompanyOf, fixNamesOf, hintsOf, namesOnPage } from './names'
 import { onPageOf, panelCompany } from './on-page'
@@ -85,11 +96,16 @@ import {
   CLOSE,
   DONE,
   LISTENING,
+  NEXT_COMMAND,
   NOTHING_HEARD,
   NOTHING_HEARD_TOUCH,
+  QUIET_STOP,
   sayExamples,
   SAY_IT_AGAIN,
   SEND,
+  START_AGAIN,
+  STOP,
+  TOO_LONG,
   TOO_MANY,
   TOO_SLOW,
   TRY_AGAIN,
@@ -147,6 +163,7 @@ const CLOSED: BarSnapshot = {
   answer: null,
   voice: true,
   fixes: [],
+  conversation: null,
 }
 
 /** A rep who may log a call now: the Call logs tick, not a Viewer, and call notes on. */
@@ -178,16 +195,25 @@ function titleOf(snapshot: BarSnapshot): string {
       return steps?.found === 'pass' ? STEP_WORDS.allowed.waiting : STEP_WORDS.found.waiting
     }
     case 'listening':
-      return LISTENING
+      // A conversation listens on while a command is read (PLAN-V24 T2-1).
+      return snapshot.conversation?.working ? WORKING : LISTENING
     case 'working':
       return WORKING
     case 'typing':
-      // Unclear words: the stop line says what to do, under the bar's name (T1-6).
-      return snapshot.problem?.kind === 'unclear' ? VOICE_BAR_NAME : TYPE_WHAT
+      // Words that wait in the text line: the line says what to do, under the bar's name (T1-6).
+      return waits(snapshot.problem) ? VOICE_BAR_NAME : TYPE_WHAT
     case 'problem':
     case 'answer':
       return VOICE_BAR_NAME
   }
+}
+
+/**
+ * Words that wait in the text line, under a line that says why: unclear words (PLAN-V23 T1-6), or
+ * words over the server's limit (PLAN-V24 choice 9).
+ */
+function waits(problem: BarProblem | null): boolean {
+  return problem?.kind === 'unclear' || problem?.kind === 'too_long'
 }
 
 /** A problem's sentence. */
@@ -207,23 +233,33 @@ function problemLine(problem: BarProblem): string {
       return problem.detail ? `${problem.title}. ${problem.detail}` : problem.title
     case 'unclear':
       return problem.line
+    case 'quiet':
+      return QUIET_STOP
+    case 'too_long':
+      return TOO_LONG
   }
 }
 
-/** A line that says why there is no mic, without alarm: it isn't a failure of the moment. */
+/**
+ * A line said without alarm: why there is no mic, which isn't a failure of the moment, or a
+ * conversation that stopped after its quiet.
+ */
 function isQuiet(problem: BarProblem): boolean {
   return (
-    problem.kind === 'no_voice' || (problem.kind === 'mic' && problem.problem === 'no_speech_tool')
+    problem.kind === 'no_voice' ||
+    problem.kind === 'quiet' ||
+    (problem.kind === 'mic' && problem.problem === 'no_speech_tool')
   )
 }
 
-type BarAction = 'try_again' | 'type_instead' | 'carry_on' | 'say_again'
+type BarAction = 'try_again' | 'type_instead' | 'carry_on' | 'say_again' | 'start_again'
 
 const ACTION_LABELS: Readonly<Record<BarAction, string>> = {
   try_again: TRY_AGAIN,
   type_instead: TYPE_INSTEAD,
   carry_on: CARRY_ON,
   say_again: SAY_IT_AGAIN,
+  start_again: START_AGAIN,
 }
 
 /** The mic's own buttons (PLAN-V18's table), as the bar has them: no mic picker here. */
@@ -250,9 +286,13 @@ function actionsOf(snapshot: BarSnapshot): BarAction[] {
     case 'nothing_heard':
     case 'too_slow':
       return ['try_again', 'type_instead']
+    case 'quiet':
+      // A conversation stopped after 2 minutes of quiet (PLAN-V24 choice 10).
+      return ['start_again']
     case 'too_many':
     case 'no_voice':
     case 'unclear':
+    case 'too_long':
       return []
     case 'other':
       return problem.resend ? ['try_again', 'type_instead'] : ['type_instead']
@@ -266,11 +306,18 @@ function actionsOf(snapshot: BarSnapshot): BarAction[] {
   }
 }
 
-/** What a screen reader hears once, as the bar moves on. A problem's own alert speaks for it. */
+/**
+ * What a screen reader hears once, as the bar moves on. A problem's own alert speaks for it. A
+ * conversation's line (a read-back, "Sent.") is said in place of "Listening".
+ */
 function statusOf(snapshot: BarSnapshot): string {
   if (snapshot.phase === 'answer') return snapshot.answer?.line ?? ''
-  if (snapshot.phase === 'problem' || snapshot.problem?.kind === 'unclear') return ''
-  return titleOf(snapshot)
+  const { problem } = snapshot
+  // A line said without alarm has no alert of its own: the quiet stop is said here.
+  if (snapshot.phase === 'problem') return problem && isQuiet(problem) ? problemLine(problem) : ''
+  if (waits(problem)) return ''
+  const line = snapshot.phase === 'listening' ? snapshot.conversation?.line : null
+  return line ?? titleOf(snapshot)
 }
 
 function KeyHint({ children }: { children: ReactNode }) {
@@ -326,6 +373,16 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
       setSession(
         new BarSession({
           onPage,
+          // A conversation reads what is on screen at each command, as it may cross pages
+          // (PLAN-V24 T2-1). The address is the browser's own: the app's router keeps it.
+          where: () => {
+            const prepped = panelCompany()
+            if (prepped) return { company_key: prepped }
+            const { pathname, search } = window.location
+            return onScreen()?.onPage ?? onPageOf(pathname, search)
+          },
+          conversation: isKeepListeningOn(),
+          cardOpen: () => cardShownOf(openedCard()),
           names: fixNamesOf(shown.names, list),
           hints: hintsOf(shown.names, list),
           read,
@@ -470,13 +527,18 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   const fixes = listening ? (snapshot.mic?.fixes ?? []) : snapshot.fixes
   const act = (action: BarAction): void => {
     if (!session) return
-    if (action === 'try_again' || action === 'say_again') session.tryAgain()
-    else session.typeInstead()
+    if (action === 'try_again' || action === 'say_again' || action === 'start_again') {
+      session.tryAgain()
+    } else session.typeInstead()
   }
   // The rep's own next company, for "Try saying" (PLAN-V23 T4-3).
   const nextCompany = firstCompanyOf(names ?? cachedNames(client, screen.key))
-  // Unclear words: the stop line comes before the text line the words wait in (T1-6).
-  const unclear = problem?.kind === 'unclear'
+  // Words that wait in the text line: the line comes before it (T1-6, PLAN-V24 choice 9).
+  const unclear = waits(problem)
+  // A conversation listens (PLAN-V24 T2-1): the command being read, and the next words as they come.
+  const conversation = listening ? snapshot.conversation : null
+  // Over the server's limit, the words can't go until they are shortened.
+  const tooLong = snapshot.draft.trim().length > MAX_CHARS
 
   const problemView = problem ? (
     isQuiet(problem) ? (
@@ -572,7 +634,7 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
                   size="sm"
                   className="touch:h-11"
                   aria-keyshortcuts="Enter"
-                  disabled={snapshot.draft.trim() === ''}
+                  disabled={snapshot.draft.trim() === '' || tooLong}
                 >
                   {SEND}
                   <KeyHint>Enter</KeyHint>
@@ -588,13 +650,30 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
             ) : (
               <div
                 data-slot="voice-words"
-                className="max-h-32 min-h-12 overflow-y-auto text-body text-foreground"
+                className="flex max-h-32 min-h-12 flex-col gap-1 overflow-y-auto text-body text-foreground"
               >
+                {conversation?.working ? (
+                  // The command being read stays, quieter, above the next words.
+                  <p data-slot="voice-working" className="text-pretty text-muted-foreground">
+                    {conversation.working}
+                  </p>
+                ) : null}
                 {listening ? (
                   <LiveWords
                     chunks={snapshot.mic?.chunks ?? []}
                     hearing={snapshot.mic?.hearing ?? ''}
-                    empty={<SayExamples company={nextCompany} />}
+                    empty={
+                      !conversation || conversation.turns === 0 ? (
+                        <SayExamples company={nextCompany} />
+                      ) : conversation.working ? (
+                        false
+                      ) : (
+                        // The last command's line ("Sent.", a read-back), or what to say next.
+                        <p data-slot="voice-line" className="text-pretty text-muted-foreground">
+                          {conversation.line ?? NEXT_COMMAND}
+                        </p>
+                      )
+                    }
                   />
                 ) : snapshot.words ? (
                   <p className="text-pretty">{snapshot.words}</p>
@@ -662,7 +741,8 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
                       session?.done()
                     }}
                   >
-                    {DONE}
+                    {/* A conversation stops; one command is done (PLAN-V24 T2-1). */}
+                    {conversation ? STOP : DONE}
                     {vOn ? <KeyHint>V</KeyHint> : null}
                   </Button>
                 ) : main ? (
@@ -670,12 +750,15 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
                     type="button"
                     size="sm"
                     className="touch:h-11"
+                    // Start again is V's too, as the quiet stop says (PLAN-V24 choice 10).
+                    aria-keyshortcuts={main === 'start_again' && vOn ? 'V' : undefined}
                     onClick={() => {
                       act(main)
                     }}
                   >
                     {main === 'try_again' ? <RotateCcw aria-hidden="true" /> : null}
                     {ACTION_LABELS[main]}
+                    {main === 'start_again' && vOn ? <KeyHint>V</KeyHint> : null}
                   </Button>
                 ) : null}
               </div>

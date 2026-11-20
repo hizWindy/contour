@@ -9,6 +9,7 @@
  */
 import { useSyncExternalStore } from 'react'
 import type { AssistantCommand, CommandSource } from '@/api/types'
+import type { CardShown } from '../voice/bar-session'
 import { wantVoiceCode } from '../voice/store'
 import type { CardDraft } from './draft'
 
@@ -62,6 +63,14 @@ export function closeCard(): void {
 
 export function openedCard(): CardRequest | null {
   return current
+}
+
+/**
+ * Whether the card open now hears the voice bar's conversation (PLAN-V24 T2-3). Until it does, a
+ * card that opens ends the conversation, as it closed the bar before.
+ */
+export function cardShownOf(request: CardRequest | null): CardShown {
+  return request === null ? null : 'other'
 }
 
 export function useOpenCard(): CardRequest | null {

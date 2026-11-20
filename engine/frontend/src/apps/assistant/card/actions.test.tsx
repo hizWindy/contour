@@ -5,7 +5,7 @@
  * Sample Logistics Pty Ltd, Jo Sample.
  */
 import { act, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { useLocation } from 'react-router'
 import { queryKeys } from '@/api/query'
@@ -15,6 +15,7 @@ import { mockApi, type Answer } from '@/test/mock-api'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import VoiceBar from '../voice/bar'
 import type { Times } from '../voice/bar-session'
+import { setKeepListening } from '../voice/keep-listening'
 import { closeVoiceBar, openVoiceBar } from '../voice/store'
 import {
   API,
@@ -100,6 +101,12 @@ async function speak(mic: FakeMic, words: string, user: ReturnType<typeof page>[
   await user.keyboard('v')
 }
 
+// One command per V, as these tests were written (PLAN-V24 T2-1: "Keep listening" off). The
+// card in a conversation is `conversation.test.tsx`.
+beforeEach(() => {
+  setKeepListening(false)
+})
+
 afterEach(() => {
   act(() => {
     closeVoiceBar()
@@ -107,6 +114,7 @@ afterEach(() => {
     toast.dismiss()
   })
   window.localStorage.clear()
+  setKeepListening(true)
 })
 
 describe('each action from V to sent (T3-5)', () => {
