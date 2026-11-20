@@ -5,8 +5,8 @@ This plan makes the Assistant's mic strong on every device, and changes nothing 
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
-- **Last updated:** 21 Nov 2026 (S0 done. Part 1, T3-1 and Part 4's model are being built at the same time, on Al-khair's ask to go faster).
-- **Progress:** Before the build: 1 of 3. Part 1: 5 of 5. Part 2: 0 of 6. Part 3: 0 of 4. Part 4: 0 of 4. Part 5: 0 of 3. M1 to M4: 0 of 4.
+- **Last updated:** 21 Nov 2026 (Parts 1 and 2 and T3-1 done. T3-3 and Part 4's fixes are being built in helper copies at the same time, on Al-khair's ask to go faster).
+- **Progress:** Before the build: 1 of 3. Part 1: 5 of 5. Part 2: 6 of 6. Part 3: 1 of 4. Part 4: 0 of 4 (T4-1 and T4-2 built in a helper copy). Part 5: 0 of 3. M1 to M4: 0 of 4.
 - **Sources:**
   - Al-khair's chat on 21 Nov, after Levi tried the Assistant with him on 20 Nov;
   - the code on `master` (`b84c3cf`), read on 21 Nov;
@@ -285,28 +285,58 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
 
 ## Part 2: a long conversation
 
-**Progress:** 0 of 6.
+**Progress:** 6 of 6. Built and checked with the fake mic, tool and clock only: not yet tried in a real browser.
 
-- [ ] **T2-1. Keep listening** (`voice/bar-session.ts`). Choices 7, 9, 10, 11 and 12.
+- [x] **T2-1. Keep listening** Done 21 Nov 2026 (`bde0f36`). (`voice/bar-session.ts`). Choices 7, 9, 10, 11 and 12.
   - **Done when:** tests with the fake mic, tool and clock pass: three commands in one V each reach the command step once, in order; 2 minutes with no words ends it with the quiet line; "stop listening" ends it and sends nothing; "um" alone sends nothing; a 90-second turn isn't cut; hold V is one turn; and with "Keep listening" off, today's bar tests pass unchanged.
-- [ ] **T2-2. Smart pauses** (`bar-session.ts`, with the joining words in one small file). Choice 8, with S1's numbers.
+- [x] **T2-2. Smart pauses** Done 21 Nov 2026 (`3c414b2`). (`bar-session.ts`, with the joining words in one small file). Choice 8, with S1's numbers.
   - **Done when:** tests pass: "log a call with" waits the long pause; "log a call with Northwind" ends after the short one; a joining word and more words inside the long pause make one turn; while V is held, no pause ends a turn; and the numbers sit in `TIMES`.
-- [ ] **T2-3. The card in the conversation** (`card/listen.ts`, `card/card.tsx`, `voice/hand-over.ts`). Choice 13.
+- [x] **T2-3. The card in the conversation** Done 21 Nov 2026 (`e9ed835`). (`card/listen.ts`, `card/card.tsx`, `voice/hand-over.ts`). Choice 13.
   - **Done when:** tests pass: "send it" 30 seconds after the card opened sends it; "later" keeps a call in Call logs; a spoken change still works; after a send, the next turn is a new command; and outside a conversation, the 5-second listen works as now.
-- [ ] **T2-4. A choice by voice** (`card/draft.ts`). Choice 14.
+- [x] **T2-4. A choice by voice** Done 21 Nov 2026 (`bd54f05`). (`card/draft.ts`). Choice 14.
   - **Done when:** tests pass: "the second one" picks the second company; "Sample Logistics" picks it from the list; the same works for a person and a teammate; a person or teammate name not in the list changes nothing and says so; and none of these asks the AI. (A company name not in the list is T3-2's.)
-- [ ] **T2-5. Phones, windows and the switch** (`bar-session.ts`, `bar.tsx`, a new switch file beside `voice/v-switch.ts`, and the menu row in `links.tsx`). Choices 6, 15 and 16.
+- [x] **T2-5. Phones, windows and the switch** Done 21 Nov 2026 (`b3b1cd3`). Built, waiting for Al-khair's look at the menu row. (`bar-session.ts`, `bar.tsx`, a new switch file beside `voice/v-switch.ts`, and the menu row in `links.tsx`). Choices 6, 15 and 16.
   - **Done when:** tests pass: the wake lock is taken at the start and let go at every end (Stop, the quiet stop, Esc, a problem, a hidden page); a refused wake lock changes nothing else; a hidden page on a phone ends with the words kept; "Keep listening" is on by default, stays after a reload, and counts as on when storage is blocked; and Al-khair has seen the menu row.
-- [ ] **T2-6. Part 2 check.** As T1-5, plus the `design-review` skill on the bar and the card.
+- [x] **T2-6. Part 2 check.** Done 21 Nov 2026 (`e7ce884`, numbers in the Log). As T1-5, plus the `design-review` skill on the bar and the card.
   - **Done when:** all pass, and the numbers are in the Log.
 
 ### Part 2 Log
 
+- 21 Nov 2026: Part 2 built in 6 commits (`bde0f36` to `e7ce884`) by a frontend agent on `plan-v24`. Every result comes from tests with the fake mic, tool and clock. Nothing was tried in a real browser, at any width, in dark mode or on a phone.
+- T2-1: the conversation keeps one `MicSession` (`voice/bar-session.ts`). Each turn comes from `handOver()` into a queue, with one command step at a time. A turn is read in this order:
+  - "stop listening" or "that's all" ends it;
+  - an open card reads it first: its fixed words, then a choice by voice;
+  - fewer than 2 real words are dropped;
+  - over 2,000 characters go to the text line;
+  - anything else goes to the command step.
+- With "Keep listening" off, today's bar tests pass unchanged. `bar-session.test.ts` is untouched, and two test files only gained a `beforeEach` that turns the switch off.
+- T2-2: a turn ends after 1.2 s, or after 3 s when it ends on a joining word or a half command (`voice/pauses.ts`). A turn can run 2 minutes, and the quiet stop comes after 2 minutes. All are **TBC** at S1, in `TIMES`.
+- T2-3: a card for a call, task or email hears the conversation. A pre-read question or dictation ends it. A turn said while a card is on its way waits until the card is there or closed. While a card is open, the bar hides, and the card's foot shows the conversation's strip: the bars, the words, Stop (V) and the last line.
+- T2-4: "the second one" or a name picks a company, person ("no one" too) or teammate, with no AI (`card/choose.ts`). A name is at most 3 words, with no word of a change (**TBC**).
+- T2-5: the wake lock is held while the conversation is on, and let go at every end. A phone is told by its pointer being a finger. Leaving the page on a phone ends the conversation with the words kept. A laptop window behind another keeps listening (**TBC** at S1). "Keep listening" sits right after "Use V to speak" in the profile menu, on by default.
+- New words, **TBC** at Al-khair's look: "Sent.", "Send or keep this one first.", "Pick one, or say its number.", the next-command hint, Stop and Start again.
+- T2-6, the agent's run:
+  - lint 0 problems, types 0 errors, and the build passes;
+  - 2,677 of 2,679 tests passed in 172 files. The two failures were a timing race in a new quiet-stop test (fixed) and `src/hooks/useRunEvents.test.tsx`, an exact-timing test this plan doesn't touch;
+  - after the fix, the 13 files concerned passed (472 tests);
+  - my full run on `e7ce884` afterwards: 2,679 of 2,679 tests passed in 172 files (159 s).
+- T2-6, the size: the first visit is 248,591 B of JavaScript (gzip) in 39 files (S0: 248,595), and the CSS is unchanged. The bar's late file grew from 22,175 B to 26,731 B gzip, which isn't in the first visit.
+- The `design-review` skill on the bar and the card found three things, all fixed:
+  - a read-back stayed on screen after a later command opened a page;
+  - the keyboard focus fell to the page when a card closed mid-conversation (the bar takes it back now);
+  - Part 1's "Reconnecting" and "Now using {mic}." now show in the bar and the card's strip.
+- For Al-khair (**TBC**):
+  - "Sent." shows while the hold's Undo toast is still up;
+  - the bar rises again (400 ms) after each card;
+  - "2 minutes" is written into the quiet line;
+  - a failed command ends the conversation and drops the turns said after it.
+- For T5-1: the card is a modal dialog, so the pill must sit inside the card's dialog layer, or Stop can't be clicked.
+
 ## Part 3: no call lost
 
-**Progress:** 0 of 4.
+**Progress:** 1 of 4. T3-3 is being built in `../contour-v24-logs`.
 
-- [ ] **T3-1. Calls saved before their company** (backend: `apps/companies/schemas.py`, `tables.py`, `note_store.py`, `note_batch.py`, `api_notes.py`, and the migration). Choices 17, 18 and 21, and "The contract".
+- [x] **T3-1. Calls saved before their company** Done 21 Nov 2026 (`866e20e` to `1e579e0`, built on `plan-v24-api` and cherry-picked). (backend: `apps/companies/schemas.py`, `tables.py`, `note_store.py`, `note_batch.py`, `api_notes.py`, and the migration). Choices 17, 18 and 21, and "The contract".
   - **Done when:** tests pass: a call with no company is saved as `needs_company`, with the name as heard, and isn't sorted; the PATCH sets its company and starts the sort; a company the person can't see gives 422; a company on a call already sorted gives 409; the send leaves a `needs_company` call out and says why; a Viewer can't do any of it; and the migration goes up and down cleanly.
 - [ ] **T3-2. The card saves at once, and hears the company again** (`card/card.tsx`, `card/company.tsx`, `card/send.ts` and `card/drafts.ts`). Choices 17 and 19.
   - **Done when:** tests pass: a call whose company isn't found is saved at once as "Needs a company"; Later keeps it in Call logs, not in this browser; the next words fill the company search and show its results as choices; "the first one" picks, and the call is sorted; a name found nowhere says so and keeps the call; and tasks and emails are still kept in this browser, as now.
@@ -316,6 +346,32 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - **Done when:** all pass, and the numbers are in the Log.
 
 ### Part 3 Log
+
+- 21 Nov 2026: T3-1 was built by a backend agent in 5 commits on `plan-v24-api` (`5d782b1` to `25a44b6`), and cherry-picked onto `plan-v24` as `866e20e` to `1e579e0`. It brings:
+  - the migration `0027_v24_call_needs_company`;
+  - the PATCH that picks the company and starts the sort;
+  - the send's `skipped` list;
+  - `?state=needs_company` and the summary's count;
+  - the contract and the website's types, made again.
+- T3-1's proving tests are in `tests/companies/`: `test_call_notes_company.py`, `test_call_notes_batch.py` and `test_call_notes_company_table.py`.
+- T3-1's checks:
+  - Ruff and its format check are clean (478 files), and so is mypy (442 files);
+  - the fast tests: 3,557 passed and 28 skipped. The Companies tests: 670 passed;
+  - the contract gate fails only when the whole suite is collected, at `LeadCard.confidence`, the known issue from 20 Nov. Run alone, it passes;
+  - the `security-check` skill found no blocker. It asked for one more test, which is in (`2fba7aa`).
+- The migration went down and up on a throwaway copy of `leadfinder_v24`. Going down was refused while a call waited for its company. `leadfinder_v24` itself is at `0027` now, with its 3 calls kept.
+- T3-1's choices:
+  - an empty company comes back as `null`;
+  - a pick teaches the mic in the PATCH, through PLAN-V23's learned names, with the card's rules;
+  - before its company is set, a call takes only `outcome`. Any other change gets 409 `company_first`, so the card keeps spoken follow-ups until the call is sorted (T3-2);
+  - a retried pick of the same company gets 409 `company_set`, and the website re-reads the call.
+- T3-1 changed files outside the plan's list:
+  - a new `apps/companies/note_company.py`, so the learned names' code doesn't import in a loop;
+  - small guards in `notes.py`, `assistant_find.py` and `assistant_names.py`, so a call with no company doesn't crash them;
+  - a shared rule in `assistant_learned.py`.
+- **For Al-khair:** Today's counts and the 4:30 pm reminder email don't count calls that need a company yet (**TBC**).
+- A backend restart during a picked call's sort sends the call to To confirm at once, to be sorted by hand. A new call waits 2 minutes first.
+- On `plan-v24`, after T3-1, the website's types show 9 errors, all in `call-logs/` and `call-notes/call-notes.test.tsx`. T3-3 fixes them.
 
 ## Part 4: every device
 
@@ -333,6 +389,39 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - **Done when:** all pass, and the numbers are in the Log.
 
 ### Part 4 Log
+
+- 21 Nov 2026: T4-1 and T4-2 built in 8 commits on `plan-v24-device` (`7dae7bf` to `ddc86ed`) by a frontend agent, before S2, with the plan's **TBC** defaults. They aren't on `plan-v24` yet, and nothing is wired in: that is T4-3.
+- **App Platform and big files.** DigitalOcean's limits pages name no size limit for a static site, per file or in all. A static site is served from Spaces through the CDN, and Spaces takes 5 GB per upload. A build gets 1 hour and 24 GiB of disk.
+  - The live site (21 Nov) sits behind Cloudflare, with `Cache-Control: public,max-age=10,s-maxage=86400`.
+  - It answers a missing file with index.html and a 200. So the browser checks each file's size and sha256 before keeping it.
+  - The biggest file is 42.5 MB. It isn't tried live until M2 (**TBC**).
+- **Pinned:**
+  - `@huggingface/transformers` 4.3.2, which brings `onnxruntime-web` 1.31.0-dev.20260914;
+  - Moonshine Base, `onnx-community/moonshine-base-ONNX` at `b1e9b6a`: 66.9 MB;
+  - Moonshine Tiny, `onnx-community/moonshine-tiny-ONNX` at `a6da124`: 32.1 MB;
+  - Silero VAD, `onnx-community/silero-vad` at `e71cae9`: 2.2 MB;
+  - Whisper base.en, for S2 only, `onnx-community/whisper-base.en` at `51eefc0`: 79.6 MB.
+  - All are the 8-bit (q8) files, and every sha256 is in `on-device/files.json`. The runtime is 14.3 MB on the CPU, or 26.9 MB with WebGPU.
+- **The first download on a device:** Moonshine Base is 83 MB on the CPU and 96 MB with WebGPU, above choice 25's 30 to 70 MB (**TBC** at S2). Tiny is 49 MB on the CPU.
+- **What the build costs:**
+  - `npm run build` runs `scripts/voice-files.js`. It fetches 101.2 MB from Hugging Face at the pinned versions (35 s here), and a wrong sha256 fails the build.
+  - So a Hugging Face outage fails an App Platform build. The live version stays.
+  - `node_modules` gains onnxruntime-node (288 MB) and sharp. They are for Node only and never bundled.
+- **Tried in headless Chrome 157,** through the real worker and tool, with sound files made by Windows' own voice:
+  - Base on the CPU heard "Log a call with sample logistics": 0.25 s for 2.3 s of sound, with the words 0.75 s after the pause;
+  - it also heard "Joe sample wants to follow up next Tuesday", but "Send it." as "Senator,";
+  - Tiny heard "Send it." right, but heard "Logical with…".
+- **WebGPU on this laptop** (Intel graphics) took 2.5 s against the CPU's 0.26 s, with the 8-bit files. `WEBGPU_FIRST` stays on, per choice 23, until S2.
+- **Requests:** every request was a GET to our own site for a listed file. There was no content policy error, and a second visit downloaded 0 MB.
+- T4-1 and T4-2's checks:
+  - lint 0 problems, types 0 errors, 2,524 tests passed in 169 files, and the build passes;
+  - the first visit is the same as S0's baseline (+0 kB, the same main file);
+  - the worker will be 546 kB raw (157 kB gzip).
+- Three things were sent back to fix before the join:
+  - a wrong file kept by the service worker would count as kept;
+  - choice 28: the name fix needs capitals, but the model writes names in lower case;
+  - "Send it." misheard: padding a short turn with silence is being tried.
+- The S2 page is in `plan/shots/v24/s2/` in `../contour-v24-device`, which git ignores. Its README has the iPhone steps.
 
 ## Part 5: listening you can see
 
@@ -410,3 +499,5 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
 - S0: fast backend tests on `plan-v24`: 3,556 passed, 28 skipped (132 s). Website tests: 2,477 passed (101 s). The first visit at `37791d8`: 248,595 B of JavaScript (gzip) in 39 files, and 25,200 B of CSS. That is the baseline for "within 1 kB".
 - S0: no uncommitted work in `contour-v22`, `contour-v22-web`, `contour-v23` or `contour-v23-web`, and no commits since `b84c3cf`. PLAN-V23's two fixes before `deploy v23` aren't started. PLAN-V22's and PLAN-V23's open look steps touch the bar and the card, so a fix from them should land on `plan-v24`, or be joined at `merge v24`.
 - S0, to go faster (Al-khair's ask, 21 Nov): two helper copies made from `plan-v24`. `../contour-v24-api` (branch `plan-v24-api`) builds T3-1, and `../contour-v24-device` (branch `plan-v24-device`) builds Part 4's model, worker and tool, while Part 1 is built on `plan-v24`. Their commits are cherry-picked onto `plan-v24`, as PLAN-V23 did with its web copy. Test database suffixes: `_v24` and `_v24api`.
+- 21 Nov 2026: S1's test page is ready in `plan/shots/v24/s1-test/`, which git ignores, with a README of the steps. Its self-test passed 33 of 33 checks with a fake speech service. The real speech service is untried: that is S1, at Al-khair's keyboard.
+- 21 Nov 2026: a third helper copy, `../contour-v24-logs` (branch `plan-v24-logs`, from `plan-v24-api`). It builds T3-3 on top of T3-1's contract, while Part 2 is built on `plan-v24`.
