@@ -46,6 +46,16 @@
  * - **A review card** a command opens hears the conversation (T2-3): the bar gives way to it while
  *   it is open, and the card's foot says the mic is on, with Stop (V). The bar comes back as it
  *   closes, still listening. V on a card with the bar closed starts a conversation.
+ *
+ * PLAN-V24 T4-3, **every device** (choices 22 and 25):
+ *
+ * - **The model's download** shows in the bar as it opens, where the model is the engine and this
+ *   browser doesn't keep its files yet: "Getting voice ready on this phone", "Only this once.",
+ *   and the bar fills with the megabytes. Type instead skips it; Esc or V closes the bar. Either
+ *   way, a download that started goes on quietly, so the next Speak is ready.
+ * - **On a laptop that needs the model**, it downloads once the page is idle, so the first Speak
+ *   needn't wait. Only once the setting is known and isn't typing, and never on a phone or a
+ *   tablet, where it waits for Speak or "Get voice ready" in the profile menu.
  */
 import { CircleAlert, RotateCcw } from 'lucide-react'
 import { AnimatePresence, m } from 'motion/react'
@@ -64,20 +74,27 @@ import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-quer
 import { useLocation, useNavigate } from 'react-router'
 import { readCommand } from '@/api/hooks/assistant'
 import { namesQueryOptions } from '@/api/hooks/assistant-names'
-import { useCallNoteOptions, voiceToolOf } from '@/api/hooks/call-note-counts'
+import { useCallNoteOptions } from '@/api/hooks/call-note-counts'
 import type { SignIn } from '@/api/hooks/auth'
 import { queryKeys } from '@/api/query'
 import type { AssistantCommand, AssistantCommandIn, CallNoteOptions } from '@/api/types'
 import { LiveWords } from '@/apps/companies/call-notes/mic/live-words'
-import type { MicEnv } from '@/apps/companies/call-notes/mic/session'
+import type { MicEnv, Preparing } from '@/apps/companies/call-notes/mic/session'
+import { browserFacts, deviceKind, pickEngine } from '@/apps/companies/call-notes/mic/voice-engine'
+import { DEVICE_MODEL } from '@/apps/companies/call-notes/mic/voice-ready'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import {
+  downloadedOf,
   fixedWords,
+  GETTING_VOICE_READY,
+  gettingVoiceReadyOn,
   nowUsing,
+  ONLY_ONCE,
   problemActions,
   problemWords,
   RECONNECTING,
   STEP_WORDS,
+  VOICE_DOWNLOAD,
   type MicAction,
 } from '@/apps/companies/call-notes/mic/words'
 import { canWrite, useIsViewer } from '@/auth/can'
@@ -87,6 +104,8 @@ import { useStill } from '@/components/motion/use-still'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Kbd } from '@/components/ui/kbd'
+import { Progress } from '@/components/ui/progress'
+import { whenIdle } from '@/lib/idle'
 import { isTyping } from '@/lib/is-typing'
 import { useBarRoom } from '@/lib/use-bar-room'
 import { CardHost } from '../card/host'
@@ -197,10 +216,21 @@ export interface VoiceBarProps {
   times?: Partial<Times>
 }
 
+/** The model's download, while it downloads (PLAN-V24 T4-3): not while it only loads. */
+function downloadOf(snapshot: BarSnapshot): Preparing | null {
+  const preparing = snapshot.mic?.preparing ?? null
+  return preparing && preparing.total > 0 ? preparing : null
+}
+
 /** The line at the top: where the bar stands. */
 function titleOf(snapshot: BarSnapshot): string {
   switch (snapshot.phase) {
     case 'starting': {
+      // The model on the device gets ready first, where it is the engine (PLAN-V24 T4-3).
+      const preparing = snapshot.mic?.preparing
+      if (preparing) {
+        return preparing.total > 0 ? gettingVoiceReadyOn(preparing.device) : GETTING_VOICE_READY
+      }
       // The mic check's own words while the mic opens. On first use the browser asks first.
       const steps = snapshot.mic?.steps
       return steps?.found === 'pass' ? STEP_WORDS.allowed.waiting : STEP_WORDS.found.waiting
@@ -444,9 +474,10 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   const vTaken = useRef(false)
 
   // It starts once the voice tool setting is known, and lets everything go when the bar closes.
+  // A setting that couldn't be read opens the text line: no voice goes anywhere on a guess.
   const toolKnown = !options.isPending
   const begin = useEffectEvent((current: BarSession) => {
-    current.start(voiceToolOf(options.data))
+    current.start(options.data?.voice_tool ?? null)
     // The V that opened the bar is still down: held, letting it go ends the talk (choice 6).
     if (isVHeld()) {
       vTaken.current = true
@@ -460,6 +491,20 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
       session.dispose()
     }
   }, [open, session, toolKnown])
+
+  // On a laptop that needs the model, it downloads once the page is idle (PLAN-V24 choice 25).
+  // Only once the setting is known and isn't typing: never on the default while it loads.
+  const setting = options.data?.voice_tool ?? null
+  useEffect(() => {
+    if (viewer || setting === null || setting === 'typing') return undefined
+    const computer = deviceKind((env?.browser ?? browserFacts)()) === 'computer'
+    if (!computer || pickEngine(setting, env) !== 'model') return undefined
+    const model = env?.model ?? DEVICE_MODEL
+    return whenIdle(() => {
+      // A failed download is tried again at Speak, where it can say so.
+      void model.fetch().catch(() => undefined)
+    })
+  }, [viewer, setting, env])
 
   const snapshot = useSyncExternalStore(
     session?.subscribe ?? noSubscribe,
@@ -547,6 +592,9 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
 
   const title = titleOf(snapshot)
   const listening = phase === 'starting' || phase === 'listening'
+  // The model gets ready first (PLAN-V24 T4-3): nothing to stop yet, and its download shows.
+  const preparing = listening && Boolean(snapshot.mic?.preparing)
+  const download = listening ? downloadOf(snapshot) : null
   const actions = actionsOf(snapshot)
   // One Navy button: Done (Stop, in a conversation) while listening, Send in the text line, else
   // the first action.
@@ -678,6 +726,27 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
                   <p className="text-pretty text-muted-foreground">{snapshot.answer.unsure}</p>
                 ) : null}
               </div>
+            ) : download ? (
+              // The model's download (PLAN-V24 choice 25), as tall as the words it gives way to.
+              <div
+                data-slot="voice-download"
+                className="flex min-h-12 flex-col justify-center gap-2"
+              >
+                <p className="text-pretty text-muted-foreground">{ONLY_ONCE}</p>
+                <div className="flex items-center gap-3">
+                  <Progress
+                    value={Math.round(
+                      (Math.min(download.loaded, download.total) / download.total) * 100,
+                    )}
+                    getValueLabel={() => downloadedOf(download.loaded, download.total)}
+                    aria-label={VOICE_DOWNLOAD}
+                    className="flex-1"
+                  />
+                  <span className="shrink-0 text-caption text-muted-foreground tabular-nums">
+                    {downloadedOf(download.loaded, download.total)}
+                  </span>
+                </div>
+              </div>
             ) : (
               <div
                 data-slot="voice-words"
@@ -773,7 +842,7 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
                   {phase === 'problem' || phase === 'answer' ? CLOSE : CANCEL}
                   <KeyHint>Esc</KeyHint>
                 </Button>
-                {listening ? (
+                {preparing ? null : listening ? (
                   <Button
                     type="button"
                     size="sm"

@@ -4,13 +4,15 @@
  * talk, V keeps the words, Esc throws them away, typing always works, and the answer goes to the
  * seam. Then each state of T3-2: nothing heard, the name fix, too many commands, Claude slow or
  * down, and the mic's own problems. PLAN-V23: the hint list (T1-5), hold V (choice 6) and unclear
- * words (T1-6). Made-up names only: Sample Logistics Pty Ltd, Vitera Pty Ltd, Jo Sample. No sound
- * is ever kept.
+ * words (T1-6). PLAN-V24 T4-3: the model on the device, its download, and the move to it. Made-up
+ * names only: Sample Logistics Pty Ltd, Vitera Pty Ltd, Jo Sample. No sound is ever kept.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiProblem } from '@/api/client'
 import type { AssistantCommand, AssistantCommandIn, AssistantOnPage } from '@/api/types'
-import { FakeMic, type FakeMicOptions } from '@/apps/companies/call-notes/mic/fake-mic'
+import { FakeMic, IPHONE, type FakeMicOptions } from '@/apps/companies/call-notes/mic/fake-mic'
+import { TOOL_START_MS } from '@/apps/companies/call-notes/mic/session'
+import { ENGINE_KEY } from '@/apps/companies/call-notes/mic/voice-engine'
 import { BarSession, TIMES, type BarSnapshot } from './bar-session'
 import type { AfterAnswer, Heard } from './hand-over'
 
@@ -253,8 +255,9 @@ describe('typing', () => {
     expect(sent).toEqual([{ text: 'add a task to call Jo Sample on Friday', source: 'typed' }])
   })
 
-  it('in a browser with no speech service, the text line, and the mic is never opened', () => {
-    const { session, mic, now } = setUp({ mic: { speech: false } })
+  it('in a browser that can run neither the speech service nor the model, the text line, and the mic is never opened', () => {
+    // With no speech service, the model on the device takes over (PLAN-V24 T4-3), where it runs.
+    const { session, mic, now } = setUp({ mic: { speech: false, browser: { model: false } } })
     session.start('browser_service')
     expect(now()).toMatchObject({
       phase: 'typing',
@@ -264,11 +267,12 @@ describe('typing', () => {
     expect(mic.asked).toEqual([])
   })
 
-  it('while Whisper isn’t built, the text line, and says so', () => {
+  it('with the setting not known, the text line, and says so: no voice goes anywhere on a guess', () => {
     const { session, mic, now } = setUp()
-    session.start('browser_model')
+    session.start(null)
     expect(now()).toMatchObject({ phase: 'typing', voice: false, problem: { kind: 'no_voice' } })
     expect(mic.asked).toEqual([])
+    expect(mic.model.asked).toEqual({ fetch: 0, prepare: 0 })
   })
 
   it('with typing chosen in Settings, the text line, with nothing to explain', () => {
@@ -725,5 +729,114 @@ describe('unclear words (PLAN-V23 T1-6)', () => {
     await tick(100)
     expect(now()).toMatchObject({ phase: 'listening', problem: null })
     expect(mic.tools).toHaveLength(2)
+  })
+})
+
+describe('every device (PLAN-V24 T4-3)', () => {
+  const BYTES = 83_000_000
+
+  it('on an iPhone, listens with the model on the device, not the browser’s service', async () => {
+    const { mic, sent } = await listening({ mic: { browser: IPHONE } })
+    expect(mic.model.asked.prepare).toBe(1)
+    expect(mic.tools.map((tool) => tool.nameCase)).toEqual(['any'])
+    mic.say(SAID)
+    await tick(TIMES.silence)
+    expect(sent).toEqual([{ text: SAID, source: 'mic' }])
+  })
+
+  it('stays starting while the model downloads, and no wait counts until the mic listens', async () => {
+    const { session, mic, now } = setUp({ mic: { browser: IPHONE, modelBytes: BYTES } })
+    session.start('browser_service')
+    await tick(100)
+    expect(now()).toMatchObject({
+      phase: 'starting',
+      mic: { preparing: { loaded: 0, total: BYTES, device: 'phone' } },
+    })
+    // A slow download: far longer than the 6 seconds with no first word.
+    await tick(TIMES.firstWords * 3)
+    mic.model.progress(41_000_000)
+    expect(now()).toMatchObject({ phase: 'starting', problem: null })
+    expect(now().mic?.preparing?.loaded).toBe(41_000_000)
+    expect(mic.asked).toEqual([])
+    mic.model.done()
+    await tick(100)
+    expect(now()).toMatchObject({ phase: 'listening', mic: { preparing: null } })
+    expect(mic.live()).toBe(1)
+  })
+
+  it('Type instead skips the download: the text line, and the mic never opens', async () => {
+    const { session, mic, now } = setUp({ mic: { browser: IPHONE, modelBytes: BYTES } })
+    session.start('browser_service')
+    await tick(100)
+    session.typeInstead()
+    expect(now()).toMatchObject({ phase: 'typing', mic: null })
+    mic.model.done()
+    await tick(100)
+    expect(mic.asked).toEqual([])
+    expect(mic.tools).toHaveLength(0)
+  })
+
+  it('V while the model downloads closes the bar: nothing was heard', async () => {
+    const { session, mic, onClose } = setUp({ mic: { browser: IPHONE, modelBytes: BYTES } })
+    session.start('browser_service')
+    await tick(100)
+    expect(session.pressV()).toBe(true)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(mic.asked).toEqual([])
+  })
+
+  it('a download that failed shows its problem, with Try again first, then Type instead', async () => {
+    const { session, mic, now } = setUp({ mic: { browser: IPHONE, modelBytes: BYTES } })
+    session.start('browser_service')
+    await tick(100)
+    mic.model.fail('download')
+    await tick(0)
+    expect(now()).toMatchObject({
+      phase: 'problem',
+      voice: true,
+      problem: { kind: 'mic', problem: 'download_failed' },
+    })
+    session.tryAgain()
+    await tick(100)
+    expect(mic.model.asked.prepare).toBe(2)
+    mic.model.done()
+    await tick(100)
+    expect(now().phase).toBe('listening')
+  })
+
+  it('a service that doesn’t start in 5 seconds moves to the model, and the bar starts again', async () => {
+    const { session, mic, now, sent } = setUp({
+      mic: { toolNeverReady: true, modelBytes: BYTES },
+    })
+    session.start('browser_service')
+    await tick(100)
+    // The mic is allowed, so the bar listens, but the service never says it does.
+    expect(now().phase).toBe('listening')
+    await tick(TOOL_START_MS)
+    expect(mic.storage.get(ENGINE_KEY)).toBe('model')
+    expect(now()).toMatchObject({
+      phase: 'starting',
+      problem: null,
+      mic: { preparing: { total: BYTES, device: 'computer' } },
+    })
+    // No first-word wait ran out while it downloads.
+    await tick(TIMES.firstWords * 2)
+    expect(now().phase).toBe('starting')
+    mic.toolNeverReady = false
+    mic.model.done()
+    await tick(100)
+    expect(now().phase).toBe('listening')
+    expect(mic.tools.at(-1)?.nameCase).toBe('any')
+    mic.say(SAID)
+    await tick(TIMES.silence)
+    expect(sent).toEqual([{ text: SAID, source: 'mic' }])
+  })
+
+  it('with browser_model, a Chrome laptop listens with the model too', async () => {
+    const { session, mic, now } = setUp()
+    session.start('browser_model')
+    await tick(100)
+    expect(now().phase).toBe('listening')
+    expect(mic.tools.map((tool) => tool.nameCase)).toEqual(['any'])
   })
 })

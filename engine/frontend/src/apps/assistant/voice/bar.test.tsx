@@ -4,7 +4,8 @@
  * the focus back, a typed command works, V in the text line types a "v", the text line works with
  * no mic, and the answer goes to the seam (a page opens, the review card opens, or the read-back
  * shows). PLAN-V23: the hint list on every page and "Try saying" (T1-5, T4-3), hold V (choice 6),
- * and the stop for unclear words (T1-6). PLAN-V24 T1-4: a mic another app holds. Made-up names
+ * and the stop for unclear words (T1-6). PLAN-V24 T1-4: a mic another app holds. T4-3: the model
+ * on the device, its download line and problems, and its quiet download on a laptop. Made-up names
  * only: Sample Logistics Pty Ltd, Vitera Pty Ltd, Jo Sample.
  */
 import type { QueryClient } from '@tanstack/react-query'
@@ -21,13 +22,16 @@ import type {
 } from '@/api/types'
 import {
   FakeMic,
+  FIREFOX_LAPTOP,
   HEADSET,
+  IPHONE,
   LAPTOP_MIC,
   type FakeMicOptions,
 } from '@/apps/companies/call-notes/mic/fake-mic'
 import { busyWords, PROBLEMS } from '@/apps/companies/call-notes/mic/words'
 import type { SignIn } from '@/api/hooks/auth'
 import { queryKeys } from '@/api/query'
+import { fakeIdle } from '@/test/fake-idle'
 import { mockApi, type Answer } from '@/test/mock-api'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import { asPhone } from '@/test/screen'
@@ -103,6 +107,10 @@ interface Open {
   /** V opened the bar, and is still down (PLAN-V23 choice 6). */
   byKey?: boolean
   times?: Partial<Times>
+  /** The switches' answer, when it isn't the one above: like a read that failed. */
+  optionsAnswer?: Answer
+  /** The bar opens as the test starts. False: it stays shut (PLAN-V24 T4-3's quiet download). */
+  opened?: boolean
 }
 
 function openBar({
@@ -118,10 +126,12 @@ function openBar({
   names,
   byKey = false,
   times = QUIET,
+  optionsAnswer,
+  opened = true,
 }: Open = {}) {
   const mic = new FakeMic(micOptions)
   const calls = mockApi({
-    [OPTIONS]: { ...options(voiceTool), enabled: notesOn },
+    [OPTIONS]: optionsAnswer ?? { ...options(voiceTool), enabled: notesOn },
     [COMMAND]: answer,
     ...(names ? { [NAMES]: names } : {}),
   })
@@ -139,6 +149,7 @@ function openBar({
   )
   screen.getByRole('button', { name: 'Where I was' }).focus()
   act(() => {
+    if (!opened) return
     if (byKey) openVoiceBarByKey()
     else openVoiceBar()
   })
@@ -577,8 +588,9 @@ describe('what each state shows (T3-2)', () => {
     expect(await within(found).findByRole('alert')).toHaveTextContent(busyWords(true))
   })
 
-  it('a browser with no speech service: the text line, and a quiet line that says why', async () => {
-    const { mic } = openBar({ mic: { speech: false } })
+  it('a browser that can run neither voice to text: the text line, and a quiet line that says why', async () => {
+    // With no speech service, the model on the device takes over where it runs (PLAN-V24 T4-3).
+    const { mic } = openBar({ mic: { speech: false, browser: { model: false } } })
     const found = await bar()
     const line = await within(found).findByRole('textbox', { name: 'Type what to do' })
     await waitFor(() => {
@@ -588,8 +600,12 @@ describe('what each state shows (T3-2)', () => {
     expect(mic.asked).toEqual([])
   })
 
-  it('while Whisper isn’t built: the text line, and says so', async () => {
-    openBar({ voiceTool: 'browser_model' })
+  it('a voice tool setting that couldn’t be read: the text line, and says so', async () => {
+    // No voice goes anywhere, and nothing downloads, on a guess (PLAN-V24 T4-3).
+    const { mic } = openBar({
+      optionsAnswer: refusal(500, 'internal'),
+      mic: { browser: FIREFOX_LAPTOP },
+    })
     const found = await bar()
     await within(found).findByRole('textbox', { name: 'Type what to do' })
     expect(within(found).getByText("Speaking isn't available here yet.")).toBeInTheDocument()
@@ -598,6 +614,8 @@ describe('what each state shows (T3-2)', () => {
       'placeholder',
       'Like: add a task to send the quote on Friday',
     )
+    expect(mic.asked).toEqual([])
+    expect(mic.model.asked).toEqual({ fetch: 0, prepare: 0 })
   })
 
   it('with the AI off and call notes off: says the Assistant can’t read commands yet', async () => {
@@ -1006,5 +1024,132 @@ describe('the mic’s own lines in the bar (PLAN-V24 T1-2, T1-3)', () => {
     const moved = await within(found).findByText('Now using Headset Microphone (Jabra Evolve2 65).')
     expect(moved).toHaveAttribute('role', 'status')
     expect(title(found)).toHaveTextContent('Listening')
+  })
+})
+
+describe('every device (PLAN-V24 T4-3)', () => {
+  const BYTES = 83_000_000
+
+  it('on an iPhone, the first Speak gets voice ready, with its progress, and Type instead skips it', async () => {
+    const { mic, user } = openBar({ mic: { browser: IPHONE, modelBytes: BYTES } })
+    const found = await bar()
+    await waitFor(() => {
+      expect(title(found)).toHaveTextContent('Getting voice ready on this phone')
+    })
+    expect(within(found).getByText('Only this once.')).toBeInTheDocument()
+    expect(within(found).getByText('0 of 83 MB')).toBeInTheDocument()
+    act(() => {
+      mic.model.progress(41_000_000)
+    })
+    expect(await within(found).findByText('41 of 83 MB')).toBeInTheDocument()
+    expect(within(found).getByRole('progressbar', { name: 'Voice download' })).toHaveAttribute(
+      'aria-valuenow',
+      '49',
+    )
+    // Said once to a screen reader, not at each megabyte.
+    expect(screen.getByRole('status')).toHaveTextContent('Getting voice ready on this phone')
+    // Nothing to stop yet: Type instead, and Cancel.
+    expect(buttons(found)).toEqual(['Type instead', 'Cancel'])
+    expect(mic.asked).toEqual([])
+    await user.click(within(found).getByRole('button', { name: 'Type instead' }))
+    const line = within(found).getByRole('textbox', { name: 'Type what to do' })
+    await waitFor(() => {
+      expect(line).toHaveFocus()
+    })
+    expect(mic.asked).toEqual([])
+  })
+
+  it('once the model is ready, it listens with it, and the words go to the command step', async () => {
+    const { mic, commands, user } = openBar({ mic: { browser: IPHONE, modelBytes: BYTES } })
+    const found = await bar()
+    await within(found).findByText('Only this once.')
+    act(() => {
+      mic.model.done()
+    })
+    await listening()
+    expect(mic.tools.map((tool) => tool.nameCase)).toEqual(['any'])
+    await say(found, mic, SAID, user)
+    await waitFor(() => {
+      expect(commands().map((call) => call.body)).toEqual([{ text: SAID, source: 'mic' }])
+    })
+  })
+
+  it('a download that failed says so, with Try again first and Type instead', async () => {
+    const { mic, user } = openBar({ mic: { browser: IPHONE, modelBytes: BYTES } })
+    const found = await bar()
+    await within(found).findByText('Only this once.')
+    act(() => {
+      mic.model.fail('download')
+    })
+    expect(await within(found).findByRole('alert')).toHaveTextContent(
+      PROBLEMS.download_failed.words,
+    )
+    expect(buttons(found)).toEqual(['Type instead', 'Close', 'Try again'])
+    await user.click(within(found).getByRole('button', { name: 'Try again' }))
+    expect(await within(found).findByText('Only this once.')).toBeInTheDocument()
+    expect(mic.model.asked.prepare).toBe(2)
+  })
+
+  it('a device too slow for the model says so, with Type instead and the words kept', async () => {
+    const { mic, user } = openBar({ mic: { browser: IPHONE } })
+    const found = await listening()
+    act(() => {
+      mic.say('add a task')
+      mic.fail('too_slow')
+    })
+    expect(await within(found).findByRole('alert')).toHaveTextContent(
+      PROBLEMS.device_too_slow.words,
+    )
+    await user.click(within(found).getByRole('button', { name: 'Type instead' }))
+    expect(within(found).getByRole('textbox', { name: 'Type what to do' })).toHaveValue(
+      'add a task',
+    )
+  })
+
+  it.each<[string, FakeMicOptions, CallNoteOptions['voice_tool'], number]>([
+    [
+      'Firefox on a laptop downloads it',
+      { browser: FIREFOX_LAPTOP, speech: false },
+      'browser_service',
+      1,
+    ],
+    ['Chrome on a laptop downloads it with the model chosen', {}, 'browser_model', 1],
+    ['Chrome on a laptop, with its own service, downloads nothing', {}, 'browser_service', 0],
+    ['an iPhone waits for Speak', { browser: IPHONE }, 'browser_service', 0],
+    ['typing downloads nothing', { browser: FIREFOX_LAPTOP, speech: false }, 'typing', 0],
+  ])('once the page is idle, %s (choice 25)', async (_, micOptions, voiceTool, fetches) => {
+    const idle = fakeIdle()
+    const { mic, queryClient } = openBar({ mic: micOptions, voiceTool, opened: false })
+    await waitFor(() => {
+      expect(queryClient.getQueryState(queryKeys.companies.callNoteOptions())?.status).toBe(
+        'success',
+      )
+    })
+    act(() => {
+      idle.idle()
+    })
+    expect(mic.model.asked.fetch).toBe(fetches)
+    // Only a download: the model loads at Speak.
+    expect(mic.model.asked.prepare).toBe(0)
+  })
+
+  it('a laptop downloads nothing while the setting is unknown, or couldn’t be read', async () => {
+    const idle = fakeIdle()
+    const { mic, queryClient } = openBar({
+      mic: { browser: FIREFOX_LAPTOP, speech: false },
+      optionsAnswer: refusal(500, 'internal'),
+      opened: false,
+    })
+    // Before the setting comes, the page's idle moment downloads nothing.
+    act(() => {
+      idle.idle()
+    })
+    await waitFor(() => {
+      expect(queryClient.getQueryState(queryKeys.companies.callNoteOptions())?.status).toBe('error')
+    })
+    act(() => {
+      idle.idle()
+    })
+    expect(mic.model.asked).toEqual({ fetch: 0, prepare: 0 })
   })
 })

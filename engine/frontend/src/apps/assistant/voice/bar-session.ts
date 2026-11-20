@@ -54,6 +54,11 @@
  *   listens (the wake lock), and let go at every end; a refused one changes nothing else. On a
  *   phone, leaving the page ends it with the words kept ("The mic stopped when you left the page.",
  *   with Carry on); on a laptop, another window in front doesn't (TBC at S1).
+ *
+ * PLAN-V24 T4-3, **every device**: the mic session picks the engine (`voice-engine.ts`), the
+ * browser's service or the model on the device. Where the model has to get ready first, the bar
+ * stays "starting" and shows its download, and nothing counts as heard until the mic listens.
+ * Type instead skips it; V or Esc closes the bar, and a download that started goes on quietly.
  */
 import { isAbort, toApiProblem } from '@/api/client'
 import type {
@@ -71,6 +76,7 @@ import {
   type MicSnapshot,
 } from '@/apps/companies/call-notes/mic/session'
 import type { NameFix } from '@/apps/companies/call-notes/mic/name-fix'
+import { pickEngine } from '@/apps/companies/call-notes/mic/voice-engine'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import type { MicProblem } from '@/apps/companies/call-notes/mic/words'
 import type { AfterAnswer, Heard } from './hand-over'
@@ -124,7 +130,7 @@ export type BarProblem =
   | { kind: 'too_slow' }
   /** The mic's own problem, with PLAN-V18's words. */
   | { kind: 'mic'; problem: MicProblem }
-  /** The voice tool isn't built here (Whisper waits for S1): the text line only. */
+  /** The voice tool setting couldn't be read, so no voice goes anywhere: the text line only. */
   | { kind: 'no_voice' }
   /** Anything else, in the server's own words or the website's. */
   | { kind: 'other'; title: string; detail: string | null; resend: boolean }
@@ -292,6 +298,8 @@ export class BarSession {
   private readonly cardOpen: () => CardShown
   private readonly env: MicEnv
   private readonly makeTool: VoiceToolMaker | null | undefined
+  /** The voice tool setting the bar started with. */
+  private tool: VoiceToolKind = 'typing'
   private readonly times: Times
   private readonly listeners = new Set<Listener>()
   private snapshot: BarSnapshot = STARTING
@@ -422,22 +430,23 @@ export class BarSession {
 
   /**
    * The bar opened: it listens, or opens on the text line where the voice can't work. `tool` is the
-   * voice tool setting. Only the browser's speech service is built (choice 10); Whisper waits for
-   * S1 (choice 11), and `typing` means no mic at all.
+   * voice tool setting, or null when it couldn't be read: then no voice goes anywhere, and nothing
+   * downloads, on a guess. `typing` means no mic at all. The engine picks itself (PLAN-V24 T4-3).
    */
-  start(tool: VoiceToolKind): void {
+  start(tool: VoiceToolKind | null): void {
     this.over = false
-    if (tool !== 'browser_service') {
+    this.tool = tool ?? 'typing'
+    if (tool === null || tool === 'typing') {
       this.set({
         ...STARTING,
         phase: 'typing',
         voice: false,
-        problem: tool === 'typing' ? null : { kind: 'no_voice' },
+        problem: tool === null ? { kind: 'no_voice' } : null,
       })
       return
     }
-    if (!this.env.speech()) {
-      // No speech service in this browser (Firefox): don't open the mic for nothing.
+    if (pickEngine(tool, this.env) === null) {
+      // Neither the browser's service nor the model can run here: don't open the mic for nothing.
       this.set({
         ...STARTING,
         phase: 'typing',
@@ -458,7 +467,7 @@ export class BarSession {
     this.abortRequest()
     const mic = new MicSession({
       mode: 'note',
-      tool: 'browser_service',
+      tool: this.tool,
       names: this.names,
       hints: this.hints,
       env: this.env,
@@ -492,6 +501,12 @@ export class BarSession {
     const { phase } = this.snapshot
     const mic = this.mic
     if ((phase !== 'starting' && phase !== 'listening') || !mic) return
+    if (mic.getSnapshot().preparing) {
+      // Nothing was heard yet: the model is still getting ready. The bar closes, and a download
+      // that started goes on quietly (PLAN-V24 T4-3).
+      this.cancel()
+      return
+    }
     this.clearTimers()
     if (this.live) {
       this.stop(mic)
@@ -677,6 +692,15 @@ export class BarSession {
       else this.talkOver()
       return
     }
+    const again = this.snapshot.phase === 'listening' && snap.steps.allowed !== 'pass'
+    if (snap.preparing || again) {
+      // The model gets ready before the mic opens (PLAN-V24 T4-3): first, or after the browser's
+      // service didn't start, when the mic opens again on the model. Nothing is heard meanwhile,
+      // so no wait counts.
+      this.clearTimers()
+      this.set({ phase: 'starting', mic: snap })
+      return
+    }
     if (this.snapshot.phase === 'starting' && snap.steps.allowed === 'pass') {
       // The mic is open and the tool listens: the words count from now. While V is held, only
       // letting go ends the talk.
@@ -771,8 +795,9 @@ export class BarSession {
 
   /**
    * The mic can't go on. Words said so far are kept, with the problem and its buttons. With no
-   * words, the bar opens on the text line and says why, but for a mic another app holds: muted
-   * there, it works again, so Try again comes first, with Type instead beside it (PLAN-V24 T1-4).
+   * words, the bar opens on the text line and says why, but for a mic another app holds (muted
+   * there, it works again: PLAN-V24 T1-4) and for the model's download that failed (on a better
+   * connection it works: T4-3). For those two, Try again comes first, with Type instead beside it.
    * A conversation's turns already said are still worked out, behind the problem.
    */
   private micFailed(problem: MicProblem): void {
@@ -780,7 +805,7 @@ export class BarSession {
     this.keepFixes()
     this.drain = 'quiet'
     this.stopListening()
-    if (said === '' && problem === 'busy') {
+    if (said === '' && (problem === 'busy' || problem === 'download_failed')) {
       this.set({
         phase: 'problem',
         mic: null,
