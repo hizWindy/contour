@@ -3,13 +3,12 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const html = readFileSync(join(import.meta.dirname, '..', '..', 'index.html'), 'utf8')
+const caddyfile = readFileSync(
+  join(import.meta.dirname, '..', '..', '..', 'deploy', 'Caddyfile'),
+  'utf8',
+)
 
-function directives(): Map<string, string[]> {
-  const meta = /<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]*)"/.exec(html)
-  const policy = meta?.[1]
-  if (!policy) {
-    throw new Error('index.html has no Content-Security-Policy meta tag')
-  }
+function parse(policy: string): Map<string, string[]> {
   return new Map(
     policy
       .split(';')
@@ -19,17 +18,41 @@ function directives(): Map<string, string[]> {
   )
 }
 
+function directives(): Map<string, string[]> {
+  const meta = /<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]*)"/.exec(html)
+  const policy = meta?.[1]
+  if (!policy) {
+    throw new Error('index.html has no Content-Security-Policy meta tag')
+  }
+  return parse(policy)
+}
+
 describe('index.html', () => {
   it('carries the Content-Security-Policy from the spec', () => {
     const policy = directives()
 
     expect(policy.get('default-src')).toEqual(["'self'"])
-    expect(policy.get('script-src')).toEqual(["'self'"])
+    // The speech model (PLAN-V24 T4-1) compiles WebAssembly, but no script is built from text.
+    expect(policy.get('script-src')).toEqual(["'self'", "'wasm-unsafe-eval'"])
     expect(policy.get('style-src')).toEqual(["'self'", "'unsafe-inline'"])
     expect(policy.get('img-src')).toEqual(["'self'", 'data:', 'https://tile.openstreetmap.org'])
     expect(policy.get('connect-src')).toEqual(["'self'"])
+    // Its worker comes from our own site only: no blob: or data: worker, and no other site.
+    expect(policy.get('worker-src')).toEqual(["'self'"])
     expect(policy.get('base-uri')).toEqual(["'none'"])
     expect(policy.get('object-src')).toEqual(["'none'"])
+  })
+
+  it("is the Caddyfile's policy, less the two a meta tag can't carry", () => {
+    const header = /Content-Security-Policy "([^"]*)"/.exec(caddyfile)?.[1]
+    if (!header) throw new Error('the Caddyfile has no Content-Security-Policy header')
+    const fromCaddy = parse(header)
+
+    expect(fromCaddy.get('frame-ancestors')).toEqual(["'none'"])
+    expect(fromCaddy.get('form-action')).toEqual(["'self'"])
+    fromCaddy.delete('frame-ancestors')
+    fromCaddy.delete('form-action')
+    expect(fromCaddy).toEqual(directives())
   })
 
   it('allows no inline or eval script', () => {

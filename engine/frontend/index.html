@@ -3,9 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- The content policy, the same as the Caddyfile's. The speech model on a phone (PLAN-V24 T4-1)
+         runs as WebAssembly in a Web Worker from our own site: scripts may compile WebAssembly
+         ('wasm-unsafe-eval', never 'unsafe-eval'), and a worker may come from our own site only. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; base-uri 'none'; object-src 'none'"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; worker-src 'self'; base-uri 'none'; object-src 'none'"
     />
     <meta name="color-scheme" content="light dark" />
     <!-- The website as an app (Improvements 1, #9): the manifest, the colour of the browser bar
