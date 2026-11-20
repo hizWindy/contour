@@ -184,9 +184,10 @@ export const SAY_SEND_IT = "Say 'send it' or press Enter"
 
 /**
  * In the voice bar's pill beside a card that waits on its company (PLAN-V24 T5-1, from T3-2's
- * note), in place of "send it": the words said next fill its company search (TBC).
+ * note), in place of "send it": the words said next fill its company search. The card itself says
+ * to pick it, so this says the voice's part only (TBC).
  */
-export const SAY_COMPANY = "Say the company's name, or pick it."
+export const SAY_COMPANY = "Say the company's name."
 
 /** The hold's toast: what goes in 5 seconds, by action. */
 export const HOLD_TITLES = {

@@ -175,7 +175,7 @@ function Live({ state, hint, hintId, onStop, onAct }: ListeningPillProps) {
             type="button"
             variant="ghost"
             size="sm"
-            className="rounded-sm"
+            className="rounded-sm touch:h-11"
             onClick={() => {
               onAct('type_instead')
             }}
@@ -187,7 +187,7 @@ function Live({ state, hint, hintId, onStop, onAct }: ListeningPillProps) {
             type="button"
             variant="outline"
             size="sm"
-            className="rounded-sm"
+            className="rounded-sm touch:h-11"
             aria-keyshortcuts={vOn ? 'V' : undefined}
             onClick={onStop}
           >
@@ -251,7 +251,7 @@ function Stopped({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="rounded-sm"
+                className="rounded-sm touch:h-11"
                 aria-keyshortcuts={byV ? 'V' : undefined}
                 onClick={() => {
                   onAct(action.id)

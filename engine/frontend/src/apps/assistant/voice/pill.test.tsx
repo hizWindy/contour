@@ -33,7 +33,9 @@ import {
   notePath,
   notePreview,
   options,
+  OTHER_SAMPLE,
   SAM,
+  SAMPLE,
   taskCommand,
   teamEmail,
   write,
@@ -259,6 +261,33 @@ describe.each([
       })
       expect(pillOf()).toBeNull()
       expect(mic.live()).toBe(0)
+    })
+
+    it('says to say the company’s name while the card waits on its company, then “send it”', async () => {
+      width()
+      vi.useFakeTimers(CLOCK)
+      const { mic } = page({
+        answers: {
+          [TASK_WORDS]: taskCommand({
+            company: {
+              found: null,
+              choices: [SAMPLE, OTHER_SAMPLE],
+              from_page: false,
+              heard: 'Sample',
+            },
+          }),
+        },
+      })
+      const card = await taskCard(mic)
+      const pill = await pillIn(card)
+      expect(within(card).getByRole('group', { name: 'Which Sample?' })).toBeInTheDocument()
+      expect(within(pill).getByText("Say the company's name.")).toBeInTheDocument()
+      expect(within(pill).queryByText(SAY_SEND_IT)).toBeNull()
+      await say(mic, 'the second one')
+      await waitFor(() => {
+        expect(within(pill).getByText(SAY_SEND_IT)).toBeInTheDocument()
+      })
+      expect(within(card).getByText(OTHER_SAMPLE.name)).toBeInTheDocument()
     })
 
     it('Stop on it ends the conversation: the pill goes, the card stays and keeps the focus', async () => {
