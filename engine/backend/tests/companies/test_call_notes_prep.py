@@ -172,4 +172,4 @@ async def test_the_summary_counts_my_own_notes_by_the_melbourne_day(
         await set_note(world, notes[4]["id"], status="uncertain")
         counts = (await client.get(f"{NOTES}/summary")).json()
     # Mine only: Sam's note logged today isn't counted. Being sent isn't waiting for me.
-    assert counts == {"to_confirm": 1, "needs_look": 2, "logged_today": 1}
+    assert counts == {"to_confirm": 1, "needs_look": 2, "logged_today": 1, "needs_company": 0}
