@@ -1,5 +1,5 @@
-import { screen, waitFor } from '@testing-library/react'
-import { useRef, useState } from 'react'
+import { screen, waitFor, within } from '@testing-library/react'
+import { useRef, useState, type ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '@/test/render'
 import { MicSheet, MicSheetTitle } from './mic-sheet'
@@ -12,9 +12,14 @@ import { MicSheet, MicSheetTitle } from './mic-sheet'
 function Host({
   withOpener = true,
   onChange,
+  aside,
+  onKeyDown,
 }: {
   withOpener?: boolean
   onChange?: (open: boolean) => void
+  /** Something beside the card, in its dialog layer (PLAN-V24 T5-1). */
+  aside?: ReactNode
+  onKeyDown?: (key: string) => void
 }) {
   const button = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
@@ -36,6 +41,10 @@ function Host({
           onChange?.(next)
           setOpen(next)
         }}
+        onKeyDown={(event) => {
+          onKeyDown?.(event.key)
+        }}
+        {...(aside === undefined ? {} : { aside })}
       >
         <MicSheetTitle>Checking your mic</MicSheetTitle>
         <p>The check</p>
@@ -93,5 +102,51 @@ describe('MicSheet', () => {
       expect(screen.queryByRole('dialog')).toBeNull()
     })
     expect(button).toHaveFocus()
+  })
+
+  it('holds something beside the card in its own layer: the keys reach both, and the dimmed page still closes it (PLAN-V24 T5-1)', async () => {
+    const changes = vi.fn()
+    const keys: string[] = []
+    const { user } = renderWithProviders(
+      <Host
+        onChange={changes}
+        onKeyDown={(key) => keys.push(key)}
+        aside={
+          <div data-testid="beside">
+            <button type="button">Stop</button>
+          </div>
+        }
+      />,
+    )
+    await user.click(screen.getByRole('button', { name: 'Speak' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Checking your mic' })
+    // The card stays the card; what is beside it is in the dialog, not in the card.
+    const card = dialog.querySelector<HTMLElement>('[data-slot=mic-sheet]')
+    const beside = screen.getByTestId('beside')
+    expect(dialog).toHaveAttribute('data-slot', 'mic-sheet-layer')
+    expect(dialog.contains(beside)).toBe(true)
+    expect(card?.contains(beside)).toBe(false)
+    expect(card?.style.transformOrigin).toBe('center')
+    // The layer takes no clicks itself; the card and what is beside it do.
+    expect(dialog.style.pointerEvents).toBe('none')
+    expect(card?.style.pointerEvents).toBe('auto')
+    // The focus reaches it by Tab, and its keys reach the card's own.
+    await user.tab()
+    expect(within(dialog).getByRole('button', { name: 'Stop' })).toHaveFocus()
+    await user.keyboard('v')
+    expect(keys).toContain('v')
+    // A click on the dimmed page around them still closes it.
+    const overlay = document.querySelector<HTMLElement>('[data-slot=mic-sheet-overlay]')
+    expect(overlay).not.toBeNull()
+    await user.pointer({ keys: '[MouseLeft]', target: overlay as HTMLElement })
+    expect(changes).toHaveBeenCalledWith(false)
+  })
+
+  it('without anything beside it, the card is the dialog, as the mic card has it', async () => {
+    const { user } = renderWithProviders(<Host />)
+    await user.click(screen.getByRole('button', { name: 'Speak' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Checking your mic' })
+    expect(dialog).toHaveAttribute('data-slot', 'mic-sheet')
+    expect(document.querySelector('[data-slot=mic-sheet-layer]')).toBeNull()
   })
 })
