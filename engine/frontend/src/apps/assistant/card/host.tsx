@@ -23,12 +23,12 @@ import { draftsLeftWords, OPEN } from './words'
 const Dictation = lazy(() => import('./dictation'))
 
 /**
- * What the card is handed: for tests, the fake mic and the waits; from the voice bar, its
+ * What the card is handed: for tests, the fake mic, the waits and the tone; from the voice bar, its
  * conversation, which an open card hears (PLAN-V24 T2-3).
  */
 export type CardHostProps = Pick<
   ReviewCardProps,
-  'env' | 'makeTool' | 'read' | 'times' | 'conversation' | 'converse'
+  'env' | 'makeTool' | 'read' | 'times' | 'conversation' | 'converse' | 'tone'
 >
 
 /**

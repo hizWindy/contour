@@ -82,6 +82,7 @@ import type { MicProblem } from '@/apps/companies/call-notes/mic/words'
 import type { AfterAnswer, Heard } from './hand-over'
 import { pauseFor } from './pauses'
 import { browserScreen, type KeptOn, type ScreenEnv } from './screen'
+import type { Tone } from './tone'
 import { endsConversation, isShortTurn } from './turns'
 
 export const TIMES = {
@@ -243,6 +244,11 @@ export interface BarSessionOptions {
   times?: Partial<Times>
   /** For tests: the screen (the wake lock, a hidden page, a phone). */
   screen?: ScreenEnv
+  /**
+   * The soft tone as listening starts and as it stops (PLAN-V24 T5-1, choice 30): each once, not
+   * at each turn of a conversation. Left out: no tone.
+   */
+  tone?: Tone | null
 }
 
 const STARTING: BarSnapshot = {
@@ -344,6 +350,9 @@ export class BarSession {
   private kept: KeptOn | null = null
   private keepAsk = 0
   private unwatchPage: (() => void) | null = null
+  private readonly tone: Tone | null
+  /** The start tone played, and the stop tone is still due (PLAN-V24 T5-1). */
+  private toned = false
 
   constructor(options: BarSessionOptions) {
     this.onPage = options.onPage ?? null
@@ -360,6 +369,7 @@ export class BarSession {
     this.makeTool = options.makeTool
     this.times = { ...TIMES, ...options.times }
     this.screen = options.screen ?? browserScreen()
+    this.tone = options.tone ?? null
   }
 
   // --- For React (useSyncExternalStore) ---------------------------------------------------------
@@ -375,7 +385,18 @@ export class BarSession {
 
   private set(change: Partial<BarSnapshot>): void {
     this.snapshot = { ...this.snapshot, ...change }
+    this.toneFor(this.snapshot.phase === 'listening')
     for (const listener of this.listeners) listener()
+  }
+
+  /**
+   * The tone as listening starts (the mic is open and hears) and as it stops, however it stops:
+   * V, Stop, a pause after one command, the quiet stop, a problem or Esc (PLAN-V24 T5-1).
+   */
+  private toneFor(listening: boolean): void {
+    if (listening === this.toned) return
+    this.toned = listening
+    this.tone?.(listening ? 'start' : 'stop')
   }
 
   /** The conversation's part of the snapshot, while it listens. */
@@ -621,6 +642,8 @@ export class BarSession {
     this.over = true
     window.clearTimeout(this.holdTimer)
     this.stopListening()
+    // Gone while it listened (Esc): listening stops, so its tone plays.
+    this.toneFor(false)
     this.abortRequest()
     this.queue = []
     this.busy = false

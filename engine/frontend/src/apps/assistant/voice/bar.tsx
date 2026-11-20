@@ -47,6 +47,10 @@
  *   it is open, and the card's foot says the mic is on, with Stop (V). The bar comes back as it
  *   closes, still listening. V on a card with the bar closed starts a conversation.
  *
+ * PLAN-V24 T5-1, **listening you can see** (choices 29 to 31):
+ *
+ * - **A soft tone** as listening starts and as it stops (`tone.ts`), through the session.
+ *
  * PLAN-V24 T4-3, **every device** (choices 22 and 25):
  *
  * - **The model's download** shows in the bar as it opens, where the model is the engine and this
@@ -118,6 +122,7 @@ import { cachedNames, firstCompanyOf, fixNamesOf, hintsOf, namesOnPage } from '.
 import { onPageOf, panelCompany } from './on-page'
 import { onScreen } from './on-screen'
 import { closeVoiceBar, isVHeld, letGoV, openVoiceBarByKey, useVoiceBarOpen } from './store'
+import { playTone, type Tone } from './tone'
 import { useVKeyOn } from './v-switch'
 import {
   CANCEL,
@@ -214,6 +219,8 @@ export interface VoiceBarProps {
   makeTool?: VoiceToolMaker | null
   read?: (body: AssistantCommandIn, signal: AbortSignal) => Promise<AssistantCommand>
   times?: Partial<Times>
+  /** For tests: the tone as listening starts and stops (PLAN-V24 T5-1). Left out: the real one. */
+  tone?: Tone
 }
 
 /** The model's download, while it downloads (PLAN-V24 T4-3): not while it only loads. */
@@ -378,7 +385,13 @@ function KeyHint({ children }: { children: ReactNode }) {
   )
 }
 
-export default function VoiceBar({ env, makeTool, read = readCommand, times }: VoiceBarProps) {
+export default function VoiceBar({
+  env,
+  makeTool,
+  read = readCommand,
+  times,
+  tone = playTone,
+}: VoiceBarProps) {
   // Never for a Viewer (choice 18), whatever asked for it: V and "Speak (V)" don't either.
   const viewer = useIsViewer()
   const asked = useVoiceBarOpen()
@@ -457,6 +470,7 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
           env,
           makeTool,
           times,
+          tone,
         }),
       )
     }
@@ -883,6 +897,7 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
         env={env}
         makeTool={makeTool}
         read={read}
+        tone={tone}
         conversation={open && session?.keepsListening ? session : null}
         converse={keepListening && !open ? openVoiceBarByKey : null}
       />

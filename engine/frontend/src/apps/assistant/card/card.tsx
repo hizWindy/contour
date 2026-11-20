@@ -114,6 +114,7 @@ import {
   type Heard,
 } from '../voice/hand-over'
 import { VOICE_BAR } from '../voice/keys'
+import { playTone, type Tone } from '../voice/tone'
 import { isVKeyOn } from '../voice/v-switch'
 import {
   CANT_READ_YET,
@@ -202,6 +203,8 @@ export interface ReviewCardProps {
   conversation?: BarSession | null
   /** V on the card starts a conversation: "Keep listening" is on, and the bar is closed. */
   converse?: (() => void) | null
+  /** For tests: the tone as V's own listening starts and stops (T5-1). Left out: the real one. */
+  tone?: Tone
 }
 
 /** A call's own boxes (`layouts.tsx`), which save when they are left (PLAN-V23 T4-2). */
@@ -392,6 +395,7 @@ function DraftCard({
   times,
   conversation = null,
   converse = null,
+  tone = playTone,
   first,
 }: ReviewCardProps & { first: CardDraft }) {
   const t: CardTimes = { ...CARD_TIMES, ...times }
@@ -1147,6 +1151,7 @@ function DraftCard({
       },
       env,
       makeTool,
+      tone,
     })
     voiceNow.current = session
     setVoice(session)
