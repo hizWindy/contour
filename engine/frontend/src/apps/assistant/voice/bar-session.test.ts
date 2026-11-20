@@ -559,6 +559,49 @@ describe('each state (T3-2)', () => {
   })
 })
 
+describe('a mic another app holds (PLAN-V24 T1-4)', () => {
+  const BUSY: FakeMicOptions = { refuse: { name: 'NotReadableError' } }
+
+  it('shows the problem with Try again and Type instead, before the text line', async () => {
+    const { mic, session, now } = setUp({ mic: BUSY })
+    session.start('browser_service')
+    await tick(0)
+    expect(now()).toMatchObject({
+      phase: 'problem',
+      words: '',
+      voice: true,
+      problem: { kind: 'mic', problem: 'busy' },
+    })
+    expect(mic.live()).toBe(0)
+    // Muted in the other app: Try again listens.
+    mic.refuse = null
+    session.tryAgain()
+    await tick(100)
+    expect(now().phase).toBe('listening')
+  })
+
+  it('Type instead opens the text line, and a typed command goes', async () => {
+    const { session, sent, now } = setUp({ mic: BUSY })
+    session.start('browser_service')
+    await tick(0)
+    session.typeInstead()
+    expect(now()).toMatchObject({ phase: 'typing', draft: '', problem: null })
+    session.setDraft('open today')
+    session.sendTyped()
+    expect(sent).toEqual([{ text: 'open today', source: 'typed' }])
+  })
+
+  it('V listens again, as with any problem', async () => {
+    const { mic, session, now } = setUp({ mic: BUSY })
+    session.start('browser_service')
+    await tick(0)
+    mic.refuse = null
+    expect(session.pressV()).toBe(true)
+    await tick(100)
+    expect(now().phase).toBe('listening')
+  })
+})
+
 describe('the hint list (PLAN-V23 T1-5)', () => {
   it('fixes a name heard nearly right, and goes to the voice tool as it starts', async () => {
     const { mic, now } = await listening({

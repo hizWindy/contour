@@ -480,12 +480,17 @@ export class BarSession {
 
   /**
    * The mic can't go on. Words said so far are kept, with the problem and its buttons. With no
-   * words, the bar opens on the text line and says why.
+   * words, the bar opens on the text line and says why, but for a mic another app holds: muted
+   * there, it works again, so Try again comes first, with Type instead beside it (PLAN-V24 T1-4).
    */
   private micFailed(problem: MicProblem): void {
     const said = (this.mic?.text() ?? '').trim()
     this.keepFixes()
     this.stopListening()
+    if (said === '' && problem === 'busy') {
+      this.set({ phase: 'problem', mic: null, words: '', problem: { kind: 'mic', problem } })
+      return
+    }
     if (said === '') {
       this.set({ phase: 'typing', mic: null, draft: '', problem: { kind: 'mic', problem } })
       return

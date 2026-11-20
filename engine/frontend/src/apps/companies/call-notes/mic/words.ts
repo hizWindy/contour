@@ -2,7 +2,7 @@
  * The mic card's words (PLAN-V18 T3-4, T3-5 and "Words for when things go wrong", the mic): plain,
  * sentence case, no em dash, and no setting or file name (the screen-words test reads them). Each
  * problem says what happened, what still works, and the one thing to do. The wording is
- * Al-khair's to change.
+ * Al-khair's to change. PLAN-V24 T1-4 changed the busy mic's words (TBC at his look).
  */
 import { isMac, isWindows } from '@/lib/platform'
 
@@ -98,10 +98,11 @@ export const PROBLEMS: Readonly<
       'Your browser has blocked the mic for Contour HQ. Click the icon to the left of the web address, set Microphone to Allow, then try again.',
     actions: ['try_again'],
   },
+  // Share the mic, never take it (PLAN-V24, decided in chat 4): mute there, never end the call.
   busy: {
     words:
-      'Another app is using your mic, like Teams or Zoom. End the call there or close it, then try again.',
-    actions: ['try_again'],
+      'Another app is holding your mic, like Teams or Zoom. Mute yourself there, then try again, or type instead.',
+    actions: ['try_again', 'type_instead'],
   },
   silent: {
     words:
@@ -143,9 +144,23 @@ export const PROBLEMS: Readonly<
   },
 }
 
-/** A problem's sentence. */
+/**
+ * On Windows only, the busy mic's second line (PLAN-V24 T1-4): an app with exclusive use of the
+ * mic keeps every other app out of it, even when muted.
+ */
+const BUSY_WINDOWS =
+  "If it still won't open, turn off 'Allow applications to take exclusive control' for your mic in the Windows sound settings."
+
+/** The busy mic's words: "Another app is holding your mic", and the Windows line on Windows. */
+export function busyWords(windows = isWindows()): string {
+  return windows ? `${PROBLEMS.busy.words} ${BUSY_WINDOWS}` : PROBLEMS.busy.words
+}
+
+/** A problem's sentence, for the computer the rep is on. */
 export function problemWords(problem: MicProblem): string {
-  return problem === 'blocked_system' ? systemBlockedWords() : PROBLEMS[problem].words
+  if (problem === 'blocked_system') return systemBlockedWords()
+  if (problem === 'busy') return busyWords()
+  return PROBLEMS[problem].words
 }
 
 /** A problem's buttons. "Type instead" only where there is a note box to type in. */

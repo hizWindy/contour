@@ -4,13 +4,13 @@
  * the focus back, a typed command works, V in the text line types a "v", the text line works with
  * no mic, and the answer goes to the seam (a page opens, the review card opens, or the read-back
  * shows). PLAN-V23: the hint list on every page and "Try saying" (T1-5, T4-3), hold V (choice 6),
- * and the stop for unclear words (T1-6). Made-up names only: Sample Logistics Pty Ltd, Vitera Pty
- * Ltd, Jo Sample.
+ * and the stop for unclear words (T1-6). PLAN-V24 T1-4: a mic another app holds. Made-up names
+ * only: Sample Logistics Pty Ltd, Vitera Pty Ltd, Jo Sample.
  */
 import type { QueryClient } from '@tanstack/react-query'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useLocation } from 'react-router'
 import type {
   AssistantCommand,
@@ -20,7 +20,7 @@ import type {
   CompanyDetail,
 } from '@/api/types'
 import { FakeMic, type FakeMicOptions } from '@/apps/companies/call-notes/mic/fake-mic'
-import { PROBLEMS } from '@/apps/companies/call-notes/mic/words'
+import { busyWords, PROBLEMS } from '@/apps/companies/call-notes/mic/words'
 import type { SignIn } from '@/api/hooks/auth'
 import { queryKeys } from '@/api/query'
 import { mockApi, type Answer } from '@/test/mock-api'
@@ -524,6 +524,43 @@ describe('what each state shows (T3-2)', () => {
     expect(within(found).getByRole('textbox', { name: 'Type what to do' })).toHaveValue(
       'Spoke to Jo Sample about the lease',
     )
+  })
+
+  it('another app holds the mic: the words, Try again first, and Type instead (PLAN-V24 T1-4)', async () => {
+    const { mic, user } = openBar({
+      mic: { refuse: { name: 'NotReadableError', message: 'Could not start audio source' } },
+    })
+    const found = await bar()
+    expect(await within(found).findByRole('alert')).toHaveTextContent(PROBLEMS.busy.words)
+    expect(within(found).queryByText(/exclusive control/)).toBeNull()
+    expect(within(found).queryByRole('textbox')).toBeNull()
+    expect(within(found).getByRole('button', { name: 'Type instead' })).toBeInTheDocument()
+    // Muted in the other app: Try again listens.
+    mic.refuse = null
+    await user.click(within(found).getByRole('button', { name: 'Try again' }))
+    await listening()
+  })
+
+  it('another app holds the mic: Type instead opens the text line, ready to type', async () => {
+    const { commands, user } = openBar({ mic: { refuse: { name: 'NotReadableError' } } })
+    const found = await bar()
+    await within(found).findByRole('alert')
+    await user.click(within(found).getByRole('button', { name: 'Type instead' }))
+    const line = within(found).getByRole('textbox', { name: 'Type what to do' })
+    await waitFor(() => {
+      expect(line).toHaveFocus()
+    })
+    await user.keyboard('open today{Enter}')
+    await waitFor(() => {
+      expect(commands().map((call) => call.body)).toEqual([{ text: 'open today', source: 'typed' }])
+    })
+  })
+
+  it('another app holds the mic, on Windows: the line about exclusive control too', async () => {
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('Win32')
+    openBar({ mic: { refuse: { name: 'NotReadableError' } } })
+    const found = await bar()
+    expect(await within(found).findByRole('alert')).toHaveTextContent(busyWords(true))
   })
 
   it('a browser with no speech service: the text line, and a quiet line that says why', async () => {

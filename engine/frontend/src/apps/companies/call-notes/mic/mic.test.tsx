@@ -7,7 +7,7 @@ import MicCard, { type MicCardProps } from './mic-card'
 import type { NameFix } from './name-fix'
 import { MIC_KEY } from './devices'
 import { SOUND } from './session'
-import { PROBLEMS, systemBlockedWords } from './words'
+import { busyWords, PROBLEMS, systemBlockedWords } from './words'
 
 /*
   The mic card (PLAN-V18 T3-4 and T3-5) with a fake mic: each check line, each failure from the
@@ -250,7 +250,7 @@ describe('what can go wrong (the plan’s table, the mic)', () => {
       { refuse: { name: 'NotReadableError', message: 'Could not start audio source' } },
       'Not allowed',
       PROBLEMS.busy.words,
-      ['Try again'],
+      ['Try again', 'Type instead'],
     ],
     [
       'an old browser',
@@ -293,6 +293,33 @@ describe('what can go wrong (the plan’s table, the mic)', () => {
     expect(systemBlockedWords(true, false)).toBe(
       'Windows has turned the mic off for your browser. In Windows Settings, open Privacy and security, then Microphone, and turn on access for apps. Then try again.',
     )
+  })
+
+  it('another app has it, on Windows: the line about exclusive control too (PLAN-V24 T1-4)', async () => {
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('Win32')
+    const { spies, user } = openCard({ refuse: { name: 'NotReadableError' } })
+    expect(await screen.findByText(busyWords(true))).toBeInTheDocument()
+    expect(busyWords(true)).toContain(
+      "turn off 'Allow applications to take exclusive control' for your mic",
+    )
+    // Type instead closes the card, ready to type the note.
+    await user.click(screen.getByRole('button', { name: 'Type instead' }))
+    expect(spies.onTypeInstead).toHaveBeenCalledWith('')
+  })
+
+  it('another app has it, on a Mac: no Windows line', async () => {
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel')
+    openCard({ refuse: { name: 'NotReadableError' } })
+    expect(await screen.findByText(PROBLEMS.busy.words)).toBeInTheDocument()
+    expect(screen.queryByText(/exclusive control/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+  })
+
+  it('another app has it, while checking the mic only: Try again, with no note to type', async () => {
+    openCard({ refuse: { name: 'NotReadableError' } }, { mode: 'check' })
+    expect(await screen.findByText(PROBLEMS.busy.words)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Type instead' })).toBeNull()
   })
 
   it('reads a refusal while the site is allowed as the computer blocking it', async () => {

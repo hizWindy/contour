@@ -3,6 +3,7 @@ import { ApiProblem } from '@/api/client'
 import { problemHint } from '@/lib/problems'
 import { HISTORY_FAILED, STATUS_WORDS } from './call-logs/words'
 import {
+  busyWords,
   problemActions,
   problemWords,
   systemBlockedWords,
@@ -32,11 +33,12 @@ describe('the mic table', () => {
       'Your browser has blocked the mic for Contour HQ. Click the icon to the left of the web address, set Microphone to Allow, then try again.',
       ['Try again'],
     ],
+    // PLAN-V24 T1-4: share the mic, never take it.
     [
       'Another app has it',
       'busy',
-      'Another app is using your mic, like Teams or Zoom. End the call there or close it, then try again.',
-      ['Try again'],
+      'Another app is holding your mic, like Teams or Zoom. Mute yourself there, then try again, or type instead.',
+      ['Try again', 'Type instead'],
     ],
     [
       'Silent',
@@ -90,9 +92,19 @@ describe('the mic table', () => {
     expect(problemActions('blocked_system', true)).toEqual(['try_again'])
   })
 
+  it('Another app has it, on Windows: adds the line about exclusive control, there only', () => {
+    expect(busyWords(true)).toBe(
+      "Another app is holding your mic, like Teams or Zoom. Mute yourself there, then try again, or type instead. If it still won't open, turn off 'Allow applications to take exclusive control' for your mic in the Windows sound settings.",
+    )
+    expect(busyWords(false)).toBe(
+      'Another app is holding your mic, like Teams or Zoom. Mute yourself there, then try again, or type instead.',
+    )
+  })
+
   it('offers Type instead only where there is a note box', () => {
     expect(problemActions('no_mic', false)).toEqual(['try_again'])
     expect(problemActions('too_slow', false)).toEqual([])
+    expect(problemActions('busy', false)).toEqual(['try_again'])
   })
 })
 
