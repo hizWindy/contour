@@ -12,6 +12,8 @@
  *   dialog. J, K, E and X never fire inside a text field; Ctrl+Enter does.
  * - **Sending:** the dialog's Send, then POST /call-notes/confirm, which answers at once. The bar
  *   fills as each note lands (`use-batch.ts`). A second press meanwhile does nothing.
+ * - **The calls that need a company** (PLAN-V24 T3-3) are never in the batch: they wait in their
+ *   group at the top of the page, and the dialog says how many, and that they stay.
  * - **A call the server won't send** (`skipped`, T3-11): the dialog names it with why before it
  *   goes. After the send it stays here, out of the batch, and its card says why at the top, until
  *   it is changed or sent again, so it never looks forgotten.
@@ -111,6 +113,8 @@ export interface ToConfirmProps {
   onPhone: boolean
   /** The batch being sent. The page holds it, so it carries on while another tab is open. */
   batch: Batch
+  /** How many calls still need a company: the send leaves them out, and says so. */
+  needsCompany?: number
 }
 
 /**
@@ -123,6 +127,7 @@ export const ToConfirm = memo(function ToConfirm({
   today,
   onPhone,
   batch,
+  needsCompany = 0,
 }: ToConfirmProps) {
   const client = useQueryClient()
   const removing = useRemoving()
@@ -478,6 +483,7 @@ export const ToConfirm = memo(function ToConfirm({
           sendPreview.mutate(sendIds)
         }}
         onSend={send}
+        needsCompany={needsCompany}
       />
     </div>
   )

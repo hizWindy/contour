@@ -15,6 +15,7 @@ import { prefetchPage } from '@/shell/prefetch'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import { asLaptop, asPhone } from '@/test/screen'
 import CallLogsPage from './index'
+import { needsCompanySendWords } from './words'
 
 const NOTES = '/api/v1/companies/call-notes'
 
@@ -142,6 +143,9 @@ interface Server {
   sent: Sent[]
 }
 
+/** The send's why for a call that needs a company (`note_batch.py`). */
+const NEEDS_A_COMPANY_FIRST = 'Needs a company first.'
+
 /** The words the server's 422 `company_not_found` has for a pick (`note_company.py`). */
 const NOT_OPEN =
   "It may have been removed, or it isn't open to your account. Pick another company, or search for it again."
@@ -244,6 +248,32 @@ function mockServer(changes: Partial<Omit<Server, 'sent'>> = {}): Server {
       const offset = Number(url.searchParams.get('offset') ?? '0')
       return json({ total: matching.length, items: matching.slice(offset, offset + limit) })
     }
+    if (path === `${NOTES}/preview` || path === `${NOTES}/confirm`) {
+      const asked = (body as { ids: string[] }).ids
+      const found = asked
+        .map((id) => server.notes.find((note) => note.id === id))
+        .filter((item): item is CallNoteOut => item !== undefined)
+      const skipped = found
+        .filter((item) => item.status === 'needs_company')
+        .map((item) => ({ id: item.id, why: NEEDS_A_COMPANY_FIRST }))
+      const going = found.filter((item) => item.status !== 'needs_company')
+      if (path.endsWith('/confirm')) {
+        for (const item of going) put({ ...item, status: 'sending' })
+        return json({ sending: going.length, already_sending: false, skipped }, 202)
+      }
+      return json({
+        items: going,
+        sending_ready: true,
+        waiting_for: null,
+        totals: {
+          calls: going.length,
+          meeting_notes: 0,
+          tasks: going.reduce((sum, item) => sum + item.tasks.length, 0),
+          changes: going.reduce((sum, item) => sum + item.changes.length, 0),
+        },
+        skipped,
+      })
+    }
     const one = /^\/api\/v1\/companies\/call-notes\/([^/]+)$/.exec(path)
     if (one) {
       const id = one[1] ?? ''
@@ -285,6 +315,9 @@ function mockServer(changes: Partial<Omit<Server, 'sent'>> = {}): Server {
           )
         }
         return json(put(picked(now, company, server.options.ai_enabled)))
+      }
+      if (item.status === 'sending') {
+        return json(put({ ...item, status: 'logged', confirmed_at: '2026-11-15T04:00:00Z' }))
       }
       return json(item)
     }
@@ -549,6 +582,42 @@ describe.each([
     })
   })
 
+  it('a send leaves the calls that need a company out, and says why', async () => {
+    size()
+    const server = mockServer()
+    const { user } = renderCallLogs()
+    await group()
+    await screen.findByRole('list', { name: 'Calls to confirm' })
+    await user.click(screen.getByRole('button', { name: 'Send 1 to HubSpot' }))
+    const dialog = await screen.findByRole('alertdialog', { name: 'Send 1 call to HubSpot?' })
+    expect(
+      within(dialog).getByText('2 calls need a company first. They stay in Call logs.'),
+    ).toBeInTheDocument()
+    expect(await within(dialog).findByText('1 call, 0 tasks, 0 field changes')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Send to HubSpot' }))
+
+    // Only the call with its company went; the two that need one stay at the top.
+    await waitFor(() => {
+      expect(sent(server, 'POST', `${NOTES}/confirm`)).toHaveLength(1)
+    })
+    expect(sent(server, 'POST', `${NOTES}/confirm`)[0]?.body).toEqual({ ids: ['n1'] })
+    expect(
+      await screen.findByText('1 logged in HubSpot.', {}, { timeout: 5000 }),
+    ).toBeInTheDocument()
+    expect(rowNames(await group())).toEqual(['"North Wind" as heard', '"Sample Mines" as heard'])
+  }, 15_000)
+
+  it('says nothing of them in a send when none needs a company', async () => {
+    size()
+    mockServer({ notes: [call('n1')] })
+    const { user } = renderCallLogs()
+    await screen.findByRole('list', { name: 'Calls to confirm' })
+    await user.click(screen.getByRole('button', { name: 'Send 1 to HubSpot' }))
+    const dialog = await screen.findByRole('alertdialog', { name: 'Send 1 call to HubSpot?' })
+    expect(await within(dialog).findByText('1 call, 0 tasks, 0 field changes')).toBeInTheDocument()
+    expect(dialog.querySelector('[data-slot=send-needs-company]')).toBeNull()
+  })
+
   it('is not there when no call needs a company', async () => {
     size()
     const server = mockServer({ notes: [call('n1')] })
@@ -709,5 +778,12 @@ describe('Needs a company while the page loads', () => {
     })
     // The page joined that request: the calls were asked for once.
     expect(lists.filter((state) => state === 'needs_company')).toHaveLength(1)
+  })
+})
+
+describe('the words of a send that leaves calls out (PLAN-V24)', () => {
+  it('says one call, or many, the way the other words do', () => {
+    expect(needsCompanySendWords(1)).toBe('1 call needs a company first. It stays in Call logs.')
+    expect(needsCompanySendWords(3)).toBe('3 calls need a company first. They stay in Call logs.')
   })
 })

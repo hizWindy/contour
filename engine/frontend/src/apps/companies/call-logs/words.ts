@@ -295,6 +295,17 @@ export const NOTHING_SENT = 'Nothing was sent. Each card says why.'
 /** With every call left out, Send has nothing to send. */
 export const NOTHING_TO_SEND = 'None of these can be sent now.'
 
+/**
+ * In the send's dialog while calls wait for their company (PLAN-V24 T3-3, choice 18): they aren't
+ * in the send, and stay at the top of Call logs. "2 calls need a company first. They stay in Call
+ * logs." (TBC at Al-khair's look.)
+ */
+export function needsCompanySendWords(count: number): string {
+  return count === 1
+    ? '1 call needs a company first. It stays in Call logs.'
+    : `${formatNumber(count)} calls need a company first. They stay in Call logs.`
+}
+
 /** Under a list cut at its limit: "Showing the first 100 of 120." */
 export function firstOfWords(shown: number, total: number): string {
   return `Showing the first ${formatNumber(shown)} of ${formatNumber(total)}.`

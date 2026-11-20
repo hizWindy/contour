@@ -185,7 +185,13 @@ function CallLogsContent() {
             })}
           </TabsList>
           <TabsContent value="to_confirm">
-            <ToConfirm options={notes} today={today} onPhone={onPhone} batch={batch} />
+            <ToConfirm
+              options={notes}
+              today={today}
+              onPhone={onPhone}
+              batch={batch}
+              needsCompany={needsCompany}
+            />
           </TabsContent>
           <TabsContent value="history">
             <History

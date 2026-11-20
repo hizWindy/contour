@@ -10,6 +10,9 @@
  * - A call the server won't send (`skipped`, T3-11), like one whose change isn't on the list a call
  *   may change, is named here with why, in the server's words, before anything goes. The totals
  *   are the server's, without it. With none left to send, Send is greyed, with why.
+ * - The calls that still need a company (PLAN-V24 T3-3) are never in a send: one line says how
+ *   many, and that they stay in Call logs. It shows from the start, so the dialog doesn't grow
+ *   when the preview answers.
  *
  * It rises 8px as it fades in, and fades out in 150ms, as the company's dialog does.
  */
@@ -32,6 +35,7 @@ import { Button } from '@/components/ui/button'
 import {
   CANCEL,
   heldWords,
+  needsCompanySendWords,
   NOTHING_TO_SEND,
   notSentHead,
   PREVIEW_FAILED,
@@ -65,6 +69,8 @@ export interface SendDialogProps {
   error: ApiProblem | null
   onRetry: () => void
   onSend: () => void
+  /** How many of the rep's calls still need a company, and so stay out of the send. */
+  needsCompany?: number
 }
 
 export function SendDialog({
@@ -77,6 +83,7 @@ export function SendDialog({
   error,
   onRetry,
   onSend,
+  needsCompany = 0,
 }: SendDialogProps) {
   const reasonId = useId()
   const held = preview
@@ -146,6 +153,15 @@ export function SendDialog({
             ) : null}
           </div>
         )}
+        {needsCompany > 0 ? (
+          <p
+            data-slot="send-needs-company"
+            className="flex items-start gap-2 text-ui text-review-ink"
+          >
+            <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            {needsCompanySendWords(needsCompany)}
+          </p>
+        ) : null}
         <AlertDialogFooter>
           <AlertDialogCancel>{CANCEL}</AlertDialogCancel>
           <Button
