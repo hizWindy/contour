@@ -521,6 +521,31 @@ export function sendOrCancel(text: string): 'send' | 'cancel' | null {
   return null
 }
 
+/**
+ * "Later", as a whole turn (PLAN-V24 choice 13): what Later does on a call, and Cancel on a task
+ * or an email. TBC at Al-khair's look.
+ */
+const LATER_WORDS: ReadonlySet<string> = new Set([
+  'later',
+  'later please',
+  'do it later',
+  'send it later',
+  'send later',
+  'keep it for later',
+  'save it for later',
+])
+
+/**
+ * The card's own words in a conversation (PLAN-V24 T2-3), read by the code with no AI: "send it"
+ * sends; "later" and "cancel" both do what the card's Later or Cancel button does.
+ */
+export function cardWordsOf(text: string): 'send' | 'later' | null {
+  const words = plain(text)
+  if (SEND_WORDS.has(words)) return 'send'
+  if (CANCEL_WORDS.has(words) || LATER_WORDS.has(words)) return 'later'
+  return null
+}
+
 // --- The read-back once changed ------------------------------------------------------------------
 
 function namesOf(to: readonly Recipient[]): string {

@@ -66,11 +66,15 @@ export function openedCard(): CardRequest | null {
 }
 
 /**
- * Whether the card open now hears the voice bar's conversation (PLAN-V24 T2-3). Until it does, a
- * card that opens ends the conversation, as it closed the bar before.
+ * Whether the card open now hears the voice bar's conversation (PLAN-V24 T2-3): a call's, a task's
+ * or an email's does. A pre-read's question and Log call with the AI off don't: they end it, as
+ * they closed the bar before.
  */
 export function cardShownOf(request: CardRequest | null): CardShown {
-  return request === null ? null : 'other'
+  if (request === null) return null
+  if (request.kind === 'dictation') return 'other'
+  if (request.kind === 'command' && request.command.action === 'pre_read') return 'other'
+  return 'hears'
 }
 
 export function useOpenCard(): CardRequest | null {

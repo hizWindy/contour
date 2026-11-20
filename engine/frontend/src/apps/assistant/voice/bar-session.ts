@@ -38,7 +38,11 @@
  *   plan's line, and listening stops.
  * - **Turns are read in order** (choice 12): a turn said while the last is worked out waits for it.
  *   What each answer does is `handOver`'s, as with one command. A page opens and the conversation
- *   goes on; a card that can't hear the conversation (`cardOpen`) ends it, as one command did.
+ *   goes on; a card that can't hear the conversation (a pre-read's, `cardOpen`) ends it.
+ * - **The review card hears it** (choice 13, T2-3): while a card is open, its ear (`attachCard`)
+ *   reads each turn first, with no AI ("send it", "later", its choice), and anything else goes to
+ *   the command step with the card's boxes, as a change. A turn said while the card is on its way
+ *   waits for it. After the card closes, the next turn is a new command.
  * - **The code reads some turns itself** (choices 10, 11): "stop listening" or "that's all" ends
  *   the conversation and sends nothing, and fewer than 2 real words are dropped quietly.
  * - **It ends** on V or Stop (the turn in progress goes first), "stop listening" or "that's all",
@@ -169,6 +173,24 @@ export interface BarSnapshot {
 /** The review card open now: one that hears the conversation, another kind, or none. */
 export type CardShown = 'hears' | 'other' | null
 
+/** What the card says back to a turn it read itself: a line ("Sent."), or none. */
+export interface CardTook {
+  line: string | null
+}
+
+/** A review card open in the conversation (T2-3): it hears each turn first. */
+export interface CardEar {
+  /**
+   * The card's own reading of a turn, with no AI: "send it", "later" or "cancel", or its choice
+   * (T2-4). Null: the turn isn't one of those, and goes to the command step.
+   */
+  take: (words: string) => CardTook | null
+  /** The card's action and the names of its boxes, for the command step. */
+  card: () => AssistantCardIn
+  /** The command step's answer to a turn said to the card: a change, a send, a new command. */
+  answer: (heard: Heard) => AfterAnswer | Promise<AfterAnswer>
+}
+
 export interface BarSessionOptions {
   /** What is on screen, for a command that names no company. */
   onPage?: AssistantOnPage | null
@@ -296,6 +318,10 @@ export class BarSession {
   private drain: Drain = 'shown'
   /** The last words the command step found unclear: Type instead offers them. */
   private lastUnclear = ''
+  /** The review card that hears the turns (T2-3). */
+  private ear: CardEar | null = null
+  /** A turn waits for the card the last one opened, to hear it first. */
+  private waitingForCard = false
 
   constructor(options: BarSessionOptions) {
     this.onPage = options.onPage ?? null
@@ -338,6 +364,43 @@ export class BarSession {
   /** True while a conversation listens. */
   isLive(): boolean {
     return this.live
+  }
+
+  // --- The review card (T2-3) -------------------------------------------------------------------
+
+  /**
+   * A review card opened: it hears each turn first, until the returned function lets go (it
+   * closed). A turn that waited for it goes on.
+   */
+  attachCard(ear: CardEar): () => void {
+    this.ear = ear
+    this.goOn()
+    return () => {
+      if (this.ear !== ear) return
+      this.ear = null
+      this.goOn()
+    }
+  }
+
+  /** The open card changed: a turn that waited for a card that won't hear it goes on. */
+  cardChanged(): void {
+    this.goOn()
+  }
+
+  /** The card says something as the conversation's line: "Sent." */
+  say(line: string): void {
+    this.setConversation({ line })
+  }
+
+  private goOn(): void {
+    if (!this.waitingForCard) return
+    this.waitingForCard = false
+    this.next()
+  }
+
+  /** The card that hears the turns, while it is still open. */
+  private hearing(): CardEar | null {
+    return this.ear !== null && this.cardOpen() === 'hears' ? this.ear : null
   }
 
   // --- What the bar asks ------------------------------------------------------------------------
@@ -528,6 +591,8 @@ export class BarSession {
     this.busy = false
     this.turnRequest?.abort()
     this.turnRequest = null
+    this.ear = null
+    this.waitingForCard = false
   }
 
   // --- Hold V (PLAN-V23 choice 6) -----------------------------------------------------------------
@@ -855,15 +920,30 @@ export class BarSession {
     })
   }
 
-  /** The next turn, once the last is worked out. Fewer than 2 real words are dropped quietly. */
+  /**
+   * The next turn, once the last is worked out. An open card reads it first (T2-3), and fewer
+   * than 2 real words are dropped quietly.
+   */
   private next(): void {
     if (this.busy || this.over) return
+    if (this.queue.length > 0 && this.hearing() === null && this.cardOpen() === 'hears') {
+      // The card the last turn opened is on its way: it hears this one first.
+      this.waitingForCard = true
+      return
+    }
     const turn = this.queue.shift()
     if (!turn) {
       this.idle()
       return
     }
     this.setConversation({ waiting: this.queue.length })
+    const ear = turn.source === 'mic' ? this.hearing() : null
+    const took = ear?.take(turn.text) ?? null
+    if (took) {
+      this.setConversation({ line: took.line })
+      this.next()
+      return
+    }
     if (turn.source === 'mic' && isShortTurn(turn.text)) {
       // A cough or an "um" never asks the AI (choice 11).
       this.next()
@@ -874,7 +954,7 @@ export class BarSession {
       this.next()
       return
     }
-    this.ask(turn)
+    this.ask(turn, ear)
   }
 
   /** Nothing is waiting. A conversation that has stopped, in the bar, is over. */
@@ -886,8 +966,8 @@ export class BarSession {
     if (this.drain === 'shown' && this.snapshot.phase === 'working') this.finishShown(true)
   }
 
-  /** A turn goes to the command step, with what is on screen now. */
-  private ask(turn: Turn): void {
+  /** A turn goes to the command step, with what is on screen now, and the open card's boxes. */
+  private ask(turn: Turn, ear: CardEar | null): void {
     this.busy = true
     const request = new AbortController()
     this.turnRequest = request
@@ -901,23 +981,30 @@ export class BarSession {
       text: turn.text,
       source: turn.source,
       ...(onPage ? { on_page: onPage } : {}),
+      ...(ear ? { card: ear.card() } : {}),
     }
     this.read(body, request.signal).then(
       (command) => {
         if (this.turnRequest !== request || this.over) return
         this.turnRequest = null
-        this.turnAnswered({ kind: 'command', command, words: turn.text, source: turn.source })
+        this.turnAnswered({ kind: 'command', command, words: turn.text, source: turn.source }, ear)
       },
       (error: unknown) => {
         if (this.turnRequest !== request || this.over || isAbort(error)) return
         this.turnRequest = null
-        this.turnFailed(error, turn)
+        this.turnFailed(error, turn, ear)
       },
     )
   }
 
-  private turnAnswered(heard: Heard): void {
-    const after = this.hand(heard)
+  /** The answer goes to the card the turn was said to, or where one command's would. */
+  private turnAnswered(heard: Heard, ear: CardEar | null): void {
+    if (ear !== null && this.hearing() !== ear) {
+      // The card closed meanwhile: its change has nowhere to go.
+      this.turnSettled({ kind: 'close' })
+      return
+    }
+    const after = ear ? ear.answer(heard) : this.hand(heard)
     if (after instanceof Promise) {
       // A pre-read starting first: the turns wait for it.
       const request = new AbortController()
@@ -941,7 +1028,8 @@ export class BarSession {
     this.busy = false
     if (this.live) {
       this.setConversation({ working: null })
-      if (after.kind === 'close' && this.cardOpen() !== null) {
+      if (after.kind === 'close' && this.cardOpen() === 'other') {
+        // A card that can't hear the conversation (a pre-read's): it ends, as one command did.
         this.stopListening()
         this.queue = []
         this.settle(after)
@@ -963,13 +1051,21 @@ export class BarSession {
   }
 
   /**
-   * A turn the command step refused. Behind another view, nothing shows. Otherwise the
-   * conversation ends with the problem, as one command's did, and later turns are dropped.
+   * A turn the command step refused. Behind another view, nothing shows. Said to a card with the
+   * AI off, the card says so, and the conversation goes on (the card's own words still work).
+   * Otherwise the conversation ends with the problem, as one command's did, and later turns are
+   * dropped.
    */
-  private turnFailed(error: unknown, turn: Turn): void {
+  private turnFailed(error: unknown, turn: Turn, ear: CardEar | null): void {
     this.busy = false
     if (!this.live && this.drain === 'quiet') {
       this.next()
+      return
+    }
+    const problem = toApiProblem(error)
+    if (ear !== null && problem.status === 409 && problem.code === 'assistant_off') {
+      this.busy = true
+      this.turnAnswered({ kind: 'dictation', words: turn.text, source: turn.source }, ear)
       return
     }
     this.stopListening()

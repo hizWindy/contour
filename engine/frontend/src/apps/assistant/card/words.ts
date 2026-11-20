@@ -134,6 +134,22 @@ export const TYPE_CHANGE = 'Type a change'
 export const CARD_CAN =
   'On this card you can change a box, send or cancel. Try saying it as one of those.'
 
+// --- In a long conversation (PLAN-V24 T2-3 and T2-4; TBC at Al-khair's look) ------------------------
+
+/** A new command said while a card is open (choice 13, the plan's words). */
+export const SEND_OR_KEEP = 'Send or keep this one first.'
+
+/** After a send, as the bar comes back (choice 13, the plan's word). */
+export const SENT = 'Sent.'
+
+/** A person or a teammate said by name, and no one there has it (the plan's words). */
+export function noOneHereWords(words: string): string {
+  return `There's no '${words}' here. Pick one, or say its number.`
+}
+
+/** Two or more fit what was said: the card asks again (TBC). */
+export const PICK_ONE = 'Pick one, or say its number.'
+
 // --- Sending (T3-4) ---------------------------------------------------------------------------------
 
 /** Under the card's bar while it listens for "send it" (the plan's words). */

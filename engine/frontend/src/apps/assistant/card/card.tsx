@@ -27,6 +27,15 @@
  *   Unclear words spoken on the card wait in its strip's text line, as in the bar.
  * - **Hold V** (PLAN-V23 choice 6) on the card works as in the bar: a V held 0.4 seconds ends the
  *   change it started as it comes up.
+ * - **In a long conversation** (PLAN-V24 T2-3, choice 13): a card that opens while the voice bar's
+ *   conversation listens hears it for as long as it is open, through the conversation's one mic,
+ *   and opens none of its own. Its ear (`attachCard`) reads each turn first, with no AI: "send it"
+ *   sends, and "later" or "cancel" does what Later or Cancel does. Anything else goes to the
+ *   command step as a change, as V's change does; a new command gets "Send or keep this one
+ *   first." (TBC). Its foot shows the mic is on ("Listening", the bars, the words, Stop (V)), and
+ *   V stops the conversation. After a send, the bar comes back and says "Sent.".
+ * - **V with "Keep listening" on** and the bar closed starts a conversation, which the card hears
+ *   (`converse`). With it off, V speaks one change, as before.
  *
  * Its code loads with the voice bar's, late, never in the first visit (`host.tsx`).
  */
@@ -79,7 +88,7 @@ import { melbourneDate } from '@/lib/format'
 import { changeDetail, toastProblem } from '@/lib/problems'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { CALL_LOGS_PATH, MEETINGS_PATH, type NewPreReadState } from '../paths'
-import { BarSession, type BarProblem, type BarSnapshot } from '../voice/bar-session'
+import { BarSession, type BarProblem, type BarSnapshot, type CardTook } from '../voice/bar-session'
 import {
   preReadPath,
   startPreRead,
@@ -92,6 +101,7 @@ import {
   CANT_READ_YET,
   NOTHING_HEARD,
   QUIET_STOP,
+  STOP,
   TOO_LONG,
   TOO_MANY,
   TOO_SLOW,
@@ -101,6 +111,7 @@ import {
   applyChange,
   BOXES,
   callPatchOf,
+  cardWordsOf,
   draftOf,
   emailBodyOf,
   emptyDraftOf,
@@ -118,7 +129,7 @@ import { CallLayout, EmailLayout, PreReadLayout, TaskLayout, type EditCall } fro
 import { cardLinesOf, unsureLeft } from './lines'
 import { listenForSendIt } from './listen'
 import { CARD_TIMES, type CardTimes } from './times'
-import { HintBar, ListenStrip, PartProblem, VoiceStrip } from './parts'
+import { ConversationStrip, HintBar, ListenStrip, PartProblem, VoiceStrip } from './parts'
 import { previewEmail, previewTask, saveNote, sendDraft, patchNote, type SendTools } from './send'
 import { openCard, type CardRequest } from './store'
 import { isNoHubSpotUser, needsTeammate } from './teammate-rules'
@@ -131,6 +142,8 @@ import {
   OPEN,
   OPEN_CALL_LOGS,
   SEND,
+  SEND_OR_KEEP,
+  SENT,
   WHICH_MEETING,
 } from './words'
 
@@ -143,6 +156,13 @@ export interface ReviewCardProps {
   makeTool?: VoiceToolMaker | null
   read?: (body: AssistantCommandIn, signal: AbortSignal) => Promise<AssistantCommand>
   times?: Partial<CardTimes>
+  /**
+   * The voice bar's conversation while it keeps listening (PLAN-V24 T2-3): a card that opens while
+   * it listens hears its turns, and opens no mic of its own.
+   */
+  conversation?: BarSession | null
+  /** V on the card starts a conversation: "Keep listening" is on, and the bar is closed. */
+  converse?: (() => void) | null
 }
 
 /** A call's own boxes (`layouts.tsx`), which save when they are left (PLAN-V23 T4-2). */
@@ -312,6 +332,8 @@ function DraftCard({
   makeTool,
   read = readCommand,
   times,
+  conversation = null,
+  converse = null,
   first,
 }: ReviewCardProps & { first: CardDraft }) {
   const t: CardTimes = { ...CARD_TIMES, ...times }
@@ -334,9 +356,11 @@ function DraftCard({
   const still = useStill()
   const whole = useDeferredValue(true, still)
   // After a spoken command, the card listens for "send it" as it opens (choice 23), once the voice
-  // tool setting is known and it is the speech service.
+  // tool setting is known and it is the speech service. Opened while a conversation listens, it
+  // hears that instead, and never opens a mic of its own (PLAN-V24 T2-3).
   const spoken = request.kind === 'command' && request.source === 'mic'
-  const canListen = spoken && !options.isPending && tool === 'browser_service'
+  const [inConversation] = useState(() => conversation?.isLive() === true)
+  const canListen = spoken && !options.isPending && tool === 'browser_service' && !inConversation
   const [listenOver, setListenOver] = useState(false)
   const listening = canListen && !listenOver
   const [voice, setVoice] = useState<BarSession | null>(null)
@@ -521,6 +545,8 @@ function DraftCard({
     closing.current = 'send'
     stopListening()
     voice?.dispose()
+    // The bar comes back as the card goes, and says it (PLAN-V24 choice 13).
+    conversation?.say(SENT)
     // Kept from now: a page closed in the 5 seconds sends nothing, and the next page offers it.
     keepCardDraft(now, true)
     onClose()
@@ -552,10 +578,13 @@ function DraftCard({
     }
   }
 
-  /** Enter, a click on Send, or "send it": a choice or a box first, else the hold starts. */
-  const trySend = (how: 'key' | 'click' | 'voice'): void => {
-    if (closing.current) return
-    if (how === 'key' && !armed.current) return
+  /**
+   * Enter, a click on Send, or "send it": a choice or a box first, else the hold starts. True when
+   * it started.
+   */
+  const trySend = (how: 'key' | 'click' | 'voice'): boolean => {
+    if (closing.current) return false
+    if (how === 'key' && !armed.current) return false
     stopListening()
     leaveCallBox()
     const { draft: now, ready: canSend, today: day } = latest.current
@@ -563,10 +592,11 @@ function DraftCard({
     if (box) {
       setChecked(true)
       focusBox(box)
-      return
+      return false
     }
-    if (!canSend) return
+    if (!canSend) return false
     startSend(now)
+    return true
   }
 
   /**
@@ -604,12 +634,30 @@ function DraftCard({
     onClose()
   }
 
+  /**
+   * A turn of the conversation, read by the card first, with no AI (PLAN-V24 T2-3): "send it" sends
+   * (or goes to a choice still to make, as Enter does), and "later" or "cancel" does what Later or
+   * Cancel does. Null: not one of these, and it goes to the command step.
+   */
+  const takeTurn = (words: string): CardTook | null => {
+    if (closing.current) return null
+    const fixed = cardWordsOf(words)
+    if (fixed === 'send') return { line: trySend('voice') ? SENT : null }
+    if (fixed === 'later') {
+      cancel()
+      return { line: null }
+    }
+    return null
+  }
+
   // The listening and V's answers run outside React: they call the newest of these.
   const trySendRef = useRef(trySend)
   const cancelRef = useRef(cancel)
+  const takeTurnRef = useRef(takeTurn)
   useLayoutEffect(() => {
     trySendRef.current = trySend
     cancelRef.current = cancel
+    takeTurnRef.current = takeTurn
   })
 
   // The listening for "send it", as the card opens after a spoken command, until it is over. The
@@ -724,6 +772,13 @@ function DraftCard({
     }
     const { command } = heard
     switch (command.action) {
+      case 'log_call':
+      case 'task':
+      case 'email':
+      case 'pre_read':
+      case 'open':
+        // A new command while this card is open: this one first (PLAN-V24 choice 13, TBC).
+        return { kind: 'show', line: SEND_OR_KEEP, unsure: null, again: false }
       case 'unclear':
         // The words wait in the strip's text line, to fix or say again (PLAN-V23 T1-6).
         return unclearAnswer(command, heard.words)
@@ -757,6 +812,42 @@ function DraftCard({
     }
     return { kind: 'show', line: CARD_CAN, unsure: command.unsure, again: true }
   }
+
+  // The conversation's answers to turns said to the card come here too (PLAN-V24 T2-3).
+  const onVoiceAnswerRef = useRef(onVoiceAnswer)
+  useLayoutEffect(() => {
+    onVoiceAnswerRef.current = onVoiceAnswer
+  })
+
+  // While the conversation is on and the card open, it hears each turn first (PLAN-V24 T2-3).
+  useEffect(() => {
+    if (!conversation || !open) return undefined
+    return conversation.attachCard({
+      take: (words) => takeTurnRef.current(words),
+      card: () => {
+        const now = latest.current.draft
+        return { action: now.action, boxes: [...BOXES[now.action]] }
+      },
+      answer: (heard) => onVoiceAnswerRef.current(heard),
+    })
+  }, [conversation, open])
+
+  // The conversation, as the card's foot shows it.
+  const talk = useSyncExternalStore(
+    conversation?.subscribe ?? noSubscribe,
+    conversation?.getSnapshot ?? idleSnapshot,
+  )
+  const talking =
+    conversation !== null &&
+    talk.conversation !== null &&
+    (talk.phase === 'starting' || talk.phase === 'listening')
+  // It stopped with a line while the card heard it: the quiet stop, or a problem. V listens again.
+  const [heardTalk, setHeardTalk] = useState(false)
+  if (talking && !heardTalk) setHeardTalk(true)
+  const talkEnded =
+    heardTalk && conversation !== null && talk.phase === 'problem' && talk.problem
+      ? stripProblem(talk.problem)
+      : null
 
   /** V on the card, or Say it again: a change by voice. `byKey`: the V key, which may be held. */
   const speak = (byKey = false): void => {
@@ -840,6 +931,17 @@ function DraftCard({
       isVKeyOn()
     ) {
       event.preventDefault()
+      // In a conversation, V stops it, or listens again once it stopped (PLAN-V24 T2-3).
+      if (conversation?.pressV()) {
+        vTaken.current = true
+        conversation.vDown()
+        return
+      }
+      // "Keep listening" on and the bar closed: V starts a conversation, which the card hears.
+      if (converse && !conversation) {
+        converse()
+        return
+      }
       speak(true)
     }
   }
@@ -931,7 +1033,7 @@ function DraftCard({
       }}
       onKeyDown={onKeyDown}
       onEscapeKeyDown={onEscape}
-      describedBy={listening ? listenId : undefined}
+      describedBy={listening || talking ? listenId : undefined}
       onOpenAutoFocus={(event) => {
         event.preventDefault()
         // An empty card (PLAN-V23 T4-3) starts in its first box (above): nothing to send yet.
@@ -969,7 +1071,16 @@ function DraftCard({
         {/* Kept in view at the card's foot while its boxes scroll: a call's boxes make the card
             taller than a phone (PLAN-V23 T4-2). */}
         <div className="sticky bottom-0 flex flex-col gap-3 border-t bg-popover px-5 py-3">
-          {voice ? (
+          {talking || talkEnded ? (
+            <ConversationStrip
+              snapshot={talk}
+              hintId={listenId}
+              ended={talkEnded}
+              onStop={() => {
+                conversation?.done()
+              }}
+            />
+          ) : voice ? (
             <VoiceStrip
               ref={changeLine}
               snapshot={snapshot}
@@ -993,7 +1104,7 @@ function DraftCard({
             <ListenStrip id={listenId} ms={t.listen} />
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
-            <HintBar inBox={inBox} escape={putOff} />
+            <HintBar inBox={inBox} escape={putOff} v={talking ? STOP : undefined} />
             <div className="ml-auto flex items-center gap-2">
               <Button
                 type="button"

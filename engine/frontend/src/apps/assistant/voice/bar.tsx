@@ -38,6 +38,9 @@
  *   throws that command away and closes the bar, as before. "That's all" stops it too, and 2
  *   minutes of quiet stops it with Start again (V).
  * - **Words over 2,000 characters** wait in the text line, with the plan's line, to shorten.
+ * - **A review card** a command opens hears the conversation (T2-3): the bar gives way to it while
+ *   it is open, and the card's foot says the mic is on, with Stop (V). The bar comes back as it
+ *   closes, still listening. V on a card with the bar closed starts a conversation.
  */
 import { CircleAlert, RotateCcw } from 'lucide-react'
 import { AnimatePresence, m } from 'motion/react'
@@ -80,15 +83,15 @@ import { Kbd } from '@/components/ui/kbd'
 import { isTyping } from '@/lib/is-typing'
 import { useBarRoom } from '@/lib/use-bar-room'
 import { CardHost } from '../card/host'
-import { cardShownOf, openCard, openedCard } from '../card/store'
+import { cardShownOf, openCard, openedCard, useOpenCard } from '../card/store'
 import { BarSession, MAX_CHARS, type BarProblem, type BarSnapshot, type Times } from './bar-session'
 import { handOver } from './hand-over'
-import { isKeepListeningOn } from './keep-listening'
+import { isKeepListeningOn, useKeepListening } from './keep-listening'
 import { isPlainV, somethingElseOpen, VOICE_BAR } from './keys'
 import { cachedNames, firstCompanyOf, fixNamesOf, hintsOf, namesOnPage } from './names'
 import { onPageOf, panelCompany } from './on-page'
 import { onScreen } from './on-screen'
-import { closeVoiceBar, isVHeld, letGoV, useVoiceBarOpen } from './store'
+import { closeVoiceBar, isVHeld, letGoV, openVoiceBarByKey, useVoiceBarOpen } from './store'
 import { useVKeyOn } from './v-switch'
 import {
   CANCEL,
@@ -341,6 +344,10 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   const still = useStill()
   // "Use V to speak" off (PLAN-V23 T4-1): V is no key here either, so no key cap says it is.
   const vOn = useVKeyOn()
+  const keepListening = useKeepListening()
+  // A review card open now: the bar gives way to it, and its foot shows the conversation (T2-3).
+  const card = useOpenCard()
+  const shown = open && card === null
 
   // A new session each time the bar opens, with what is on screen as it opens.
   const [opened, setOpened] = useState(false)
@@ -443,6 +450,11 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   )
   const { phase } = snapshot
 
+  // A turn that waited for a card that closed, or never came to hear it, goes on (T2-3).
+  useEffect(() => {
+    session?.cardChanged()
+  }, [session, card])
+
   // The bar's own keys, while it is open: V is Done (or listens again), Esc is Cancel. A V that
   // listens again and is held ends the talk as it comes up, as the V that opened the bar does.
   useEffect(() => {
@@ -490,7 +502,7 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   const whyId = useId()
   const bar = useRef<HTMLDivElement | null>(null)
   const line = useRef<HTMLInputElement | null>(null)
-  const room = useBarRoom(open)
+  const room = useBarRoom(shown)
   const setBar = useCallback(
     (element: HTMLDivElement | null) => {
       bar.current = element
@@ -511,9 +523,10 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   }, [open])
   useEffect(() => {
     if (open && phase === 'typing') line.current?.focus()
-    // Out of the text line (sent, or back to the mic): the bar keeps the focus for its keys.
-    else if (open && document.activeElement === document.body) bar.current?.focus()
-  }, [open, phase])
+    // Out of the text line (sent, or back to the mic), or back after a card: the bar keeps the
+    // focus for its keys.
+    else if (shown && document.activeElement === document.body) bar.current?.focus()
+  }, [open, shown, phase])
 
   const title = titleOf(snapshot)
   const listening = phase === 'starting' || phase === 'listening'
@@ -573,7 +586,7 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   return (
     <>
       <AnimatePresence>
-        {open ? (
+        {shown ? (
           <m.div
             key="voice-bar"
             ref={setBar}
@@ -766,8 +779,14 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
           </m.div>
         ) : null}
       </AnimatePresence>
-      {/* The review card a command opens, after the bar closes (T3-3). */}
-      <CardHost env={env} makeTool={makeTool} read={read} />
+      {/* The review card a command opens (T3-3): it hears the conversation while it listens. */}
+      <CardHost
+        env={env}
+        makeTool={makeTool}
+        read={read}
+        conversation={open && session?.keepsListening ? session : null}
+        converse={keepListening && !open ? openVoiceBarByKey : null}
+      />
     </>
   )
 }

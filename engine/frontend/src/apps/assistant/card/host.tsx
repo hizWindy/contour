@@ -22,8 +22,14 @@ import { draftsLeftWords, OPEN } from './words'
 
 const Dictation = lazy(() => import('./dictation'))
 
-/** For tests: what the card is handed (the fake mic, the waits). */
-export type CardHostProps = Pick<ReviewCardProps, 'env' | 'makeTool' | 'read' | 'times'>
+/**
+ * What the card is handed: for tests, the fake mic and the waits; from the voice bar, its
+ * conversation, which an open card hears (PLAN-V24 T2-3).
+ */
+export type CardHostProps = Pick<
+  ReviewCardProps,
+  'env' | 'makeTool' | 'read' | 'times' | 'conversation' | 'converse'
+>
 
 /**
  * A draft whose hold a closed page cut off (choice 22) is offered once, as the bar's code loads on
