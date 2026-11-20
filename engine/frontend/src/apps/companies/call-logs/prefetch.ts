@@ -5,11 +5,16 @@
  * notes hooks stay out of the first visit. The page asks with the same query options, so its
  * requests join these.
  *
+ * The calls that need a company (PLAN-V24 T3-3, the group above the tabs) are asked for too when
+ * the counts in the cache say there are some. The menu reads the counts on every page, so they are
+ * usually there; with none known, the group asks once the page has them.
+ *
  * Once the page is open and its own tab is in, `warmOtherTabs` asks quietly for the first list of
  * the other two tabs (Improvements 1, #10), so a click on a tab shows its rows at once.
  */
 import type { QueryClient } from '@tanstack/react-query'
 import type { SignIn } from '@/api/hooks/auth'
+import type { CallNoteSummary } from '@/api/types'
 import {
   callNoteHistoryQueryOptions,
   callNoteOptionsQueryOptions,
@@ -57,6 +62,10 @@ export function prefetchCallLogs({ client, search }: PrefetchArgs): void {
   if (!canUse(client.getQueryData<SignIn>(queryKeys.auth.me()), 'companies.call_logs')) return
   void client.prefetchQuery(callNoteOptionsQueryOptions())
   void client.prefetchQuery(callNoteSummaryQueryOptions())
+  const counts = client.getQueryData<CallNoteSummary>(queryKeys.companies.callNoteSummary())
+  if ((counts?.needs_company ?? 0) > 0) {
+    void client.prefetchQuery(callNotesQueryOptions(callLogsQuery('needs_company')))
+  }
   void startTab(client, readTab(search), readHistory(search))
 }
 

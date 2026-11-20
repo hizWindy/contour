@@ -11,6 +11,11 @@
  * - **Needs a look:** a save that failed, or one HubSpot may or may not have, with what to do
  *   (`needs-look.tsx`).
  *
+ * Above the tabs, "Needs a company" (PLAN-V24 T3-3) lists the calls saved before their company
+ * was found, with their count, and only when there are some (`needs-company.tsx`). The page waits
+ * for the counts as well as the switches before it draws the tabs, so the group never pushes them
+ * down as it arrives.
+ *
  * The rep sees their own notes (`mine`). A team view for Admins is TBC. The tab is in the address,
  * so a link or Back opens the same one. "Log call" in the header logs a call that wasn't prepped
  * (`log-call.tsx`). Ctrl+K's "Log a call" opens this page with `?log=1` (T3-7): the company
@@ -34,6 +39,7 @@ import { melbourneDate } from '@/lib/format'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { LogCallButton, LogCallSheet, type LogCallState, type LogTarget } from './log-call'
 import { History } from './history'
+import { NeedsCompany } from './needs-company'
 import { NeedsLook } from './needs-look'
 import {
   CALL_LOGS_TABS,
@@ -112,6 +118,8 @@ function CallLogsContent() {
     to_confirm: summary.data?.to_confirm,
     needs_look: summary.data?.needs_look,
   }
+  // The calls saved before their company was found (PLAN-V24): the group above the tabs.
+  const needsCompany = summary.data?.needs_company ?? 0
 
   let body
   if (options.error) {
@@ -126,6 +134,9 @@ function CallLogsContent() {
     body = <CardsPending />
   } else if (!notes.enabled) {
     body = <CallNotesOff />
+  } else if (summary.isPending) {
+    // The counts first: they say whether "Needs a company" sits above the tabs.
+    body = <CardsPending />
   } else {
     body = (
       <>
@@ -139,6 +150,7 @@ function CallLogsContent() {
             {waitingLine(notes.waiting_for)}
           </p>
         )}
+        <NeedsCompany count={needsCompany} today={today} />
         <Tabs
           value={tab}
           onValueChange={(next) => {

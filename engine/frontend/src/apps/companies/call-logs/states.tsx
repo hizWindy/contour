@@ -34,9 +34,9 @@ export function CardsPending({ cards = 3 }: { cards?: number }) {
 }
 
 /** Rows of a list of calls. */
-export function RowsPending({ rows = 5 }: { rows?: number }) {
+export function RowsPending({ rows = 5, label = LOADING }: { rows?: number; label?: string }) {
   return (
-    <Pending label={LOADING}>
+    <Pending label={label}>
       <div className="flex flex-col divide-y rounded-lg border bg-card">
         {Array.from({ length: rows }, (_, index) => (
           <div key={index} className="flex flex-col gap-1.5 px-4 py-3">

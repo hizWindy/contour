@@ -466,13 +466,17 @@ describe('History', () => {
   })
 
   it('is asked for while the code downloads, and the page joins that request', async () => {
-    // The options answer; the list stays on its way, so a second request for it would show.
+    // The options and the counts answer; the list stays on its way, so a second request for it
+    // would show.
     const asked: string[] = []
     vi.stubGlobal(
       'fetch',
       vi.fn((request: Request) => {
         const url = new URL(request.url)
         if (url.pathname === `${NOTES}/options`) return Promise.resolve(Response.json(options()))
+        if (url.pathname === `${NOTES}/summary`) {
+          return Promise.resolve(Response.json({ to_confirm: 0, needs_look: 0, logged_today: 0 }))
+        }
         if (url.pathname === NOTES) asked.push(url.search)
         return new Promise<Response>(() => undefined)
       }),

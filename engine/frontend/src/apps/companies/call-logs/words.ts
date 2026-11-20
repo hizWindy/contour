@@ -494,6 +494,26 @@ export function loggedWhen(at: string | null, today: string = melbourneDate()): 
     : `Logged ${formatDateTime(at)}`
 }
 
+// --- Needs a company (PLAN-V24 T3-3, choice 20; all TBC at Al-khair's look) ------------------
+
+export const NEEDS_COMPANY_TITLE = 'Needs a company'
+export const NEEDS_COMPANY_LIST = 'Calls that need a company'
+export const NEEDS_COMPANY_LOADING = 'Loading the calls that need a company.'
+export const NEEDS_COMPANY_FAILED = "The calls that need a company couldn't be loaded."
+
+/** The plain sentence under the group's count: what it means, and what to do. */
+export function needsCompanyLead(count: number): string {
+  return count === 1
+    ? "We couldn't find the company for this call, so it can't go to HubSpot yet. Pick it, and the call moves to To confirm."
+    : "We couldn't find the company for these calls, so they can't go to HubSpot yet. Pick each one, and its call moves to To confirm."
+}
+
+/** Folded: the group shows its newest calls, and this opens the rest. "Show all 5 calls". */
+export function showAllCallsWords(count: number): string {
+  return `Show all ${pluralise(count, 'call')}`
+}
+export const SHOW_FEWER = 'Show fewer'
+
 // --- Log call (choice 15; the picker's shared words are in ../words.ts) ---------------------
 
 export const WHICH_COMPANY = 'Which company was the call with?'

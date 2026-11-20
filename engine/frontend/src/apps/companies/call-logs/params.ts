@@ -38,6 +38,10 @@ const OLD_LOGGED = 'logged'
 /** The batch is one page: about 10 calls, so 100 is plenty (TBC). */
 export const TO_CONFIRM_LIMIT = 100
 export const NEEDS_LOOK_LIMIT = 50
+/** The calls saved before their company was found (PLAN-V24 T3-3): one page, newest first. */
+export const NEEDS_COMPANY_LIMIT = 50
+/** How many of them the group shows before "Show all", so the tabs stay near the top (TBC). */
+export const NEEDS_COMPANY_SHOWN = 3
 
 export function readTab(search: URLSearchParams): CallLogsTab {
   const value = search.get(TAB_PARAM)
@@ -80,11 +84,18 @@ export function callLogsHref(tab: CallLogsTab = 'to_confirm', { log = false } = 
   return query ? `${CALL_LOGS_PATH}?${query}` : CALL_LOGS_PATH
 }
 
-/** The request for To confirm or Needs a look: the rep's own notes in that state. */
-export function callLogsQuery(tab: 'to_confirm' | 'needs_look'): CallNoteQuery {
-  return tab === 'to_confirm'
-    ? { state: 'to_confirm', mine: true, limit: TO_CONFIRM_LIMIT, offset: 0 }
-    : { state: 'needs_look', mine: true, limit: NEEDS_LOOK_LIMIT, offset: 0 }
+const LIMITS = {
+  to_confirm: TO_CONFIRM_LIMIT,
+  needs_look: NEEDS_LOOK_LIMIT,
+  needs_company: NEEDS_COMPANY_LIMIT,
+} as const
+
+/**
+ * The request for To confirm, Needs a look, or the calls that need a company (PLAN-V24, the group
+ * at the top of the page): the rep's own notes in that state.
+ */
+export function callLogsQuery(state: keyof typeof LIMITS): CallNoteQuery {
+  return { state, mine: true, limit: LIMITS[state], offset: 0 }
 }
 
 // --- History's search and filters (PLAN-V18 T3-6), in the address too ---------------------------

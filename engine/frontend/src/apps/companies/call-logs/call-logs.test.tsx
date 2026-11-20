@@ -1426,18 +1426,26 @@ describe('the line beside Send', () => {
 
 describe('what Call logs asks for first (PLAN-V7 C1)', () => {
   it('starts the switches, the counts and To confirm while its code downloads, and uses them', async () => {
-    // The switches answer (the page shows its tabs only once it knows call notes are on); the
-    // rest stays on its way, so a second request for it would show.
+    // The switches answer at once, and the counts once the page is up (the page shows its tabs
+    // only once it knows call notes are on, and whether calls need a company, PLAN-V24); the rest
+    // stays on its way, so a second request for any of it would show.
     const calls = new Map<string, number>()
+    let answerCounts: () => void = () => undefined
+    const counts = new Promise<void>((resolve) => {
+      answerCounts = resolve
+    })
     vi.stubGlobal(
       'fetch',
-      vi.fn((request: Request) => {
+      vi.fn(async (request: Request) => {
         const url = new URL(request.url)
         const key = `${url.pathname}${url.search}`
         calls.set(key, (calls.get(key) ?? 0) + 1)
-        return url.pathname === `${NOTES}/options`
-          ? Promise.resolve(json(options()))
-          : new Promise<Response>(() => undefined)
+        if (url.pathname === `${NOTES}/options`) return json(options())
+        if (url.pathname === `${NOTES}/summary`) {
+          await counts
+          return json({ to_confirm: 0, needs_look: 0, logged_today: 0, needs_company: 0 })
+        }
+        return new Promise<Response>(() => undefined)
       }),
     )
     const client = createTestQueryClient()
@@ -1453,6 +1461,7 @@ describe('what Call logs asks for first (PLAN-V7 C1)', () => {
       `${NOTES}?state=to_confirm&mine=true&limit=100&offset=0`,
     ])
     renderWithProviders(<CallLogsPage />, { route: '/assistant/call-logs', queryClient: client })
+    answerCounts()
     expect(await screen.findByRole('tab', { name: 'To confirm' })).toBeInTheDocument()
     await waitFor(() => {
       expect(
