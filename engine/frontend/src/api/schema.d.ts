@@ -217,6 +217,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/assistant/companies/find": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find a company said again
+         * @description Finds the company a rep says (or types) again on the review card, as the command step finds it, with no Claude request and no company on screen: the team's learned names, then our copy, then HubSpot's own search (free, at most 8 seconds), which reads what it finds into our copy (`from_hubspot`). `company` has the command's shape: `heard`, then `found` (one match) or `choices` (two or more, best first, at most 5). Found nowhere after HubSpot was searched: `can_add`, so the card may offer Add to HubSpot. With no HubSpot connection, or HubSpot not answering, it isn't searched, and `can_add` is false. `line` is the command's line for the company. It writes nothing to HubSpot and keeps no copy of the words. It works while the AI sort is off. Meant for a name said or entered, not for each key typed: a name our copy doesn't have asks HubSpot each time. Behind the Call logs or the Meetings tick; a Viewer gets 403 `viewer_read_only`. 422 when `words` is empty or over 120 characters, `words_empty` when nothing is left to search for once tidied, and `contact_details` for an email address or a phone number in the words.
+         */
+        get: operations["find_assistant_company"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/assistant/companies/preview": {
         parameters: {
             query?: never;
@@ -568,7 +588,7 @@ export interface paths {
         head?: never;
         /**
          * Change a call note
-         * @description My edits while the note waits for me, or to the parts not yet in HubSpot of a note that failed or was partly saved: the summary, the outcome, the person, the changes, the follow-ups (with `due_words`, the words the day came from), and `left_out`. Only the parts sent change. Each change is checked as the sorter checks one (a listed field, an office the company has, a value that can be read), and no follow-up is due before today. A call that needs a company (PLAN-V24) takes `company_key`, with only `contact_id` and `outcome` beside it: then it is sorted as a new call is (it comes back `sorting`, or `to_confirm` at once with the AI off), and the words heard teach the mic, as the card's learned names do. Until then it takes only `outcome`. 409 `company_set` for `company_key` on a call that has its company, `company_first` for any other change to a call that needs one. 409 `note_sorting` while it is being sorted, `note_sent` while it is being sent or once it is logged, `part_sent` for a part already in HubSpot. 422 `company_not_found` (a company not open to me), `change_not_possible`, `change_twice`, `task_in_past`, `task_empty`, `owner_not_found` or `person_not_at_company`. 403 `not_your_note` for an Admin's look at someone else's. 404 `note_not_found`. 409 `call_notes_off`.
+         * @description My edits while the note waits for me, or to the parts not yet in HubSpot of a note that failed or was partly saved: the summary, the outcome, the person, the changes, the follow-ups (with `due_words`, the words the day came from), and `left_out`. Only the parts sent change. Each change is checked as the sorter checks one (a listed field, an office the company has, a value that can be read), and no follow-up is due before today. A call that needs a company (PLAN-V24) takes `company_key`, with only `contact_id`, `outcome` and `teach` beside it: then it is sorted as a new call is (it comes back `sorting`, or `to_confirm` at once with the AI off), and the words heard teach the mic, as the card's learned names do, unless `teach` is false (a company picked from the command's own choices). Until then it takes only `outcome`. 409 `company_set` for `company_key` on a call that has its company, `company_first` for any other change to a call that needs one. 409 `note_sorting` while it is being sorted, `note_sent` while it is being sent or once it is logged, `part_sent` for a part already in HubSpot. 422 `company_not_found` (a company not open to me), `change_not_possible`, `change_twice`, `task_in_past`, `task_empty`, `owner_not_found` or `person_not_at_company`. 403 `not_your_note` for an Admin's look at someone else's. 404 `note_not_found`. 409 `call_notes_off`.
          */
         patch: operations["edit_call_note"];
         trace?: never;
@@ -2538,6 +2558,20 @@ export interface components {
             hubspot_url: string | null;
         };
         /**
+         * AssistantCompanyFind
+         * @description A company said or typed again on the review card, found as a command finds it. Free: no
+         *     Claude request.
+         */
+        AssistantCompanyFind: {
+            /** @description As a command's `company`: the words as heard, then `found` (one match) or `choices` (two or more, best first), with `from_hubspot`, and `can_add` when it is found nowhere. `from_page` is always false: the card sends no company on screen */
+            company: components["schemas"]["AssistantCompany"];
+            /**
+             * Line
+             * @description The company's line, as a command gives it in `unsure`: like 'Northwind Pty Ltd is new in HubSpot. We'll use it.', 'Which North Wind?' or 'North Wind isn't in HubSpot. Add it, or pick another company.' None when one company was found in our copy or by a learned name
+             */
+            line: string | null;
+        };
+        /**
          * AssistantCompanyIn
          * @description A company to add to HubSpot, as the card has it.
          */
@@ -3218,14 +3252,14 @@ export interface components {
          * CallNotePatch
          * @description The rep's edits. Only the parts sent change: `outcome` or `contact_id` sent as null clears
          *     it, and `changes` or `tasks` replace the card's whole list. `company_key` picks the company of
-         *     a call that needs one (PLAN-V24).
+         *     a call that needs one (PLAN-V24), and `teach` says whether that pick teaches the mic.
          */
         CallNotePatch: {
             /** Changes */
             changes?: components["schemas"]["CallNoteChangeIn"][] | null;
             /**
              * Company Key
-             * @description The company, for a call saved before it was found (`needs_company`): a HubSpot company id, or lead:<id>. Taken only then: 409 `company_set` for a call that has its company. Only `contact_id` and `outcome` may come with it. Once it is set, the call is sorted as a new call is, then waits in To confirm. Left out or None: the company stays as it is
+             * @description The company, for a call saved before it was found (`needs_company`): a HubSpot company id, or lead:<id>. Taken only then: 409 `company_set` for a call that has its company. Only `contact_id`, `outcome` and `teach` may come with it. Once it is set, the call is sorted as a new call is, then waits in To confirm. Left out or None: the company stays as it is
              */
             company_key?: string | null;
             /**
@@ -3244,6 +3278,11 @@ export interface components {
             summary?: string | null;
             /** Tasks */
             tasks?: components["schemas"]["CallNoteTaskIn"][] | null;
+            /**
+             * Teach
+             * @description For a pick (`company_key`): whether the words heard teach the mic, as a learned name. True, or left out: they do, as before. Send false when the rep picked the company from the command's own choices ('Which Sample?'), which shouldn't teach (PLAN-V23). The call is sorted the same either way. Read only with `company_key`: on its own it changes nothing
+             */
+            teach?: boolean;
         };
         /** CallNotePreview */
         CallNotePreview: {
@@ -12690,6 +12729,128 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssistantCompanyAdded"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    find_assistant_company: {
+        parameters: {
+            query: {
+                /** @description The company's name as said or typed, 1 to 120 characters */
+                words: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantCompanyFind"];
                 };
             };
             /** @description The request can't be understood */

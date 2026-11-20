@@ -425,6 +425,33 @@
         "title": "AssistantCompanyAdded",
         "type": "object"
       },
+      "AssistantCompanyFind": {
+        "description": "A company said or typed again on the review card, found as a command finds it. Free: no\nClaude request.",
+        "properties": {
+          "company": {
+            "$ref": "#/components/schemas/AssistantCompany",
+            "description": "As a command's `company`: the words as heard, then `found` (one match) or `choices` (two or more, best first), with `from_hubspot`, and `can_add` when it is found nowhere. `from_page` is always false: the card sends no company on screen"
+          },
+          "line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The company's line, as a command gives it in `unsure`: like 'Northwind Pty Ltd is new in HubSpot. We'll use it.', 'Which North Wind?' or 'North Wind isn't in HubSpot. Add it, or pick another company.' None when one company was found in our copy or by a learned name",
+            "title": "Line"
+          }
+        },
+        "required": [
+          "company",
+          "line"
+        ],
+        "title": "AssistantCompanyFind",
+        "type": "object"
+      },
       "AssistantCompanyIn": {
         "additionalProperties": false,
         "description": "A company to add to HubSpot, as the card has it.",
@@ -1841,7 +1868,7 @@
         "type": "object"
       },
       "CallNotePatch": {
-        "description": "The rep's edits. Only the parts sent change: `outcome` or `contact_id` sent as null clears\nit, and `changes` or `tasks` replace the card's whole list. `company_key` picks the company of\na call that needs one (PLAN-V24).",
+        "description": "The rep's edits. Only the parts sent change: `outcome` or `contact_id` sent as null clears\nit, and `changes` or `tasks` replace the card's whole list. `company_key` picks the company of\na call that needs one (PLAN-V24), and `teach` says whether that pick teaches the mic.",
         "properties": {
           "changes": {
             "anyOf": [
@@ -1869,7 +1896,7 @@
                 "type": "null"
               }
             ],
-            "description": "The company, for a call saved before it was found (`needs_company`): a HubSpot company id, or lead:<id>. Taken only then: 409 `company_set` for a call that has its company. Only `contact_id` and `outcome` may come with it. Once it is set, the call is sorted as a new call is, then waits in To confirm. Left out or None: the company stays as it is",
+            "description": "The company, for a call saved before it was found (`needs_company`): a HubSpot company id, or lead:<id>. Taken only then: 409 `company_set` for a call that has its company. Only `contact_id`, `outcome` and `teach` may come with it. Once it is set, the call is sorted as a new call is, then waits in To confirm. Left out or None: the company stays as it is",
             "title": "Company Key"
           },
           "contact_id": {
@@ -1944,6 +1971,11 @@
               }
             ],
             "title": "Tasks"
+          },
+          "teach": {
+            "description": "For a pick (`company_key`): whether the words heard teach the mic, as a learned name. True, or left out: they do, as before. Send false when the rep picked the company from the command's own choices ('Which Sample?'), which shouldn't teach (PLAN-V23). The call is sorted the same either way. Read only with `company_key`: on its own it changes nothing",
+            "title": "Teach",
+            "type": "boolean"
           }
         },
         "title": "CallNotePatch",
@@ -22815,6 +22847,162 @@
         ]
       }
     },
+    "/companies/assistant/companies/find": {
+      "get": {
+        "description": "Finds the company a rep says (or types) again on the review card, as the command step finds it, with no Claude request and no company on screen: the team's learned names, then our copy, then HubSpot's own search (free, at most 8 seconds), which reads what it finds into our copy (`from_hubspot`). `company` has the command's shape: `heard`, then `found` (one match) or `choices` (two or more, best first, at most 5). Found nowhere after HubSpot was searched: `can_add`, so the card may offer Add to HubSpot. With no HubSpot connection, or HubSpot not answering, it isn't searched, and `can_add` is false. `line` is the command's line for the company. It writes nothing to HubSpot and keeps no copy of the words. It works while the AI sort is off. Meant for a name said or entered, not for each key typed: a name our copy doesn't have asks HubSpot each time. Behind the Call logs or the Meetings tick; a Viewer gets 403 `viewer_read_only`. 422 when `words` is empty or over 120 characters, `words_empty` when nothing is left to search for once tidied, and `contact_details` for an email address or a phone number in the words.",
+        "operationId": "find_assistant_company",
+        "parameters": [
+          {
+            "description": "The company's name as said or typed, 1 to 120 characters",
+            "in": "query",
+            "name": "words",
+            "required": true,
+            "schema": {
+              "description": "The company's name as said or typed, 1 to 120 characters",
+              "examples": [
+                "North Wind"
+              ],
+              "maxLength": 120,
+              "minLength": 1,
+              "pattern": "^[^\\x00]*$",
+              "title": "Words",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantCompanyFind"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Find a company said again",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
     "/companies/assistant/companies/preview": {
       "post": {
         "description": "What adding this company to HubSpot would do, for the card's 'Add to HubSpot': `similar`, HubSpot's companies with a close name (its own search, one free request), best first, at most 5, each read into our copy so the card can use it; `exists`, a company with this name already (adding it again is refused); whether it can be added now (`can_write`, `waiting_for`); and the card's line (`sentence`). Nothing is written to HubSpot. With no HubSpot connection, none are listed and it can't be added. 422 `company_name_empty`, `contact_details`. 503 `hubspot_unavailable` when HubSpot didn't answer. A Viewer gets 403 `viewer_read_only`.",
@@ -25999,7 +26187,7 @@
         ]
       },
       "patch": {
-        "description": "My edits while the note waits for me, or to the parts not yet in HubSpot of a note that failed or was partly saved: the summary, the outcome, the person, the changes, the follow-ups (with `due_words`, the words the day came from), and `left_out`. Only the parts sent change. Each change is checked as the sorter checks one (a listed field, an office the company has, a value that can be read), and no follow-up is due before today. A call that needs a company (PLAN-V24) takes `company_key`, with only `contact_id` and `outcome` beside it: then it is sorted as a new call is (it comes back `sorting`, or `to_confirm` at once with the AI off), and the words heard teach the mic, as the card's learned names do. Until then it takes only `outcome`. 409 `company_set` for `company_key` on a call that has its company, `company_first` for any other change to a call that needs one. 409 `note_sorting` while it is being sorted, `note_sent` while it is being sent or once it is logged, `part_sent` for a part already in HubSpot. 422 `company_not_found` (a company not open to me), `change_not_possible`, `change_twice`, `task_in_past`, `task_empty`, `owner_not_found` or `person_not_at_company`. 403 `not_your_note` for an Admin's look at someone else's. 404 `note_not_found`. 409 `call_notes_off`.",
+        "description": "My edits while the note waits for me, or to the parts not yet in HubSpot of a note that failed or was partly saved: the summary, the outcome, the person, the changes, the follow-ups (with `due_words`, the words the day came from), and `left_out`. Only the parts sent change. Each change is checked as the sorter checks one (a listed field, an office the company has, a value that can be read), and no follow-up is due before today. A call that needs a company (PLAN-V24) takes `company_key`, with only `contact_id`, `outcome` and `teach` beside it: then it is sorted as a new call is (it comes back `sorting`, or `to_confirm` at once with the AI off), and the words heard teach the mic, as the card's learned names do, unless `teach` is false (a company picked from the command's own choices). Until then it takes only `outcome`. 409 `company_set` for `company_key` on a call that has its company, `company_first` for any other change to a call that needs one. 409 `note_sorting` while it is being sorted, `note_sent` while it is being sent or once it is logged, `part_sent` for a part already in HubSpot. 422 `company_not_found` (a company not open to me), `change_not_possible`, `change_twice`, `task_in_past`, `task_empty`, `owner_not_found` or `person_not_at_company`. 403 `not_your_note` for an Admin's look at someone else's. 404 `note_not_found`. 409 `call_notes_off`.",
         "operationId": "edit_call_note",
         "parameters": [
           {
