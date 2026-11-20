@@ -7,7 +7,8 @@
  * finds the pauses; each turn's sound goes to the model in a Web Worker, and its words come back
  * as `onWords`. While you talk there are no words yet (the bars move); `onHearing` isn't used.
  * Stop gives the last words, then `onFinished`. The name hints aren't used: Moonshine can't take
- * them, and the mic session's name fix (PLAN-V23) works on these words as on any.
+ * them. Moonshine often writes names in small letters ("sample logistics"), so the tool says so
+ * (`nameCase: 'any'`) and the mic session's name fix (PLAN-V23) finds names by their words.
  *
  * **The voice stays on the device.** The sound goes from the mic to the worker, and nowhere else:
  * the tool makes no request, and the worker's only requests are for the model's own files.
@@ -22,6 +23,7 @@
  * with `import()`, so none of it is in the first visit.
  */
 
+import type { NameCase } from '../name-fix'
 import type { VoiceProblem, VoiceTool, VoiceToolEvents } from '../voice-tool'
 import { captureSound } from './capture'
 import type { FromEngine, Progress, ToEngine } from './engine'
@@ -37,6 +39,11 @@ export interface WorkerLike {
   terminate(): void
   onmessage: ((event: MessageEvent<FromEngine>) => void) | null
   onerror: ((event: ErrorEvent) => void) | null
+}
+
+/** A voice tool that writes names in any case, so the name fix reads them by their words. */
+export interface OnDeviceTool extends VoiceTool {
+  readonly nameCase: NameCase
 }
 
 /** What the tool runs on. */
@@ -202,7 +209,10 @@ function connect({ model = DEFAULT_MODEL, device, env = ON_DEVICE }: OnDeviceOpt
 }
 
 /** The on-device model as a voice tool. */
-export function onDeviceModel(events: VoiceToolEvents, options: OnDeviceOptions = {}): VoiceTool {
+export function onDeviceModel(
+  events: VoiceToolEvents,
+  options: OnDeviceOptions = {},
+): OnDeviceTool {
   lastId += 1
   const id = lastId
   const env = options.env ?? ON_DEVICE
@@ -278,6 +288,7 @@ export function onDeviceModel(events: VoiceToolEvents, options: OnDeviceOptions 
   }
 
   return {
+    nameCase: 'any',
     start(track) {
       if (over || started) return
       if (!track) {

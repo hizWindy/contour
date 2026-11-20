@@ -218,6 +218,10 @@ describe('the on-device voice tool', () => {
     expect(turns[0]?.soundMs).toBeGreaterThanOrEqual(1500)
   })
 
+  it('says it writes names in any case, so the name fix reads them by their words', () => {
+    expect(onDeviceModel(events(), { env: fakeVoice().env }).nameCase).toBe('any')
+  })
+
   it('keeps one worker for every tool, so the model loads once', async () => {
     const fake = fakeVoice()
     await listening(fake)
