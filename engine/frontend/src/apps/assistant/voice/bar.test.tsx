@@ -1050,6 +1050,8 @@ describe('every device (PLAN-V24 T4-3)', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Getting voice ready on this phone')
     // Nothing to stop yet: Type instead, and Cancel.
     expect(buttons(found)).toEqual(['Type instead', 'Cancel'])
+    // No mic is open, so no level bars: the title has the whole row on a phone.
+    expect(found.querySelector('[data-slot=frequency-bars]')).toBeNull()
     expect(mic.asked).toEqual([])
     await user.click(within(found).getByRole('button', { name: 'Type instead' }))
     const line = within(found).getByRole('textbox', { name: 'Type what to do' })

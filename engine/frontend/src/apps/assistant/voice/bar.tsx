@@ -678,8 +678,9 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
               >
                 {title}
               </p>
-              {listening ? (
-                // With reduced motion: one still bar beside the word above.
+              {listening && !preparing ? (
+                // With reduced motion: one still bar beside the word above. Not while the model
+                // gets ready: no mic is open yet, and the title needs the room on a phone.
                 <FrequencyBars source={snapshot.mic?.bars ?? null} label="" className="h-6" />
               ) : null}
             </div>
