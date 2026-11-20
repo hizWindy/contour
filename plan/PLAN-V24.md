@@ -5,8 +5,8 @@ This plan makes the Assistant's mic strong on every device, and changes nothing 
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
-- **Last updated:** 21 Nov 2026 (Parts 1 and 2, and T3-1 to T3-3, done. T4-3 is being built in a helper copy while Part 5 starts, on Al-khair's ask to go faster).
-- **Progress:** Before the build: 1 of 3. Part 1: 5 of 5. Part 2: 6 of 6. Part 3: 3 of 4. Part 4: 0 of 4 (T4-1 and T4-2 built, T4-3 being built, in a helper copy). Part 5: 0 of 3. M1 to M4: 0 of 4.
+- **Last updated:** 21 Nov 2026 (the whole build is joined on `plan-v24`: Parts 1 and 2, T3-1 to T3-3, T4-1 to T4-3, T5-1 and T5-2. The checks T3-4, T4-4 and T5-3 are next).
+- **Progress:** Before the build: 1 of 3. Part 1: 5 of 5. Part 2: 6 of 6. Part 3: 3 of 4. Part 4: 3 of 4. Part 5: 2 of 3. M1 to M4: 0 of 4.
 - **Sources:**
   - Al-khair's chat on 21 Nov, after Levi tried the Assistant with him on 20 Nov;
   - the code on `master` (`b84c3cf`), read on 21 Nov;
@@ -193,7 +193,7 @@ One session builds every step, in order: S0, Part 1, Part 2, Part 3, Part 4, the
 - Leave ports 8000 and 5173 alone, and those of older plans (8041 to 8101, 5211 to 5271).
 
 **What to expect.**
-- **Website work, but for T3-1 and choice 27's one sentence.** If a step seems to need more of the backend, stop and ask.
+- **Website work, but for T3-1, choice 27's one sentence, and the two backend changes Al-khair approved on 21 Nov** (a company find for the card, and a pick that doesn't teach). If a step seems to need more of the backend, stop and ask.
 - **One migration,** `0027_v24_call_needs_company`, made in T3-1. It follows `0026_v23_names_and_hubspot_user`. S0 checks that.
 - **The contract and the website's types** are made again after T3-1 (`uv run --no-sync engine openapi`, then `npm run types`). Never edit `openapi.json` or `src/api/schema.d.ts` by hand.
 - **The model's files never go in git.** A build script fetches them at a fixed version and checks their checksum, as PLAN-V18 T3-5 (a) set out.
@@ -338,7 +338,7 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
 
 - [x] **T3-1. Calls saved before their company** Done 21 Nov 2026 (`866e20e` to `1e579e0`, built on `plan-v24-api` and cherry-picked). (backend: `apps/companies/schemas.py`, `tables.py`, `note_store.py`, `note_batch.py`, `api_notes.py`, and the migration). Choices 17, 18 and 21, and "The contract".
   - **Done when:** tests pass: a call with no company is saved as `needs_company`, with the name as heard, and isn't sorted; the PATCH sets its company and starts the sort; a company the person can't see gives 422; a company on a call already sorted gives 409; the send leaves a `needs_company` call out and says why; a Viewer can't do any of it; and the migration goes up and down cleanly.
-- [x] **T3-2. The card saves at once, and hears the company again** Done 21 Nov 2026 (`4cd8e3e` to `b5f0a2a`). Built, waiting for Al-khair's look. Its search reads our copy only: a gap against choice 19, in the Log. (`card/card.tsx`, `card/company.tsx`, `card/send.ts` and `card/drafts.ts`). Choices 17 and 19.
+- [x] **T3-2. The card saves at once, and hears the company again** Done 21 Nov 2026 (`4cd8e3e` to `b5f0a2a`, then `b26504a` to `2e6ed48` for choice 19's find, on Al-khair's word). Built, waiting for Al-khair's look. (`card/card.tsx`, `card/company.tsx`, `card/send.ts` and `card/drafts.ts`). Choices 17 and 19.
   - **Done when:** tests pass: a call whose company isn't found is saved at once as "Needs a company"; Later keeps it in Call logs, not in this browser; the next words fill the company search and show its results as choices; "the first one" picks, and the call is sorted; a name found nowhere says so and keeps the call; and tasks and emails are still kept in this browser, as now.
 - [x] **T3-3. "Needs a company" in Call logs** Done 21 Nov 2026 (`c90e8be` to `4747216`, built on `plan-v24-logs` and cherry-picked). Built, waiting for Al-khair's look. (`apps/companies/call-logs/`). Choice 20.
   - **Done when:** tests at 1440 and 390 px pass: the group sits at the top with its count; each row shows the name as heard and "Pick company"; a pick moves the call to To confirm once it is sorted; a send leaves these calls out and says why; and Al-khair has seen it.
@@ -436,17 +436,48 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - "Still no '{words}'. Say it again, or pick it later in Call logs.", and on a task card "Still no '{words}'. Say it again, or pick it.";
   - "1 call needs a company first. It stays in Call logs.", with Open Call logs.
 
+- 21 Nov 2026: Al-khair's two backend changes were built by a backend agent in 3 commits on `plan-v24-api` (`08ac349`, `9371bdb` and `0198862`). They were cherry-picked onto `plan-v24-card` (`01f48b5` to `e9af013`) for the card's side, and onto `plan-v24` as `b26504a` to `7a6ea90`.
+- **The find:** `GET /companies/assistant/companies/find?words=...`, with no AI.
+  - It runs the command step's own company search, now one shared function (`company_for_words`): the learned names, our copy, then HubSpot's own search.
+  - It answers with the command step's company shape (found, up to 5 choices, and `can_add`) and its line.
+  - The words are 1 to 120 characters. An email or phone gives 422 `contact_details`, as Add to HubSpot does.
+  - It needs the Call logs or Meetings tick, and never works for a Viewer. It works with the AI sort off.
+- **The PATCH** gains `teach`, which means true when left out. A "Which Sample?" pick sends `teach: false`, so the call can be saved at once.
+- The tests:
+  - `tests/companies/test_assistant_find_company.py`: our copy, a learned name, HubSpot's search (with a fake HubSpot), nothing anywhere, a Viewer refused, no AI ever called, and the 422s;
+  - `test_call_notes_company.py`: `teach: false` teaches nothing and the call is sorted as now, and `teach` on its own changes nothing.
+- The checks:
+  - Ruff and its format check are clean (479 files), and so is mypy (443);
+  - the fast tests: 3,558 passed and 28 skipped. The Companies tests: 679 passed;
+  - the contract gate passes alone (3 passed). With the whole suite collected, it has the known enum-order failure (`confidence` on the lead models, and `TodayTask.priority`). None of it comes from this change.
+- The `security-check` skill found no blocker. Two low points, **TBC**:
+  - the words travel in the address, as `GET /companies/search?q=` does today, so the host's request logs may keep a company name. A POST would avoid it;
+  - the find has no limit for each person. Each name our copy lacks costs one free HubSpot search.
+- Outside the two changes: `no_default_in_types` moved to `core/api/models.py`, so `teach` stays optional in the website's types.
+- 21 Nov 2026: the card's side of choice 19's find was built by the same frontend agent in 3 commits on `plan-v24-card` (`2bb86fc`, `bc12399` and `47ef71c`). With the backend's 3, they were cherry-picked onto `plan-v24` as `b26504a` to `2e6ed48`. This closes the gap above.
+  - A name said again, or typed and then entered, goes through the find:
+    - one found becomes the card's company at once, with "… is new in HubSpot. We'll use it." when HubSpot's search found it;
+    - two or more show as choices ("Which North Wind?");
+    - nowhere shows "Still no …", with Add to HubSpot.
+  - Keys typed still filter our copy. A 404 from the find (an older server, during a deploy) falls back to our copy's search.
+  - A "Which Sample?" call is saved at once as "Needs a company", and a pick from the command's own choices sends `teach: false`. A pick from the find's results teaches.
+  - Its tests: `card/find-company.test.tsx` (11 tests), and one changed test in `needs-company.test.tsx`.
+  - Its checks: lint 0 problems, types 0 errors, 2,927 of 2,927 tests in 187 files, and the build passes. The first visit is 249,084 B in 41 files (+489 B on S0). The card's side adds nothing to it.
+  - **TBC** for Al-khair:
+    - a single match from the find is picked at once, with no second look. Once sent, it can't be redone (409 `company_set`);
+    - a find answer that comes after the rep typed something else still picks, if it found one company.
+
 ## Part 4: every device
 
-**Progress:** 0 of 4. Needs S2's decision first.
+**Progress:** 3 of 4. Built before S2, with the plan's **TBC** defaults: S2 decides the model, the GPU and the download size.
 
-- [ ] **T4-1. The model's files and the worker** (a build script in `engine/frontend/scripts/`, a Web Worker beside `voice-tool.ts`, `index.html`, the Caddyfile and `csp.test.ts`). Choices 23 and 25.
+- [x] **T4-1. The model's files and the worker** Done 21 Nov 2026 (`442ec59` to `d0356aa`, built on `plan-v24-device` and cherry-picked). App Platform's size limit is checked on paper only; it is tried live at M2 (**TBC**). (a build script in `engine/frontend/scripts/`, a Web Worker beside `voice-tool.ts`, `index.html`, the Caddyfile and `csp.test.ts`). Choices 23 and 25.
   - Check first that App Platform's static site serves files this big (**TBC**). If it can't, stop and tell Al-khair.
   - **Done when:** the build fetches the model at its fixed version and fails on a wrong checksum; the worker loads it and turns a made-up test sound file into words; nothing of it is in the first visit; and `csp.test.ts` passes with the new rules.
-- [ ] **T4-2. The on-device voice tool** (`voice-tool.ts` and a new file beside it, and choice 27's words). Choices 24, 26, 27 and 28.
+- [x] **T4-2. The on-device voice tool** Done 21 Nov 2026 (`5a629de` to `ab0ddd6`, built on `plan-v24-device` and cherry-picked). (`voice-tool.ts` and a new file beside it, and choice 27's words). Choices 24, 26, 27 and 28.
   - It gives the same five events as the browser's tool (`onReady`, `onWords`, `onHearing`, `onFinished` and `onProblem`), so the bar and the card don't change. It listens to our own mic track, the one Part 1 cleaned.
   - **Done when:** tests with a fake worker pass: speech then a pause gives the words once; a long talk gives the words turn by turn; Stop gives the last words, then `onFinished`; a worker that fails gives the "voice tool didn't load" problem; a slow device gives the too-slow problem; and a test proves no request carries the sound.
-- [ ] **T4-3. The engine picks itself, and the download** (`voiceToolFor` in `voice-tool.ts`, `session.ts`, and the profile menu). Choices 22, 25 and 27.
+- [x] **T4-3. The engine picks itself, and the download** Done 21 Nov 2026 (`42ab3b0` to `2636c98`, and `9232e30`). Built, waiting for Al-khair's look at the download line and the menu row. (`voiceToolFor` in `voice-tool.ts`, `session.ts`, and the profile menu). Choices 22, 25 and 27.
   - **Done when:** tests pass: Safari and the installed app on an iPhone, and Firefox, get the model; Chrome on a laptop and on Android gets the service; a service that doesn't start in 5 seconds moves to the model and remembers it; `browser_model` gets the model everywhere; the download shows its progress line and can be skipped with Type instead; and a second visit doesn't download again.
 - [ ] **T4-4. Part 4 check.** As T2-6, plus the `speed-check` skill, and the `security-check` skill on the new package and the content policy. Its numbers: the first visit, the worker's size, and the model's time on a laptop at 4x CPU slowdown.
   - **Done when:** all pass, and the numbers are in the Log.
@@ -486,7 +517,7 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - "Send it." misheard: padding a short turn with silence is being tried.
 - The S2 page is in `plan/shots/v24/s2/` in `../contour-v24-device`, which git ignores. Its README has the iPhone steps.
 
-- 21 Nov 2026: the three fixes, in 4 more commits on `plan-v24-device` (`676657f` to `268c92e`). All 12 commits were cherry-picked onto `plan-v24-wire` (`6a1ea15` to `0cbf545`) in `../contour-v24-device`, a branch made from `plan-v24` at `c9b90a2`, where T4-3 is built.
+- 21 Nov 2026: the three fixes, in 4 more commits on `plan-v24-device` (`676657f` to `268c92e`). All 12 commits were cherry-picked onto `plan-v24-wire` (`6a1ea15` to `0cbf545`) in `../contour-v24-device`, a branch made from `plan-v24` at `c9b90a2`, where T4-3 was built. They are on `plan-v24` as `5a629de` to `491006f`.
 - **A wrong kept file never counts as kept.** Only a copy in our own store counts, and only if it carries the size written when its check passed. A failed check deletes the address from both stores, ours and the service worker's.
 - **Choice 28 on the model's words.** The model's tool says its words don't capitalise names. Then:
   - a run of 2 or more words that is a name, ignoring case, gets the name's capitals: "sample logistics" becomes "Sample Logistics";
@@ -504,18 +535,98 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - Whisper base on the CPU heard every line right, but took 3.5 s.
 - The fixes' checks: lint 0 problems, types 0 errors, 2,536 of 2,536 tests passed, and the build passes. The first visit is the same (+0 kB). The everyday-word list adds about 2 kB to the bar's and the mic card's late files.
 
+- 21 Nov 2026: T4-3 was built by a frontend agent in 8 commits on `plan-v24-wire` (`2e208bc` to `4745dfa`), after Part 4's 12. It was cherry-picked onto `plan-v24` as `42ab3b0` to `2636c98`, by the Part 5 agent. It is built and waiting for Al-khair's look at the download line and the menu row. Nothing was tried in a real browser, or with a real download.
+- **The engine choice.** `engineFor` (`call-notes/mic/voice-engine.ts`) gives:
+  - the browser's service: Chrome or Edge on a laptop, and Chrome on Android;
+  - the model: any browser on an iPhone or iPad, including the installed app and an iPad that shows a Mac's user agent, plus Safari on a Mac and Firefox;
+  - the model everywhere, with `browser_model`.
+- **The 5 second move.** A service that doesn't start within 5 seconds moves to the model, and this browser remembers it (`contour-voice-engine`). It doesn't move during "Reconnecting", or where the model can't run.
+- **The download.** One shared store, `mic/voice-ready.ts`.
+  - The session gets the model ready before the mic opens, so the 5 second start limit never runs during a download.
+  - A laptop that needs the model downloads it when the page is idle, and loads it at the first Speak.
+  - Nothing downloads on a phone before Speak, with typing, or while the setting is unknown. The default is now `typing`.
+- **The rest:**
+  - the name fix gets the tool's name case (choice 28);
+  - `voiceToolFor`, and the old "isn't set up yet" problem, are gone;
+  - Settings calls `browser_model` "A free model on the device: the voice never leaves the device" (choice 27).
+- T4-3's tests: `voice-engine.test.ts`, `session.test.ts` ("the engine picks itself"), `bar-session.test.ts`, `bar.test.tsx`, `mic.test.tsx`, `voice-ready.test.ts`, `on-device/download.test.ts`, `get-ready.test.tsx` and `errors.test.ts`.
+- T4-3's checks, on its branch:
+  - lint 0 problems;
+  - the types show only the 9 T3-1 errors, which T3-3 fixes;
+  - 2,835 tests passed in 181 files;
+  - `npx vite build` passes. `npm run build` stops at those 9 errors there.
+- T4-3's size:
+  - The first visit is 248,904 B of JavaScript (gzip) in 40 files, +309 B on S0. The 40th file is Vite's preload helper (958 B), moved out by the shared code's `import()`. Without that `import()`, it was 39 files and 248,617 B. Accepted.
+  - The late files grew: the bar from 67,788 B to 71,448 B, the mic card from 22,203 B to 25,498 B, and the menu's parts from 12,231 B to 14,350 B.
+  - Loaded only where the model is the engine: the tool, 4,701 B gzip; the worker, 561 kB raw; and the runtime, 14.3 MB (26.9 MB with WebGPU). None is precached.
+- Words for Al-khair's look (**TBC**):
+  - the download line: "Getting voice ready on this phone" (or tablet, or computer), "Only this once." and "41 of 83 MB", with a bar;
+  - "Getting voice ready" while the model loads;
+  - the plan's download-failed and too-slow lines;
+  - new: "Voice to text couldn't start on this device. Use your keyboard's mic, or type.", for a model that won't load;
+  - the menu row: "Get voice ready", "About 83 MB, best on Wi-Fi", then "Voice is ready on this phone".
+- For Al-khair (**TBC**):
+  - a download that started goes on after Type instead or closing, which uses mobile data;
+  - a laptop loads the model only at the first Speak, a second or two of "Getting voice ready";
+  - a move to the model never expires;
+  - while the model gets ready, the bar has no Navy button, and V closes the bar;
+  - `browser_service`'s words still say the voice goes to Google or Microsoft, which is now true only where the service is the engine.
+- Not checked yet:
+  - on an iPhone, whether the sound starts after a long download without a fresh tap (S2);
+  - the download runs on the main thread.
+
 ## Part 5: listening you can see
 
-**Progress:** 0 of 3.
+**Progress:** 2 of 3.
 
-- [ ] **T5-1. The pill, the tone and the lines** (`voice/bar.tsx`, `voice/words.ts`). Choices 29 to 31.
+- [x] **T5-1. The pill, the tone and the lines** Done 21 Nov 2026 (`b5f9e3a`, `0ba196f`, `07f8bc3` and `cfa4e09`). Built, waiting for Al-khair's look. (`voice/bar.tsx`, `voice/words.ts`). Choices 29 to 31.
   - **Done when:** tests at 1440 and 390 px pass: the pill shows while a card is open and goes at the end; Stop on it ends the conversation; each tone plays once (a fake sound); each line is said once to a screen reader; and Al-khair has seen it.
-- [ ] **T5-2. A button for every voice step.** "Decided in chat" 5.
+- [x] **T5-2. A button for every voice step.** Done 21 Nov 2026 (`fadb0e7`). "Decided in chat" 5.
   - **Done when:** two tests do a conversation's work with the mic off, one by keyboard only and one by clicks only: a command typed, a choice picked, a company picked for a call that needs one, Send, Later, Try again, Type instead and Stop.
 - [ ] **T5-3. Part 5 check.** As T2-6, plus the `speed-check` skill. Each screen at 1440, 1280, 768 and 390 px, light and dark, by keyboard only, and with reduced motion.
   - **Done when:** all pass, and the numbers are in the Log.
 
 ### Part 5 Log
+
+- 21 Nov 2026: T5-1 and T5-2 were built by a frontend agent on `plan-v24` in 6 commits (`9232e30` to `cfa4e09`), after it cherry-picked Part 4 and T4-3. They are built and waiting for Al-khair's look. Screenshots of a throwaway page with the real parts are in `plan/shots/v24/t5-1/`, which git ignores.
+- **The pill** (`voice/pill.tsx`, `voice/pill-state.ts`):
+  - It sits under the card, 384 px wide, inside the card's dialog layer (`MicSheet`'s new `aside` slot).
+  - It holds the bars, the bar's title and Stop (V). Under them go the words, the last line or a hint.
+  - It replaces the card's conversation strip, and shows the download, too-slow and download-failed lines.
+  - The card never moves when the pill comes or goes. On a tall card on a phone, the card gives up the pill's height, and Send stays in view.
+  - DESIGN.md bans pills, so it has the 10 px corner, and "pill" is only its name (**TBC**, Al-khair's call).
+- **The tone** (`voice/tone.ts`): two sine notes made in code, 587 Hz then 880 Hz to start, and the reverse to stop.
+  - They are 90 ms each (160 ms in all), at a peak volume of 0.05, about 26 dB under full.
+  - It plays only after a user's gesture, once at the start and once at the stop, not every turn. It doesn't play for the card's 5-second "send it" listen.
+  - **TBC** at the look. Safari's first start tone is untried.
+- **The lines:** "Reconnecting", "Now using {mic}." and the quiet stop are each said once to a screen reader, from the bar to the pill and back.
+- The bar comes back after a card with a 250 ms fade, without rising (principles 02 #20).
+- **T5-2** (`voice/by-hand.test.tsx`): a conversation's work done with the mic off, once by keyboard only (1440 px) and once by clicks only (390 px). It covers:
+  - a command typed, a choice picked, a company picked for a call that needs one, Send and Later;
+  - Try again, on a failed download and on a busy mic;
+  - Type instead, on the download line, on "didn't hear anything" and on words that made no command;
+  - Stop.
+- Two voice-only gaps were found and fixed:
+  - over an open card, once the conversation stopped, only V could listen again, so a phone had no way to;
+  - words that made no command offered only Try again. Type instead now sits beside it.
+- Part 5's tests: `voice/pill.test.tsx` (27 tests, each at 1440 and 390 px), `voice/tone.test.ts` and `voice/tone-session.test.ts`.
+- Part 5's checks:
+  - lint 0 problems, types 0 errors, and 2,947 of 2,947 tests passed in 188 files;
+  - the build passes, and fetched 0.0 MB;
+  - the first visit is 249,090 B of JavaScript (gzip) in 41 files, +495 B on S0. Part 5 adds 0 B;
+  - the CSS is 25,331 B (S0: 25,200), and the bar's late file grew from 28,768 B to 30,595 B gzip.
+- The `design-review` skill on the pill and the card's foot found three things, all fixed:
+  - the pill's buttons were 40 px on a touch screen, not 44 px;
+  - the pill's company hint repeated the card's words;
+  - a card closed within the bar's 150 ms exit could make the bar say the quiet stop again.
+- The review's ideas, **TBC**:
+  - on a phone, which has no Enter key, "Say 'send it' or press Enter" could say "or tap Send";
+  - at silence, the pill's bars read like a dotted line.
+- New words, **TBC**: "Say the company's name." where a card waits on its company, and Type instead beside Try again when words made no command.
+- Not tried: the real app with its backend, a real mic or speech service, a real screen reader, a real phone, and 768 px. On the model's path, loading the model can eat into the card's 5-second listen.
+- Known small gaps:
+  - a V pressed within 150 ms after Esc types a "v" into the closing text line;
+  - a line from a turn's answer, after Stop over a card, shows only once the card closes, as with the old strip.
 
 ## Merge, checks and going live
 
@@ -582,3 +693,7 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
 - S0, to go faster (Al-khair's ask, 21 Nov): two helper copies made from `plan-v24`. `../contour-v24-api` (branch `plan-v24-api`) builds T3-1, and `../contour-v24-device` (branch `plan-v24-device`) builds Part 4's model, worker and tool, while Part 1 is built on `plan-v24`. Their commits are cherry-picked onto `plan-v24`, as PLAN-V23 did with its web copy. Test database suffixes: `_v24` and `_v24api`.
 - 21 Nov 2026: S1's test page is ready in `plan/shots/v24/s1-test/`, which git ignores, with a README of the steps. Its self-test passed 33 of 33 checks with a fake speech service. The real speech service is untried: that is S1, at Al-khair's keyboard.
 - 21 Nov 2026: a third helper copy, `../contour-v24-logs` (branch `plan-v24-logs`, from `plan-v24-api`). It builds T3-3 on top of T3-1's contract, while Part 2 is built on `plan-v24`.
+- 21 Nov 2026, Al-khair's answer in chat ("Build both"): two more backend changes, for choice 19 and decision 7.
+  - A company find for the card, with no AI: our copy, then the learned names, then HubSpot's own search, as the command step finds.
+  - A pick from the command's own choices ("Which Sample?") that doesn't teach the mic, so those calls are saved at once too.
+  - They are built by a backend agent on `plan-v24-api`, and the card's side follows on `plan-v24`.
