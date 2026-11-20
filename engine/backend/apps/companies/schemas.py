@@ -858,14 +858,14 @@ class CallNoteResolve(BaseModel):
 
 class CallNoteSummary(Out):
     # needs_company was added in PLAN-V24: the API always sends it, and the website's types leave
-    # it optional.
+    # it optional. It has no default: the types would make a field with one required.
     model_config = ConfigDict(json_schema_extra=optional_in_types("needs_company"))
 
     to_confirm: int = Field(description="My notes waiting for me to confirm them")
     needs_look: int = Field(description="My notes that failed, were partly saved, or are unsure")
     logged_today: int = Field(description="My notes logged in HubSpot today, Melbourne time")
     needs_company: int = Field(
-        0, description="My calls saved before their company was found, waiting for me to pick it"
+        description="My calls saved before their company was found, waiting for me to pick it"
     )
 
 

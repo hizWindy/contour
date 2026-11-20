@@ -450,13 +450,13 @@ export interface paths {
         };
         /**
          * My call notes
-         * @description A page of notes. `state`: `to_confirm` (being sorted, waiting for me, or being sent), `logged`, `needs_look` (failed, partly saved, or unsure in HubSpot), or `history` (every one of my own notes, in any status, for History in Call logs). `mine` is true by default: `mine=false` shows everyone's notes to an Admin, and anyone else still gets only their own; History is always my own. Filters, for any state: `q` (each word must start a word of the company's name, the person's name, the note or the summary), `outcome` (one of the call outcomes, or `none`), and `since` and `until` (Melbourne days, both counted, from 2000-01-01 to 2100-12-31). To confirm: the notes the sorter was unsure of first, then the oldest call first. Otherwise the newest call first. 422 `day_out_of_range` for a day outside those, with each one in `errors` (`query.since`, `query.until`). 422 `dates_out_of_order` when `since` is after `until`. 409 `call_notes_off`.
+         * @description A page of notes. `state`: `to_confirm` (being sorted, waiting for me, or being sent), `logged`, `needs_look` (failed, partly saved, or unsure in HubSpot), `history` (every one of my own notes, in any status, for History in Call logs), or `needs_company` (calls saved before their company was found, waiting for me to pick it, PLAN-V24; `total` is their count). `mine` is true by default: `mine=false` shows everyone's notes to an Admin, and anyone else still gets only their own; History is always my own. Filters, for any state: `q` (each word must start a word of the company's name or its name as heard, the person's name, the note or the summary), `outcome` (one of the call outcomes, or `none`), and `since` and `until` (Melbourne days, both counted, from 2000-01-01 to 2100-12-31). To confirm: the notes the sorter was unsure of first, then the oldest call first. Otherwise the newest call first. 422 `day_out_of_range` for a day outside those, with each one in `errors` (`query.since`, `query.until`). 422 `dates_out_of_order` when `since` is after `until`. 409 `call_notes_off`.
          */
         get: operations["list_call_notes"];
         put?: never;
         /**
          * Log a call
-         * @description Saves a note after a call. The text may be empty when an outcome is picked (No answer needs no words). An email address or a phone number in it is saved as [email left out] or [number left out]. With Claude sorting, a note with words comes back `sorting` and is sorted in the background; otherwise it is ready to confirm at once, and the rep adds the outcome and any follow-ups. Send an `Idempotency-Key`: the same key from the same person gives back the first note (200), so a double press is one note. 404 `company_not_found`. 422 `note_too_long`, `note_empty`, `person_not_at_company`, `prep_not_found` or `called_later`. 409 `call_notes_off`.
+         * @description Saves a note after a call. The text may be empty when an outcome is picked (No answer needs no words). An email address or a phone number in it is saved as [email left out] or [number left out]. With Claude sorting, a note with words comes back `sorting` and is sorted in the background; otherwise it is ready to confirm at once, and the rep adds the outcome and any follow-ups. A call whose company isn't found yet is saved too (PLAN-V24): leave `company_key` out and send `company_heard`, the name as heard. It comes back `needs_company`, with no company, and isn't sorted or sent until the rep picks its company (PATCH). Send an `Idempotency-Key`: the same key from the same person gives back the first note (200), so a double press is one note. 404 `company_not_found`. 422 `company_needed` (neither `company_key` nor `company_heard`), `note_too_long`, `note_empty`, `person_not_at_company`, `prep_not_found` or `called_later`. 409 `call_notes_off`.
          */
         post: operations["save_call_note"];
         delete?: never;
@@ -476,7 +476,7 @@ export interface paths {
         put?: never;
         /**
          * Send notes to HubSpot
-         * @description Sends my notes to HubSpot, one after another, in the background, in the order given, each as one record (one failure never fails the rest). It answers at once: `sending` is how many started. While a batch is being sent, a second press starts nothing and says so (`already_sending`, still 202). A note left out, not mine, not waiting to be sent, or for a company not in HubSpot yet is in `skipped`, with why. When a call is on a company someone else owns, the owner gets one FYI task in HubSpot once the call is there, with an alert (PLAN-V23 T2-2; Settings can switch it off). A call by someone with no HubSpot user has no owner, and its text starts 'Logged by {name}, {position}, in Contour.' (PLAN-V23 T3-2); their follow-up needs a teammate in its For box: 409 `no_hubspot_user` otherwise, and nothing is sent. 409 `hubspot_writes_off` while sending waits for HubSpot write access: nothing is sent. 409 `call_notes_off`.
+         * @description Sends my notes to HubSpot, one after another, in the background, in the order given, each as one record (one failure never fails the rest). It answers at once: `sending` is how many started. While a batch is being sent, a second press starts nothing and says so (`already_sending`, still 202). A note left out, not mine, not waiting to be sent, or for a company not in HubSpot yet is in `skipped`, with why. A call that needs a company is never sent: it is in `skipped` with 'Needs a company first.', and stays in Call logs (PLAN-V24). When a call is on a company someone else owns, the owner gets one FYI task in HubSpot once the call is there, with an alert (PLAN-V23 T2-2; Settings can switch it off). A call by someone with no HubSpot user has no owner, and its text starts 'Logged by {name}, {position}, in Contour.' (PLAN-V23 T3-2); their follow-up needs a teammate in its For box: 409 `no_hubspot_user` otherwise, and nothing is sent. 409 `hubspot_writes_off` while sending waits for HubSpot write access: nothing is sent. 409 `call_notes_off`.
          */
         post: operations["confirm_call_notes"];
         delete?: never;
@@ -494,7 +494,7 @@ export interface paths {
         };
         /**
          * What Log call offers
-         * @description Whether call notes are on, whether Claude sorts a note, whether sending to HubSpot is ready (and what it waits for, in plain words), the call outcomes, the fields a call may change, when the timer turns Ochre, the longest note, the longest meeting transcript, and which voice to text tool the mic uses. The browser's own speech service (`browser_service`) sends the voice to Google or Microsoft, so until the server allows it (Levi's OK) a saved or server value of it comes as `browser_model`, Whisper in the browser. It answers while call notes are off too.
+         * @description Whether call notes are on, whether Claude sorts a note, whether sending to HubSpot is ready (and what it waits for, in plain words), the call outcomes, the fields a call may change, when the timer turns Ochre, the longest note, the longest meeting transcript, and which voice to text tool the mic uses. The browser's own speech service (`browser_service`) sends the voice to Google or Microsoft, so until the server allows it (Levi's OK) a saved or server value of it comes as `browser_model`, a free model on the device, so the voice never leaves it. It answers while call notes are off too.
          */
         get: operations["call_note_options"];
         put?: never;
@@ -516,7 +516,7 @@ export interface paths {
         put?: never;
         /**
          * Check notes before sending
-         * @description For a list of my notes (waiting to be sent, or the parts not yet sent of a note that failed or was partly saved): each one with what HubSpot has now for every change, read through the writer's preview (while HubSpot can't be written, our copy's value), whether sending is ready, and `totals`: the calls, follow-ups and field changes sending would add. A change whose value moved since I saw it says so (`current_changed`). Notes that can't be sent are in `skipped`, with why. Nothing is written. 409 `call_notes_off`.
+         * @description For a list of my notes (waiting to be sent, or the parts not yet sent of a note that failed or was partly saved): each one with what HubSpot has now for every change, read through the writer's preview (while HubSpot can't be written, our copy's value), whether sending is ready, and `totals`: the calls, follow-ups and field changes sending would add. A change whose value moved since I saw it says so (`current_changed`). Notes that can't be sent are in `skipped`, with why: a call that needs a company (`needs_company`) with 'Needs a company first.' Nothing is written. 409 `call_notes_off`.
          */
         post: operations["preview_call_notes"];
         delete?: never;
@@ -534,7 +534,7 @@ export interface paths {
         };
         /**
          * My call note counts
-         * @description For Home and the menu: my notes to confirm (being sorted, or waiting for me), those that need a look (failed, partly saved, or unsure in HubSpot), and those logged today, Melbourne time. 409 `call_notes_off`.
+         * @description For Home and the menu: my notes to confirm (being sorted, or waiting for me), those that need a look (failed, partly saved, or unsure in HubSpot), those logged today, Melbourne time, and my calls that need a company (saved before their company was found, PLAN-V24). 409 `call_notes_off`.
          */
         get: operations["call_note_summary"];
         put?: never;
@@ -561,14 +561,14 @@ export interface paths {
         post?: never;
         /**
          * Remove a call note
-         * @description Removes my note before it is sent (the toast's Undo), or a note that failed with nothing in HubSpot. A sort still running stops first. 409 `note_sent` while it is being sent, or once any part of it is in HubSpot or may be. 403 `not_your_note`, 404 `note_not_found`, 409 `call_notes_off`.
+         * @description Removes my note before it is sent (the toast's Undo), a call that needs a company (PLAN-V24), or a note that failed with nothing in HubSpot. A sort still running stops first. 409 `note_sent` while it is being sent, or once any part of it is in HubSpot or may be. 403 `not_your_note`, 404 `note_not_found`, 409 `call_notes_off`.
          */
         delete: operations["delete_call_note"];
         options?: never;
         head?: never;
         /**
          * Change a call note
-         * @description My edits while the note waits for me, or to the parts not yet in HubSpot of a note that failed or was partly saved: the summary, the outcome, the person, the changes, the follow-ups (with `due_words`, the words the day came from), and `left_out`. Only the parts sent change. Each change is checked as the sorter checks one (a listed field, an office the company has, a value that can be read), and no follow-up is due before today. 409 `note_sorting` while it is being sorted, `note_sent` while it is being sent or once it is logged, `part_sent` for a part already in HubSpot. 422 `change_not_possible`, `change_twice`, `task_in_past`, `task_empty`, `owner_not_found` or `person_not_at_company`. 403 `not_your_note` for an Admin's look at someone else's. 404 `note_not_found`. 409 `call_notes_off`.
+         * @description My edits while the note waits for me, or to the parts not yet in HubSpot of a note that failed or was partly saved: the summary, the outcome, the person, the changes, the follow-ups (with `due_words`, the words the day came from), and `left_out`. Only the parts sent change. Each change is checked as the sorter checks one (a listed field, an office the company has, a value that can be read), and no follow-up is due before today. A call that needs a company (PLAN-V24) takes `company_key`, with only `contact_id` and `outcome` beside it: then it is sorted as a new call is (it comes back `sorting`, or `to_confirm` at once with the AI off), and the words heard teach the mic, as the card's learned names do. Until then it takes only `outcome`. 409 `company_set` for `company_key` on a call that has its company, `company_first` for any other change to a call that needs one. 409 `note_sorting` while it is being sorted, `note_sent` while it is being sent or once it is logged, `part_sent` for a part already in HubSpot. 422 `company_not_found` (a company not open to me), `change_not_possible`, `change_twice`, `task_in_past`, `task_empty`, `owner_not_found` or `person_not_at_company`. 403 `not_your_note` for an Admin's look at someone else's. 404 `note_not_found`. 409 `call_notes_off`.
          */
         patch: operations["edit_call_note"];
         trace?: never;
@@ -2257,7 +2257,7 @@ export interface paths {
         };
         /**
          * All settings, with their limits and current values
-         * @description Every setting a person may change, then the ones set only on the server, as read-only rows (`editable` false). The browser's own speech service (`voice_tool` `browser_service`) sends the voice to Google or Microsoft, so it waits for Levi's OK, set only on the server (`browser_speech_ok`, a read-only row). Until then, `voice_tool` doesn't list it in `choices`, and a saved or server value of it shows as `browser_model` (Whisper in the browser).
+         * @description Every setting a person may change, then the ones set only on the server, as read-only rows (`editable` false). The browser's own speech service (`voice_tool` `browser_service`) sends the voice to Google or Microsoft, so it waits for Levi's OK, set only on the server (`browser_speech_ok`, a read-only row). Until then, `voice_tool` doesn't list it in `choices`, and a saved or server value of it shows as `browser_model` (a free model on the device).
          */
         get: operations["read_settings"];
         put?: never;
@@ -3033,10 +3033,16 @@ export interface components {
              */
             called_at: string;
             /**
-             * Company Key
-             * @description A HubSpot company id, or lead:<id>
+             * Company Heard
+             * @description The company's name as heard or typed, like North Wind: 1 to 120 characters. Needed when `company_key` is left out (422 `company_needed` otherwise). Kept with the call. An email address or a phone number in it is kept as [email left out] or [number left out]
+             * @example North Wind
              */
-            company_key: string;
+            company_heard?: string | null;
+            /**
+             * Company Key
+             * @description A HubSpot company id, or lead:<id>. Left out when the company isn't found yet: then `company_heard` is needed, and the call is saved `needs_company`, unsorted, until the rep picks its company (PLAN-V24)
+             */
+            company_key?: string | null;
             /**
              * Contact Id
              * @description HubSpot's contact id: who the call was with, if known
@@ -3107,7 +3113,7 @@ export interface components {
             transcript_max_chars?: number;
             /**
              * Voice Tool
-             * @description Which voice to text tool the mic uses: browser_service (the browser's own speech service, the default since PLAN-V22, which sends the voice to Google or Microsoft), browser_model (Whisper in the browser: the voice stays on the laptop) or typing (no mic). browser_service comes only once the server allows it, after Levi's OK: until then a saved or server value of it comes as browser_model
+             * @description Which voice to text tool the mic uses: browser_service (the browser's own speech service, the default since PLAN-V22, which sends the voice to Google or Microsoft), browser_model (a free model on the device: the voice never leaves the device) or typing (no mic). browser_service comes only once the server allows it, after Levi's OK: until then a saved or server value of it comes as browser_model
              * @default browser_service
              * @enum {string}
              */
@@ -3128,10 +3134,21 @@ export interface components {
             called_at: string;
             /** Changes */
             changes: components["schemas"]["CallNoteChange"][];
-            /** Company Key */
-            company_key: string;
-            /** Company Name */
-            company_name: string;
+            /**
+             * Company Heard
+             * @description The company's name as heard or typed when the call was saved without its company, like North Wind. It stays once the company is picked. None when the company was known
+             */
+            company_heard?: string | null;
+            /**
+             * Company Key
+             * @description A HubSpot company id, or lead:<id>. None while the call needs its company (`needs_company`)
+             */
+            company_key: string | null;
+            /**
+             * Company Name
+             * @description The company's name. None while the call needs its company
+             */
+            company_name: string | null;
             /** Confirmed At */
             confirmed_at: string | null;
             /**
@@ -3174,7 +3191,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "sorting" | "to_confirm" | "sending" | "logged" | "partial" | "failed" | "uncertain";
+            status: "needs_company" | "sorting" | "to_confirm" | "sending" | "logged" | "partial" | "failed" | "uncertain";
             /**
              * Steps
              * @description Each step of the send, empty until it is sent
@@ -3200,11 +3217,17 @@ export interface components {
         /**
          * CallNotePatch
          * @description The rep's edits. Only the parts sent change: `outcome` or `contact_id` sent as null clears
-         *     it, and `changes` or `tasks` replace the card's whole list.
+         *     it, and `changes` or `tasks` replace the card's whole list. `company_key` picks the company of
+         *     a call that needs one (PLAN-V24).
          */
         CallNotePatch: {
             /** Changes */
             changes?: components["schemas"]["CallNoteChangeIn"][] | null;
+            /**
+             * Company Key
+             * @description The company, for a call saved before it was found (`needs_company`): a HubSpot company id, or lead:<id>. Taken only then: 409 `company_set` for a call that has its company. Only `contact_id` and `outcome` may come with it. Once it is set, the call is sorted as a new call is, then waits in To confirm. Left out or None: the company stays as it is
+             */
+            company_key?: string | null;
             /**
              * Contact Id
              * @description Who the call was with: one of the company's people
@@ -3299,6 +3322,11 @@ export interface components {
              * @description My notes logged in HubSpot today, Melbourne time
              */
             logged_today: number;
+            /**
+             * Needs Company
+             * @description My calls saved before their company was found, waiting for me to pick it
+             */
+            needs_company?: number;
             /**
              * Needs Look
              * @description My notes that failed, were partly saved, or are unsure
@@ -6836,7 +6864,7 @@ export interface components {
              * @description Where it is: any status but logged
              * @enum {string}
              */
-            status?: "sorting" | "to_confirm" | "sending" | "logged" | "partial" | "failed" | "uncertain";
+            status?: "needs_company" | "sorting" | "to_confirm" | "sending" | "logged" | "partial" | "failed" | "uncertain";
             /**
              * Summary
              * @description The card's summary, or the note's first 200 characters
@@ -14257,7 +14285,7 @@ export interface operations {
     list_call_notes: {
         parameters: {
             query?: {
-                state?: ("to_confirm" | "logged" | "needs_look" | "history") | null;
+                state?: ("to_confirm" | "logged" | "needs_look" | "history" | "needs_company") | null;
                 company_key?: string | null;
                 mine?: boolean;
                 q?: string | null;
