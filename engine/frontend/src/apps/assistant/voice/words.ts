@@ -4,6 +4,7 @@
  * problem says what happened, what still works, and the one thing to do. The mic's own problems
  * keep PLAN-V18's words (`call-notes/mic/words.ts`). The wording is Al-khair's to change.
  */
+import type { DeviceKind } from '@/apps/companies/call-notes/mic/voice-engine'
 
 /**
  * The top bar's mic button (choice 13). Its full name for a screen reader is "Speak (V)", and
@@ -79,8 +80,8 @@ export function unclearWords(words: string): string {
 export const SAY_IT_AGAIN = 'Say it again'
 
 /**
- * With the voice tool not built here (Whisper waits for S1), the bar is the text line only. The mic
- * card says "Your mic works" here, after its check; the bar opens no mic, so it says less.
+ * The voice tool setting couldn't be read (PLAN-V24 T4-3): the bar is the text line only, so no
+ * voice goes anywhere and nothing downloads on a guess. It opens no mic, so it says little.
  */
 export const VOICE_NOT_SET_UP = "Speaking isn't available here yet."
 
@@ -111,3 +112,23 @@ export const LEFT_PAGE = 'The mic stopped when you left the page. What you said 
 /** A turn over the server's 2,000 characters (choice 9, the plan's words). */
 export const TOO_LONG =
   "That's too long for one command. Your words are in the text line: shorten them, then press Enter."
+
+// --- Get voice ready (PLAN-V24 T4-3, choice 25; TBC at Al-khair's look) ---------------------------
+
+/** The account menu's row that downloads the model on the device ahead of the first Speak. */
+export const GET_VOICE_READY = 'Get voice ready'
+
+/** Under it: the size, and when to do it. "About 83 MB, best on Wi-Fi". */
+export function getReadyHint(bytes: number | null): string {
+  return bytes === null || bytes <= 0
+    ? 'Best on Wi-Fi'
+    : `About ${String(Math.max(1, Math.round(bytes / 1_000_000)))} MB, best on Wi-Fi`
+}
+
+/** Once this browser keeps the model, said plainly. */
+export function voiceReadyOn(device: DeviceKind): string {
+  return `Voice is ready on this ${device}`
+}
+
+/** Under the row, after a download from it failed. */
+export const GET_READY_FAILED = "That didn't finish. Check your connection, then try again."

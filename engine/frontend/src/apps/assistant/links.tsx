@@ -23,13 +23,16 @@
  *   menu group called Relationships, so those words stay among the entries' keywords.
  * - **"Speak (V)"** (PLAN-V22 T3-1) in the top bar opens the voice bar, as V does. "Use V to
  *   speak" in the account menu switches the V key off and on (PLAN-V23 T4-1), and "Keep
- *   listening" beside it a long conversation (PLAN-V24 T2-5).
+ *   listening" beside it a long conversation (PLAN-V24 T2-5). "Get voice ready" after them
+ *   downloads the model on the device ahead, where the model is the engine (PLAN-V24 T4-3).
  * - **"Add task" and "Email the team"** in Ctrl+K open the review card empty (PLAN-V23 T4-3).
  * - **Loaded late**, through `parts.ts`: the menu, Home and Ctrl+K are in the first visit, and this
  *   file, with its hooks, words and icons, is not. Import the parts from there, not here.
  */
 import {
+  CircleCheck,
   ClipboardCheck,
+  Download,
   Ear,
   FileText,
   ListPlus,
@@ -39,7 +42,7 @@ import {
   Speech,
 } from 'lucide-react'
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui'
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useCallNoteCounts, useCallNoteOptions, voiceToolOf } from '@/api/hooks/call-note-counts'
 import { useMeetingSummary } from '@/api/hooks/meeting-summary'
 import type { VoiceToolKind } from '@/api/types'
@@ -49,7 +52,13 @@ import {
   openMicCheck,
   useMicCheckOpen,
 } from '@/apps/companies/call-notes/mic/check-store'
-import { CHECK_MY_MIC } from '@/apps/companies/call-notes/mic/words'
+import { browserFacts, deviceKind, pickEngine } from '@/apps/companies/call-notes/mic/voice-engine'
+import { fetchVoice, lookAtVoice, useVoiceReady } from '@/apps/companies/call-notes/mic/voice-ready'
+import {
+  CHECK_MY_MIC,
+  downloadedOf,
+  GETTING_VOICE_READY,
+} from '@/apps/companies/call-notes/mic/words'
 import {
   CALLS_TO_CONFIRM,
   LOG_A_CALL,
@@ -63,6 +72,7 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Kbd } from '@/components/ui/kbd'
 import { SwitchMark } from '@/components/ui/switch'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
+import { cn } from '@/lib/utils'
 import { MenuCount } from '@/shell/menu-count'
 import type { CommandsProps } from '@/shell/nav'
 import { openCard } from './card/store'
@@ -70,7 +80,16 @@ import { MEETINGS_PATH } from './paths'
 import { setKeepListening, useKeepListening } from './voice/keep-listening'
 import { openVoiceBar } from './voice/store'
 import { setVKeyOn, useVKeyOn } from './voice/v-switch'
-import { KEEP_LISTENING, SPEAK, SPEAK_KEY, USE_V } from './voice/words'
+import {
+  GET_READY_FAILED,
+  GET_VOICE_READY,
+  getReadyHint,
+  KEEP_LISTENING,
+  SPEAK,
+  SPEAK_KEY,
+  USE_V,
+  voiceReadyOn,
+} from './voice/words'
 import { ADD_TASK, ASSISTANT_KEYWORDS, EMAIL_THE_TEAM } from './words'
 
 function ToConfirmCountContent() {
@@ -338,14 +357,84 @@ export function KeepListeningMenuItem() {
 }
 
 /**
- * The Assistant's rows in the account menu: "Use V to speak" and "Keep listening", then "Check my
- * mic".
+ * "Get voice ready" (PLAN-V24 T4-3, choice 25), after "Keep listening": downloads the model on the
+ * device ahead of the first Speak, best on Wi-Fi, without loading it. Only where the model is, or
+ * would be, the engine (choice 22), once the setting is known, and not for a Viewer, who has no
+ * mic. The menu stays open as it is pressed, so the download is seen to start, and it goes on if
+ * the menu shuts. Once this browser keeps the files, the row says so plainly, with a tick.
+ */
+export function VoiceReadyMenuItem() {
+  const viewer = useIsViewer()
+  const options = useCallNoteOptions(!viewer)
+  const setting = options.data?.voice_tool ?? null
+  const model = !viewer && setting !== null && pickEngine(setting) === 'model'
+  const ready = useVoiceReady()
+  const [device] = useState(() => deviceKind(browserFacts()))
+  useEffect(() => {
+    if (model) void lookAtVoice()
+  }, [model])
+  if (!model) return null
+  if (ready.state === 'kept') {
+    return (
+      // Nothing to do, but still reached by the keys and read out, as unavailable: at full
+      // strength, so it is read plainly.
+      <DropdownMenuItem
+        aria-disabled
+        data-slot="voice-ready"
+        className="touch:min-h-11"
+        onSelect={(event) => {
+          event.preventDefault()
+        }}
+      >
+        <CircleCheck aria-hidden="true" className="text-pass-ink" />
+        {voiceReadyOn(device)}
+      </DropdownMenuItem>
+    )
+  }
+  const downloading = ready.state === 'downloading'
+  const hint = downloading
+    ? downloadedOf(ready.loaded, ready.total)
+    : ready.state === 'failed'
+      ? GET_READY_FAILED
+      : getReadyHint(ready.state === 'missing' ? ready.bytes : null)
+  return (
+    <DropdownMenuItem
+      data-slot="voice-ready"
+      aria-disabled={downloading ? true : undefined}
+      className="items-start touch:min-h-11"
+      onSelect={(event) => {
+        // The menu stays open, so the download is seen to start.
+        event.preventDefault()
+        if (!downloading) void fetchVoice().catch(() => undefined)
+      }}
+    >
+      <Download aria-hidden="true" className="mt-0.5" />
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span>{downloading ? GETTING_VOICE_READY : GET_VOICE_READY}</span>
+        <span
+          className={cn(
+            'text-caption text-pretty',
+            ready.state === 'failed' ? 'text-destructive-ink' : 'text-muted-foreground',
+            downloading && 'tabular-nums',
+          )}
+        >
+          {hint}
+        </span>
+      </span>
+    </DropdownMenuItem>
+  )
+}
+
+/**
+ * The Assistant's rows in the account menu: "Use V to speak" and "Keep listening", "Get voice
+ * ready" where the model is the engine, then "Check my mic".
  */
 export function AssistantAccountItems() {
   return (
     <>
       <VKeyMenuItem />
       <KeepListeningMenuItem />
+      <VoiceReadyMenuItem />
       <MicCheckMenuItem />
     </>
   )
