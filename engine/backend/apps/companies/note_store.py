@@ -119,8 +119,9 @@ CHANGEABLE: Final = ("to_confirm", "partial", "failed")  # the parts not in HubS
 # failed: only with nothing in HubSpot. needs_company: never sent (PLAN-V24).
 REMOVABLE: Final = ("needs_company", "sorting", "to_confirm", "failed")
 # What a call that needs its company may change before it is picked: its outcome, which the sort
-# keeps as the rep's own pick. The sort makes the rest of the card anew (PLAN-V24).
-BEFORE_COMPANY: Final = frozenset({"outcome"})
+# keeps as the rep's own pick. The sort makes the rest of the card anew (PLAN-V24). `teach` goes
+# with a pick only (note_company.py): on its own it changes nothing, so it isn't refused.
+BEFORE_COMPANY: Final = frozenset({"outcome", "teach"})
 NOTE_START_CHARS: Final = 200  # a note with no summary shows its first 200 characters
 SEARCH_WORDS: Final = 12  # the most words of a search that count
 CARD_PARTS: Final = frozenset({"summary", "outcome", "changes", "tasks"})

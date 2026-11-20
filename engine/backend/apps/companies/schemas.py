@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from apps.companies.deals import DealState, StageKind
-from core.api.models import SafeText, optional_in_types
+from core.api.models import SafeText, no_default_in_types, optional_in_types
 from core.config import VoiceTool
 from core.hubspot.meetings import Meeting, MeetingsState, MeetingWhere
 
@@ -781,7 +781,7 @@ class CallNoteTaskIn(BaseModel):
 class CallNotePatch(BaseModel):
     """The rep's edits. Only the parts sent change: `outcome` or `contact_id` sent as null clears
     it, and `changes` or `tasks` replace the card's whole list. `company_key` picks the company of
-    a call that needs one (PLAN-V24)."""
+    a call that needs one (PLAN-V24), and `teach` says whether that pick teaches the mic."""
 
     company_key: str | None = Field(
         None,
@@ -789,9 +789,20 @@ class CallNotePatch(BaseModel):
         max_length=64,
         description="The company, for a call saved before it was found (`needs_company`): a "
         "HubSpot company id, or lead:<id>. Taken only then: 409 `company_set` for a call that "
-        "has its company. Only `contact_id` and `outcome` may come with it. Once it is set, the "
-        "call is sorted as a new call is, then waits in To confirm. Left out or None: the "
-        "company stays as it is",
+        "has its company. Only `contact_id`, `outcome` and `teach` may come with it. Once it is "
+        "set, the call is sorted as a new call is, then waits in To confirm. Left out or None: "
+        "the company stays as it is",
+    )
+    # The default isn't written in the contract, so the website's types leave `teach` optional
+    # and every other edit can leave it out.
+    teach: bool = Field(
+        True,
+        description="For a pick (`company_key`): whether the words heard teach the mic, as a "
+        "learned name. True, or left out: they do, as before. Send false when the rep picked "
+        "the company from the command's own choices ('Which Sample?'), which shouldn't teach "
+        "(PLAN-V23). The call is sorted the same either way. Read only with `company_key`: on "
+        "its own it changes nothing",
+        json_schema_extra=no_default_in_types,
     )
     summary: SafeText | None = Field(None, max_length=NOTE_SUMMARY_MAX_CHARS)
     outcome: OutcomeName | None = None

@@ -14,7 +14,6 @@ from datetime import date, datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
-from pydantic.config import JsonDict
 
 from apps.companies.schemas import (
     MAX_RECIPIENTS,
@@ -27,7 +26,7 @@ from apps.companies.schemas import (
     PrepPerson,
     TeamMember,
 )
-from core.api.models import SafeText, optional_in_types
+from core.api.models import SafeText, no_default_in_types, optional_in_types
 
 # unclear (PLAN-V23 choice 4): the words are too unclear to make a command. The bar stops before
 # the card, with the words in `read_back`.
@@ -114,13 +113,6 @@ class AssistantCommandIn(BaseModel):
 
 
 # --- Out ---------------------------------------------------------------------------------------
-
-
-def no_default_in_types(schema: JsonDict) -> None:
-    """The website's types take a field with a default as always there. Together with
-    `optional_in_types`, this leaves the field optional in them, so test data written before it
-    still type-checks. The API always sends it."""
-    schema.pop("default", None)
 
 
 class AssistantCompany(Out):

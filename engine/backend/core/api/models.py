@@ -41,3 +41,12 @@ def optional_in_types(*names: str) -> Callable[[JsonDict], None]:
             schema["required"] = [name for name in required if name not in names]
 
     return drop
+
+
+def no_default_in_types(schema: JsonDict) -> None:
+    """Leaves one field's default out of the OpenAPI file, for its `json_schema_extra`. The
+    website's types take a field with a default as always there: in an answer (with
+    `optional_in_types`), test data written before it still type-checks; in a request, the
+    website may leave it out. The field's description says the default (PLAN-V23; in core since
+    PLAN-V24, for a request's `teach`)."""
+    schema.pop("default", None)

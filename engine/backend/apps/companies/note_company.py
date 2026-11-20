@@ -6,15 +6,17 @@ The route is the call note PATCH in api_notes.py, with `company_key`.
   `company_set` (TBC).
 - **A company open to this person:** in our HubSpot copy, or a lead of a project whose tick they
   have, as saving checks it (422 `company_not_found` otherwise).
-- **With it, only the person and the outcome.** The sort makes the rest of the card anew, so
-  anything else is refused (409 `company_first`).
+- **With it, only the person, the outcome and `teach`.** The sort makes the rest of the card
+  anew, so anything else is refused (409 `company_first`).
 - **Then it carries on as any call does:** it is sorted exactly as a new call is
   (`note_store.start_sort`): by Claude in the background, or by hand at once with the AI off or
   no words to sort. Then it waits in To confirm.
 - **Picking teaches the mic** (choice 21): the words heard and the picked company are kept as a
   learned name for the whole team (PLAN-V23 T1-2), by the card's rules: only when the words
   differ from the company's name, case and spaces aside, once, and for at most 5 companies.
-  Never words that held an email address or a phone number.
+  Never words that held an email address or a phone number. A pick sent with `teach` false
+  teaches nothing: the card sends it for a company picked from the command's own choices
+  ("Which Sample?"), which PLAN-V23 says shouldn't teach. The sort is the same either way.
 - **One step:** the company, the sort's start and the learned name are saved together, under the
   call's lock, with only database reads while it is held. Log lines hold ids, never the words.
 """
@@ -51,7 +53,7 @@ from core.config import Settings
 
 log = logging.getLogger(__name__)
 
-WITH_COMPANY: Final = frozenset({"company_key", "contact_id", "outcome"})
+WITH_COMPANY: Final = frozenset({"company_key", "contact_id", "outcome", "teach"})
 # How a left-out email address or phone number starts in the words kept (facts.scrub), even when
 # the words were cut to fit: such words never teach the mic.
 LEFT_OUT: Final = tuple(gone.split(" out")[0] for gone in (EMAIL_GONE, PHONE_GONE))
@@ -95,7 +97,8 @@ async def pick_company(
 ) -> None:
     """Sets the company of a call that needs one, with the person and the outcome if they came,
     and sends it to be sorted as a new call is: `sorting` (the caller starts the sorter once this
-    returns), or in the rep's batch at once, sorted by hand. The words heard teach the mic."""
+    returns), or in the rep's batch at once, sorted by hand. The words heard teach the mic,
+    unless the pick says not to (`teach` false)."""
     key = patch.company_key
     if key is None:  # the route sends only a pick here
         raise company_first()
@@ -124,7 +127,7 @@ async def pick_company(
         card.call.outcome = patch.outcome
         note.card = card.model_dump(mode="json")
     await start_sort(session, note, settings=settings, now=now)
-    taught = await teach(session, note, maker=maker_of(auth))
+    taught = await teach(session, note, maker=maker_of(auth)) if patch.teach else False
     await session.commit()
     log.info(
         "call_company_picked",

@@ -14,7 +14,8 @@
 - it has its own list and count, History shows it, and a search finds it by the name as heard;
   the rep can remove it;
 - picking teaches the mic the words heard, once, but not the company's own name or words that
-  held a phone number;
+  held a phone number; a pick sent with `teach` false (a company from the command's own
+  choices) teaches nothing and is sorted as any pick is, and `teach` on its own changes nothing;
 - a Viewer, someone without the Call logs tick, and nobody signed in can do none of it.
 
 The send leaving it out is in test_call_notes_batch.py, and the migration in
@@ -351,6 +352,61 @@ async def test_picking_teaches_the_mic_the_words_heard_once(
     assert await pairs(world) == [("Sample Logistic", "201")]
     [pair] = await all_rows(world, LearnedName)
     assert pair.company_name == "Sample Logistics Pty Ltd" and pair.made_by is not None
+
+
+async def test_a_pick_with_teach_false_teaches_nothing_and_is_sorted_as_now(
+    world: World, settings: dict[str, Any], claude: FakeClaude, sorter: NoteSorter
+) -> None:
+    """The card sends `teach` false for a company picked from the command's own choices ("Which
+    Sample?"). Left out or true, a pick teaches as T3-1's does."""
+    await a_company(world)
+    settings.update(call_notes_ai_enabled=True, anthropic_api_key=NOT_REAL_KEY)
+    picks: list[tuple[str, dict[str, Any]]] = [
+        ("Sample Logistic", {"teach": False}),
+        ("Sample Logistik", {}),
+        ("Sampel Logistics", {"teach": True}),
+    ]
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        notes = [await log_waiting(client, heard, outcome=None) for heard, _ in picks]
+        answers = [
+            await client.patch(f"{NOTES}/{note['id']}", json={"company_key": "201", **more})
+            for note, (_, more) in zip(notes, picks, strict=True)
+        ]
+        await sorter.wait()
+        after = [(await client.get(f"{NOTES}/{note['id']}")).json() for note in notes]
+    for response in answers:
+        assert response.status_code == 200, response.text
+        assert response.json()["status"] == "sorting"  # sorted as a new call is
+    assert len(claude.asked) == 3  # each pick's sort, teaching or not
+    for item in after:
+        assert (item["status"], item["sorted_by"], item["company_key"]) == (
+            "to_confirm",
+            "ai",
+            "201",
+        )
+    no_teach, left_out, _ = after
+    for part in ("call", "person", "changes", "tasks"):
+        assert no_teach[part] == left_out[part], part
+    assert await pairs(world) == [("Sampel Logistics", "201"), ("Sample Logistik", "201")]
+
+
+async def test_teach_on_its_own_changes_nothing(world: World, settings: dict[str, Any]) -> None:
+    await a_company(world)
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        waiting = await log_waiting(client)
+        known = await log_call(client)
+        outcome = await client.patch(
+            f"{NOTES}/{waiting['id']}", json={"outcome": "No answer", "teach": False}
+        )
+        alone = await client.patch(f"{NOTES}/{known['id']}", json={"teach": False})
+    assert outcome.status_code == 200, outcome.text
+    assert (outcome.json()["status"], outcome.json()["call"]["outcome"]) == (
+        "needs_company",
+        "No answer",
+    )
+    assert alone.status_code == 200, alone.text
+    assert alone.json() == known
+    assert await pairs(world) == []
 
 
 # --- Who may -------------------------------------------------------------------------------------

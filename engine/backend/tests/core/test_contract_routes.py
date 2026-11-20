@@ -360,6 +360,15 @@ def test_a_request_body_keeps_its_defaults_optional(schema: dict[str, Any]) -> N
     assert not [name for name in components if name.endswith(("-Input", "-Output"))]
 
 
+def test_a_call_note_edit_may_leave_teach_out(schema: dict[str, Any]) -> None:
+    """The website's types make a field with a written default one it must send. The PATCH's
+    `teach` (PLAN-V24) says its default in words only, so every other edit can leave it out."""
+    patch = schema["components"]["schemas"]["CallNotePatch"]
+    assert "teach" not in patch.get("required", [])
+    assert "default" not in patch["properties"]["teach"]
+    assert patch["properties"]["teach"]["type"] == "boolean"
+
+
 def test_creating_a_run_documents_the_location_and_the_idempotency_key(
     schema: dict[str, Any],
 ) -> None:
