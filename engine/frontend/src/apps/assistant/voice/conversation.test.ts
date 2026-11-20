@@ -2,8 +2,8 @@
  * A long conversation (PLAN-V24 Part 2, T2-1), with a fake mic, a fake voice tool, a fake command
  * step and an exact clock: one V, many commands, each reaching the command step once and in order;
  * the quiet stop; "stop listening"; "um" alone; a long turn; hold V as one turn; and words over the
- * server's limit. T2-2: smart pauses. Today's one command per V ("Keep listening" off) is
- * `bar-session.test.ts`, unchanged. Made-up names only: Sample Logistics Pty Ltd, Jo Sample. No
+ * server's limit. T2-2: smart pauses. T2-5: the wake lock, and a hidden page on a phone or a
+ * laptop. Today's one command per V ("Keep listening" off) is `bar-session.test.ts`, unchanged. Made-up names only: Sample Logistics Pty Ltd, Jo Sample. No
  * sound is ever kept.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,6 +11,7 @@ import type { AssistantCommand, AssistantCommandIn, AssistantOnPage } from '@/ap
 import { FakeMic, type FakeMicOptions } from '@/apps/companies/call-notes/mic/fake-mic'
 import { BarSession, TIMES, type BarSnapshot, type CardShown } from './bar-session'
 import type { AfterAnswer, Heard } from './hand-over'
+import type { ScreenEnv } from './screen'
 
 function command(change: Partial<AssistantCommand> = {}): AssistantCommand {
   return {
@@ -44,9 +45,19 @@ interface SetUp {
   cardOpen?: () => CardShown
   /** One command per V: "Keep listening" off. */
   oneCommand?: boolean
+  /** The screen: the wake lock, a hidden page, a phone (T2-5). */
+  screen?: ScreenEnv
 }
 
-function setUp({ mic: micOptions, slow = false, after, where, cardOpen, oneCommand }: SetUp = {}) {
+function setUp({
+  mic: micOptions,
+  slow = false,
+  after,
+  where,
+  cardOpen,
+  oneCommand,
+  screen,
+}: SetUp = {}) {
   const mic = new FakeMic(micOptions)
   const sent: AssistantCommandIn[] = []
   const handed: Heard[] = []
@@ -58,6 +69,7 @@ function setUp({ mic: micOptions, slow = false, after, where, cardOpen, oneComma
     conversation: !oneCommand,
     ...(where ? { where } : {}),
     ...(cardOpen ? { cardOpen } : {}),
+    ...(screen ? { screen } : {}),
     read: (body) => {
       sent.push(body)
       if (!slow) return Promise.resolve(command({ read_back: `Read: ${body.text}` }))
@@ -484,5 +496,168 @@ describe('smart pauses (PLAN-V24 T2-2, choice 8)', () => {
     session.vUp()
     await tick(0)
     expect(texts()).toEqual(['Log a call with Jo Sample at Northwind, they move in March'])
+  })
+})
+
+/** A fake screen (T2-5): the wake lock, a page that can be hidden, and a phone or a laptop. */
+function fakeScreen({ phone = true, refuse = false } = {}) {
+  const listeners = new Set<() => void>()
+  const state = { hidden: false, taken: 0, released: 0 }
+  const screen: ScreenEnv = {
+    keepOn: () => {
+      if (refuse) return Promise.reject(new DOMException('Battery saver', 'NotAllowedError'))
+      state.taken += 1
+      return Promise.resolve({
+        release: () => {
+          state.released += 1
+          return Promise.resolve()
+        },
+      })
+    },
+    hidden: () => state.hidden,
+    onVisibility: (listener) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+    phone: () => phone,
+  }
+  /** The page is hidden (the phone locked, or another app in front), or shown again. */
+  const hide = (hidden: boolean): void => {
+    state.hidden = hidden
+    for (const listener of [...listeners]) listener()
+  }
+  return { screen, state, hide, listeners }
+}
+
+describe('phones and windows (PLAN-V24 T2-5)', () => {
+  it.each<
+    [
+      string,
+      (set: Awaited<ReturnType<typeof listening>>, hide: (on: boolean) => void) => Promise<void>,
+    ]
+  >([
+    [
+      'Stop (V)',
+      async ({ session }) => {
+        session.pressV()
+        await tick(0)
+      },
+    ],
+    [
+      'the quiet stop',
+      async () => {
+        await tick(TIMES.quiet)
+      },
+    ],
+    [
+      'Esc',
+      async ({ session }) => {
+        session.cancel()
+        await tick(0)
+      },
+    ],
+    [
+      'a problem (the mic unplugged mid-turn)',
+      async ({ mic }) => {
+        mic.say('Log a call with Jo')
+        mic.unplug()
+        await tick(0)
+      },
+    ],
+    [
+      'a hidden page on a phone',
+      async ({ mic }, hide) => {
+        mic.say('Log a call with Jo')
+        hide(true)
+        await tick(0)
+      },
+    ],
+  ])('the wake lock is taken as it starts, and let go at %s', async (_, end) => {
+    const fake = fakeScreen()
+    const set = await listening({ screen: fake.screen })
+    expect(fake.state).toMatchObject({ taken: 1, released: 0 })
+    await end(set, fake.hide)
+    expect(fake.state).toMatchObject({ taken: 1, released: 1 })
+    expect(set.mic.live()).toBe(0)
+    // Nothing is left listening for the page.
+    expect(fake.listeners.size).toBe(0)
+  })
+
+  it('a refused wake lock changes nothing else', async () => {
+    const fake = fakeScreen({ refuse: true })
+    const { mic, texts, now } = await listening({ screen: fake.screen })
+    await sayTurn(mic, OPEN_TODAY)
+    await sayTurn(mic, ADD_TASK)
+    expect(texts()).toEqual([OPEN_TODAY, ADD_TASK])
+    expect(now().phase).toBe('listening')
+    expect(mic.live()).toBe(1)
+  })
+
+  it('a hidden page on a phone ends it with the words kept, and Carry on puts them in the text line', async () => {
+    const fake = fakeScreen({ phone: true })
+    const { mic, session, sent, now } = await listening({ screen: fake.screen })
+    mic.say('Log a call with Jo Sample, they move in')
+    fake.hide(true)
+    expect(now()).toMatchObject({
+      phase: 'problem',
+      problem: { kind: 'left' },
+      words: 'Log a call with Jo Sample, they move in',
+      conversation: null,
+    })
+    expect(mic.live()).toBe(0)
+    await tick(TIMES.longPause)
+    expect(sent).toEqual([])
+    // Carry on: the words go in the text line, to finish and send.
+    session.typeInstead()
+    expect(now()).toMatchObject({
+      phase: 'typing',
+      draft: 'Log a call with Jo Sample, they move in',
+    })
+  })
+
+  it('a hidden page on a phone with no words in progress just stops listening', async () => {
+    const fake = fakeScreen({ phone: true })
+    const { mic, onClose } = await listening({ screen: fake.screen })
+    await sayTurn(mic, OPEN_TODAY)
+    fake.hide(true)
+    expect(mic.live()).toBe(0)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('on a laptop, another window in front doesn’t end it, and the screen is kept on again as it comes back', async () => {
+    const fake = fakeScreen({ phone: false })
+    const { mic, texts, now } = await listening({ screen: fake.screen })
+    fake.hide(true)
+    await tick(0)
+    expect(now().phase).toBe('listening')
+    expect(mic.live()).toBe(1)
+    fake.hide(false)
+    await tick(0)
+    expect(fake.state).toMatchObject({ taken: 2, released: 1 })
+    await sayTurn(mic, OPEN_TODAY)
+    expect(texts()).toEqual([OPEN_TODAY])
+  })
+
+  it('one command per V ("Keep listening" off) keeps no screen on', async () => {
+    const fake = fakeScreen()
+    const { session, mic } = setUp({ oneCommand: true, screen: fake.screen })
+    session.start('browser_service')
+    await tick(100)
+    mic.say(OPEN_TODAY)
+    fake.hide(true)
+    await tick(0)
+    expect(fake.state.taken).toBe(0)
+    expect(session.getSnapshot().phase).toBe('listening')
+  })
+
+  it('a held V is one turn: the screen is let go as it becomes one', async () => {
+    const fake = fakeScreen()
+    const { session } = setUp({ screen: fake.screen })
+    session.start('browser_service')
+    session.vDown()
+    await tick(TIMES.hold)
+    expect(fake.state).toMatchObject({ taken: 1, released: 1 })
   })
 })

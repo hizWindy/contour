@@ -22,12 +22,22 @@
  * - **The old words still find them.** Call logs was Activity, and Meetings and Call logs sat in a
  *   menu group called Relationships, so those words stay among the entries' keywords.
  * - **"Speak (V)"** (PLAN-V22 T3-1) in the top bar opens the voice bar, as V does. "Use V to
- *   speak" in the account menu switches the V key off and on (PLAN-V23 T4-1).
+ *   speak" in the account menu switches the V key off and on (PLAN-V23 T4-1), and "Keep
+ *   listening" beside it a long conversation (PLAN-V24 T2-5).
  * - **"Add task" and "Email the team"** in Ctrl+K open the review card empty (PLAN-V23 T4-3).
  * - **Loaded late**, through `parts.ts`: the menu, Home and Ctrl+K are in the first visit, and this
  *   file, with its hooks, words and icons, is not. Import the parts from there, not here.
  */
-import { ClipboardCheck, FileText, ListPlus, Mail, Mic, NotebookPen, Speech } from 'lucide-react'
+import {
+  ClipboardCheck,
+  Ear,
+  FileText,
+  ListPlus,
+  Mail,
+  Mic,
+  NotebookPen,
+  Speech,
+} from 'lucide-react'
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui'
 import { lazy, Suspense, useState } from 'react'
 import { useCallNoteCounts, useCallNoteOptions, voiceToolOf } from '@/api/hooks/call-note-counts'
@@ -57,9 +67,10 @@ import { MenuCount } from '@/shell/menu-count'
 import type { CommandsProps } from '@/shell/nav'
 import { openCard } from './card/store'
 import { MEETINGS_PATH } from './paths'
+import { setKeepListening, useKeepListening } from './voice/keep-listening'
 import { openVoiceBar } from './voice/store'
 import { setVKeyOn, useVKeyOn } from './voice/v-switch'
-import { SPEAK, SPEAK_KEY, USE_V } from './voice/words'
+import { KEEP_LISTENING, SPEAK, SPEAK_KEY, USE_V } from './voice/words'
 import { ADD_TASK, ASSISTANT_KEYWORDS, EMAIL_THE_TEAM } from './words'
 
 function ToConfirmCountContent() {
@@ -297,11 +308,44 @@ export function VKeyMenuItem() {
   )
 }
 
-/** The Assistant's rows in the account menu: "Use V to speak", then "Check my mic". */
+/**
+ * "Keep listening" (PLAN-V24 choice 6, T2-5), beside "Use V to speak" and with the same look: on,
+ * one V (or Speak) listens across commands until it is stopped; off, one command per V, as before.
+ * On by default, and kept in this browser (`voice/keep-listening.ts`). Not for a Viewer, who has no
+ * mic (choice 18).
+ */
+export function KeepListeningMenuItem() {
+  const viewer = useIsViewer()
+  const on = useKeepListening()
+  if (viewer) return null
+  return (
+    <DropdownMenuPrimitive.CheckboxItem
+      data-slot="keep-listening-switch"
+      checked={on}
+      onCheckedChange={(checked) => {
+        setKeepListening(checked)
+      }}
+      onSelect={(event) => {
+        event.preventDefault()
+      }}
+      className="relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-ui outline-hidden select-none focus:bg-accent focus:text-accent-foreground touch:min-h-11 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0"
+    >
+      <Ear aria-hidden="true" />
+      <span className="flex-1">{KEEP_LISTENING}</span>
+      <SwitchMark checked={on} />
+    </DropdownMenuPrimitive.CheckboxItem>
+  )
+}
+
+/**
+ * The Assistant's rows in the account menu: "Use V to speak" and "Keep listening", then "Check my
+ * mic".
+ */
 export function AssistantAccountItems() {
   return (
     <>
       <VKeyMenuItem />
+      <KeepListeningMenuItem />
       <MicCheckMenuItem />
     </>
   )

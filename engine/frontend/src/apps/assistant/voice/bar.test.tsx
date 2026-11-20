@@ -25,6 +25,7 @@ import type { SignIn } from '@/api/hooks/auth'
 import { queryKeys } from '@/api/query'
 import { mockApi, type Answer } from '@/test/mock-api'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
+import { asPhone } from '@/test/screen'
 import VoiceBar from './bar'
 import type { Times } from './bar-session'
 import { closeCard } from '../card/store'
@@ -944,5 +945,33 @@ describe('a long conversation on screen (PLAN-V24 T2-1)', () => {
       ])
     })
     expect(mic.live()).toBe(0)
+  })
+})
+
+describe('a phone that leaves the page (PLAN-V24 T2-5)', () => {
+  beforeEach(() => {
+    setKeepListening(true)
+  })
+
+  it('stops listening with the plan’s line, keeps the words, and Carry on puts them in the text line', async () => {
+    asPhone()
+    const { mic, user } = openBar({ times: { ...QUIET, pause: 600_000, quiet: 600_000 } })
+    const found = await listening()
+    act(() => {
+      mic.say('Log a call with Jo Sample')
+    })
+    // The phone locks: the page is hidden.
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    expect(await within(found).findByRole('alert')).toHaveTextContent(
+      'The mic stopped when you left the page. What you said so far is kept.',
+    )
+    expect(mic.live()).toBe(0)
+    await user.click(within(found).getByRole('button', { name: 'Carry on' }))
+    expect(within(found).getByRole('textbox', { name: 'Type what to do' })).toHaveValue(
+      'Log a call with Jo Sample',
+    )
   })
 })

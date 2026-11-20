@@ -105,6 +105,9 @@ export const NEXT_COMMAND = "Say the next command, or “that's all” to stop."
 export const QUIET_STOP = 'Stopped listening after 2 minutes of quiet.'
 export const START_AGAIN = 'Start again'
 
+/** A phone locked, or the app left the front (choice 15, the plan's words), with Carry on. */
+export const LEFT_PAGE = 'The mic stopped when you left the page. What you said so far is kept.'
+
 /** A turn over the server's 2,000 characters (choice 9, the plan's words). */
 export const TOO_LONG =
   "That's too long for one command. Your words are in the text line: shorten them, then press Enter."

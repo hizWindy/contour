@@ -38,6 +38,8 @@
  *   throws that command away and closes the bar, as before. "That's all" stops it too, and 2
  *   minutes of quiet stops it with Start again (V).
  * - **Words over 2,000 characters** wait in the text line, with the plan's line, to shorten.
+ * - **On a phone** (T2-5), the screen stays on while it listens; leaving the page stops it, with
+ *   "The mic stopped when you left the page. What you said so far is kept." and Carry on.
  * - **A review card** a command opens hears the conversation (T2-3): the bar gives way to it while
  *   it is open, and the card's foot says the mic is on, with Stop (V). The bar comes back as it
  *   closes, still listening. V on a card with the bar closed starts a conversation.
@@ -98,6 +100,7 @@ import {
   CARRY_ON,
   CLOSE,
   DONE,
+  LEFT_PAGE,
   LISTENING,
   NEXT_COMMAND,
   NOTHING_HEARD,
@@ -240,6 +243,8 @@ function problemLine(problem: BarProblem): string {
       return QUIET_STOP
     case 'too_long':
       return TOO_LONG
+    case 'left':
+      return LEFT_PAGE
   }
 }
 
@@ -292,6 +297,9 @@ function actionsOf(snapshot: BarSnapshot): BarAction[] {
     case 'quiet':
       // A conversation stopped after 2 minutes of quiet (PLAN-V24 choice 10).
       return ['start_again']
+    case 'left':
+      // A phone left the page: the words so far go in the text line (T2-5).
+      return ['carry_on']
     case 'too_many':
     case 'no_voice':
     case 'unclear':

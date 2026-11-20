@@ -50,6 +50,10 @@
  *   again). Turns already said are still worked out. Esc throws away the turn and everything still
  *   on its way, and closes the bar, as it did. A problem ends it too, with its words and buttons.
  * - **Hold V is one turn** (choice 7): held, it is today's one command, up to 2 minutes.
+ * - **Phones and windows** (choices 15, 16, T2-5, `screen.ts`): the screen is kept on while it
+ *   listens (the wake lock), and let go at every end; a refused one changes nothing else. On a
+ *   phone, leaving the page ends it with the words kept ("The mic stopped when you left the page.",
+ *   with Carry on); on a laptop, another window in front doesn't (TBC at S1).
  */
 import { isAbort, toApiProblem } from '@/api/client'
 import type {
@@ -71,6 +75,7 @@ import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import type { MicProblem } from '@/apps/companies/call-notes/mic/words'
 import type { AfterAnswer, Heard } from './hand-over'
 import { pauseFor } from './pauses'
+import { browserScreen, type KeptOn, type ScreenEnv } from './screen'
 import { endsConversation, isShortTurn } from './turns'
 
 export const TIMES = {
@@ -132,6 +137,8 @@ export type BarProblem =
   | { kind: 'quiet' }
   /** The words are over the server's 2,000 characters: they wait in the text line (choice 9). */
   | { kind: 'too_long' }
+  /** A phone left the page (locked, or another app in front): the words so far are kept (T2-5). */
+  | { kind: 'left' }
 
 export interface ShownAnswer {
   line: string
@@ -228,6 +235,8 @@ export interface BarSessionOptions {
   env?: MicEnv
   makeTool?: VoiceToolMaker | null
   times?: Partial<Times>
+  /** For tests: the screen (the wake lock, a hidden page, a phone). */
+  screen?: ScreenEnv
 }
 
 const STARTING: BarSnapshot = {
@@ -322,6 +331,11 @@ export class BarSession {
   private ear: CardEar | null = null
   /** A turn waits for the card the last one opened, to hear it first. */
   private waitingForCard = false
+  private readonly screen: ScreenEnv
+  /** The wake lock while the conversation listens, and which ask for it is the newest. */
+  private kept: KeptOn | null = null
+  private keepAsk = 0
+  private unwatchPage: (() => void) | null = null
 
   constructor(options: BarSessionOptions) {
     this.onPage = options.onPage ?? null
@@ -337,6 +351,7 @@ export class BarSession {
     this.env = options.env ?? browserEnv()
     this.makeTool = options.makeTool
     this.times = { ...TIMES, ...options.times }
+    this.screen = options.screen ?? browserScreen()
   }
 
   // --- For React (useSyncExternalStore) ---------------------------------------------------------
@@ -461,6 +476,11 @@ export class BarSession {
       mic: mic.getSnapshot(),
       conversation: this.live ? { ...NEW_CONVERSATION, waiting: this.queue.length } : null,
     })
+    if (this.live) {
+      // The screen stays on while it listens, and a hidden page is seen (T2-5).
+      this.keepScreenOn()
+      this.unwatchPage = this.screen.onVisibility(this.pageChanged)
+    }
     mic.start()
   }
 
@@ -630,6 +650,7 @@ export class BarSession {
    */
   private oneTurn(): void {
     this.live = false
+    this.letScreenGo()
     this.clear('quiet')
     this.clear('turn')
     if (this.snapshot.phase === 'listening') {
@@ -791,11 +812,14 @@ export class BarSession {
     })
   }
 
-  /** The mic is let go, and every wait with it. A conversation stops listening. */
+  /** The mic is let go, and every wait with it. A conversation stops listening, and the screen. */
   private stopListening(): void {
     this.clearTimers()
     this.finishing = null
     this.live = false
+    this.letScreenGo()
+    this.unwatchPage?.()
+    this.unwatchPage = null
     this.unsubscribe?.()
     this.unsubscribe = null
     this.mic?.close()
@@ -902,6 +926,61 @@ export class BarSession {
       mic: null,
       words: '',
       problem: { kind: 'nothing_heard' },
+      conversation: null,
+    })
+  }
+
+  // --- Phones and windows (T2-5) ---------------------------------------------------------------
+
+  /** The screen stays on while the conversation listens (choice 15). A refusal changes nothing. */
+  private keepScreenOn(): void {
+    this.keepAsk += 1
+    const ask = this.keepAsk
+    void this.screen.keepOn().then(
+      (kept) => {
+        if (!kept) return
+        // It ended meanwhile: let the lock go at once.
+        if (ask !== this.keepAsk || !this.live) void kept.release().catch(() => undefined)
+        else this.kept = kept
+      },
+      () => undefined,
+    )
+  }
+
+  private letScreenGo(): void {
+    this.keepAsk += 1
+    const kept = this.kept
+    this.kept = null
+    if (kept) void kept.release().catch(() => undefined)
+  }
+
+  /**
+   * The page was hidden or shown. On a phone, hidden ends the conversation, with the words kept.
+   * On a laptop it goes on (TBC at S1). Shown again, the wake lock the browser let go is asked for
+   * again.
+   */
+  private readonly pageChanged = (): void => {
+    if (!this.live || this.over) return
+    if (!this.screen.hidden()) {
+      this.letScreenGo()
+      this.keepScreenOn()
+      return
+    }
+    if (!this.screen.phone()) return
+    const said = (this.mic?.text() ?? '').trim()
+    if (said === '') {
+      // Nothing to keep: it stops, as "that's all" does.
+      this.stopConversation()
+      return
+    }
+    this.keepFixes()
+    this.drain = 'quiet'
+    this.stopListening()
+    this.set({
+      phase: 'problem',
+      mic: null,
+      words: said,
+      problem: { kind: 'left' },
       conversation: null,
     })
   }

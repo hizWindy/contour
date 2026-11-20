@@ -18,6 +18,7 @@ import { callLogsHref, readLog, withoutLog } from '@/apps/companies/call-logs/pa
 import { closeMicCheck } from '@/apps/companies/call-notes/mic/check-store'
 import { FakeMic } from '@/apps/companies/call-notes/mic/fake-mic'
 import { closeCard } from './card/store'
+import { setKeepListening } from './voice/keep-listening'
 import { closeVoiceBar } from './voice/store'
 import { setVKeyOn } from './voice/v-switch'
 
@@ -433,8 +434,15 @@ describe('Check my mic (PLAN-V18 T3-4)', () => {
         screen.getByRole('menu').querySelectorAll('[role^="menuitem"]'),
         (item) => item.textContent,
       )
-      // "Use V to speak" (PLAN-V23 T4-1) comes first among the Assistant's rows.
-      expect(names).toEqual(['Use V to speak', 'Check my mic', 'Change password', 'Sign out'])
+      // "Use V to speak" (PLAN-V23 T4-1) comes first among the Assistant's rows, then "Keep
+      // listening" (PLAN-V24 T2-5).
+      expect(names).toEqual([
+        'Use V to speak',
+        'Keep listening',
+        'Check my mic',
+        'Change password',
+        'Sign out',
+      ])
       await user.click(screen.getByRole('menuitem', { name: 'Check my mic' }))
       // Whisper waits for T3-3: the card checks the mic and says speech to words isn't set up yet.
       expect(
@@ -540,6 +548,55 @@ describe('Use V to speak (PLAN-V23 T4-1)', () => {
       await again.user.click(screen.getByRole('button', { name: 'Account menu, Jo Sample' }))
       expect(
         await screen.findByRole('menuitemcheckbox', { name: 'Use V to speak' }, { timeout: LAZY }),
+      ).toHaveAttribute('aria-checked', 'false')
+    },
+    SLOW,
+  )
+})
+
+describe('Keep listening (PLAN-V24 T2-5)', () => {
+  // The whole app on Home, then the late parts: slow on a cold, busy run.
+  const SLOW = LAZY * 6
+
+  afterEach(() => {
+    act(() => {
+      setKeepListening(true)
+    })
+    window.localStorage.clear()
+  })
+
+  it(
+    'sits beside "Use V to speak", is on by default, switches off in place, and stays off after a reload',
+    async () => {
+      asLaptop()
+      stubBackend({ user: { role: 'staff', apps: ['companies'] } })
+      const first = renderAt('/')
+      await home()
+      await first.user.click(screen.getByRole('button', { name: 'Account menu, Jo Sample' }))
+      const row = await screen.findByRole(
+        'menuitemcheckbox',
+        { name: 'Keep listening' },
+        { timeout: LAZY },
+      )
+      // Right after "Use V to speak", with the same sliding switch.
+      const rows = Array.from(
+        screen.getByRole('menu').querySelectorAll('[role^="menuitem"]'),
+        (item) => item.textContent,
+      )
+      expect(rows.indexOf('Keep listening')).toBe(rows.indexOf('Use V to speak') + 1)
+      expect(row).toHaveAttribute('aria-checked', 'true')
+      await first.user.click(row)
+      // The menu stays open, so the switch is seen to move.
+      expect(row).toHaveAttribute('aria-checked', 'false')
+      await first.user.keyboard('{Escape}')
+
+      // A reload: the app is drawn again, and reads the choice this browser keeps.
+      first.unmount()
+      const again = renderAt('/')
+      await home()
+      await again.user.click(screen.getByRole('button', { name: 'Account menu, Jo Sample' }))
+      expect(
+        await screen.findByRole('menuitemcheckbox', { name: 'Keep listening' }, { timeout: LAZY }),
       ).toHaveAttribute('aria-checked', 'false')
     },
     SLOW,

@@ -102,6 +102,7 @@ import {
 import { isVKeyOn } from '../voice/v-switch'
 import {
   CANT_READ_YET,
+  LEFT_PAGE,
   NOTHING_HEARD,
   QUIET_STOP,
   STOP,
@@ -218,6 +219,8 @@ function stripProblem(problem: BarProblem): string {
       return QUIET_STOP
     case 'too_long':
       return TOO_LONG
+    case 'left':
+      return LEFT_PAGE
   }
 }
 
