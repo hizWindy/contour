@@ -17,6 +17,15 @@
  *
  * **The mic is let go** the moment the card closes: every track stops (so the browser's red dot
  * goes), the sound stops, and the tool is thrown away. Nothing of the sound is kept or sent.
+ *
+ * PLAN-V24 Part 1:
+ *
+ * - **Clean sound** (choice 1): the mic opens with the browser's own echo cancellation, noise
+ *   suppression and auto gain, in one channel, and voice isolation where the browser has it. The
+ *   voice tool hears that same track (choice 2), where the browser lets it.
+ * - **One check a conversation** (choice 5): `handOver` gives the words so far and clears them,
+ *   while the mic, the bars and the tool keep running. The next turn starts at once, with no check
+ *   and no second mic. Words still being heard go with the turn they were said in, once.
  */
 import { BAR_COUNT, type BarSource } from '@/components/motion/bar-levels'
 import { hasMic, micName, micsOf, rememberedMic, rememberMic, type MicDevice } from './devices'
@@ -111,6 +120,84 @@ export function browserEnv(): MicEnv {
       }
     },
   }
+}
+
+/**
+ * The mic's sound (PLAN-V24 choice 1): the browser's own cleaning of echo, background noise and
+ * loudness, in one channel. Each is a wish, not a must: a browser that can't do one still opens
+ * the mic.
+ */
+export const SOUND: Readonly<MediaTrackConstraints> = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+  channelCount: 1,
+}
+
+/** Voice isolation is newer than TypeScript's types (the Media Capture Extensions draft). */
+type SoundSettings = MediaTrackConstraints & { voiceIsolation?: boolean }
+
+/** True where the browser can single out a voice from other sound (TBC: which browsers do). */
+function hasVoiceIsolation(media: MediaDevices): boolean {
+  try {
+    if (typeof media.getSupportedConstraints !== 'function') return false
+    const supported: MediaTrackSupportedConstraints & { voiceIsolation?: boolean } =
+      media.getSupportedConstraints()
+    return supported.voiceIsolation === true
+  } catch {
+    return false
+  }
+}
+
+/** What the mic opens with: the clean sound, and the picked mic's exact id when there is one. */
+export function soundFor(media: MediaDevices, picked: string | null): SoundSettings {
+  return {
+    ...(picked ? { deviceId: { exact: picked } } : {}),
+    ...SOUND,
+    ...(hasVoiceIsolation(media) ? { voiceIsolation: true } : {}),
+  }
+}
+
+/** The words of a turn, handed over while the mic listens on (`MicSession.handOver`). */
+export interface Handed {
+  /** Everything said since the last hand-over: the chunks, then what was still being heard. */
+  text: string
+  /** The names the fix put right in those words. */
+  fixes: readonly NameFix[]
+}
+
+/** Letters and digits alone, in small letters: how words are matched across a hand-over. */
+export function lettersOf(text: string): string {
+  return text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
+}
+
+/**
+ * Takes off the front of `text` the words that were handed over while they were still being heard
+ * (`pending`, as `lettersOf` gives them), so they count once. The service may write them out a
+ * little differently ("north wind" heard, "Northwind." written), so the cut is at the end of the
+ * word nearest to that many letters, and the earlier one when two are as near.
+ *
+ * Returns what is left of the text, and what is left of `pending` when the text was all handed
+ * over already (its words may come in more than one chunk).
+ */
+export function afterHanded(text: string, pending: string): { rest: string; left: string } {
+  if (pending === '') return { rest: text, left: '' }
+  const total = lettersOf(text).length
+  if (total <= pending.length) return { rest: '', left: pending.slice(total) }
+  let count = 0
+  let cut = 0
+  let away = pending.length
+  for (const word of text.matchAll(/\S+/g)) {
+    count += lettersOf(word[0]).length
+    const off = Math.abs(count - pending.length)
+    if (off < away) {
+      away = off
+      cut = word.index + word[0].length
+    }
+    // Every word after this one is further away.
+    if (count >= pending.length) break
+  }
+  return { rest: text.slice(cut).trimStart(), left: '' }
 }
 
 /** Sound over this level (the RMS of the wave, 0 to 1) counts as a voice. TBC after T3-3. */
@@ -231,6 +318,10 @@ export class MicSession {
   private toolReady = false
   private timers: number[] = []
   private hearTimer = 0
+  /** The words still being heard as they were handed over, as letters: they count once. */
+  private pending = ''
+  /** The words still being heard now, as the tool gave them (before the name fix). */
+  private heardRaw = ''
 
   constructor({
     mode,
@@ -296,6 +387,8 @@ export class MicSession {
     this.release()
     this.run += 1
     this.toolReady = false
+    this.pending = ''
+    this.heardRaw = ''
     this.set({
       phase: 'checking',
       steps: WAITING,
@@ -365,6 +458,30 @@ export class MicSession {
     return [...chunks, hearing].filter((part) => part.trim() !== '').join(' ')
   }
 
+  /**
+   * A turn is over and the mic listens on (PLAN-V24 T1-1, for Part 2's conversation): the words
+   * since the last hand-over go, with their name fixes, and the session starts the next turn
+   * empty. The mic, the bars and the voice tool keep running, so the next turn starts at once,
+   * with no check and no second mic.
+   *
+   * Words still being heard go with this turn. When the tool writes them out, they are taken off
+   * the next words (`afterHanded`), so they never count twice. The turn's clock starts again, for
+   * the "too slow" wait after Done.
+   */
+  handOver(): Handed {
+    const text = this.text()
+    const { fixes, phase, listeningSince } = this.snapshot
+    this.pending += lettersOf(this.heardRaw)
+    this.heardRaw = ''
+    this.set({
+      chunks: [],
+      hearing: '',
+      fixes: [],
+      listeningSince: phase === 'listening' ? this.env.now() : listeningSince,
+    })
+    return { text, fixes }
+  }
+
   // --- The check --------------------------------------------------------------------------------
 
   private stale(run: number): boolean {
@@ -403,9 +520,7 @@ export class MicSession {
 
     let stream: MediaStream
     try {
-      stream = await media.getUserMedia({
-        audio: picked ? { deviceId: { exact: picked } } : true,
-      })
+      stream = await media.getUserMedia({ audio: soundFor(media, picked) })
     } catch (error) {
       if (this.stale(run)) return
       if (picked && micGone(error)) {
@@ -557,7 +672,11 @@ export class MicSession {
       },
       onWords: (chunk) => {
         if (this.stale(run)) return
-        const fixed = fixNames(chunk, this.names)
+        // Words handed over before they were final count once (`handOver`).
+        const { rest, left } = afterHanded(chunk, this.pending)
+        this.pending = left
+        if (rest.trim() === '') return
+        const fixed = fixNames(rest, this.names)
         const fixes = [...this.snapshot.fixes]
         for (const fix of fixed.fixes) {
           if (!fixes.some((kept) => kept.from === fix.from && kept.to === fix.to)) fixes.push(fix)
@@ -566,7 +685,10 @@ export class MicSession {
       },
       onHearing: (text) => {
         if (this.stale(run)) return
-        this.set({ hearing: fixNames(text, this.names).text })
+        // Nothing is still being heard: words handed over before they were final are all in.
+        if (text.trim() === '') this.pending = ''
+        this.heardRaw = afterHanded(text, this.pending).rest
+        this.set({ hearing: fixNames(this.heardRaw, this.names).text })
       },
       onFinished: () => {
         if (this.stale(run)) return

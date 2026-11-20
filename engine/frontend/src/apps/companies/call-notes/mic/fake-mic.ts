@@ -46,6 +46,8 @@ export interface FakeMicOptions {
   toolNeverReady?: boolean
   /** After Done the tool never finishes writing out. */
   toolNeverFinishes?: boolean
+  /** The browser can single out a voice from other sound (PLAN-V24 choice 1). */
+  voiceIsolation?: boolean
 }
 
 export const HEADSET: FakeDevice = {
@@ -83,6 +85,7 @@ export class FakeMic {
   level: number
   toolNeverReady: boolean
   toolNeverFinishes: boolean
+  voiceIsolation: boolean
   /** What each `getUserMedia` asked for. */
   readonly asked: MediaStreamConstraints[] = []
   readonly tracks: FakeTrack[] = []
@@ -94,6 +97,8 @@ export class FakeMic {
     aborted: boolean
     /** The names it was told to listen for as it started (PLAN-V23 T1-5). */
     hints: readonly string[]
+    /** The mic's track it was told to listen to (PLAN-V24 T1-1). */
+    track: MediaStreamTrack | null
   }[] = []
   readonly storage = new Map<string, string>()
   audioClosed = 0
@@ -109,6 +114,7 @@ export class FakeMic {
     this.level = options.level ?? 0.2
     this.toolNeverReady = options.toolNeverReady ?? false
     this.toolNeverFinishes = options.toolNeverFinishes ?? false
+    this.voiceIsolation = options.voiceIsolation ?? false
   }
 
   /** How many tracks are still open: 0 once the mic is let go. */
@@ -178,7 +184,16 @@ export class FakeMic {
       } as unknown as MediaStream
       return Promise.resolve(stream)
     }
-    return { enumerateDevices, getUserMedia } as unknown as MediaDevices
+    // The sound settings this browser knows: voice isolation only when the test says so.
+    const getSupportedConstraints = (): MediaTrackSupportedConstraints => ({
+      deviceId: true,
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      channelCount: true,
+      ...(this.voiceIsolation ? { voiceIsolation: true } : {}),
+    })
+    return { enumerateDevices, getUserMedia, getSupportedConstraints } as unknown as MediaDevices
   }
 
   private audio(): AudioContext {
@@ -241,12 +256,14 @@ export class FakeMic {
       stopped: false,
       aborted: false,
       hints: [] as readonly string[],
+      track: null as MediaStreamTrack | null,
     }
     this.tools.push(record)
     const tool: VoiceTool = {
-      start: (_track, hints = []) => {
+      start: (track, hints = []) => {
         record.started = true
         record.hints = hints
+        record.track = track
         if (!this.toolNeverReady) queueMicrotask(events.onReady)
       },
       stop: () => {

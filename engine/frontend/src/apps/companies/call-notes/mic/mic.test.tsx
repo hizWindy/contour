@@ -6,6 +6,7 @@ import { FakeMic, HEADSET, LAPTOP_MIC, type FakeMicOptions } from './fake-mic'
 import MicCard, { type MicCardProps } from './mic-card'
 import type { NameFix } from './name-fix'
 import { MIC_KEY } from './devices'
+import { SOUND } from './session'
 import { PROBLEMS, systemBlockedWords } from './words'
 
 /*
@@ -365,7 +366,8 @@ describe('which mic', () => {
       await screen.findByRole('menuitemradio', { name: 'Microphone Array (Realtek)' }),
     )
     await speakNow()
-    expect(mic.asked.at(-1)).toEqual({ audio: { deviceId: { exact: 'mic-laptop' } } })
+    // The picked mic by its exact id, with the clean sound (PLAN-V24 T1-1).
+    expect(mic.asked.at(-1)).toEqual({ audio: { deviceId: { exact: 'mic-laptop' }, ...SOUND } })
     expect(mic.storage.get(MIC_KEY)).toBe('mic-laptop')
     expect(screen.getByText('Microphone Array (Realtek)')).toBeInTheDocument()
     // The first mic was let go.
@@ -378,8 +380,8 @@ describe('which mic', () => {
     const spies = spiesOf()
     renderWithProviders(<Host mic={mic} spies={spies} />)
     await speakNow()
-    expect(mic.asked[0]).toEqual({ audio: { deviceId: { exact: 'mic-unplugged' } } })
-    expect(mic.asked[1]).toEqual({ audio: true })
+    expect(mic.asked[0]).toEqual({ audio: { deviceId: { exact: 'mic-unplugged' }, ...SOUND } })
+    expect(mic.asked[1]).toEqual({ audio: SOUND })
     expect(mic.storage.has(MIC_KEY)).toBe(false)
   })
 })
