@@ -8,7 +8,11 @@
  * mic that fails ends it quietly: Enter still sends.
  *
  * The sound is never kept or sent: the session lets the mic go the moment it ends.
+ *
+ * It follows the voice tool setting (PLAN-V24 T4-3): the mic session picks the engine from it, the
+ * browser's service or the model on the device, as the voice bar's session does.
  */
+import type { VoiceToolKind } from '@/api/types'
 import { MicSession, type MicEnv } from '@/apps/companies/call-notes/mic/session'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import { sendOrCancel } from './draft'
@@ -21,6 +25,8 @@ export interface ListenOptions {
   onCancel: () => void
   /** The listening is over, whatever ended it. */
   onEnd: () => void
+  /** The voice tool setting, which the engine follows. Left out: the browser's service. */
+  tool?: VoiceToolKind
   env?: MicEnv
   makeTool?: VoiceToolMaker | null
   ms?: number
@@ -34,6 +40,7 @@ export function listenForSendIt({
   onSend,
   onCancel,
   onEnd,
+  tool = 'browser_service',
   env,
   makeTool,
   ms = LISTEN_MS,
@@ -41,7 +48,7 @@ export function listenForSendIt({
   let over = false
   const mic = new MicSession({
     mode: 'note',
-    tool: 'browser_service',
+    tool,
     names: [],
     ...(env ? { env } : {}),
     ...(makeTool === undefined ? {} : { makeTool }),

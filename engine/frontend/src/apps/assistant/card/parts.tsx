@@ -14,7 +14,12 @@ import { CircleAlert } from 'lucide-react'
 import { forwardRef, useId, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import type { VoiceToolKind } from '@/api/types'
 import { LiveWords } from '@/apps/companies/call-notes/mic/live-words'
-import { RECONNECTING, STEP_WORDS } from '@/apps/companies/call-notes/mic/words'
+import {
+  GETTING_VOICE_READY,
+  gettingVoiceReadyOn,
+  RECONNECTING,
+  STEP_WORDS,
+} from '@/apps/companies/call-notes/mic/words'
 import { NoteMic } from '@/apps/companies/call-notes/note-mic'
 import { FrequencyBars } from '@/components/motion/frequency-bars'
 import { Button } from '@/components/ui/button'
@@ -410,13 +415,20 @@ export const VoiceStrip = forwardRef<HTMLInputElement, VoiceStripProps>(function
   const { phase } = snapshot
   const lineId = useId()
   const listening = phase === 'starting' || phase === 'listening'
-  const title = listening
-    ? LISTENING
-    : phase === 'working'
-      ? WORKING
-      : phase === 'typing'
-        ? TYPE_CHANGE
-        : null
+  // The model on the device gets ready first, where it is the engine (PLAN-V24 T4-3): its line,
+  // as the voice bar's, and no bars until a mic is open.
+  const preparing = listening ? (snapshot.mic?.preparing ?? null) : null
+  const title = preparing
+    ? preparing.total > 0
+      ? gettingVoiceReadyOn(preparing.device)
+      : GETTING_VOICE_READY
+    : listening
+      ? LISTENING
+      : phase === 'working'
+        ? WORKING
+        : phase === 'typing'
+          ? TYPE_CHANGE
+          : null
   return (
     <div
       data-slot="card-voice"
@@ -429,7 +441,7 @@ export const VoiceStrip = forwardRef<HTMLInputElement, VoiceStripProps>(function
       {title ? (
         <div className="flex min-h-6 items-center gap-3">
           <p className="min-w-0 flex-1 font-semibold text-foreground">{title}</p>
-          {listening ? (
+          {listening && !preparing ? (
             <FrequencyBars source={snapshot.mic?.bars ?? null} label="" className="h-6" />
           ) : null}
         </div>

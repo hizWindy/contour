@@ -41,6 +41,8 @@
  *   command step as a change, as V's change does; a new command gets "Send or keep this one
  *   first." (TBC). Its foot shows the mic is on ("Listening", the bars, the words, Stop (V)), and
  *   V stops the conversation. After a send, the bar comes back and says "Sent.".
+ * - **The card's own listening follows the engine** (PLAN-V24 T4-3): the 5 seconds for "send it",
+ *   and V's change, use the browser's service or the model on the device, as the bar does.
  * - **V with "Keep listening" on** and the bar closed starts a conversation, which the card hears
  *   (`converse`). With it off, V speaks one change, as before.
  * - **Its question by voice** (PLAN-V24 T2-4, choice 14): while it asks "Which Sample?", "the
@@ -91,6 +93,7 @@ import type {
 } from '@/api/types'
 import { needsCompanySendWords, NOT_CHANGED } from '@/apps/companies/call-logs/words'
 import type { MicEnv } from '@/apps/companies/call-notes/mic/session'
+import { pickEngine } from '@/apps/companies/call-notes/mic/voice-engine'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import { problemWords } from '@/apps/companies/call-notes/mic/words'
 import { useNoHubSpotUser } from '@/auth/hubspot-user'
@@ -411,11 +414,17 @@ function DraftCard({
   const still = useStill()
   const whole = useDeferredValue(true, still)
   // After a spoken command, the card listens for "send it" as it opens (choice 23), once the voice
-  // tool setting is known and it is the speech service. Opened while a conversation listens, it
-  // hears that instead, and never opens a mic of its own (PLAN-V24 T2-3).
+  // tool setting is known and a voice engine can run here: the browser's service, or the model on
+  // the device, as the bar's own session picks it (PLAN-V24 T4-3). Opened while a conversation
+  // listens, it hears that instead, and never opens a mic of its own (PLAN-V24 T2-3).
   const spoken = request.kind === 'command' && request.source === 'mic'
   const [inConversation] = useState(() => conversation?.isLive() === true)
-  const canListen = spoken && !options.isPending && tool === 'browser_service' && !inConversation
+  const canListen =
+    spoken &&
+    !options.isPending &&
+    tool !== 'typing' &&
+    pickEngine(tool, env) !== null &&
+    !inConversation
   const [listenOver, setListenOver] = useState(false)
   const listening = canListen && !listenOver
   const [voice, setVoice] = useState<BarSession | null>(null)
@@ -918,6 +927,7 @@ function DraftCard({
       onEnd: () => {
         setListenOver(true)
       },
+      tool,
       env,
       makeTool,
       ms: t.listen,
@@ -926,7 +936,7 @@ function DraftCard({
     return () => {
       stop(true)
     }
-  }, [listening, env, makeTool, t.listen])
+  }, [listening, tool, env, makeTool, t.listen])
 
   // V's session goes with the card.
   useEffect(
