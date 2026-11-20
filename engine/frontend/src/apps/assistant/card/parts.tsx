@@ -1,8 +1,8 @@
 /**
  * The review card's small parts (PLAN-V22 T3-3, choices 19 and 20): a choice to make ("Which
  * James?"), a box with its own mic, a line of the card, the hint bar with real key caps, and the
- * strips at the card's foot (V's change, the listening for "send it", and the voice bar's
- * conversation while the card hears it, PLAN-V24 T2-3).
+ * strips at the card's foot (V's change, and the listening for "send it"). The voice bar's
+ * conversation shows beside the card, as its pill (`voice/pill.tsx`, PLAN-V24 T5-1).
  *
  * - **A choice** is a group of buttons: the arrow keys move between them, and Enter (or a click)
  *   picks. Not a list box: the card keeps its own keys.
@@ -14,12 +14,7 @@ import { CircleAlert } from 'lucide-react'
 import { forwardRef, useId, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import type { VoiceToolKind } from '@/api/types'
 import { LiveWords } from '@/apps/companies/call-notes/mic/live-words'
-import {
-  GETTING_VOICE_READY,
-  gettingVoiceReadyOn,
-  RECONNECTING,
-  STEP_WORDS,
-} from '@/apps/companies/call-notes/mic/words'
+import { GETTING_VOICE_READY, gettingVoiceReadyOn } from '@/apps/companies/call-notes/mic/words'
 import { NoteMic } from '@/apps/companies/call-notes/note-mic'
 import { FrequencyBars } from '@/components/motion/frequency-bars'
 import { Button } from '@/components/ui/button'
@@ -30,7 +25,7 @@ import { isMac } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 import type { BarSnapshot } from '../voice/bar-session'
 import { useVKeyOn } from '../voice/v-switch'
-import { SAY_IT_AGAIN, STOP } from '../voice/words'
+import { SAY_IT_AGAIN } from '../voice/words'
 import { CountdownBar } from './countdown'
 import type { Box } from './draft'
 import {
@@ -259,7 +254,8 @@ function Hint({ keys, words }: { keys: string; words: string }) {
 /**
  * Real key caps: on the card, or inside a box. Not on a touch screen. `escape` is what Esc does
  * on the card: Cancel, or Later on a call (PLAN-V23 T4-2). V shows only while "Use V to speak" is
- * on (T4-1), and says Stop while a conversation listens (PLAN-V24 T2-3).
+ * on (T4-1), and not while the voice bar's pill beside the card shows V's key on its own button
+ * (`v` null, PLAN-V24 T5-1).
  */
 export function HintBar({
   inBox,
@@ -268,7 +264,7 @@ export function HintBar({
 }: {
   inBox: boolean
   escape?: string
-  v?: string
+  v?: string | null
 }) {
   const ctrl = isMac() ? '⌘' : 'Ctrl'
   const vOn = useVKeyOn()
@@ -288,7 +284,7 @@ export function HintBar({
         <>
           <Hint keys="Enter" words={SEND} />
           <Hint keys="Esc" words={escape} />
-          {vOn ? <Hint keys="V" words={v} /> : null}
+          {vOn && v ? <Hint keys="V" words={v} /> : null}
         </>
       )}
     </div>
@@ -296,91 +292,6 @@ export function HintBar({
 }
 
 // --- The strips at the card's foot --------------------------------------------------------------
-
-export interface ConversationStripProps {
-  /** The voice bar's conversation, which the card hears while it is open (PLAN-V24 T2-3). */
-  snapshot: BarSnapshot
-  /** The quiet line under "Listening", which describes the card too ("Say 'send it'..."). */
-  hintId: string
-  /** The line the conversation said last, if it stopped: the quiet stop, or a problem. */
-  ended: string | null
-  onStop: () => void
-}
-
-/**
- * While a conversation listens with the card open (PLAN-V24 T2-3): the mic is on, so the card says
- * so, with the bars, the words as they come, and Stop (V). Kept small on purpose: Part 5 turns it
- * into a pill beside the card (T5-1). Once the conversation stops with a line (the quiet stop, a
- * problem), the line stays until the card closes, and V listens again.
- */
-export function ConversationStrip({ snapshot, hintId, ended, onStop }: ConversationStripProps) {
-  const vOn = useVKeyOn()
-  const { phase, conversation } = snapshot
-  const live = (phase === 'starting' || phase === 'listening') && conversation !== null
-  if (!live) {
-    return ended ? (
-      <div data-slot="card-conversation" data-phase={phase}>
-        <p role="status" className="text-ui text-pretty text-muted-foreground">
-          {ended}
-        </p>
-      </div>
-    ) : null
-  }
-  const title =
-    phase === 'starting'
-      ? snapshot.mic?.steps.found === 'pass'
-        ? STEP_WORDS.allowed.waiting
-        : STEP_WORDS.found.waiting
-      : snapshot.mic?.reconnecting
-        ? RECONNECTING
-        : conversation.working
-          ? WORKING
-          : LISTENING
-  const line = conversation.working ? null : conversation.line
-  return (
-    <div data-slot="card-conversation" data-phase={phase} className="flex flex-col gap-2">
-      {/* A screen reader hears where it stands, and each line, once. */}
-      <p role="status" className="sr-only">
-        {line ?? title}
-      </p>
-      <div className="flex min-h-6 items-center gap-3">
-        <p className="min-w-0 flex-1 truncate font-semibold text-foreground">{title}</p>
-        <FrequencyBars source={snapshot.mic?.bars ?? null} label="" className="h-6" />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="touch:h-11"
-          aria-keyshortcuts={vOn ? 'V' : undefined}
-          onClick={onStop}
-        >
-          {STOP}
-          {vOn ? (
-            <Kbd aria-hidden="true" className="touch:hidden">
-              V
-            </Kbd>
-          ) : null}
-        </Button>
-      </div>
-      <div className="min-h-6 text-ui text-foreground">
-        <LiveWords
-          chunks={snapshot.mic?.chunks ?? []}
-          hearing={snapshot.mic?.hearing ?? ''}
-          empty={
-            <p id={hintId} className="text-pretty text-muted-foreground">
-              {SAY_SEND_IT}
-            </p>
-          }
-        />
-      </div>
-      {line ? (
-        <p data-slot="card-conversation-line" className="text-ui text-pretty text-foreground">
-          {line}
-        </p>
-      ) : null}
-    </div>
-  )
-}
 
 /** While the card listens for "send it" (choice 23): the words, and a bar that empties once. */
 export function ListenStrip({ id, ms }: { id: string; ms: number }) {

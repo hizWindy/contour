@@ -40,16 +40,23 @@
  * - **Words over 2,000 characters** wait in the text line, with the plan's line, to shorten.
  * - **On a phone** (T2-5), the screen stays on while it listens; leaving the page stops it, with
  *   "The mic stopped when you left the page. What you said so far is kept." and Carry on.
- * - **The mic's own lines** (PLAN-V24 T1-2, T1-3), plainly until Part 5 polishes them (T5-1): the
- *   title says "Reconnecting" while the speech service is tried again, and "Now using {mic}." shows
- *   once under the words when the mic moved, said once to a screen reader.
+ * - **The mic's own lines** (PLAN-V24 T1-2, T1-3): the title says "Reconnecting" while the speech
+ *   service is tried again, and "Now using {mic}." shows under the words when the mic moved.
  * - **A review card** a command opens hears the conversation (T2-3): the bar gives way to it while
- *   it is open, and the card's foot says the mic is on, with Stop (V). The bar comes back as it
- *   closes, still listening. V on a card with the bar closed starts a conversation.
+ *   it is open, and comes back as it closes, still listening. V on a card with the bar closed
+ *   starts a conversation.
  *
  * PLAN-V24 T5-1, **listening you can see** (choices 29 to 31):
  *
+ * - **The pill:** while a card is open, the bar shrinks to a small pill beside it (`pill.tsx`),
+ *   with its bars, where it stands, the words and Stop (V). The bar hands the card what the pill
+ *   says (`PillState`), in its own words, and the card puts it in its dialog layer.
+ * - **It comes back without rising** after a card: it was there all along, as the pill, and what is
+ *   used all day barely moves (principles 02 #20). It fades in on `snappy`.
  * - **A soft tone** as listening starts and as it stops (`tone.ts`), through the session.
+ * - **Each line is said once** to a screen reader: "Now using {mic}." where it first shows, the
+ *   bar or the pill; and back after a card, the bar says nothing of where it stands until that
+ *   changes, since the pill said it.
  *
  * PLAN-V24 T4-3, **every device** (choices 22 and 25):
  *
@@ -92,7 +99,6 @@ import {
   fixedWords,
   GETTING_VOICE_READY,
   gettingVoiceReadyOn,
-  nowUsing,
   ONLY_ONCE,
   problemActions,
   problemWords,
@@ -113,7 +119,7 @@ import { whenIdle } from '@/lib/idle'
 import { isTyping } from '@/lib/is-typing'
 import { useBarRoom } from '@/lib/use-bar-room'
 import { CardHost } from '../card/host'
-import { cardShownOf, openCard, openedCard, useOpenCard } from '../card/store'
+import { cardShownOf, openCard, openedCard, useOpenCard, type CardRequest } from '../card/store'
 import { BarSession, MAX_CHARS, type BarProblem, type BarSnapshot, type Times } from './bar-session'
 import { handOver } from './hand-over'
 import { isKeepListeningOn, useKeepListening } from './keep-listening'
@@ -121,6 +127,8 @@ import { isPlainV, somethingElseOpen, VOICE_BAR } from './keys'
 import { cachedNames, firstCompanyOf, fixNamesOf, hintsOf, namesOnPage } from './names'
 import { onPageOf, panelCompany } from './on-page'
 import { onScreen } from './on-screen'
+import { MovedLine, SaidStatus } from './pill'
+import type { PillState } from './pill-state'
 import { closeVoiceBar, isVHeld, letGoV, openVoiceBarByKey, useVoiceBarOpen } from './store'
 import { playTone, type Tone } from './tone'
 import { useVKeyOn } from './v-switch'
@@ -212,6 +220,9 @@ function canLogCalls(client: QueryClient): boolean {
 
 const noSubscribe = (): (() => void) => () => undefined
 const closedSnapshot = (): BarSnapshot => CLOSED
+
+/** No review card has opened over the bar since it opened. */
+const NO_CARDS = { last: null, seen: 0 } as const
 
 export interface VoiceBarProps {
   /** For tests: the browser, the voice tool, the command step and the waits. */
@@ -405,9 +416,17 @@ export default function VoiceBar({
   // "Use V to speak" off (PLAN-V23 T4-1): V is no key here either, so no key cap says it is.
   const vOn = useVKeyOn()
   const keepListening = useKeepListening()
-  // A review card open now: the bar gives way to it, and its foot shows the conversation (T2-3).
+  // A review card open now: the bar gives way to it, and shrinks to the pill beside it (T5-1).
   const card = useOpenCard()
   const shown = open && card === null
+  // Back after a card, the bar was there all along, as the pill: it fades in, and doesn't rise
+  // again (principles 02 #20), and says nothing of where it stands until that changes (T5-1).
+  // Counted per card, so its screen reader line starts afresh after each one, even when the bar
+  // comes back before it had finished leaving.
+  const [cards, setCards] = useState<{ last: CardRequest | null; seen: number }>(NO_CARDS)
+  if (open && card !== null && card !== cards.last) setCards({ last: card, seen: cards.seen + 1 })
+  if (!open && cards !== NO_CARDS) setCards(NO_CARDS)
+  const hadCard = cards.seen > 0
 
   // A new session each time the bar opens, with what is on screen as it opens.
   const [opened, setOpened] = useState(false)
@@ -632,6 +651,24 @@ export default function VoiceBar({
   const conversation = listening ? snapshot.conversation : null
   // Over the server's limit, the words can't go until they are shortened.
   const tooLong = snapshot.draft.trim().length > MAX_CHARS
+  // While a card is open, the bar shrinks to the pill beside it, which says what the bar would:
+  // where it stands, and once it stopped, why, with the bar's own buttons (PLAN-V24 T5-1).
+  const pill: PillState | null =
+    open && session
+      ? {
+          snapshot,
+          title,
+          stopped:
+            problem && (phase === 'problem' || phase === 'typing')
+              ? { line: problemLine(problem), quiet: isQuiet(problem) }
+              : null,
+          actions: actions.map((id) => ({ id, label: ACTION_LABELS[id] })),
+          act,
+          stop: () => {
+            session.done()
+          },
+        }
+      : null
 
   const problemView = problem ? (
     isQuiet(problem) ? (
@@ -677,13 +714,15 @@ export default function VoiceBar({
             data-phase={phase}
             tabIndex={-1}
             className="fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-60 mx-auto flex w-[min(40rem,calc(100vw-2rem))] flex-col gap-3 rounded-lg border bg-popover p-4 text-ui text-popover-foreground shadow-float outline-none"
-            initial={still ? false : { opacity: 0, y: RISE }}
-            animate={{ opacity: 1, y: 0, transition: still ? INSTANT : springs.smooth }}
+            initial={still ? false : hadCard ? { opacity: 0 } : { opacity: 0, y: RISE }}
+            animate={{
+              opacity: 1,
+              y: 0,
+              transition: still ? INSTANT : hadCard ? springs.snappy : springs.smooth,
+            }}
             exit={{ opacity: 0, y: RISE / 2, transition: still ? INSTANT : springs.exit }}
           >
-            <p role="status" className="sr-only">
-              {statusOf(snapshot)}
-            </p>
+            <SaidStatus key={cards.seen} text={statusOf(snapshot)} quiet={hadCard} />
 
             <div className="flex min-h-6 items-center gap-3">
               <p
@@ -803,14 +842,9 @@ export default function VoiceBar({
             ) : null}
 
             {listening && snapshot.mic?.movedTo ? (
-              // The mic moved by itself, a headset plugged in (PLAN-V24 T1-2): said once.
-              <p
-                role="status"
-                data-slot="voice-moved"
-                className="text-caption text-muted-foreground"
-              >
-                {nowUsing(snapshot.mic.movedTo.name)}
-              </p>
+              // The mic moved by itself, a headset plugged in (PLAN-V24 T1-2): said once in all,
+              // here or in the pill (T5-1).
+              <MovedLine key={snapshot.mic.movedTo.id} device={snapshot.mic.movedTo} />
             ) : null}
 
             {waiting ? null : problemView}
@@ -900,6 +934,7 @@ export default function VoiceBar({
         tone={tone}
         conversation={open && session?.keepsListening ? session : null}
         converse={keepListening && !open ? openVoiceBarByKey : null}
+        pill={pill}
       />
     </>
   )

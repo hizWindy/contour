@@ -24,11 +24,11 @@ const Dictation = lazy(() => import('./dictation'))
 
 /**
  * What the card is handed: for tests, the fake mic, the waits and the tone; from the voice bar, its
- * conversation, which an open card hears (PLAN-V24 T2-3).
+ * conversation, which an open card hears (PLAN-V24 T2-3), and the pill it shrinks to (T5-1).
  */
 export type CardHostProps = Pick<
   ReviewCardProps,
-  'env' | 'makeTool' | 'read' | 'times' | 'conversation' | 'converse' | 'tone'
+  'env' | 'makeTool' | 'read' | 'times' | 'conversation' | 'converse' | 'pill' | 'tone'
 >
 
 /**

@@ -120,9 +120,12 @@ async function say(mic: FakeMic, words: string) {
   await wait(TALK.pause ?? 0)
 }
 
-/** The card's strip for the conversation: the mic is on. */
+/**
+ * The voice bar's pill beside the card (PLAN-V24 T5-1): the mic is on. It is in the card's dialog
+ * layer, so the dialog holds it, but not in the card's own box.
+ */
 function strip(card: HTMLElement): HTMLElement | null {
-  return card.querySelector<HTMLElement>('[data-slot=card-conversation]')
+  return card.querySelector<HTMLElement>('[data-slot=listening-pill]')
 }
 
 afterEach(() => {
@@ -269,7 +272,11 @@ describe('the card in a conversation (T2-3)', () => {
     await waitFor(() => {
       expect(mic.live()).toBe(0)
     })
-    expect(strip(card)).toBeNull()
+    // The pill goes with the conversation (T5-1), and the focus stays on the card.
+    await waitFor(() => {
+      expect(strip(card)).toBeNull()
+    })
+    expect(within(card).getByRole('button', { name: 'Send' })).toHaveFocus()
     expect(screen.getByRole('dialog', { name: TASK_CARD })).toBe(card)
   })
 

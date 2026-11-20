@@ -627,9 +627,9 @@ async function say(mic: FakeMic, words: string) {
   await wait(TALK.pause ?? 0)
 }
 
-/** The card's strip for the conversation, and its last line. */
+/** The conversation's last line, in the voice bar's pill beside the card (PLAN-V24 T5-1). */
 function line(found: HTMLElement): HTMLElement | null {
-  return found.querySelector<HTMLElement>('[data-slot=card-conversation-line]')
+  return found.querySelector<HTMLElement>('[data-slot=pill-line]')
 }
 
 describe('the company said again (choice 19)', () => {

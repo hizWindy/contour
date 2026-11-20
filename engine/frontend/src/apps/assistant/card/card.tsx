@@ -39,8 +39,13 @@
  *   and opens none of its own. Its ear (`attachCard`) reads each turn first, with no AI: "send it"
  *   sends, and "later" or "cancel" does what Later or Cancel does. Anything else goes to the
  *   command step as a change, as V's change does; a new command gets "Send or keep this one
- *   first." (TBC). Its foot shows the mic is on ("Listening", the bars, the words, Stop (V)), and
- *   V stops the conversation. After a send, the bar comes back and says "Sent.".
+ *   first." (TBC). V stops the conversation. After a send, the bar comes back and says "Sent.".
+ * - **The Listening pill** (PLAN-V24 T5-1, choices 29 to 31): while the voice bar's mic is on, the
+ *   bar shrinks to a pill beside the card (`voice/pill.tsx`), in the card's own dialog layer, so
+ *   Stop can be clicked and reached by the keyboard. It says what the bar would, and what to say to
+ *   the card. Once the conversation stops with a line (the quiet stop, a problem), the pill keeps
+ *   it, with the bar's buttons, until the card closes. Its buttons put the focus back on the card:
+ *   Type instead in the card's first box, the others on Send.
  * - **The card's own listening follows the engine** (PLAN-V24 T4-3): the 5 seconds for "send it",
  *   and V's change, use the browser's service or the model on the device, as the bar does.
  * - **V with "Keep listening" on** and the bar closed starts a conversation, which the card hears
@@ -114,6 +119,8 @@ import {
   type Heard,
 } from '../voice/hand-over'
 import { VOICE_BAR } from '../voice/keys'
+import { ListeningPill } from '../voice/pill'
+import { micIsOn, type PillActionId, type PillState } from '../voice/pill-state'
 import { playTone, type Tone } from '../voice/tone'
 import { isVKeyOn } from '../voice/v-switch'
 import {
@@ -121,7 +128,6 @@ import {
   LEFT_PAGE,
   NOTHING_HEARD,
   QUIET_STOP,
-  STOP,
   TOO_LONG,
   TOO_MANY,
   TOO_SLOW,
@@ -155,7 +161,7 @@ import { CallLayout, EmailLayout, PreReadLayout, TaskLayout, type EditCall } fro
 import { cardLinesOf, unsureLeft } from './lines'
 import { listenForSendIt } from './listen'
 import { CARD_TIMES, type CardTimes } from './times'
-import { ConversationStrip, HintBar, ListenStrip, PartProblem, VoiceStrip } from './parts'
+import { HintBar, ListenStrip, PartProblem, VoiceStrip } from './parts'
 import {
   heardNoteBodyOf,
   patchNote,
@@ -181,6 +187,8 @@ import {
   OPEN,
   OPEN_CALL_LOGS,
   PICK_ONE,
+  SAY_COMPANY,
+  SAY_SEND_IT,
   SEND,
   SEND_OR_KEEP,
   SENT,
@@ -203,6 +211,11 @@ export interface ReviewCardProps {
   conversation?: BarSession | null
   /** V on the card starts a conversation: "Keep listening" is on, and the bar is closed. */
   converse?: (() => void) | null
+  /**
+   * The voice bar, shrunk to a pill beside the card while the bar is open (PLAN-V24 T5-1): what it
+   * says, and its buttons. Null: the bar is closed.
+   */
+  pill?: PillState | null
   /** For tests: the tone as V's own listening starts and stops (T5-1). Left out: the real one. */
   tone?: Tone
 }
@@ -395,6 +408,7 @@ function DraftCard({
   times,
   conversation = null,
   converse = null,
+  pill = null,
   tone = playTone,
   first,
 }: ReviewCardProps & { first: CardDraft }) {
@@ -1120,13 +1134,13 @@ function DraftCard({
     conversation !== null &&
     talk.conversation !== null &&
     (talk.phase === 'starting' || talk.phase === 'listening')
-  // It stopped with a line while the card heard it: the quiet stop, or a problem. V listens again.
+  // The voice bar's mic is on while the card is open: the bar shrinks to the pill beside it
+  // (PLAN-V24 T5-1). Once it stopped with a line the card saw it stop with (the quiet stop, a
+  // problem), the pill keeps the line, with its buttons, until the card closes. V listens again.
+  const pillLive = pill !== null && micIsOn(pill.snapshot)
   const [heardTalk, setHeardTalk] = useState(false)
-  if (talking && !heardTalk) setHeardTalk(true)
-  const talkEnded =
-    heardTalk && conversation !== null && talk.phase === 'problem' && talk.problem
-      ? stripProblem(talk.problem)
-      : null
+  if (pillLive && !heardTalk) setHeardTalk(true)
+  const pillShown = pillLive || (heardTalk && pill !== null && pill.stopped !== null)
 
   /** V on the card, or Say it again: a change by voice. `byKey`: the V key, which may be held. */
   const speak = (byKey = false): void => {
@@ -1211,10 +1225,13 @@ function DraftCard({
       isVKeyOn()
     ) {
       event.preventDefault()
-      // In a conversation, V stops it, or listens again once it stopped (PLAN-V24 T2-3).
+      // In a conversation, V stops it, or listens again once it stopped (PLAN-V24 T2-3). On the
+      // pill, which goes or changes as it does, the focus goes back to the card's Send (T5-1).
+      const onPill = !(card.current?.contains(event.target) ?? false)
       if (conversation?.pressV()) {
         vTaken.current = true
         conversation.vDown()
+        if (onPill) sendButton.current?.focus()
         return
       }
       // "Keep listening" on and the bar closed: V starts a conversation, which the card hears.
@@ -1249,6 +1266,32 @@ function DraftCard({
   const onFocus = (event: FocusEvent<HTMLDivElement>): void => {
     setInBox(inTextBox(event.target))
   }
+
+  // --- The Listening pill beside the card (PLAN-V24 T5-1) -----------------------------------------
+  /** Type instead, from the pill: the rep types into the card, from its first box still to fill. */
+  const toTyping = (): void => {
+    const box = missingOf(latest.current.draft, latest.current.today)
+    if (box && focusBox(box)) return
+    const boxes = card.current?.querySelectorAll<HTMLElement>('input, textarea') ?? []
+    const typed = [...boxes].find((element) => inTextBox(element))
+    if (typed) typed.focus()
+    else sendButton.current?.focus()
+  }
+  /** Stop, on the pill: the conversation ends, the pill goes, and the focus stays on the card. */
+  const stopTalk = (): void => {
+    sendButton.current?.focus()
+    pill?.stop()
+  }
+  /** The pill's buttons do the bar's job, and the focus goes back to the card. */
+  const pillAct = (id: PillActionId): void => {
+    if (id === 'type_instead' || id === 'carry_on') toTyping()
+    else sendButton.current?.focus()
+    pill?.act(id)
+  }
+  // What to say to the card before any words: its company while it waits on one (PLAN-V24 T3-2),
+  // else "send it".
+  const pillHint =
+    draft.action !== 'email' && draft.company.found === null ? SAY_COMPANY : SAY_SEND_IT
 
   // A call is put off, not cancelled: it waits in Call logs (PLAN-V23 T4-2).
   const putOff = draft.action === 'log_call' ? LATER : CANCEL
@@ -1337,6 +1380,20 @@ function DraftCard({
         // The focus starts on Send (choice 19).
         sendButton.current?.focus()
       }}
+      // The voice bar, shrunk to a pill beside the card while its mic is on (PLAN-V24 T5-1).
+      aside={
+        <ListeningPill
+          shown={pillShown}
+          state={pill}
+          hint={pillHint}
+          hintId={listenId}
+          onStop={stopTalk}
+          onAct={pillAct}
+          onFocus={() => {
+            setInBox(false)
+          }}
+        />
+      }
     >
       <div
         ref={card}
@@ -1391,16 +1448,7 @@ function DraftCard({
         {/* Kept in view at the card's foot while its boxes scroll: a call's boxes make the card
             taller than a phone (PLAN-V23 T4-2). */}
         <div className="sticky bottom-0 flex flex-col gap-3 border-t bg-popover px-5 py-3">
-          {talking || talkEnded ? (
-            <ConversationStrip
-              snapshot={talk}
-              hintId={listenId}
-              ended={talkEnded}
-              onStop={() => {
-                conversation?.done()
-              }}
-            />
-          ) : voice ? (
+          {voice ? (
             <VoiceStrip
               ref={changeLine}
               snapshot={snapshot}
@@ -1424,7 +1472,8 @@ function DraftCard({
             <ListenStrip id={listenId} ms={t.listen} />
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
-            <HintBar inBox={inBox} escape={putOff} v={talking ? STOP : undefined} />
+            {/* V's key cap is on the pill while it shows: said once (principles 03 #2). */}
+            <HintBar inBox={inBox} escape={putOff} v={pillShown ? null : undefined} />
             <div className="ml-auto flex items-center gap-2">
               <Button
                 type="button"

@@ -182,6 +182,12 @@ export const CHANGE_WAITS = 'That change waits until the call is sorted.'
 /** Under the card's bar while it listens for "send it" (the plan's words). */
 export const SAY_SEND_IT = "Say 'send it' or press Enter"
 
+/**
+ * In the voice bar's pill beside a card that waits on its company (PLAN-V24 T5-1, from T3-2's
+ * note), in place of "send it": the words said next fill its company search (TBC).
+ */
+export const SAY_COMPANY = "Say the company's name, or pick it."
+
 /** The hold's toast: what goes in 5 seconds, by action. */
 export const HOLD_TITLES = {
   log_call: 'Sending the call to HubSpot',

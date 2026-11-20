@@ -948,9 +948,11 @@ export class BarSession {
   /**
    * The conversation stops listening (V, Stop, "that's all"): the mic is let go, and the turns
    * already said are worked out in the bar. With none, the bar closes, or says it heard nothing.
+   * Over an open card it closes either way: the card was what the talk was for, and the pill
+   * beside it goes with the conversation (PLAN-V24 T5-1).
    */
   private stopConversation(said = false): void {
-    const heardAny = said || (this.snapshot.conversation?.turns ?? 0) > 0
+    const heardAny = said || (this.snapshot.conversation?.turns ?? 0) > 0 || this.hearing() !== null
     const working = this.busy ? (this.snapshot.conversation?.working ?? '') : null
     this.drain = 'shown'
     this.stopListening()
