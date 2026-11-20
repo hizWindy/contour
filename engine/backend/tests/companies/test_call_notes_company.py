@@ -194,6 +194,9 @@ async def test_picking_the_company_sorts_the_call_as_a_new_call_is_sorted(
         made = (await client.get(f"{NOTES}/{known['id']}")).json()
     assert len(claude.asked) == 2
     assert claude.asked[0]["prompt"] == claude.asked[1]["prompt"]  # the same request as a new call
+    # Claude gets no phone number or email, and neither the company's name nor the name as heard.
+    sent = claude.asked[1]["prompt"]
+    assert "0412" not in sent and "@" not in sent and "Sample Logistic" not in sent
     assert (after["status"], after["sorted_by"]) == ("to_confirm", "ai")
     assert (after["company_key"], after["company_name"]) == ("201", "Sample Logistics Pty Ltd")
     assert after["company_heard"] == "Sample Logistic"  # kept once the company is picked
