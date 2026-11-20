@@ -3,3 +3,5 @@ dist
 coverage
 *.local
 *.tsbuildinfo
+# The speech model's files (PLAN-V24 T4-1): scripts/voice-files.js fetches them at each build.
+public/voice/

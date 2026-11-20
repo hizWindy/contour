@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && node scripts/voice-files.js && vite build",
     "preview": "vite preview",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc -b",

@@ -1,0 +1,143 @@
+{
+  "served": "/voice/",
+  "runtime": {
+    "package": "onnxruntime-web",
+    "version": "1.31.0-dev.20260914-8d85527a0",
+    "files": {
+      "ort-wasm-simd-threaded.asyncify.wasm": {
+        "bytes": 26861777,
+        "sha256": "49871f5a4409519797e127440868a6d1923339d9185907f301a5b2a1d90af082"
+      },
+      "ort-wasm-simd-threaded.wasm": {
+        "bytes": 14264838,
+        "sha256": "06ba057753da3847e4c24f02d91ab133455b0817c69a44993a9a53a2146df9e3"
+      },
+      "ort-wasm-simd-threaded.mjs": {
+        "bytes": 24381,
+        "sha256": "c57ca56328877353a575e51bbca6f18450027d6c9bf2307a2cb2c41363b4de9f"
+      }
+    }
+  },
+  "models": {
+    "moonshine-base": {
+      "repo": "onnx-community/moonshine-base-ONNX",
+      "revision": "b1e9b6aae3c3c7298f10c3798393fdf38e8fbbad",
+      "folder": "moonshine-base-b1e9b6a",
+      "for": "app",
+      "files": {
+        "config.json": {
+          "bytes": 922,
+          "sha256": "fab7241d1e9fc6c2370c4c6dfb5da79bb54d67ed9ab6b507ac51d29d2abe01d1"
+        },
+        "generation_config.json": {
+          "bytes": 147,
+          "sha256": "f9b3f711b57be7def2e50a8942f64f36ee0a55fad5b84ff93a687b6c5bcc1d44"
+        },
+        "preprocessor_config.json": {
+          "bytes": 128,
+          "sha256": "fa43a7017ef85cd1d0fba0d9aae77c8adb16990ae6f11115631f41ec5d8aa679"
+        },
+        "tokenizer.json": {
+          "bytes": 3761754,
+          "sha256": "7b913404bdd039af4756783218af4440bc07fb7d6d8258d677e34f95b3ec416f"
+        },
+        "tokenizer_config.json": {
+          "bytes": 135735,
+          "sha256": "edaee394565d428ea98a663ae7209cdcfeefc5585c42d7a570ff7c986df2cd15"
+        },
+        "onnx/encoder_model_quantized.onnx": {
+          "bytes": 20513063,
+          "sha256": "1dd9ab0a7f987113d30affcba5a068d11c8f90fa0223caa3e491ade431ad9751"
+        },
+        "onnx/decoder_model_merged_quantized.onnx": {
+          "bytes": 42498870,
+          "sha256": "cc9f3cd6698a369c6008b41aa60aa3fb3322e7f03c9bdf19d8e6b7200afca4f3"
+        }
+      }
+    },
+    "moonshine-tiny": {
+      "repo": "onnx-community/moonshine-tiny-ONNX",
+      "revision": "a6da1241cd305dcd64eab1edbd615f2bb9aabb95",
+      "folder": "moonshine-tiny-a6da124",
+      "for": "app",
+      "files": {
+        "config.json": {
+          "bytes": 921,
+          "sha256": "558e1e02069137c796ace1e50c48d8fe451f04a295929138e6bea885517f0edb"
+        },
+        "generation_config.json": {
+          "bytes": 147,
+          "sha256": "f9b3f711b57be7def2e50a8942f64f36ee0a55fad5b84ff93a687b6c5bcc1d44"
+        },
+        "preprocessor_config.json": {
+          "bytes": 128,
+          "sha256": "fa43a7017ef85cd1d0fba0d9aae77c8adb16990ae6f11115631f41ec5d8aa679"
+        },
+        "tokenizer.json": {
+          "bytes": 3761754,
+          "sha256": "7b913404bdd039af4756783218af4440bc07fb7d6d8258d677e34f95b3ec416f"
+        },
+        "tokenizer_config.json": {
+          "bytes": 135735,
+          "sha256": "edaee394565d428ea98a663ae7209cdcfeefc5585c42d7a570ff7c986df2cd15"
+        },
+        "onnx/encoder_model_quantized.onnx": {
+          "bytes": 7937661,
+          "sha256": "c6fc4b7bc5af75c0591fd157a1f3829b533d18e9769a888fd95a62e470dd4f4a"
+        },
+        "onnx/decoder_model_merged_quantized.onnx": {
+          "bytes": 20243286,
+          "sha256": "eed87831c3a6103534aae7d47a5d485025c659a1323901513961c39fe8a1a367"
+        }
+      }
+    },
+    "silero-vad": {
+      "repo": "onnx-community/silero-vad",
+      "revision": "e71cae966052b992a7eca6b17738916ce0eca4ec",
+      "folder": "silero-vad-e71cae9",
+      "for": "app",
+      "files": {
+        "onnx/model.onnx": {
+          "bytes": 2243022,
+          "sha256": "a4a068cd6cf1ea8355b84327595838ca748ec29a25bc91fc82e6c299ccdc5808"
+        }
+      }
+    },
+    "whisper-base-en": {
+      "repo": "onnx-community/whisper-base.en",
+      "revision": "51eefc0af78b103839eda9e7e4f4186acc6517fe",
+      "folder": "whisper-base-en-51eefc0",
+      "for": "s2",
+      "files": {
+        "config.json": {
+          "bytes": 2197,
+          "sha256": "c8a0de5ed8a083565a4319db29d0c210fda35b4d6076c2d711cae53ae00f3cb1"
+        },
+        "generation_config.json": {
+          "bytes": 1556,
+          "sha256": "3479b1f44a07e41db799e22599222fee5816738036def94a39841cb9cdbb4120"
+        },
+        "preprocessor_config.json": {
+          "bytes": 339,
+          "sha256": "a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d"
+        },
+        "tokenizer.json": {
+          "bytes": 2405679,
+          "sha256": "5eb60cec1e77aeeb6869a2bb5a8e01a84c3fe5d072d75369343021fe6f5310d0"
+        },
+        "tokenizer_config.json": {
+          "bytes": 282662,
+          "sha256": "93879c3dccdd4b976f709acd85b44778873f30c275e67026f30ca1e4c975230c"
+        },
+        "onnx/encoder_model_quantized.onnx": {
+          "bytes": 23201320,
+          "sha256": "6e8001198c490bbae018c0044f630c2915efb826bad957006ce36152d0ab2a10"
+        },
+        "onnx/decoder_model_merged_quantized.onnx": {
+          "bytes": 53692803,
+          "sha256": "dd4761a3f7add26afda3512abff4706920404c2517e85a9f2ff090b0c0987909"
+        }
+      }
+    }
+  }
+}
