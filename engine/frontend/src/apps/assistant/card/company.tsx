@@ -212,7 +212,7 @@ export function CompanyPicker({
       {/* Where the line changes ("The call is saved", "Still no"), a screen reader hears it. With
           no line it takes no room, but stays there to be heard. */}
       <div role="status" data-slot="company-line" className="empty:sr-only">
-        {nowhere && stillNo && said ? <Line>{stillNo(said.words)}</Line> : line}
+        {nowhere && said ? <Line>{stillNo(said.words)}</Line> : line}
       </div>
       {action}
       {/* The box with its label, like the card's other boxes, so it says what it is with words
