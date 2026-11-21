@@ -26,6 +26,7 @@ import type {
 import { FakeMic } from '@/apps/companies/call-notes/mic/fake-mic'
 import { mockApi, type Answer, type Call } from '@/test/mock-api'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
+import { asPhone } from '@/test/screen'
 import VoiceBar from '../voice/bar'
 import type { Times } from '../voice/bar-session'
 import { setKeepListening } from '../voice/keep-listening'
@@ -335,6 +336,19 @@ describe('saved at once (choice 17)', () => {
     await user.keyboard('{Escape}')
     expect(within(found).getByRole('button', { name: 'Send' })).toHaveFocus()
     expect(hints).toHaveTextContent('EnterSend')
+    expect(of(notePath(), 'PATCH')).toEqual([])
+  })
+
+  it("on a phone, opens on Send, so the phone's own keyboard doesn't rise over the card (the PLAN-V24 browser check)", async () => {
+    asPhone()
+    const server = callServer()
+    const { of } = show(northWind(), server.answers)
+    const found = await card()
+    const send = within(found).getByRole('button', { name: 'Send' })
+    await waitFor(() => {
+      expect(send).toHaveFocus()
+    })
+    expect(within(found).getByRole('textbox', { name: 'Find a company' })).not.toHaveFocus()
     expect(of(notePath(), 'PATCH')).toEqual([])
   })
 

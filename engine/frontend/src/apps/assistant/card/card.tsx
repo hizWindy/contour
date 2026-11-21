@@ -287,6 +287,15 @@ function isVKey(event: { key: string }): boolean {
   return event.key === 'v' || event.key === 'V'
 }
 
+/** A phone or tablet: the pointer is a finger, as the conversation tells a phone (`voice/screen.ts`). */
+function fingerPointer(): boolean {
+  try {
+    return window.matchMedia('(pointer: coarse)').matches
+  } catch {
+    return false
+  }
+}
+
 /**
  * A refusal the preview gives (a 4xx): the send would be refused too, so it waits. A task with no
  * one to do it isn't said here: its "For whom" says it, with the team list (PLAN-V23 T3-4).
@@ -711,9 +720,12 @@ function DraftCard({
 
   // An empty card (PLAN-V23 T4-3) starts in its first box, as soon as its boxes are drawn. So does
   // a call that needs its company: it starts where its company is found, since Enter on Send would
-  // only say why the call waits (the PLAN-V24 browser check). True: the focus went there.
+  // only say why the call waits (the PLAN-V24 browser check). True: the focus went there. On a
+  // phone or tablet that call starts on Send, as other cards do: a phone has no Enter to waste, and
+  // its own keyboard would rise over the card and the pill while the rep says the company again.
   const toFirstBox = useRef(
-    request.kind === 'empty' || (first.action === 'log_call' && first.company.found === null),
+    request.kind === 'empty' ||
+      (first.action === 'log_call' && first.company.found === null && !fingerPointer()),
   )
   const focusFirstBox = (): boolean => {
     if (!toFirstBox.current) return false
