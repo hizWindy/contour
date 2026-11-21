@@ -37,7 +37,10 @@ export type { VoiceToolKind }
 
 /** What a tool can tell the card went wrong. The card has the words for each. */
 // too_slow: the speech model on this device can't keep up with the talk (PLAN-V24 T4-2).
-export type VoiceProblem = 'blocked_browser' | 'no_mic' | 'tool_failed' | 'too_slow'
+// connection_lost: the speech service's network blip outlasted its quiet tries (the PLAN-V24
+// browser check: it had loaded, so "didn't load" was wrong).
+export type VoiceProblem =
+  'blocked_browser' | 'no_mic' | 'tool_failed' | 'too_slow' | 'connection_lost'
 
 export interface VoiceToolEvents {
   /** The tool is listening: the check's last line ticks. */
@@ -195,7 +198,8 @@ function problemOf(error: string): VoiceProblem | null {
     case 'aborted':
       return null
     default:
-      // network, service-not-allowed, language-not-supported, and anything new.
+      // service-not-allowed, language-not-supported, and anything new. A network error is tried
+      // again first, and is `connection_lost` once its tries run out.
       return 'tool_failed'
   }
 }
@@ -438,8 +442,10 @@ export function browserService(
             finish()
             return
           }
-          // A blip: the service's end that follows starts it again, after a short wait.
-          if (quietTry()) return
+          // A blip: the service's end that follows starts it again, after a short wait. Once it
+          // has had its tries, the connection is lost: its own words, not "didn't load".
+          if (!quietTry()) fail('connection_lost')
+          return
         }
         const problem = problemOf(event.error)
         if (problem) fail(problem)

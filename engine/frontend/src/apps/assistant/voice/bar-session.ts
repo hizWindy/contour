@@ -838,16 +838,20 @@ export class BarSession {
   /**
    * The mic can't go on. Words said so far are kept, with the problem and its buttons. With no
    * words, the bar opens on the text line and says why, but for a mic another app holds (muted
-   * there, it works again: PLAN-V24 T1-4) and for the model's download that failed (on a better
-   * connection it works: T4-3). For those two, Try again comes first, with Type instead beside it.
-   * A conversation's turns already said are still worked out, behind the problem.
+   * there, it works again: PLAN-V24 T1-4), for the model's download that failed, and for a
+   * connection the speech service lost (on a better connection both work: T4-3, and the PLAN-V24
+   * browser check). For those, Try again comes first, with Type instead beside it. A
+   * conversation's turns already said are still worked out, behind the problem.
    */
   private micFailed(problem: MicProblem): void {
     const said = (this.mic?.text() ?? '').trim()
     this.keepFixes()
     this.drain = 'quiet'
     this.stopListening()
-    if (said === '' && (problem === 'busy' || problem === 'download_failed')) {
+    if (
+      said === '' &&
+      (problem === 'busy' || problem === 'download_failed' || problem === 'connection_lost')
+    ) {
       this.set({
         phase: 'problem',
         mic: null,

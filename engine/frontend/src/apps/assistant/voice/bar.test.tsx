@@ -1108,6 +1108,39 @@ describe('every device (PLAN-V24 T4-3)', () => {
     )
   })
 
+  it('a connection lost after the quiet tries says so in its own words, with Try again and Type instead (the PLAN-V24 browser check)', async () => {
+    const { mic, user } = openBar()
+    const found = await listening()
+    act(() => {
+      mic.say('add a task')
+      mic.fail('connection_lost')
+    })
+    const alert = await within(found).findByRole('alert')
+    expect(alert).toHaveTextContent(
+      'Voice to text lost its connection. Check your connection, then try again. You can type meanwhile.',
+    )
+    // Not the old words: the tool had loaded, and the Assistant has no note.
+    expect(alert).not.toHaveTextContent("didn't load")
+    expect(alert).not.toHaveTextContent('the note')
+    expect(buttons(found)).toEqual(expect.arrayContaining(['Try again', 'Type instead']))
+    // Try again listens again, with a new voice tool.
+    await user.click(within(found).getByRole('button', { name: 'Try again' }))
+    await waitFor(() => {
+      expect(title(found)).toHaveTextContent('Listening')
+    })
+    expect(mic.tools).toHaveLength(2)
+    // Lost again: Type instead puts the words in the text line.
+    act(() => {
+      mic.say('add a task')
+      mic.fail('connection_lost')
+    })
+    await within(found).findByRole('alert')
+    await user.click(within(found).getByRole('button', { name: 'Type instead' }))
+    expect(within(found).getByRole('textbox', { name: 'Type what to do' })).toHaveValue(
+      'add a task',
+    )
+  })
+
   it.each<[string, FakeMicOptions, CallNoteOptions['voice_tool'], number]>([
     [
       'Firefox on a laptop downloads it',

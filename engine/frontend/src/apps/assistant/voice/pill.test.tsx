@@ -595,3 +595,29 @@ describe('the model on the device in the pill (PLAN-V24 T4-3)', () => {
     expect(within(card).getByRole('textbox', { name: 'Find a company' })).toHaveFocus()
   })
 })
+
+describe.each([
+  ['1440 px (a laptop)', asLaptop],
+  ['390 px (a phone)', asPhone],
+])('a connection lost after the quiet tries, at %s (the PLAN-V24 browser check)', (_, width) => {
+  it('the pill says so in its own words, with Try again and Type instead', async () => {
+    width()
+    vi.useFakeTimers(CLOCK)
+    const { mic, user } = page()
+    const card = await taskCard(mic)
+    const pill = await pillIn(card)
+    act(() => {
+      mic.fail('connection_lost')
+    })
+    const alert = await within(pill).findByRole('alert')
+    expect(alert).toHaveTextContent(PROBLEMS.connection_lost.words)
+    expect(alert).not.toHaveTextContent("didn't load")
+    expect(within(pill).getByRole('button', { name: 'Type instead' })).toBeInTheDocument()
+    // Try again listens again, from the pill.
+    await user.click(within(pill).getByRole('button', { name: /^Try again/ }))
+    await waitFor(() => {
+      expect(pillOf(card)?.querySelector('[data-slot=pill-title]')).toHaveTextContent('Listening')
+    })
+    expect(mic.tools).toHaveLength(2)
+  })
+})

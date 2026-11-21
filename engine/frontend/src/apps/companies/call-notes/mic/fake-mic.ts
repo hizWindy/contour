@@ -31,6 +31,7 @@ import type { ModelVoice, NotReady } from './voice-ready'
 import type { Progress } from './on-device/engine'
 import type {
   SpeechRecognitionLike,
+  VoiceProblem,
   VoiceTool,
   VoiceToolEvents,
   VoiceToolMaker,
@@ -283,7 +284,7 @@ export class FakeMic {
   }
 
   /** The newest tool reports a problem. */
-  fail(problem: 'blocked_browser' | 'no_mic' | 'tool_failed' | 'too_slow'): void {
+  fail(problem: VoiceProblem): void {
     this.tools.at(-1)?.events.onProblem(problem)
   }
 

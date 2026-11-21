@@ -380,7 +380,7 @@ describe('a network blip (PLAN-V24 T1-3, choice 4)', () => {
     expect(heard.onWords).toHaveBeenCalledWith('about the lease')
   })
 
-  it('a fourth network error inside 10 seconds is the problem, with the words kept', async () => {
+  it('a fourth network error inside 10 seconds is the lost connection, with the words kept', async () => {
     vi.useFakeTimers()
     const made = installService()
     const heard = events()
@@ -396,7 +396,8 @@ describe('a network blip (PLAN-V24 T1-3, choice 4)', () => {
     expect(heard.onProblem).not.toHaveBeenCalled()
     made[0]?.error('network')
     expect(heard.onProblem).toHaveBeenCalledTimes(1)
-    expect(heard.onProblem).toHaveBeenCalledWith('tool_failed')
+    // It had loaded: its connection is lost, not "didn't load" (the PLAN-V24 browser check).
+    expect(heard.onProblem).toHaveBeenCalledWith('connection_lost')
     expect(made[0]?.aborted).toBe(true)
     // Every word said is kept, the ones still being heard at the first blip too, once.
     expect(heard.onWords.mock.calls).toEqual([['Spoke to Jo Sample'], ['about the']])

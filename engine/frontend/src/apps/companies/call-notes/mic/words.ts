@@ -63,6 +63,7 @@ export type MicProblem =
   | 'download_failed'
   | 'device_too_slow'
   | 'model_failed'
+  | 'connection_lost'
 
 /** A problem's buttons, in the order they show. The first is the main one. */
 export type MicAction = 'try_again' | 'type_instead' | 'pick_mic' | 'carry_on'
@@ -155,6 +156,13 @@ export const PROBLEMS: Readonly<
   model_failed: {
     words: "Voice to text couldn't start on this device. Use your keyboard's mic, or type.",
     actions: ['type_instead'],
+  },
+  // The speech service's network blip outlasted its quiet tries (PLAN-V24 T1-3): it had loaded,
+  // and the Assistant has no note. From the browser check: TBC at Al-khair's look.
+  connection_lost: {
+    words:
+      'Voice to text lost its connection. Check your connection, then try again. You can type meanwhile.',
+    actions: ['try_again', 'type_instead'],
   },
 }
 
