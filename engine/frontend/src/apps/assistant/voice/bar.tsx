@@ -118,6 +118,7 @@ import { Progress } from '@/components/ui/progress'
 import { whenIdle } from '@/lib/idle'
 import { isTyping } from '@/lib/is-typing'
 import { useBarRoom } from '@/lib/use-bar-room'
+import { sparing } from '@/shell/preload'
 import { CardHost } from '../card/host'
 import { cardShownOf, openCard, openedCard, useOpenCard, type CardRequest } from '../card/store'
 import { BarSession, MAX_CHARS, type BarProblem, type BarSnapshot, type Times } from './bar-session'
@@ -528,10 +529,12 @@ export default function VoiceBar({
   }, [open, session, toolKnown])
 
   // On a laptop that needs the model, it downloads once the page is idle (PLAN-V24 choice 25).
-  // Only once the setting is known and isn't typing: never on the default while it loads.
+  // Only once the setting is known and isn't typing: never on the default while it loads. Never on
+  // a connection that asks to save data or is slow, as DESIGN.md "Speed" says of downloads in the
+  // background: Speak still gets voice ready then, with its progress line.
   const setting = options.data?.voice_tool ?? null
   useEffect(() => {
-    if (viewer || setting === null || setting === 'typing') return undefined
+    if (viewer || setting === null || setting === 'typing' || sparing()) return undefined
     const computer = deviceKind((env?.browser ?? browserFacts)()) === 'computer'
     if (!computer || pickEngine(setting, env) !== 'model') return undefined
     const model = env?.model ?? DEVICE_MODEL

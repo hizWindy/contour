@@ -1135,6 +1135,44 @@ describe('every device (PLAN-V24 T4-3)', () => {
     expect(mic.model.asked.prepare).toBe(0)
   })
 
+  it.each([
+    ['asks to save data', { saveData: true }],
+    ['is slow', { effectiveType: '2g' }],
+  ])(
+    'a laptop on a connection that %s downloads nothing once idle, and Speak still gets voice ready, with its progress (PLAN-V24 review)',
+    async (_, connection) => {
+      Object.defineProperty(navigator, 'connection', { value: connection, configurable: true })
+      try {
+        const idle = fakeIdle()
+        const { mic, queryClient } = openBar({
+          mic: { browser: FIREFOX_LAPTOP, speech: false, modelBytes: BYTES },
+          voiceTool: 'browser_service',
+          opened: false,
+        })
+        await waitFor(() => {
+          expect(queryClient.getQueryState(queryKeys.companies.callNoteOptions())?.status).toBe(
+            'success',
+          )
+        })
+        act(() => {
+          idle.idle()
+        })
+        expect(mic.model.asked).toEqual({ fetch: 0, prepare: 0 })
+        act(() => {
+          openVoiceBar()
+        })
+        const found = await bar()
+        await waitFor(() => {
+          expect(title(found)).toHaveTextContent('Getting voice ready on this computer')
+        })
+        expect(within(found).getByText('0 of 83 MB')).toBeInTheDocument()
+        expect(mic.model.asked.prepare).toBe(1)
+      } finally {
+        delete (navigator as Navigator & { connection?: unknown }).connection
+      }
+    },
+  )
+
   it('a laptop downloads nothing while the setting is unknown, or couldn’t be read', async () => {
     const idle = fakeIdle()
     const { mic, queryClient } = openBar({
