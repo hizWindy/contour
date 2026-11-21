@@ -56,13 +56,22 @@ type Transcriber = (
   options: { max_new_tokens: number },
 ) => Promise<{ text: string } | { text: string }[]>
 
-/** Transformers.js reads only what this device keeps, and ONNX Runtime gets its WebAssembly. */
+/**
+ * Transformers.js reads only what this device keeps, and ONNX Runtime gets its WebAssembly. This is
+ * the one place the worker's "only from our own site" rule is kept: on App Platform the page's
+ * content policy doesn't reach the worker (a worker takes its policy from its own response, and the
+ * static site sends none), and the library's defaults are huggingface.co and jsDelivr. Every switch
+ * that could fetch or share a file is set here by name, so an update that changes a default can't
+ * turn one on (models.test.ts).
+ */
 async function setUp(device: Device): Promise<void> {
   env.allowRemoteModels = false
   env.allowLocalModels = true
   env.localModelPath = SERVED
   env.useBrowserCache = false
   env.useWasmCache = false
+  env.useCustomCache = false
+  env.experimental_useCrossOriginStorage = false
   env.fetch = fromKept
   env.logLevel = LogLevel.ERROR
   const wasm = env.backends.onnx.wasm
