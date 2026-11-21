@@ -259,6 +259,25 @@ describe('the card in a conversation (T2-3)', () => {
     expect(screen.getByRole('dialog', { name: TASK_CARD })).toBe(card)
   })
 
+  it('the new command’s words are kept: once the card is sent, Type instead puts them in the text line (the PLAN-V24 browser check)', async () => {
+    vi.useFakeTimers(CLOCK)
+    const { mic, user } = page({ [TASK_WORDS]: taskCommand(), [CALL_WORDS]: callCommand() })
+    await listening()
+    await say(mic, TASK_WORDS)
+    const card = await screen.findByRole('dialog', { name: TASK_CARD })
+    await say(mic, CALL_WORDS)
+    await waitFor(() => {
+      expect(strip(card)).toHaveTextContent('Send or keep this one first.')
+    })
+    await say(mic, 'send it')
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: TASK_CARD })).toBeNull()
+    })
+    const bar = await screen.findByRole('dialog', { name: BAR })
+    await user.click(within(bar).getByRole('button', { name: 'Type instead' }))
+    expect(within(bar).getByRole('textbox', { name: 'Type what to do' })).toHaveValue(CALL_WORDS)
+  })
+
   it('Stop (V) on the card stops listening; the card stays, and works by hand', async () => {
     vi.useFakeTimers(CLOCK)
     const { mic, user } = page({ [TASK_WORDS]: taskCommand() })

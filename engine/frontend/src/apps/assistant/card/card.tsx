@@ -1140,8 +1140,11 @@ function DraftCard({
       case 'email':
       case 'pre_read':
       case 'open':
-        // A new command while this card is open: this one first (PLAN-V24 choice 13, TBC).
-        return { kind: 'show', line: SEND_OR_KEEP, unsure: null, again: false }
+        // A new command while this card is open: this one first (PLAN-V24 choice 13, TBC). Its
+        // words are kept, as unclear words are (the PLAN-V24 browser check): in a conversation,
+        // Type instead puts them in the bar's text line once this card is done; with V on the
+        // card, they wait in its strip's text line.
+        return { kind: 'unclear', words: heard.words, line: SEND_OR_KEEP }
       case 'unclear':
         // The words wait in the strip's text line, to fix or say again (PLAN-V23 T1-6).
         return unclearAnswer(command, heard.words)
