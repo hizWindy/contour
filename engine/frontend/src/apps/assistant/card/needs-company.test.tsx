@@ -899,7 +899,11 @@ describe('the company said again (choice 19)', () => {
     act(() => {
       openVoiceBar()
     })
-    await screen.findByRole('dialog', { name: BAR })
+    const bar = await screen.findByRole('dialog', { name: BAR })
+    // Words said before the mic listens are heard by no one: run alone, the bar starts cold.
+    await waitFor(() => {
+      expect(bar.querySelector('[data-slot=voice-title]')).toHaveTextContent('Listening')
+    })
     await say(mic, TASK_WORDS)
     const found = await screen.findByRole('dialog', {
       name: 'Add a task for you: send Sample Logistics the quote, due Fri 27 Nov.',
