@@ -150,7 +150,7 @@ function startWorker(build: Build = BUILD, network: Network = () => Promise.reso
      */
     send(
       url: string,
-      extra: { method?: string; mode?: string } = {},
+      extra: { method?: string; mode?: string; cache?: string } = {},
     ): { answered: Promise<Response> | null; kept: () => Promise<void> } {
       const request = Object.assign(new FakeRequest(url), extra)
       const respondWith = vi.fn()
@@ -177,7 +177,7 @@ function startWorker(build: Build = BUILD, network: Network = () => Promise.reso
      */
     async request(
       url: string,
-      extra: { method?: string; mode?: string } = {},
+      extra: { method?: string; mode?: string; cache?: string } = {},
     ): Promise<{ handled: false } | { handled: true; response: Response }> {
       const { answered, kept } = this.send(url, extra)
       if (!answered) return { handled: false }
@@ -296,6 +296,30 @@ describe('what it serves', () => {
     expect([...kept.entries.keys()]).toEqual([])
     await worker.request('/assets/page-b2.js')
     expect([...kept.entries.keys()]).toEqual([absolute('/assets/page-b2.js')])
+  })
+
+  it('lets a request that asks for no store straight through, and keeps nothing of it (the PLAN-V24 browser check)', async () => {
+    // The speech model's runtime, downloaded by the page, which checks and keeps its own copy.
+    const runtime = '/assets/ort-wasm-simd-threaded-abc123.wasm'
+    const worker = startWorker()
+    await worker.install()
+    worker.fetched.length = 0
+    const kept = await worker.caches.open('contour-assets')
+
+    const download = await worker.request(runtime, { cache: 'no-store' })
+    expect(download.handled).toBe(false)
+    expect(worker.fetched).toHaveLength(0)
+    expect([...kept.entries.keys()]).toEqual([])
+
+    // Fetched without no-store, the same file is kept as any other, and so is the app's own code.
+    const normal = await worker.request(runtime)
+    expect(normal.handled).toBe(true)
+    await worker.request('/assets/page-b2.js')
+    expect([...kept.entries.keys()]).toEqual([absolute(runtime), absolute('/assets/page-b2.js')])
+
+    // Once kept, a no-store request still isn't answered from here: it goes to the site.
+    const again = await worker.request(runtime, { cache: 'no-store' })
+    expect(again.handled).toBe(false)
   })
 
   it('streams a file to the page as it comes, while its copy is kept alongside (PLAN-V24 review)', async () => {

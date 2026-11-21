@@ -9,10 +9,14 @@
  *
  * The first time, the files are downloaded once, checked against the list (size and sha256), and
  * kept in the browser's Cache Storage (`CACHE`). After that they come from there: a second visit
- * downloads nothing. Only our own checked copy counts as kept. The service worker keeps /assets/
- * files as they pass, before anyone checks them, and our site answers a missing file with its
- * index.html and a 200, so its copy may be wrong: a file that fails its check leaves both stores,
- * and a good one stays in ours only.
+ * downloads nothing. Only our own checked copy counts as kept.
+ *
+ * The download asks for no store (the PLAN-V24 browser check): the service worker lets it through
+ * untouched and keeps nothing of it, and the browser's own cache keeps nothing either, so a phone
+ * holds one copy of the 14 to 27 MB runtime, ours. A copy the service worker kept before that (it
+ * kept /assets/ files as they passed, before anyone checked them, and our site answers a missing
+ * file with its index.html and a 200) is never counted: it leaves once ours is kept, and a file
+ * that fails its check leaves both stores.
  */
 
 import cpuGlue from 'onnxruntime-web/ort-wasm-simd-threaded.mjs?url'
@@ -215,7 +219,10 @@ function progressSayer(
   }
 }
 
-/** Downloads one file, reporting the bytes as they come. */
+/**
+ * Downloads one file, reporting the bytes as they come. It asks for no store: we keep our own
+ * checked copy, so neither the service worker nor the browser's cache should keep another.
+ */
 async function download(
   file: VoiceFile,
   onBytes: (bytes: number) => void,
@@ -223,7 +230,7 @@ async function download(
   const stop = new AbortController()
   let stalled = setTimeout(() => stop.abort(), STALL_MS)
   try {
-    const response = await fetch(file.url, { signal: stop.signal })
+    const response = await fetch(file.url, { signal: stop.signal, cache: 'no-store' })
     if (!response.ok || !response.body) throw new DownloadFailed(`${file.url}: ${response.status}`)
     const bytes = new Uint8Array(file.bytes)
     let got = 0
@@ -299,7 +306,8 @@ export async function keepFiles(
     }
     const headers = { [CHECKED_BYTES]: String(bytes.length) }
     await cache.put(file.url, new Response(bytes, { headers }))
-    // The service worker kept its own copy as the file passed: one copy, the checked one, is enough.
+    // A copy the service worker kept before downloads asked for no store goes: one copy, the
+    // checked one, is enough.
     if (await caches.has(SW_ASSETS)) await (await caches.open(SW_ASSETS)).delete(file.url)
     done += file.bytes
     say({ loaded: done, total }, done === total)

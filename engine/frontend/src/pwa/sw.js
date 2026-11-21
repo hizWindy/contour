@@ -18,6 +18,9 @@
  *     it is never kept, and the worker doesn't even look at the request: it goes straight through.
  *   - It never keeps another site's files (the map tiles), a request that isn't a GET, or a failed
  *     answer.
+ *   - It never keeps a request that asks for no store: it lets it straight through. The speech
+ *     model's download asks that way, as the page checks and keeps its own copy; kept here too, it
+ *     would be a second copy of 14 to 27 MB on a phone (the PLAN-V24 browser check).
  *
  * `__BUILD__` is put in front of this file by the build (vite-pwa.ts): the version, the files to
  * keep at install, and every file under /assets/ in this build (to clear the old ones out). The
@@ -90,6 +93,9 @@ self.addEventListener('fetch', (event) => {
     return
   }
   if (url.pathname.startsWith('/assets/')) {
+    // A request that asks for no store, like the speech model's download: through, untouched. It
+    // isn't kept here, nor answered from here: the page checks and keeps its own copy.
+    if (request.cache === 'no-store') return
     event.respondWith(keepAsYouGo(event))
   }
 })

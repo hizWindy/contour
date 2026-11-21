@@ -105,13 +105,15 @@ const INDEX_HTML = bytesOf('<!doctype html><title>Contour</title>')
  * Our site, answering what `pages` holds: every request that reaches it is kept in `asked`. Like
  * App Platform, an address with no file gets index.html with a 200. In front of it, like
  * src/pwa/sw.js, the service worker answers /assets/ files from its store when it has them, and
- * keeps each good answer from the site as it passes, unchecked.
+ * keeps each good answer from the site as it passes, unchecked. A request that asks for no store
+ * goes past it untouched (the PLAN-V24 browser check), as the download's do.
  */
 function site(pages: Record<string, Uint8Array<ArrayBuffer>>) {
   const asked: { url: string; method: string; body: unknown }[] = []
   const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input)
-    const worker = url.startsWith('/assets/') ? await caches.open(SW_ASSETS) : null
+    const passes = url.startsWith('/assets/') && init?.cache !== 'no-store'
+    const worker = passes ? await caches.open(SW_ASSETS) : null
     const kept = await worker?.match(url)
     if (kept) return kept
     asked.push({ url, method: init?.method ?? 'GET', body: init?.body })
@@ -315,13 +317,16 @@ describe('keepFiles', () => {
     expect(asked).toEqual([])
   })
 
-  it("takes a runtime file that failed its check out of the service worker's store too", async () => {
+  it("keeps a runtime file that failed its check in neither store, and takes the service worker's older copy out too", async () => {
     const runtime = served('/assets/ort-wasm-simd-threaded-abc123.wasm', 'the real runtime')
+    // Kept by the service worker as it passed, before downloads asked for no store.
+    await (await caches.open(SW_ASSETS)).put(runtime.file.url, new Response(bytesOf('an old copy')))
     const { asked } = site({ [runtime.file.url]: bytesOf('the fake runtime') })
 
     await expect(keepFiles([runtime.file])).rejects.toBeInstanceOf(DownloadFailed)
 
-    // The service worker kept the fake as it passed; the failed check took it out again.
+    // The download went past the service worker, which kept nothing of it, and the failed check
+    // took the older copy out as well.
     expect(asked).toHaveLength(1)
     expect(caches.paths(SW_ASSETS)).toEqual([])
     expect(caches.paths(CACHE)).toEqual([])
@@ -356,24 +361,32 @@ describe('keepFiles', () => {
     await failed
   })
 
-  it("never counts the service worker's unchecked copy: a bad one goes from both stores", async () => {
+  it("never counts the service worker's unchecked copy, nor downloads from it: it goes once ours is kept", async () => {
     const runtime = served('/assets/ort-wasm-simd-threaded-abc123.wasm', 'wasm bytes')
-    // The service worker kept our site's index.html under the runtime's name, with a 200.
+    // Before downloads asked for no store, the service worker kept our site's index.html under the
+    // runtime's name, with a 200.
     await (await caches.open(SW_ASSETS)).put(runtime.file.url, new Response(INDEX_HTML))
     const { asked } = site({ [runtime.file.url]: runtime.bytes })
 
     expect(await missingFiles([runtime.file])).toEqual([runtime.file])
-    await expect(keepFiles([runtime.file])).rejects.toBeInstanceOf(DownloadFailed)
-    expect(asked).toEqual([])
-    expect(caches.paths(SW_ASSETS)).toEqual([])
-    expect(await missingFiles([runtime.file])).toEqual([runtime.file])
-
-    // The next try reaches the site, and keeps one copy: ours, checked.
+    // The download goes past it, to the site, and keeps one copy: ours, checked.
     await keepFiles([runtime.file])
     expect(asked).toHaveLength(1)
     expect(caches.paths(CACHE)).toEqual([runtime.file.url])
     expect(caches.paths(SW_ASSETS)).toEqual([])
     expect(await missingFiles([runtime.file])).toEqual([])
+  })
+
+  it('asks for no store, so the service worker keeps no second copy of the runtime (the PLAN-V24 browser check)', async () => {
+    const runtime = served('/assets/ort-wasm-simd-threaded-abc123.wasm', 'runtime '.repeat(100))
+    const model = served('/voice/model-1/onnx/model.onnx', 'weights '.repeat(100))
+    const { fetch } = site({ [runtime.file.url]: runtime.bytes, [model.file.url]: model.bytes })
+
+    await keepFiles([runtime.file, model.file])
+
+    expect(fetch.mock.calls.map(([, init]) => init?.cache)).toEqual(['no-store', 'no-store'])
+    expect(caches.paths(SW_ASSETS)).toEqual([])
+    expect(caches.paths(CACHE)).toEqual([runtime.file.url, model.file.url])
   })
 
   it('counts a kept copy only when its checked size is the listed one', async () => {
@@ -425,6 +438,22 @@ describe('fromKept, the fetch Transformers.js gets', () => {
     ]) {
       expect((await fromKept(address)).status).toBe(404)
     }
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it("reads only our store, never the service worker's, so the model loads as before (the PLAN-V24 browser check)", async () => {
+    const { fetch } = site({})
+    const [runtime] = filesFor(DEFAULT_MODEL, 'wasm')
+    if (!runtime) throw new Error('no runtime file listed')
+    const copy = bytesOf('the runtime')
+    // A copy the service worker kept, even marked as checked, isn't ours.
+    await (
+      await caches.open(SW_ASSETS)
+    ).put(runtime.url, new Response(copy, { headers: { [CHECKED_BYTES]: String(runtime.bytes) } }))
+    expect((await fromKept(runtime.url)).status).toBe(404)
+
+    await keepChecked(runtime.url, copy, runtime.bytes)
+    expect(await (await fromKept(runtime.url)).text()).toBe('the runtime')
     expect(fetch).not.toHaveBeenCalled()
   })
 })
