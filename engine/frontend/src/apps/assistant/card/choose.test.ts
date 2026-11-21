@@ -185,6 +185,48 @@ describe('the company said again (PLAN-V24 T3-2, choice 19)', () => {
     const next = picked(pickByVoice(northWind(), 'the first one', found))
     expect(pickByVoice(next, 'Northwind')).toBeNull()
   })
+
+  it.each([
+    'okay',
+    'yeah',
+    'Yep.',
+    'hmm',
+    'mhm',
+    'huh',
+    'Hmm, okay.',
+    'right',
+    'sure',
+    'sure thing',
+    'great',
+    'all good',
+    'no',
+    'thanks',
+    'thank you',
+    'cheers',
+    'hang on',
+    'got it',
+  ])('a reply or a sound alone, "%s", is never searched or picked (PLAN-V24 review)', (said) => {
+    expect(pickByVoice(northWind(), said)).toBeNull()
+    expect(pickByVoice(northWind(), said, found)).toBeNull()
+    expect(pickByVoice(whichSample(), said)).toBeNull()
+  })
+
+  it('a name with a reply word in it is still searched whole, and a sound before it is left out', () => {
+    expect(pickByVoice(northWind(), 'Great Southern Freight')).toEqual({
+      kind: 'search',
+      words: 'Great Southern Freight',
+    })
+    expect(pickByVoice(northWind(), 'Hmm, Southwind.')).toEqual({
+      kind: 'search',
+      words: 'Southwind',
+    })
+  })
+
+  it('a sound before a place still picks by place', () => {
+    expect(picked(pickByVoice(northWind(), 'hmm, the second one', found))).toMatchObject({
+      company: { found: { key: SAMPLE.key } },
+    })
+  })
 })
 
 describe('a person on a call (T2-4)', () => {
@@ -220,6 +262,13 @@ describe('a person on a call (T2-4)', () => {
   it('"James" fits both: nothing changes, and the card asks again', () => {
     expect(pickByVoice(whichJames(), 'James')).toEqual({ kind: 'which' })
   })
+
+  it.each(['great', 'hmm', 'thank you'])(
+    'a reply, "%s", is no name: the card says nothing back (PLAN-V24 review)',
+    (said) => {
+      expect(pickByVoice(whichJames(), said)).toBeNull()
+    },
+  )
 
   it('a change goes on to the command step', () => {
     expect(pickByVoice(whichJames(), 'make the follow-up Monday')).toBeNull()

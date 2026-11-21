@@ -16,8 +16,12 @@
  *   its question is the search list on screen, if there is one, else the command's own choices.
  *   A name that is in neither, like "Northwind", is searched: the card fills its search box with
  *   it. A place said ("the third one") or a change is never searched.
+ * - **A reply or a sound alone** ("okay", "hmm", "great", "thank you") names nothing (PLAN-V24
+ *   review): it never picks or searches, and the bar drops it as a short turn. The card hears a
+ *   turn before the bar's short-turn filter, so one stray word would otherwise ask HubSpot.
  */
 import type { CallNotePerson, TeamMember } from '@/api/types'
+import { FILLERS } from '../voice/turns'
 import { pickCompany, type CardDraft, type Company } from './draft'
 
 /** What a choice by voice did. */
@@ -180,6 +184,55 @@ const AROUND: ReadonlySet<string> = new Set([
   'erm',
   'number',
   'option',
+  // Sounds and short replies no company's name starts or ends with (PLAN-V24 review).
+  ...FILLERS,
+  'huh',
+  'yep',
+  'yup',
+  'nah',
+  'nope',
+  'alright',
+])
+
+/**
+ * Everyday replies that name nothing on their own (PLAN-V24 review): a turn of only these, with
+ * the words around a choice, is never a pick or a search. They are left in a name said with them,
+ * so "Great Southern Freight" is still searched whole.
+ */
+const REPLIES: ReadonlySet<string> = new Set([
+  'no',
+  'right',
+  'sure',
+  'thing',
+  'thanks',
+  'thank',
+  'you',
+  'cheers',
+  'ta',
+  'cool',
+  'great',
+  'good',
+  'fine',
+  'nice',
+  'perfect',
+  'lovely',
+  'awesome',
+  'excellent',
+  'all',
+  'sorry',
+  'hello',
+  'hi',
+  'hey',
+  'wait',
+  'hang',
+  'on',
+  'got',
+  'sounds',
+  'so',
+  'well',
+  'done',
+  'correct',
+  'exactly',
 ])
 
 /** Places, as said: "the second one" is 1. */
@@ -337,6 +390,8 @@ export function pickByVoice(
   }
   const name = words.filter((word) => !AROUND.has(word))
   if (name.length === 0) return null
+  // "Great", "sure thing", "thank you": a reply, not a name. Never picked, searched or said back.
+  if (name.every((word) => REPLIES.has(word))) return null
   const fitting = options.filter((option) => name.every((word) => fits(word, option.words)))
   const [only] = fitting
   if (fitting.length === 1 && only) return { kind: 'picked', draft: only.pick() }

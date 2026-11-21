@@ -865,6 +865,21 @@ describe('the company said again (choice 19)', () => {
     LONG_TEST,
   )
 
+  it('a reply or a sound alone asks nothing: no find, no search and no AI (PLAN-V24 review)', async () => {
+    vi.useFakeTimers(CLOCK)
+    const server = callServer()
+    const { mic, of, calls } = page({ [CALL_WORDS]: northWind() }, server.answers)
+    const found = await callCard(mic)
+    for (const said of ['hmm', 'great', 'okay', 'sure']) await say(mic, said)
+    await wait(1000)
+    const finds = calls.filter((call) => call.path === '/api/v1/companies/assistant/companies/find')
+    expect(finds).toEqual([])
+    // The box searches our copy for the name as heard as it opens, and for nothing since.
+    expect(searches(calls).filter((words) => words !== 'North Wind')).toEqual([])
+    expect(of(API.command)).toHaveLength(1)
+    expect(within(found).getByRole('textbox', { name: 'Find a company' })).toHaveValue('North Wind')
+  })
+
   it('a name said while "Which Sample?" asks, and not in its list, opens the search with it', async () => {
     vi.useFakeTimers(CLOCK)
     const TASK_WORDS = 'Add a task to send Sample the quote'
