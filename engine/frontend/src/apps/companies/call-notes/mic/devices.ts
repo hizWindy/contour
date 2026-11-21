@@ -57,7 +57,9 @@ export function defaultMic(devices: readonly MediaDeviceInfo[]): MicDevice | nul
   const same =
     (name === '' ? undefined : real.find((device) => micName(device.label) === name)) ??
     real.find((device) => device.groupId !== '' && device.groupId === first.groupId)
-  return mics.find((mic) => mic.id === same?.deviceId) ?? (name ? { id: first.deviceId, name } : null)
+  return (
+    mics.find((mic) => mic.id === same?.deviceId) ?? (name ? { id: first.deviceId, name } : null)
+  )
 }
 
 /** True when there is at least one mic, the browser's own entries included. */
