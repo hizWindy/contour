@@ -6,6 +6,10 @@
  *
  * - **One found:** it is the card's company at once, as a command's found company is, with its
  *   line when HubSpot's own search found it ("Northwind Pty Ltd is new in HubSpot. We'll use it.").
+ *   On a call that needs a company it is asked first (`askFirst`, the browser check of PLAN-V24),
+ *   as a one-item choice: the server takes a call's company once (409 `company_set`), and learns
+ *   the words heard as that company. A tap, "yes" or "the first one" picks it (`confirm`). Other
+ *   cards still take it at once, as their company can change until Send.
  * - **Two or more:** the card asks which ("Which North Wind?"), and "the first one" picks.
  * - **Nowhere:** the plan's "Still no …" words, with Add to HubSpot when HubSpot was searched.
  * - **Refused** (like a phone number in the words): the server's own words. Our copy's search
@@ -50,12 +54,17 @@ export function companyFindQueryOptions(words: string) {
   })
 }
 
-/** What the find made of the words, short of one company found: that one is picked at once. */
+/** What the find made of the words, short of one company found and taken at once. */
 export type FindAnswer =
   /** On its way. */
   | { kind: 'looking' }
   /** Two or more: the card asks which, from these, best first. */
   | { kind: 'choices'; choices: readonly CompanyHit[] }
+  /**
+   * One, on a call that needs a company: shown as a one-item choice, picked by a tap, "yes" or "the
+   * first one" (`confirm`). `fromHubspot`: HubSpot's own search found it.
+   */
+  | { kind: 'confirm'; choice: CompanyHit; fromHubspot: boolean }
   /** Found nowhere. `canAdd`: after HubSpot was searched, so the card offers Add to HubSpot. */
   | { kind: 'nowhere'; canAdd: boolean }
   /** Refused, in the server's own words. */
@@ -87,34 +96,52 @@ function findWords(words: string): string | null {
 /**
  * The card's find: `find(words)` for a name said or entered, and `said`, what it found for the
  * newest words. A find replaced by a newer one is dropped, and so is one still on its way when
- * `drop()` is called (the box's words changed) or `company`, the card's company, changes.
+ * `drop()` is called (the box's words changed) or `picked`, the card's company, changes. With
+ * `askFirst`, one found waits as a one-item choice until `confirm()` picks it.
  */
 export function useCompanyFind(
   onFound: OnFound,
-  company: string | null,
+  picked: string | null,
+  askFirst = false,
 ): {
   said: CompanySaid | null
   find: (words: string) => void
   drop: () => void
+  confirm: (key: string) => boolean
 } {
   const client = useQueryClient()
   const [said, setSaid] = useState<CompanySaid | null>(null)
   const asked = useRef(0)
   const found = useRef(onFound)
+  const asks = useRef(askFirst)
+  const saidNow = useRef(said)
   useLayoutEffect(() => {
     found.current = onFound
+    asks.current = askFirst
+    saidNow.current = said
   })
   // The words stay, so the box isn't filled with them again; only an answer still to come goes.
   const drop = useCallback(() => {
     asked.current += 1
     setSaid((now) => (now?.find.kind === 'looking' ? { ...now, find: { kind: 'dropped' } } : now))
   }, [])
-  const companyBefore = useRef(company)
+  const pickedBefore = useRef(picked)
   useLayoutEffect(() => {
-    if (companyBefore.current === company) return
-    companyBefore.current = company
+    if (pickedBefore.current === picked) return
+    pickedBefore.current = picked
     drop()
-  }, [company, drop])
+  }, [picked, drop])
+  /**
+   * The one company a confirm shows is picked, as one found is: with its HubSpot line. False when
+   * no confirm shows, or it shows another company.
+   */
+  const confirm = useCallback((key: string): boolean => {
+    const now = saidNow.current?.find
+    if (now?.kind !== 'confirm' || now.choice.key !== key) return false
+    setSaid(null)
+    found.current({ key: now.choice.key, name: now.choice.name }, now.fromHubspot)
+    return true
+  }, [])
   const find = useCallback(
     (words: string) => {
       const tidy = findWords(words)
@@ -126,11 +153,17 @@ export function useCompanyFind(
         ({ company }) => {
           if (asked.current !== n) return
           if (company.found) {
+            const fromHubspot = company.from_hubspot === true
+            if (asks.current) {
+              setSaid({
+                words: tidy,
+                n,
+                find: { kind: 'confirm', choice: company.found, fromHubspot },
+              })
+              return
+            }
             setSaid(null)
-            found.current(
-              { key: company.found.key, name: company.found.name },
-              company.from_hubspot === true,
-            )
+            found.current({ key: company.found.key, name: company.found.name }, fromHubspot)
             return
           }
           setSaid({
@@ -161,5 +194,5 @@ export function useCompanyFind(
     },
     [client],
   )
-  return { said, find, drop }
+  return { said, find, drop, confirm }
 }

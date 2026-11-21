@@ -99,6 +99,11 @@ export interface CompanyVoice {
    * its answer can't pick a company the rep has moved on from (PLAN-V24 review).
    */
   onTyped?: () => void
+  /**
+   * The one company the find found on a call that needs a company, tapped (PLAN-V24 browser
+   * check): the card's find picks it, with its HubSpot line. False: it isn't the one shown.
+   */
+  onConfirm?: (key: string) => boolean
 }
 
 /** A line of the company part, in plain words. */
@@ -153,9 +158,11 @@ export function CompanyPicker({
     () => (asked ? (data?.companies ?? []) : []),
     [asked, data],
   )
-  // On screen: the find's choices; nothing while it looks or found nowhere; else our copy's.
+  // On screen: the find's choices, or the one it asks about; nothing while it looks or found
+  // nowhere; else our copy's.
   const shown = useMemo<readonly CompanyHit[]>(() => {
     if (find?.kind === 'choices') return find.choices.slice(0, 6)
+    if (find?.kind === 'confirm') return [find.choice]
     if (find?.kind === 'looking' || find?.kind === 'nowhere') return []
     return hits.slice(0, 6)
   }, [find, hits])
@@ -183,7 +190,9 @@ export function CompanyPicker({
     shown.length > 0 ? (
       <ChoiceList
         label={
-          find?.kind === 'choices' && said ? whichWords(said.words, WHICH_COMPANY) : WHICH_COMPANY
+          (find?.kind === 'choices' || find?.kind === 'confirm') && said
+            ? whichWords(said.words, WHICH_COMPANY)
+            : WHICH_COMPANY
         }
         box="company"
         options={shown.map((hit) => ({
@@ -192,6 +201,8 @@ export function CompanyPicker({
           detail: [hit.industry, hit.city].filter(Boolean).join(' · ') || null,
         }))}
         onPick={(key) => {
+          // The one the find asks about goes as the find's own pick, with its HubSpot line.
+          if (find?.kind === 'confirm' && voice?.onConfirm?.(key)) return
           const hit = shown.find((one) => one.key === key)
           if (hit) onPick({ key: hit.key, name: hit.name })
         }}

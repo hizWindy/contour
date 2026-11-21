@@ -227,6 +227,24 @@ describe('the company said again (PLAN-V24 T3-2, choice 19)', () => {
       company: { found: { key: SAMPLE.key } },
     })
   })
+
+  it.each(['yes', 'Yes.', 'yeah', 'yep, please', 'yes it is'])(
+    '"%s" picks the one company the find asks about on a call (the PLAN-V24 browser check)',
+    (said) => {
+      const one = [{ key: NORTHWIND.key, name: NORTHWIND.name }]
+      expect(picked(pickByVoice(northWind(), said, one, true))).toMatchObject({
+        company: { found: { key: NORTHWIND.key }, byHand: true },
+      })
+    },
+  )
+
+  it('"yes" picks nothing anywhere else: not a list the find doesn’t ask about, nor two', () => {
+    const one = [{ key: NORTHWIND.key, name: NORTHWIND.name }]
+    expect(pickByVoice(northWind(), 'yes', one)).toBeNull()
+    expect(pickByVoice(northWind(), 'yes', found, true)).toBeNull()
+    expect(pickByVoice(northWind(), 'yes, send it', one, true)).toBeNull()
+    expect(pickByVoice(northWind(), 'sure', one, true)).toBeNull()
+  })
 })
 
 describe('a person on a call (T2-4)', () => {

@@ -279,7 +279,7 @@ afterEach(() => {
 // --- Typed, then Enter ----------------------------------------------------------------------------
 
 describe('a name typed in the company box, then Enter', () => {
-  it('one found: "North Wind" finds Northwind, with its line, and the call is sorted', async () => {
+  it('one found: "North Wind" finds Northwind, asked about first on a call, and a tap picks it with its line', async () => {
     const { user, of, calls } = show(northWind())
     const found = await card()
     await waitFor(() => {
@@ -291,9 +291,18 @@ describe('a name typed in the company box, then Enter', () => {
     await user.type(box, 'North Wind')
     expect(finds(calls)).toEqual([])
     await user.keyboard('{Enter}')
+    // A call's company can't be picked twice: the one found waits as a one-item choice.
+    const asked = await within(found).findByRole('group', { name: 'Which North Wind?' })
+    expect(
+      within(asked)
+        .getAllByRole('button')
+        .map((one) => one.textContent),
+    ).toEqual(['Northwind Pty LtdFreight · Perth'])
+    expect(finds(calls)).toEqual(['North Wind'])
+    expect(of(notePath(), 'PATCH')).toEqual([])
+    await user.click(within(asked).getByRole('button', { name: /Northwind Pty Ltd/ }))
     expect(await within(found).findByText(NEW_IN_HUBSPOT)).toBeInTheDocument()
     expect(within(found).getByText(NORTHWIND.name)).toBeInTheDocument()
-    expect(finds(calls)).toEqual(['North Wind'])
     // The pick goes to the server, which teaches the mic: `teach` is left out.
     await waitFor(() => {
       expect(of(notePath(), 'PATCH').map((call) => call.body)).toEqual([
@@ -431,7 +440,7 @@ describe('a find still on its way (PLAN-V24 review)', () => {
     })
   })
 
-  it('with the box as it was, its one match is the company, as before', async () => {
+  it('with the box as it was, its one match is asked about, as any is on a call, and a tap picks it', async () => {
     const find = slowFind()
     const { user, of } = show(northWind(), { [FIND]: find.slow })
     const found = await card()
@@ -443,6 +452,8 @@ describe('a find still on its way (PLAN-V24 review)', () => {
     act(() => {
       find.answer()
     })
+    const asked = await within(found).findByRole('group', { name: 'Which North Wind?' })
+    await user.click(within(asked).getByRole('button', { name: /Northwind Pty Ltd/ }))
     expect(await within(found).findByText(NEW_IN_HUBSPOT)).toBeInTheDocument()
     await waitFor(() => {
       expect(of(notePath(), 'PATCH').map((call) => call.body)).toEqual([
@@ -525,7 +536,7 @@ async function callCard(mic: FakeMic, words: string, name: string) {
 }
 
 describe('the company said again, by voice', () => {
-  it('one found: "North Wind" is Northwind at once, with its line, and no AI is asked', async () => {
+  it('one found on a call: "North Wind" is asked about first, and "yes" picks it, with its line and no AI', async () => {
     vi.useFakeTimers(CLOCK)
     const { mic, of, calls } = page({ [CALL_WORDS]: northWind() })
     const found = await callCard(mic, CALL_WORDS, CARD)
@@ -533,8 +544,13 @@ describe('the company said again, by voice', () => {
       expect(of(API.notes)).toHaveLength(1)
     })
     await say(mic, 'North Wind.')
-    expect(await within(found).findByText(NEW_IN_HUBSPOT)).toBeInTheDocument()
+    expect(await within(found).findByRole('group', { name: 'Which North Wind?' })).toBeVisible()
     expect(finds(calls)).toEqual(['North Wind'])
+    // Nothing is picked, sent or learned before the rep says so.
+    await wait(1000)
+    expect(of(notePath(), 'PATCH')).toEqual([])
+    await say(mic, 'yes')
+    expect(await within(found).findByText(NEW_IN_HUBSPOT)).toBeInTheDocument()
     await waitFor(() => {
       expect(of(notePath(), 'PATCH').map((call) => call.body)).toEqual([
         { company_key: NORTHWIND.key },
@@ -542,6 +558,21 @@ describe('the company said again, by voice', () => {
     })
     // Only the command that opened the card asked the AI.
     expect(of(API.command)).toHaveLength(1)
+  })
+
+  it('one found on a call: "the first one" picks it too', async () => {
+    vi.useFakeTimers(CLOCK)
+    const { mic, of } = page({ [CALL_WORDS]: northWind() })
+    const found = await callCard(mic, CALL_WORDS, CARD)
+    await say(mic, 'North Wind.')
+    await within(found).findByRole('group', { name: 'Which North Wind?' })
+    await say(mic, 'the first one')
+    expect(await within(found).findByText(NEW_IN_HUBSPOT)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(of(notePath(), 'PATCH').map((call) => call.body)).toEqual([
+        { company_key: NORTHWIND.key },
+      ])
+    })
   })
 
   it('two or more: "Which Sample?", and "the second one" picks, leaving `teach` out', async () => {

@@ -575,28 +575,34 @@ function DraftCard({
   // command's is. The matches on screen are what "the first one" picks from (`shownCompanies`).
   // A find still on its way is dropped once the box's words or the card's company change.
   const pickedKey = draft.action === 'email' ? null : (draft.company.found?.key ?? null)
+  // On a call, one found is asked about first: its pick can't be undone (the browser check).
   const {
     said,
     find,
     drop: dropFind,
-  } = useCompanyFind((hit, fromHubspot) => {
-    setDraft((now) =>
-      now.action === 'email' || now.company.found !== null
-        ? now
-        : {
-            ...now,
-            company: { ...pickCompany(now.company, hit, 'by_hand'), fromHubspot },
-            edited: true,
-          },
-    )
-  }, pickedKey)
+    confirm: confirmFind,
+  } = useCompanyFind(
+    (hit, fromHubspot) => {
+      setDraft((now) =>
+        now.action === 'email' || now.company.found !== null
+          ? now
+          : {
+              ...now,
+              company: { ...pickCompany(now.company, hit, 'by_hand'), fromHubspot },
+              edited: true,
+            },
+      )
+    },
+    pickedKey,
+    draft.action === 'log_call',
+  )
   const shownCompanies = useRef<readonly Company[] | null>(null)
   const onShown = useCallback((shown: readonly Company[] | null) => {
     shownCompanies.current = shown
   }, [])
   const companyVoice = useMemo<CompanyVoice>(
-    () => ({ said, onShown, onSubmit: find, onTyped: dropFind }),
-    [said, onShown, find, dropFind],
+    () => ({ said, onShown, onSubmit: find, onTyped: dropFind, onConfirm: confirmFind }),
+    [said, onShown, find, dropFind, confirmFind],
   )
   /** Why a company picked for a call that needs one wasn't taken (choice 21). */
   const [pickProblem, setPickProblem] = useState<string | null>(null)
@@ -914,12 +920,17 @@ function DraftCard({
    * screen, and a name that isn't there is searched (PLAN-V24 choice 19). Null: none of these.
    */
   const answerByVoice = (words: string): CardTook | null => {
-    const pick = pickByVoice(latest.current.draft, words, shownCompanies.current)
+    // The one company the find asks about takes "yes" too (the PLAN-V24 browser check).
+    const asksOne = said?.find.kind === 'confirm'
+    const pick = pickByVoice(latest.current.draft, words, shownCompanies.current, asksOne)
     if (pick === null) return null
     switch (pick.kind) {
-      case 'picked':
-        setDraft(pick.draft)
+      case 'picked': {
+        // That one goes as the find's own pick, with its HubSpot line.
+        const key = pick.draft.action === 'email' ? null : (pick.draft.company.found?.key ?? null)
+        if (!(asksOne && key !== null && confirmFind(key))) setDraft(pick.draft)
         return { line: null }
+      }
       case 'none':
         return { line: noOneHereWords(pick.words) }
       case 'which':

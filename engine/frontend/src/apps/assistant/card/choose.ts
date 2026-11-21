@@ -363,15 +363,26 @@ function searchWordsOf(said: string): string {
     .trim()
 }
 
+/** A yes to the one company the card asks about. */
+const YES: ReadonlySet<string> = new Set(['yes', 'yeah', 'yep', 'yup'])
+
+/** The whole turn is a yes: "yes", "yeah, please", "yes it is". */
+function isYes(words: readonly string[]): boolean {
+  return words.some((word) => YES.has(word)) && words.every((word) => AROUND.has(word))
+}
+
 /**
  * What a turn picks on the card, with no AI, or null when it isn't an answer to the card's
  * question (it goes to the command step, as now). `search`: the companies the card's search list
- * shows now, or null when it shows none (PLAN-V24 choice 19).
+ * shows now, or null when it shows none (PLAN-V24 choice 19). `asksOne`: the list is the one
+ * company the card's find asks about, on a call that needs a company (the PLAN-V24 browser
+ * check): then "yes" picks it too, and nowhere else does.
  */
 export function pickByVoice(
   draft: CardDraft,
   said: string,
   search: readonly Company[] | null = null,
+  asksOne = false,
 ): VoicePick | null {
   const question = questionOf(draft, search)
   if (!question) return null
@@ -381,6 +392,10 @@ export function pickByVoice(
   if (place !== null) {
     const option = options[place]
     return option ? { kind: 'picked', draft: option.pick() } : null
+  }
+  const [one] = options
+  if (asksOne && one && options.length === 1 && isYes(words)) {
+    return { kind: 'picked', draft: one.pick() }
   }
   // "The third one" of two companies: a place, not a name to search.
   if (!question.people && placeSaid(words) !== null) return null
