@@ -312,6 +312,61 @@ describe('saved at once (choice 17)', () => {
     expect(server.saved()?.status).toBe('needs_company')
   })
 
+  it('opens with the focus in "Find a company", where Enter finds, and its hint says so (the PLAN-V24 browser check)', async () => {
+    const server = callServer()
+    const { user, of } = show(northWind(), server.answers)
+    const found = await card()
+    const box = within(found).getByRole('textbox', { name: 'Find a company' })
+    await waitFor(() => {
+      expect(box).toHaveFocus()
+    })
+    // Enter finds there, and nothing can be sent yet, so Send isn't offered.
+    const hints = found.querySelector('[data-slot=card-hints]')
+    expect(hints).toHaveTextContent('EnterFind')
+    expect(hints).toHaveTextContent('EscLeave the box')
+    expect(hints).not.toHaveTextContent('Send')
+    // The first key press is a search, not a dead end.
+    await user.clear(box)
+    await user.type(box, 'Northwind')
+    expect(
+      await within(found).findByRole('button', { name: /Northwind Pty Ltd/ }),
+    ).toBeInTheDocument()
+    // Out of the box, the card's own keys are back.
+    await user.keyboard('{Escape}')
+    expect(within(found).getByRole('button', { name: 'Send' })).toHaveFocus()
+    expect(hints).toHaveTextContent('EnterSend')
+    expect(of(notePath(), 'PATCH')).toEqual([])
+  })
+
+  it('opens a call still asking "Which Sample?" on its first choice, and one with its company on Send', async () => {
+    const which = show(
+      callCommand({
+        company: {
+          found: null,
+          choices: [SAMPLE, OTHER_SAMPLE],
+          from_page: false,
+          heard: 'Sample',
+        },
+        person: null,
+      }),
+      callServer().answers,
+    )
+    const asking = await card()
+    await waitFor(() => {
+      expect(within(asking).getByRole('button', { name: /Sample Logistics Pty Ltd/ })).toHaveFocus()
+    })
+    act(() => {
+      closeCard()
+    })
+    which.unmount()
+
+    show(callCommand(), callServer().answers)
+    const ready = await card()
+    await waitFor(() => {
+      expect(within(ready).getByRole('button', { name: 'Send' })).toHaveFocus()
+    })
+  })
+
   it('Later keeps it in Call logs, not in this browser', async () => {
     const server = callServer()
     const { user, of } = show(northWind(), server.answers)

@@ -30,6 +30,7 @@ import { CountdownBar } from './countdown'
 import type { Box } from './draft'
 import {
   CANCEL,
+  FIND,
   KEYS_NAME,
   LEAVE_BOX,
   LISTENING,
@@ -255,14 +256,17 @@ function Hint({ keys, words }: { keys: string; words: string }) {
  * Real key caps: on the card, or inside a box. Not on a touch screen. `escape` is what Esc does
  * on the card: Cancel, or Later on a call (PLAN-V23 T4-2). V shows only while "Use V to speak" is
  * on (T4-1), and not while the voice bar's pill beside the card shows V's key on its own button
- * (`v` null, PLAN-V24 T5-1).
+ * (`v` null, PLAN-V24 T5-1). In the company's search box (`find`), Enter finds, and nothing can be
+ * sent before a company is picked, so Send isn't offered there (the PLAN-V24 browser check).
  */
 export function HintBar({
   inBox,
+  find = false,
   escape = CANCEL,
   v = SPEAK,
 }: {
   inBox: boolean
+  find?: boolean
   escape?: string
   v?: string | null
 }) {
@@ -275,7 +279,12 @@ export function HintBar({
       aria-label={KEYS_NAME}
       className="flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-muted-foreground touch:hidden"
     >
-      {inBox ? (
+      {inBox && find ? (
+        <>
+          <Hint keys="Enter" words={FIND} />
+          <Hint keys="Esc" words={LEAVE_BOX} />
+        </>
+      ) : inBox ? (
         <>
           <Hint keys={`${ctrl}+Enter`} words={SEND} />
           <Hint keys="Esc" words={LEAVE_BOX} />

@@ -408,6 +408,7 @@ function DraftCard({
 
   const [draft, setDraft] = useState<CardDraft>(first)
   const [inBox, setInBox] = useState(false)
+  const [inFind, setInFind] = useState(false)
   // A box still to fill shows as one: at once for a command, which was meant to fill it; on an empty
   // card (PLAN-V23 T4-3), only once Send was tried, not before the rep has typed anything.
   const [checked, setChecked] = useState(request.kind !== 'empty')
@@ -700,12 +701,18 @@ function DraftCard({
     return focusable !== null
   }
 
-  // An empty card (PLAN-V23 T4-3) starts in its first box, as soon as its boxes are drawn.
-  const toFirstBox = useRef(request.kind === 'empty')
-  const focusFirstBox = (): void => {
-    if (!toFirstBox.current) return
+  // An empty card (PLAN-V23 T4-3) starts in its first box, as soon as its boxes are drawn. So does
+  // a call that needs its company: it starts where its company is found, since Enter on Send would
+  // only say why the call waits (the PLAN-V24 browser check). True: the focus went there.
+  const toFirstBox = useRef(
+    request.kind === 'empty' || (first.action === 'log_call' && first.company.found === null),
+  )
+  const focusFirstBox = (): boolean => {
+    if (!toFirstBox.current) return false
     const box = missingOf(latest.current.draft, latest.current.today)
-    if (!box || focusBox(box)) toFirstBox.current = false
+    const focused = box !== null && focusBox(box)
+    if (!box || focused) toFirstBox.current = false
+    return focused
   }
   const boxesDrawn = useEffectEvent(focusFirstBox)
   useEffect(() => {
@@ -1302,6 +1309,8 @@ function DraftCard({
 
   const onFocus = (event: FocusEvent<HTMLDivElement>): void => {
     setInBox(inTextBox(event.target))
+    // The company's search box: Enter finds there, and nothing can be sent before a company.
+    setInFind(event.target instanceof HTMLInputElement && event.target.dataset.box === 'company')
   }
 
   // --- The Listening pill beside the card (PLAN-V24 T5-1) -----------------------------------------
@@ -1409,11 +1418,9 @@ function DraftCard({
       describedBy={listening || talking ? listenId : undefined}
       onOpenAutoFocus={(event) => {
         event.preventDefault()
-        // An empty card (PLAN-V23 T4-3) starts in its first box (above): nothing to send yet.
-        if (toFirstBox.current) {
-          focusFirstBox()
-          return
-        }
+        // An empty card (PLAN-V23 T4-3), or a call that needs its company, starts in its first box
+        // (above): nothing to send yet. Boxes drawn a moment later take the focus then.
+        if (toFirstBox.current && (focusFirstBox() || toFirstBox.current)) return
         // The focus starts on Send (choice 19).
         sendButton.current?.focus()
       }}
@@ -1428,6 +1435,7 @@ function DraftCard({
           onAct={pillAct}
           onFocus={() => {
             setInBox(false)
+            setInFind(false)
           }}
         />
       }
@@ -1510,7 +1518,7 @@ function DraftCard({
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
             {/* V's key cap is on the pill while it shows: said once (principles 03 #2). */}
-            <HintBar inBox={inBox} escape={putOff} v={pillShown ? null : undefined} />
+            <HintBar inBox={inBox} find={inFind} escape={putOff} v={pillShown ? null : undefined} />
             <div className="ml-auto flex items-center gap-2">
               <Button
                 type="button"

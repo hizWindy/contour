@@ -17,6 +17,8 @@ export const CANCEL = 'Cancel'
 export const LATER = 'Later'
 export const SPEAK = 'Speak'
 export const LEAVE_BOX = 'Leave the box'
+/** Enter in the company's search box looks for the name typed (the PLAN-V24 browser check, TBC). */
+export const FIND = 'Find'
 export const REMOVE = 'Remove'
 export const ADD = 'Add'
 
