@@ -962,6 +962,56 @@ describe('To confirm', () => {
     expect(within(look).getByRole('button', { name: 'Try again' })).toBeEnabled()
   }, 15_000)
 
+  it('Esc on the send dialog puts the focus back on Send, which opened it (the PLAN-V24 browser check)', async () => {
+    mockServer({ notes: threeNotes() })
+    const { user } = renderCallLogs()
+    await toConfirmList()
+    const send = screen.getByRole('button', { name: 'Send 3 to HubSpot' })
+    await user.click(send)
+    const dialog = await screen.findByRole('alertdialog')
+    await within(dialog).findByText('3 calls, 1 task, 1 field change')
+    await user.keyboard('{Escape}')
+    await waitFor(() => {
+      expect(screen.queryByRole('alertdialog')).toBeNull()
+    })
+    await waitFor(() => {
+      expect(send).toHaveFocus()
+    })
+  })
+
+  it('Ctrl+Enter on a card, then Esc, puts the focus back on that card', async () => {
+    mockServer({ notes: threeNotes() })
+    const { user } = renderCallLogs()
+    const list = await toConfirmList()
+    const [, second] = within(list).getAllByRole('article')
+    await user.keyboard('jj')
+    expect(second).toHaveFocus()
+    await user.keyboard('{Control>}{Enter}{/Control}')
+    await screen.findByRole('alertdialog')
+    await user.keyboard('{Escape}')
+    await waitFor(() => {
+      expect(second).toHaveFocus()
+    })
+  })
+
+  it('after Send, while the calls go and Send is greyed, the focus goes to the first card, not the page', async () => {
+    mockServer({ notes: threeNotes() })
+    const { user } = renderCallLogs()
+    const list = await toConfirmList()
+    const [first] = within(list).getAllByRole('article')
+    await user.click(screen.getByRole('button', { name: 'Send 3 to HubSpot' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await within(dialog).findByText('3 calls, 1 task, 1 field change')
+    await user.click(within(dialog).getByRole('button', { name: 'Send to HubSpot' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('alertdialog')).toBeNull()
+    })
+    await waitFor(() => {
+      expect(first).toHaveFocus()
+    })
+    expect(document.body).not.toHaveFocus()
+  })
+
   it('a second batch while one is sending says so in words', async () => {
     mockServer({ notes: threeNotes(), alreadySending: true })
     const { user } = renderCallLogs()

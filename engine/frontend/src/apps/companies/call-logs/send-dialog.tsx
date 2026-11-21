@@ -14,7 +14,9 @@
  *   many, and that they stay in Call logs. It shows from the start, so the dialog doesn't grow
  *   when the preview answers.
  *
- * It rises 8px as it fades in, and fades out in 150ms, as the company's dialog does.
+ * It rises 8px as it fades in, and fades out in 150ms, as the company's dialog does. As it closes,
+ * the page puts the focus back (`focusBack`): it has no trigger of its own, so Esc left the focus
+ * on the page's body (the PLAN-V24 browser check).
  */
 import { Send, TriangleAlert } from 'lucide-react'
 import { useId } from 'react'
@@ -71,6 +73,12 @@ export interface SendDialogProps {
   onSend: () => void
   /** How many of the rep's calls still need a company, and so stay out of the send. */
   needsCompany?: number
+  /**
+   * Where the focus goes as the dialog closes (the PLAN-V24 browser check): the page puts it back
+   * on what opened the dialog, or the next sensible place, and says true. Left out, or false: the
+   * dialog's own way, which, with no trigger of its own, left it on the page's body.
+   */
+  focusBack?: () => boolean
 }
 
 export function SendDialog({
@@ -84,6 +92,7 @@ export function SendDialog({
   onRetry,
   onSend,
   needsCompany = 0,
+  focusBack,
 }: SendDialogProps) {
   const reasonId = useId()
   const held = preview
@@ -99,7 +108,12 @@ export function SendDialog({
   const skippedMeetings = skipped.filter((call) => call.meeting).length
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="data-open:slide-in-from-bottom-2">
+      <AlertDialogContent
+        className="data-open:slide-in-from-bottom-2"
+        onCloseAutoFocus={(event) => {
+          if (focusBack?.()) event.preventDefault()
+        }}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>{sendTitle(going.calls, going.meetingNotes)}</AlertDialogTitle>
           <AlertDialogDescription>{SEND_DESCRIPTION}</AlertDialogDescription>

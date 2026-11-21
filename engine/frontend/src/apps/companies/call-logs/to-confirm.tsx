@@ -25,7 +25,7 @@
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Send } from 'lucide-react'
-import { memo, useEffect, useEffectEvent, useId, useState } from 'react'
+import { memo, useEffect, useEffectEvent, useId, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
   confirmCallNotesOptions,
@@ -272,13 +272,35 @@ export const ToConfirm = memo(function ToConfirm({
     removeCallNote(client, note)
   }
 
-  const openSend = (): void => {
+  /** What opened the send dialog: its Send button, or the card Ctrl+Enter was pressed on. */
+  const sendOpener = useRef<HTMLElement | null>(null)
+  const sendButton = useRef<HTMLButtonElement>(null)
+  const openSend = (from: HTMLElement | null): void => {
     if (!canSend) return
+    sendOpener.current = from
     const next = included.map((note) => note.id)
     setSendIds(next)
     sendPreview.reset()
     sendPreview.mutate(next)
     setDialogOpen(true)
+  }
+  /**
+   * As the send dialog closes (the PLAN-V24 browser check): the focus goes back to what opened
+   * it, or to Send, and while a send runs (Send greyed, a card gone) to the first card on the tab,
+   * so it never falls to the page's body. False: nothing here can take it.
+   */
+  const focusBackFromSend = (): boolean => {
+    const from = sendOpener.current
+    sendOpener.current = null
+    for (const place of [from, sendButton.current]) {
+      if (!place?.isConnected || (place instanceof HTMLButtonElement && place.disabled)) continue
+      place.focus()
+      if (document.activeElement === place) return true
+    }
+    const first = ids[0]
+    if (first === undefined) return false
+    focusCard(first)
+    return document.activeElement?.closest('[data-note]') !== null
   }
   // The calls the preview says won't be sent, by their company, for the dialog.
   const skippedNow: SkippedCall[] = (sendPreview.data?.skipped ?? []).map((call) => {
@@ -339,9 +361,11 @@ export const ToConfirm = memo(function ToConfirm({
     // A dialog or panel open on top (Log call) keeps its own Ctrl+Enter.
     if (target?.closest('[role="dialog"], [role="alertdialog"]')) return
     event.preventDefault()
+    // The card it was pressed on gets the focus back as the dialog closes.
+    const from = target?.closest<HTMLElement>('[data-note]') ?? null
     // Leaving a field saves it before the dialog takes the focus.
     if (target?.closest(EDITABLE) && target instanceof HTMLElement) target.blur()
-    openSend()
+    openSend(from)
   })
   useEffect(() => {
     const listener = (event: KeyboardEvent): void => {
@@ -413,13 +437,16 @@ export const ToConfirm = memo(function ToConfirm({
               <Kbd>Enter</Kbd>
             </KbdGroup>
             <Button
+              ref={sendButton}
               type="button"
               size={onPhone ? 'lg' : 'default'}
               className={onPhone ? 'w-full' : undefined}
               disabled={!canSend}
               aria-describedby={described ? reasonId : undefined}
               aria-keyshortcuts="Control+Enter Meta+Enter"
-              onClick={openSend}
+              onClick={() => {
+                openSend(sendButton.current)
+              }}
             >
               <Send aria-hidden="true" />
               {included.length > 0 && !batch.running ? (
@@ -484,6 +511,7 @@ export const ToConfirm = memo(function ToConfirm({
         }}
         onSend={send}
         needsCompany={needsCompany}
+        focusBack={focusBackFromSend}
       />
     </div>
   )
