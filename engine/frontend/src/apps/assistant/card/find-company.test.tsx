@@ -47,6 +47,7 @@ import {
   teamEmail,
   write,
 } from './fixtures'
+import { companyFindQueryOptions } from './find'
 import { CardHost } from './host'
 import { closeCard, openCard } from './store'
 
@@ -222,10 +223,10 @@ function base(): Record<string, unknown> {
   }
 }
 
-/** A card opened by a typed command, on a page with a fake server. */
-function show(made: AssistantCommand) {
+/** A card opened by a typed command, on a page with a fake server, and these answers too. */
+function show(made: AssistantCommand, answers: Record<string, unknown> = {}) {
   const mic = new FakeMic()
-  const calls = mockApi(base())
+  const calls = mockApi({ ...base(), ...answers })
   const queryClient = createTestQueryClient()
   queryClient.setQueryData(queryKeys.auth.me(), { state: 'off' })
   const view = renderWithProviders(
@@ -382,6 +383,74 @@ describe('a name typed in the company box, then Enter', () => {
 })
 
 // --- "Which Sample?" on a call --------------------------------------------------------------------
+
+describe('a find still on its way (PLAN-V24 review)', () => {
+  /** The card's find, answering only once the test lets it: HubSpot's search can take 8 seconds. */
+  function slowFind() {
+    let answer = (): void => undefined
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    const fast = finder(FINDS)
+    const slow = ((call: Parameters<Answer>[0]) =>
+      answered.then(() => fast(call))) as unknown as Answer
+    return { slow, answer: () => answer() }
+  }
+
+  it('picks nothing once the box’s words change: a late match for the old words isn’t the company', async () => {
+    const find = slowFind()
+    const { user, of, calls, queryClient } = show(northWind(), { [FIND]: find.slow })
+    const found = await card()
+    await waitFor(() => {
+      expect(of(API.notes)).toHaveLength(1)
+    })
+    await enter(found, user, 'North Wind')
+    expect(await within(found).findByText('Looking.')).toBeInTheDocument()
+    // The rep types another name while HubSpot's search runs.
+    const box = within(found).getByRole('textbox', { name: 'Find a company' })
+    await user.clear(box)
+    await user.type(box, 'Sample')
+    find.answer()
+    // The answer is in, so the card's find has heard it.
+    await waitFor(() => {
+      expect(queryClient.getQueryData(companyFindQueryOptions('North Wind').queryKey)).toBeDefined()
+    })
+    expect(finds(calls)).toEqual(['North Wind'])
+    // North Wind's one match isn't the company: nothing picked, nothing sent, nothing it said.
+    expect(within(found).queryByText(NEW_IN_HUBSPOT)).toBeNull()
+    expect(of(notePath(), 'PATCH')).toEqual([])
+    expect(box).toHaveValue('Sample')
+    // Our copy's search for the words typed is there to pick from.
+    const choices = await within(found).findByRole('group', { name: 'Which company?' })
+    expect(within(choices).getAllByRole('button')).toHaveLength(2)
+    await user.click(within(choices).getAllByRole('button')[0])
+    await waitFor(() => {
+      expect(of(notePath(), 'PATCH').map((call) => call.body)).toEqual([
+        { company_key: SAMPLE.key },
+      ])
+    })
+  })
+
+  it('with the box as it was, its one match is the company, as before', async () => {
+    const find = slowFind()
+    const { user, of } = show(northWind(), { [FIND]: find.slow })
+    const found = await card()
+    await waitFor(() => {
+      expect(of(API.notes)).toHaveLength(1)
+    })
+    await enter(found, user, 'North Wind')
+    await within(found).findByText('Looking.')
+    act(() => {
+      find.answer()
+    })
+    expect(await within(found).findByText(NEW_IN_HUBSPOT)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(of(notePath(), 'PATCH').map((call) => call.body)).toEqual([
+        { company_key: NORTHWIND.key },
+      ])
+    })
+  })
+})
 
 describe('a call asking "Which Sample?" (Al-khair, 21 Nov)', () => {
   it('is saved at once, and a pick from those choices says not to teach the mic', async () => {

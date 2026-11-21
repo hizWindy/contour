@@ -573,7 +573,13 @@ function DraftCard({
   // While the card waits on its company, words said to it, or a name entered in its search box, go
   // to the card's own find, with no AI (`find.ts`): one found is the card's company at once, as a
   // command's is. The matches on screen are what "the first one" picks from (`shownCompanies`).
-  const { said, find } = useCompanyFind((hit, fromHubspot) => {
+  // A find still on its way is dropped once the box's words or the card's company change.
+  const pickedKey = draft.action === 'email' ? null : (draft.company.found?.key ?? null)
+  const {
+    said,
+    find,
+    drop: dropFind,
+  } = useCompanyFind((hit, fromHubspot) => {
     setDraft((now) =>
       now.action === 'email' || now.company.found !== null
         ? now
@@ -583,14 +589,14 @@ function DraftCard({
             edited: true,
           },
     )
-  })
+  }, pickedKey)
   const shownCompanies = useRef<readonly Company[] | null>(null)
   const onShown = useCallback((shown: readonly Company[] | null) => {
     shownCompanies.current = shown
   }, [])
   const companyVoice = useMemo<CompanyVoice>(
-    () => ({ said, onShown, onSubmit: find }),
-    [said, onShown, find],
+    () => ({ said, onShown, onSubmit: find, onTyped: dropFind }),
+    [said, onShown, find, dropFind],
   )
   /** Why a company picked for a call that needs one wasn't taken (choice 21). */
   const [pickProblem, setPickProblem] = useState<string | null>(null)
@@ -703,7 +709,6 @@ function DraftCard({
   // A company picked on the card (a choice, the search list, Use, or one added; PLAN-V23 T1-6):
   // the part it was picked in goes, so the focus would fall to the page. It goes on to the next
   // box still to fill, else to Send, so the keyboard carries on from there.
-  const pickedKey = draft.action === 'email' ? null : (draft.company.found?.key ?? null)
   const pickedBefore = useRef(pickedKey)
   const companyPicked = useEffectEvent(() => {
     const active = document.activeElement

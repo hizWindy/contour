@@ -94,6 +94,11 @@ export interface CompanyVoice {
   onShown: (shown: readonly Company[] | null) => void
   /** A name typed in the box and entered: the card's find looks for it. */
   onSubmit?: (words: string) => void
+  /**
+   * The rep typed in the box, or in the add's own boxes: a find still on its way is dropped, so
+   * its answer can't pick a company the rep has moved on from (PLAN-V24 review).
+   */
+  onTyped?: () => void
 }
 
 /** A line of the company part, in plain words. */
@@ -229,6 +234,7 @@ export function CompanyPicker({
           className="touch:text-body"
           onChange={(event) => {
             setText(event.target.value)
+            voice?.onTyped?.()
           }}
           onKeyDown={(event) => {
             // Enter looks for the name typed, as a name said is (Ctrl+Enter still sends).
@@ -316,6 +322,7 @@ function AddForm({
     if (next.city !== undefined) setCity(next.city)
     setKey(newIdempotencyKey())
     setProblem(null)
+    voice?.onTyped?.()
   }
 
   const add = (): void => {

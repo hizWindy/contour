@@ -12,6 +12,10 @@
  *   still works in the box.
  * - **No find on this server** (a 404, from an older backend while a deploy runs): our copy's
  *   search stands in, as before.
+ * - **Dropped** (PLAN-V24 review): a find still on its way once the box's words change, or the
+ *   card's company does. HubSpot's search can take 8 seconds, and one match for words the rep has
+ *   moved on from would become the company, which the server takes only once (409 `company_set`).
+ *   Its answer picks nothing and shows nothing, and our copy's search stands in.
  *
  * Each answer is kept for 30 seconds by its words, so the same words said twice ask HubSpot once.
  */
@@ -58,6 +62,11 @@ export type FindAnswer =
   | { kind: 'problem'; words: string }
   /** No find on this server: our copy's search stands in. */
   | { kind: 'copy' }
+  /**
+   * Dropped while it looked: the box's words or the card's company changed. Our copy's search
+   * stands in, and nothing is said to be nowhere.
+   */
+  | { kind: 'dropped' }
 
 /** The company said or entered again, which time (the same words twice find twice), and the find. */
 export interface CompanySaid {
@@ -77,11 +86,16 @@ function findWords(words: string): string | null {
 
 /**
  * The card's find: `find(words)` for a name said or entered, and `said`, what it found for the
- * newest words. A find replaced by a newer one is dropped.
+ * newest words. A find replaced by a newer one is dropped, and so is one still on its way when
+ * `drop()` is called (the box's words changed) or `company`, the card's company, changes.
  */
-export function useCompanyFind(onFound: OnFound): {
+export function useCompanyFind(
+  onFound: OnFound,
+  company: string | null,
+): {
   said: CompanySaid | null
   find: (words: string) => void
+  drop: () => void
 } {
   const client = useQueryClient()
   const [said, setSaid] = useState<CompanySaid | null>(null)
@@ -90,6 +104,17 @@ export function useCompanyFind(onFound: OnFound): {
   useLayoutEffect(() => {
     found.current = onFound
   })
+  // The words stay, so the box isn't filled with them again; only an answer still to come goes.
+  const drop = useCallback(() => {
+    asked.current += 1
+    setSaid((now) => (now?.find.kind === 'looking' ? { ...now, find: { kind: 'dropped' } } : now))
+  }, [])
+  const companyBefore = useRef(company)
+  useLayoutEffect(() => {
+    if (companyBefore.current === company) return
+    companyBefore.current = company
+    drop()
+  }, [company, drop])
   const find = useCallback(
     (words: string) => {
       const tidy = findWords(words)
@@ -136,5 +161,5 @@ export function useCompanyFind(onFound: OnFound): {
     },
     [client],
   )
-  return { said, find }
+  return { said, find, drop }
 }
