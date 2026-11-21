@@ -5,8 +5,8 @@ This plan makes the Assistant's mic strong on every device, and changes nothing 
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
-- **Last updated:** 21 Nov 2026 (built and checked: Parts 1 to 5 are done on `plan-v24`, with the review's and the browser check's fixes. Every screen waits for Al-khair's look. S1, S2 and M1 to M4 wait for him).
-- **Progress:** Before the build: 1 of 3. Part 1: 5 of 5. Part 2: 6 of 6. Part 3: 4 of 4. Part 4: 4 of 4. Part 5: 3 of 3. M1 to M4: 0 of 4.
+- **Last updated:** 21 Nov 2026 (M1 done on Al-khair's word: checked again, and `master` moved to `plan-v24`. M2, the deploy, is next. Every screen still waits for his look. S1, S2, M3 and M4 wait for him).
+- **Progress:** Before the build: 1 of 3. Part 1: 5 of 5. Part 2: 6 of 6. Part 3: 4 of 4. Part 4: 4 of 4. Part 5: 3 of 3. M1 to M4: 1 of 4.
 - **Sources:**
   - Al-khair's chat on 21 Nov, after Levi tried the Assistant with him on 20 Nov;
   - the code on `master` (`b84c3cf`), read on 21 Nov;
@@ -700,10 +700,11 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
 
 ## Merge, checks and going live
 
-- [ ] **M1. Merge** (`merge v24`, on Al-khair's word). Make the contract and the website's types again. Run the full backend checks (with `RUN_GATES=1`) and the full website checks, the `merge-check` skill and a fresh `review-agent`. Then move `master` to `plan-v24` with `git merge --ff-only`. If it won't fast-forward, stop and ask.
+- [x] **M1. Merge** Done 21 Nov 2026 (`988454c` and `5805746`, then this tick; `master` moved from `b84c3cf`). (`merge v24`, on Al-khair's word). Make the contract and the website's types again. Run the full backend checks (with `RUN_GATES=1`) and the full website checks, the `merge-check` skill and a fresh `review-agent`. Then move `master` to `plan-v24` with `git merge --ff-only`. If it won't fast-forward, stop and ask.
   - **Done when:** everything passes and `master` has moved.
 - [ ] **M2. Deploy** (`deploy v24`). Push `master` and deploy to App Platform. The migration runs on deploy. It only adds a column, lets two be empty and widens the status list, so the old code runs with it. There is no live switch.
   - **Done when:** the live site answers on the new version, the model's files load from it, and the Log says so.
+  - **Rolling back** (from M1's review): if live goes back to `b84c3cf` while any call needs a company, the old code breaks there. History in Call logs gives a 500 error, because the old `CallNoteOut` needs a company, and the V name hints fail on the empty company. So first pick a company for, or remove, every "Needs a company" call. The migration's down step refuses while such calls exist, but an App Platform rollback doesn't run it.
 - [ ] **M3. The live test with Levi,** on his own devices.
   1. Three commands in one V, with "send it" for each card.
   2. In a Teams or Zoom meeting, muted there: V works.
@@ -753,7 +754,7 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
     - **Before `deploy v24`:**
       - "Keep listening" is on by default while Levi's W2 is still open. So on Chrome and Edge, more room sound goes to Google or Microsoft. Get W2 answered, or turn the default off.
     - **For `merge v24`:**
-      - the main folder has uncommitted changes to `CLAUDE.md` (the move to `AGENTS.md`), and `plan-v24` changes `CLAUDE.md` too. So `git merge --ff-only plan-v24` would refuse there, until that work is committed or set aside.
+      - the main folder has uncommitted changes to `CLAUDE.md` (the move to `AGENTS.md`), and `plan-v24` changes `CLAUDE.md` too. So `git merge --ff-only plan-v24` would refuse there, until that work is committed or set aside. At M1 it was set aside for the fast-forward and put back unchanged, and this plan's line was added to the main folder's `AGENTS.md`. Committing that work stays Al-khair's.
     - **Small, from the browser check:**
       - after a pick on the card, Today and the menu's count catch up only on the next visit or focus. The card marks counts stale without asking again (`markCountsOld`, an older pattern used in 12 places);
       - an `InvalidStateError` from the theme's view transition shows at start-up on some phone-size loads. It is not this plan's code (`shell/theme.ts:78`).
@@ -821,3 +822,18 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - changes held for a call are lost if the page closes before the sort, and let go after 10 minutes of sorting;
   - Try again after a failed turn sends the joined words as one command;
   - whether App Platform's CDN answers a no-store download from its edge isn't known.
+- 21 Nov 2026, M1 (`merge v24`), on Al-khair's word in chat: "yes please merge it to the main and deploy it".
+  - **The joins:** the contract and the website's types were made again, with no change. There is one migration head (`0027`), and the schema map matches. `uv.lock` is unchanged, and `package-lock.json` adds only `@huggingface/transformers` 4.3.2 and its packages.
+  - **Website:** lint and types clean, and Prettier clean after `988454c` (one line break from T1-2).
+    - Tests: 3,039 of 3,042 passed in the full run. The other 3 failed only because the laptop slept in the middle of them, about 82 minutes each. Their 3 files then passed alone, 79 of 79.
+    - The build passes, with its 101.2 MB of model files checked.
+    - First visit: 243 kB of JavaScript (gzip) in 41 files, and 25 kB of CSS, the same as before M1.
+  - **Backend,** with `RUN_GATES=1`, in five parts: 5,079 passed, 25 skipped, none failed.
+    - Fast tests 3,558; Companies 449; core 664; Lead Finder and end to end 405; the gates 3.
+    - In core, one test timed out connecting to the database on the busy laptop. Its file then passed alone, 28 of 28.
+    - Ruff, the format check (479 files) and mypy (443 files) are clean.
+  - **The review** (a fresh `review-agent` with `merge-check`): Ready with notes, no Blockers.
+    - Fixed: real company names in a test (`5805746`).
+    - Added: M2's line on rolling back.
+    - Notes: check on live that the runtime's `.mjs` file comes as JavaScript (M2). A phone number or email said as a company's words reaches the host's logs before the server refuses it (A2's POST point). T2-5, T3-3 and T5-1 are ticked as built, and still wait for Al-khair's look. S1 and S2 are open by his choice.
+  - **`master`** moved from `b84c3cf` to `plan-v24` with `--ff-only`. The main folder's uncommitted `CLAUDE.md` (the move to `AGENTS.md`) was set aside for it and put back unchanged. This plan's line was added to the main folder's `AGENTS.md`.
