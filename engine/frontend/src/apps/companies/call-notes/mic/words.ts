@@ -6,7 +6,7 @@
  * download and its problems (both TBC at his look).
  */
 import { isMac, isWindows } from '@/lib/platform'
-import type { DeviceKind } from './voice-engine'
+import { browserFacts, deviceKind, type DeviceKind } from './voice-engine'
 
 /** The mic button in the note box, for screen readers and its tooltip. */
 export const SPEAK = 'Speak'
@@ -178,11 +178,30 @@ export function busyWords(windows = isWindows()): string {
   return windows ? `${PROBLEMS.busy.words} ${BUSY_WINDOWS}` : PROBLEMS.busy.words
 }
 
-/** A problem's sentence, for the computer the rep is on. */
-export function problemWords(problem: MicProblem): string {
+/**
+ * The model's problems on a computer, which has no keyboard mic to turn to (the PLAN-V24 browser
+ * check): they offer typing only. A phone or a tablet keeps the plan's words. TBC at Al-khair's
+ * look.
+ */
+const ON_A_COMPUTER: Readonly<Partial<Record<MicProblem, string>>> = {
+  device_too_slow: 'This computer is too slow for voice to text. You can type instead.',
+  model_failed: "Voice to text couldn't start on this computer. You can type instead.",
+}
+
+/** The device this browser is on: a phone, a tablet or a computer. */
+function deviceHere(): DeviceKind {
+  return deviceKind(browserFacts())
+}
+
+/**
+ * A problem's sentence, for the device and the computer the rep is on. `device` comes from the
+ * caller's own browser facts where it has them (a test's made-up iPhone, too).
+ */
+export function problemWords(problem: MicProblem, device: DeviceKind = deviceHere()): string {
   if (problem === 'blocked_system') return systemBlockedWords()
   if (problem === 'busy') return busyWords()
-  return PROBLEMS[problem].words
+  const words = device === 'computer' ? ON_A_COMPUTER[problem] : undefined
+  return words ?? PROBLEMS[problem].words
 }
 
 /** A problem's buttons. "Type instead" only where there is a note box to type in. */

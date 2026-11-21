@@ -98,7 +98,12 @@ import type {
 } from '@/api/types'
 import { needsCompanySendWords, NOT_CHANGED } from '@/apps/companies/call-logs/words'
 import type { MicEnv } from '@/apps/companies/call-notes/mic/session'
-import { pickEngine } from '@/apps/companies/call-notes/mic/voice-engine'
+import {
+  browserFacts,
+  deviceKind,
+  pickEngine,
+  type DeviceKind,
+} from '@/apps/companies/call-notes/mic/voice-engine'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import { problemWords } from '@/apps/companies/call-notes/mic/words'
 import { useNoHubSpotUser } from '@/auth/hubspot-user'
@@ -248,8 +253,11 @@ const IDLE: BarSnapshot = {
 }
 const idleSnapshot = (): BarSnapshot => IDLE
 
-/** A problem of V's strip, in the voice bar's words. */
-function stripProblem(problem: BarProblem): string {
+/**
+ * A problem of V's strip, in the voice bar's words. `device`: the model's problems offer the
+ * keyboard's mic on a phone or a tablet only (the PLAN-V24 browser check).
+ */
+function stripProblem(problem: BarProblem, device: DeviceKind): string {
   switch (problem.kind) {
     case 'nothing_heard':
       return NOTHING_HEARD
@@ -258,7 +266,7 @@ function stripProblem(problem: BarProblem): string {
     case 'too_slow':
       return TOO_SLOW
     case 'mic':
-      return problemWords(problem.problem)
+      return problemWords(problem.problem, device)
     case 'no_voice':
       return VOICE_NOT_SET_UP
     case 'other':
@@ -1232,7 +1240,7 @@ function DraftCard({
     snapshot.phase === 'answer'
       ? (snapshot.answer?.line ?? null)
       : (snapshot.phase === 'problem' || snapshot.problem?.kind === 'unclear') && snapshot.problem
-        ? stripProblem(snapshot.problem)
+        ? stripProblem(snapshot.problem, deviceKind((env?.browser ?? browserFacts)()))
         : null
 
   // --- Keys (choice 19) -------------------------------------------------------------------------------

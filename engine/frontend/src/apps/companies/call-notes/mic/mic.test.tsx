@@ -524,7 +524,13 @@ describe('a free model on the device (PLAN-V24 T4-3)', () => {
       PROBLEMS.download_failed.words,
       ['Try again', 'Type instead'],
     ],
-    ['the model won’t start here', 'load', PROBLEMS.model_failed.words, ['Type instead']],
+    // On a laptop, which has no keyboard mic: typing only (the PLAN-V24 browser check).
+    [
+      'the model won’t start here',
+      'load',
+      "Voice to text couldn't start on this computer. You can type instead.",
+      ['Type instead'],
+    ],
   ])('%s: says so, with its buttons, and no mic opened', async (_, why, words, buttons) => {
     const { mic } = openCard({ modelBytes: BYTES }, { tool: 'browser_model' })
     await screen.findByText('Only this once.')
@@ -559,7 +565,10 @@ describe('a free model on the device (PLAN-V24 T4-3)', () => {
       mic.say('log a call with jo sample')
       mic.fail('too_slow')
     })
-    expect(await screen.findByText(PROBLEMS.device_too_slow.words)).toBeInTheDocument()
+    // On a laptop: typing only, no keyboard mic (the PLAN-V24 browser check).
+    expect(
+      await screen.findByText('This computer is too slow for voice to text. You can type instead.'),
+    ).toBeInTheDocument()
     expect(screen.getByRole('dialog', { name: 'The mic stopped' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Type instead' }))
     expect(spies.onTypeInstead).toHaveBeenCalledWith('log a call with Jo Sample')

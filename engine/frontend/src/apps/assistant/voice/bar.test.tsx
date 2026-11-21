@@ -1108,6 +1108,21 @@ describe('every device (PLAN-V24 T4-3)', () => {
     )
   })
 
+  it('on a laptop, a device too slow for the model offers typing only: no keyboard mic there (the PLAN-V24 browser check)', async () => {
+    const { mic } = openBar({ mic: { browser: FIREFOX_LAPTOP, speech: false } })
+    const found = await listening()
+    act(() => {
+      mic.say('add a task')
+      mic.fail('too_slow')
+    })
+    const alert = await within(found).findByRole('alert')
+    expect(alert).toHaveTextContent(
+      'This computer is too slow for voice to text. You can type instead.',
+    )
+    expect(alert).not.toHaveTextContent("keyboard's mic")
+    expect(within(found).getByRole('button', { name: 'Type instead' })).toBeInTheDocument()
+  })
+
   it('a connection lost after the quiet tries says so in its own words, with Try again and Type instead (the PLAN-V24 browser check)', async () => {
     const { mic, user } = openBar()
     const found = await listening()

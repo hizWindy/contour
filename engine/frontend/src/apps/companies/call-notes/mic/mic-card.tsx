@@ -54,6 +54,7 @@ import { clockText } from '../words'
 import { LiveWords } from './live-words'
 import type { NameFix } from './name-fix'
 import { CHECK_STEPS, MicSession, type MicEnv, type MicSnapshot, type Preparing } from './session'
+import { browserFacts, deviceKind } from './voice-engine'
 import type { VoiceToolKind, VoiceToolMaker } from './voice-tool'
 import {
   ACTION_WORDS,
@@ -385,7 +386,9 @@ export default function MicCard({
   const folded = useFolded(listening && shownPassed >= CHECK_STEPS.length)
   const showSteps =
     !done && !(listening && folded) && !(phase === 'failed' && snapshot.failedAt === null)
-  const problem = snapshot.problem ? problemWords(snapshot.problem) : null
+  // The model's problems offer the keyboard's mic on a phone or a tablet only (the browser check).
+  const device = deviceKind((env?.browser ?? browserFacts)())
+  const problem = snapshot.problem ? problemWords(snapshot.problem, device) : null
   const actions = snapshot.problem ? problemActions(snapshot.problem, noteBox) : []
   const [main, ...others] = actions
   const title = titleOf(snapshot)

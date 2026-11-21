@@ -91,7 +91,12 @@ import { queryKeys } from '@/api/query'
 import type { AssistantCommand, AssistantCommandIn, CallNoteOptions } from '@/api/types'
 import { LiveWords } from '@/apps/companies/call-notes/mic/live-words'
 import type { MicEnv, Preparing } from '@/apps/companies/call-notes/mic/session'
-import { browserFacts, deviceKind, pickEngine } from '@/apps/companies/call-notes/mic/voice-engine'
+import {
+  browserFacts,
+  deviceKind,
+  pickEngine,
+  type DeviceKind,
+} from '@/apps/companies/call-notes/mic/voice-engine'
 import { DEVICE_MODEL } from '@/apps/companies/call-notes/mic/voice-ready'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import {
@@ -278,8 +283,11 @@ function waits(problem: BarProblem | null): boolean {
   return problem?.kind === 'unclear' || problem?.kind === 'too_long'
 }
 
-/** A problem's sentence. */
-function problemLine(problem: BarProblem): string {
+/**
+ * A problem's sentence. `device`: the model's problems offer the keyboard's mic on a phone or a
+ * tablet only (the PLAN-V24 browser check). Left out: this browser's own.
+ */
+function problemLine(problem: BarProblem, device?: DeviceKind): string {
   switch (problem.kind) {
     case 'nothing_heard':
       return NOTHING_HEARD
@@ -288,7 +296,7 @@ function problemLine(problem: BarProblem): string {
     case 'too_slow':
       return TOO_SLOW
     case 'mic':
-      return problemWords(problem.problem)
+      return problemWords(problem.problem, device)
     case 'no_voice':
       return VOICE_NOT_SET_UP
     case 'other':
@@ -656,6 +664,8 @@ export default function VoiceBar({
   const conversation = listening ? snapshot.conversation : null
   // Over the server's limit, the words can't go until they are shortened.
   const tooLong = snapshot.draft.trim().length > MAX_CHARS
+  // The device, for the words of the model's problems (the PLAN-V24 browser check).
+  const device = deviceKind((env?.browser ?? browserFacts)())
   // While a card is open, the bar shrinks to the pill beside it, which says what the bar would:
   // where it stands, and once it stopped, why, with the bar's own buttons (PLAN-V24 T5-1).
   const pill: PillState | null =
@@ -665,7 +675,7 @@ export default function VoiceBar({
           title,
           stopped:
             problem && (phase === 'problem' || phase === 'typing')
-              ? { line: problemLine(problem), quiet: isQuiet(problem) }
+              ? { line: problemLine(problem, device), quiet: isQuiet(problem) }
               : null,
           actions: actions.map((id) => ({ id, label: ACTION_LABELS[id] })),
           act,
@@ -678,7 +688,7 @@ export default function VoiceBar({
   const problemView = problem ? (
     isQuiet(problem) ? (
       <p id={whyId} data-slot="voice-problem" className="text-pretty text-muted-foreground">
-        {problemLine(problem)}
+        {problemLine(problem, device)}
       </p>
     ) : (
       <p
@@ -699,7 +709,7 @@ export default function VoiceBar({
             <span>{NOTHING_HEARD_TOUCH}</span>
           )
         ) : (
-          <span>{problemLine(problem)}</span>
+          <span>{problemLine(problem, device)}</span>
         )}
       </p>
     )

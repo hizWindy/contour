@@ -78,17 +78,25 @@ describe('the mic table', () => {
       "Voice couldn't get ready. Check your connection, then try again. You can type meanwhile.",
       ['Try again', 'Type instead'],
     ],
+    // On a computer (this test's browser), which has no keyboard mic: typing only.
     [
       'Too slow for the model',
       'device_too_slow',
-      "This device is too slow for voice to text. Use your keyboard's mic, or type.",
+      'This computer is too slow for voice to text. You can type instead.',
       ['Type instead'],
     ],
     [
       "The model won't start",
       'model_failed',
-      "Voice to text couldn't start on this device. Use your keyboard's mic, or type.",
+      "Voice to text couldn't start on this computer. You can type instead.",
       ['Type instead'],
+    ],
+    // The PLAN-V24 browser check: the speech service's connection, lost after its quiet tries.
+    [
+      'The connection lost',
+      'connection_lost',
+      'Voice to text lost its connection. Check your connection, then try again. You can type meanwhile.',
+      ['Try again', 'Type instead'],
     ],
   ])('%s', (_, problem, words, buttons) => {
     expect(problemWords(problem)).toBe(words)
@@ -103,6 +111,24 @@ describe('the mic table', () => {
     )
     expect(actions).toEqual(buttons)
   })
+
+  it.each(['phone', 'tablet'] as const)(
+    "the model's problems offer the keyboard's mic on a %s only, in the plan's words",
+    (device) => {
+      expect(problemWords('device_too_slow', device)).toBe(
+        "This device is too slow for voice to text. Use your keyboard's mic, or type.",
+      )
+      expect(problemWords('model_failed', device)).toBe(
+        "Voice to text couldn't start on this device. Use your keyboard's mic, or type.",
+      )
+      expect(problemWords('device_too_slow', 'computer')).not.toContain("keyboard's mic")
+      expect(problemWords('model_failed', 'computer')).not.toContain("keyboard's mic")
+      // Every other problem has the same words everywhere.
+      expect(problemWords('download_failed', device)).toBe(
+        problemWords('download_failed', 'computer'),
+      )
+    },
+  )
 
   it('Blocked by Windows, with Try again', () => {
     expect(systemBlockedWords(true, false)).toBe(
