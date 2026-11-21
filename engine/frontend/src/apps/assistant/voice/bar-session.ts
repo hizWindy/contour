@@ -49,6 +49,7 @@
  *   or 2 minutes with no words (TBC: "Stopped listening after 2 minutes of quiet.", with Start
  *   again). Turns already said are still worked out. Esc throws away the turn and everything still
  *   on its way, and closes the bar, as it did. A problem ends it too, with its words and buttons.
+ *   The words of turns said after a turn that failed join its words, so none is lost.
  * - **Hold V is one turn** (choice 7): held, it is today's one command, up to 2 minutes.
  * - **Phones and windows** (choices 15, 16, T2-5, `screen.ts`): the screen is kept on while it
  *   listens (the wake lock), and let go at every end; a refused one changes nothing else. On a
@@ -283,6 +284,24 @@ type Hold = 'none' | 'down' | 'held'
 interface Turn {
   text: string
   source: CommandSource
+}
+
+/** A turn's words as a sentence of its own: it ends on a full stop, or the mark it had. */
+function asSentence(text: string): string {
+  return /[.!?]$/.test(text) ? text : `${text}.`
+}
+
+/**
+ * A failed turn's words, with the words of the turns said after it, which go no further (PLAN-V24
+ * review): each as a sentence, so the text line shows where the next began ("Log a call with Jo.
+ * Open today."). A short turn is left out: it would never have been sent (choice 11).
+ */
+function withLater(failed: string, later: readonly Turn[]): string {
+  const said = later
+    .filter((turn) => turn.source !== 'mic' || !isShortTurn(turn.text))
+    .map((turn) => turn.text.trim())
+    .filter((text) => text !== '')
+  return said.length === 0 ? failed : [failed, ...said].map(asSentence).join(' ')
 }
 
 /**
@@ -1183,8 +1202,10 @@ export class BarSession {
   /**
    * A turn the command step refused. Behind another view, nothing shows. Said to a card with the
    * AI off, the card says so, and the conversation goes on (the card's own words still work).
-   * Otherwise the conversation ends with the problem, as one command's did, and later turns are
-   * dropped.
+   * Otherwise the conversation ends with the problem, as one command's did. The turns said after
+   * it go no further, but their words join its words (PLAN-V24 review): Type instead puts them all
+   * in the text line, and Try again sends them as one command. Words that grow over the server's
+   * limit wait in the text line, whole, as a long turn's do.
    */
   private turnFailed(error: unknown, turn: Turn, ear: CardEar | null): void {
     this.busy = false
@@ -1199,10 +1220,15 @@ export class BarSession {
       return
     }
     this.stopListening()
+    const words = withLater(turn.text, this.queue)
     this.queue = []
     this.source = turn.source
-    this.set({ phase: 'working', mic: null, words: turn.text, conversation: null })
-    this.failed(error, turn.text, turn.source)
+    if (words.length > MAX_CHARS) {
+      this.tooLong(words)
+      return
+    }
+    this.set({ phase: 'working', mic: null, words, conversation: null })
+    this.failed(error, words, turn.source)
   }
 
   // --- The command step -------------------------------------------------------------------------

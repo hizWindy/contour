@@ -7,6 +7,7 @@
  * sound is ever kept.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiProblem } from '@/api/client'
 import type { AssistantCommand, AssistantCommandIn, AssistantOnPage } from '@/api/types'
 import { FakeMic, type FakeMicOptions } from '@/apps/companies/call-notes/mic/fake-mic'
 import { BarSession, TIMES, type BarSnapshot, type CardShown } from './bar-session'
@@ -62,6 +63,7 @@ function setUp({
   const sent: AssistantCommandIn[] = []
   const handed: Heard[] = []
   const waiting: ((answer: AssistantCommand) => void)[] = []
+  const refusing: ((error: unknown) => void)[] = []
   const onClose = vi.fn<() => void>()
   const session = new BarSession({
     env: mic.env(),
@@ -73,8 +75,9 @@ function setUp({
     read: (body) => {
       sent.push(body)
       if (!slow) return Promise.resolve(command({ read_back: `Read: ${body.text}` }))
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
         waiting.push(resolve)
+        refusing.push(reject)
       })
     },
     hand: (heard) => {
@@ -89,11 +92,18 @@ function setUp({
   const now = (): BarSnapshot => session.getSnapshot()
   /** The command step answers the oldest call still waiting. */
   const answer = async (made: AssistantCommand = command()) => {
+    refusing.shift()
     waiting.shift()?.(made)
     await tick(0)
   }
+  /** The command step refuses the oldest call still waiting. */
+  const refuse = async (error: unknown) => {
+    waiting.shift()
+    refusing.shift()?.(error)
+    await tick(0)
+  }
   const texts = () => sent.map((body) => body.text)
-  return { mic, session, sent, texts, handed, onClose, now, answer, waiting }
+  return { mic, session, sent, texts, handed, onClose, now, answer, refuse, waiting }
 }
 
 /** Moves the clock, and lets every promise the move freed settle. */
@@ -397,6 +407,71 @@ describe('V and Stop (choice 10)', () => {
       conversation: null,
     })
     expect(mic.live()).toBe(0)
+  })
+})
+
+describe('a turn that fails (PLAN-V24 review)', () => {
+  /** Claude slow or down: the command step's 503. */
+  const SLOW = new ApiProblem({
+    title: "That didn't work",
+    status: 503,
+    code: 'claude_unavailable',
+  })
+
+  it('keeps the words of the turns said after it: they join its words, and Type instead puts them all in the text line', async () => {
+    const { mic, session, texts, now, refuse } = await listening({ slow: true })
+    await sayTurn(mic, LOG_CALL)
+    await sayTurn(mic, ADD_TASK)
+    // Too short to send, so it would never have gone anywhere: left out. It ends on the long pause.
+    mic.say('um')
+    await tick(TIMES.longPause)
+    await sayTurn(mic, OPEN_TODAY)
+    expect(now().conversation?.waiting).toBe(3)
+    await refuse(SLOW)
+    const all = `${LOG_CALL}. ${ADD_TASK}. ${OPEN_TODAY}.`
+    expect(now()).toMatchObject({
+      phase: 'problem',
+      problem: { kind: 'too_slow' },
+      words: all,
+      conversation: null,
+    })
+    // The turns after it went no further, and the mic is let go.
+    expect(texts()).toEqual([LOG_CALL])
+    expect(mic.live()).toBe(0)
+    session.typeInstead()
+    expect(now()).toMatchObject({ phase: 'typing', draft: all })
+  })
+
+  it('Try again sends them as one command', async () => {
+    const { mic, session, texts, refuse } = await listening({ slow: true })
+    await sayTurn(mic, LOG_CALL)
+    await sayTurn(mic, OPEN_TODAY)
+    await refuse(SLOW)
+    session.tryAgain()
+    expect(texts()).toEqual([LOG_CALL, `${LOG_CALL}. ${OPEN_TODAY}.`])
+  })
+
+  it('with nothing said after it, its words are as they were', async () => {
+    const { mic, session, now, refuse } = await listening({ slow: true })
+    await sayTurn(mic, LOG_CALL)
+    await refuse(SLOW)
+    expect(now()).toMatchObject({ phase: 'problem', words: LOG_CALL })
+    session.typeInstead()
+    expect(now().draft).toBe(LOG_CALL)
+  })
+
+  it('words that grow over the server’s 2,000 characters wait in the text line, whole', async () => {
+    const { mic, now, refuse } = await listening({ slow: true })
+    const long = `${'Spoke to Jo Sample about the lease and the move '.repeat(25)}in March`
+    expect(long.length).toBeLessThan(2000)
+    await sayTurn(mic, long)
+    await sayTurn(mic, long)
+    await refuse(SLOW)
+    expect(now()).toMatchObject({
+      phase: 'typing',
+      draft: `${long}. ${long}.`,
+      problem: { kind: 'too_long' },
+    })
   })
 })
 
