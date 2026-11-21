@@ -226,6 +226,26 @@ describe('keepFiles', () => {
     expect(caches.paths(CACHE)).toEqual([])
   })
 
+  it('refuses files it can’t check, before any download, and keeps nothing (PLAN-V24 review)', async () => {
+    const one = served('/voice/model-1/config.json', '{"model_type":"moonshine"}')
+    const { asked } = site({ [one.file.url]: one.bytes })
+    // A page that isn't secure has no crypto.subtle: only the size could be checked.
+    vi.stubGlobal('crypto', {})
+    const progress: Progress[] = []
+
+    await expect(keepFiles([one.file], (step) => progress.push(step))).rejects.toBeInstanceOf(
+      DownloadFailed,
+    )
+    expect(asked).toEqual([])
+    expect(progress).toEqual([])
+    expect(caches.paths(CACHE)).toEqual([])
+
+    // A file checked and kept on an earlier visit still counts: nothing to download or check.
+    await keepChecked(one.file.url, one.bytes)
+    await expect(keepFiles([one.file])).resolves.toBeUndefined()
+    expect(asked).toEqual([])
+  })
+
   it("takes a runtime file that failed its check out of the service worker's store too", async () => {
     const runtime = served('/assets/ort-wasm-simd-threaded-abc123.wasm', 'the real runtime')
     const { asked } = site({ [runtime.file.url]: bytesOf('the fake runtime') })

@@ -220,9 +220,13 @@ async function download(
   }
 }
 
-/** The sha256 of some bytes, in hex. Only a secure page (https) can work it out. */
-async function sha256Of(bytes: Uint8Array<ArrayBuffer>): Promise<string | null> {
-  if (typeof crypto === 'undefined' || !crypto.subtle) return null
+/** This page can work out a sha256: only a secure page (https) can. */
+function canCheck(): boolean {
+  return typeof crypto !== 'undefined' && Boolean(crypto.subtle)
+}
+
+/** The sha256 of some bytes, in hex. */
+async function sha256Of(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes)
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 }
@@ -232,6 +236,10 @@ async function sha256Of(bytes: Uint8Array<ArrayBuffer>): Promise<string | null> 
  * Any failure (no network, a stall, a wrong size or sha256) is a `DownloadFailed`, and a file that
  * failed takes no place in either store, so the next try fetches it fresh. A page served as
  * index.html for a missing file fails the size.
+ *
+ * A file that can't be checked is never kept (PLAN-V24 review): a page that can't work out a
+ * sha256 is refused before any byte is downloaded, rather than keeping files checked by size only.
+ * Cache Storage needs a secure page too, so in practice both are there, or neither is.
  */
 export async function keepFiles(
   files: readonly VoiceFile[],
@@ -240,6 +248,7 @@ export async function keepFiles(
   const missing = await missingFiles(files)
   if (missing.length === 0) return
   if (typeof caches === 'undefined') throw new DownloadFailed('this browser has no Cache Storage')
+  if (!canCheck()) throw new DownloadFailed('this page can’t check the files it downloads')
   const total = missing.reduce((sum, file) => sum + file.bytes, 0)
   const cache = await caches.open(CACHE)
   let done = 0
@@ -248,9 +257,7 @@ export async function keepFiles(
     let bytes: Uint8Array<ArrayBuffer>
     try {
       bytes = await download(file, (got) => onProgress?.({ loaded: done + got, total }))
-      const sha256 = await sha256Of(bytes)
-      if (sha256 !== null && sha256 !== file.sha256)
-        throw new DownloadFailed(`${file.url}: checksum`)
+      if ((await sha256Of(bytes)) !== file.sha256) throw new DownloadFailed(`${file.url}: checksum`)
     } catch (error) {
       await forget(file.url)
       throw error
