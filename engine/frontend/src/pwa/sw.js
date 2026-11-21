@@ -90,7 +90,7 @@ self.addEventListener('fetch', (event) => {
     return
   }
   if (url.pathname.startsWith('/assets/')) {
-    event.respondWith(keepAsYouGo(request))
+    event.respondWith(keepAsYouGo(event))
   }
 })
 
@@ -101,13 +101,22 @@ async function fromShell(request, path) {
   return kept || fetch(request)
 }
 
-/** A file under /assets/: from the device if kept, else from the network, and kept for next time. */
-async function keepAsYouGo(request) {
+/**
+ * A file under /assets/: from the device if kept, else from the network, and kept for next time.
+ * The network's answer goes to the page at once, and the copy is kept alongside it (`waitUntil`),
+ * so a big file streams in as it comes (PLAN-V24 review). Waiting for the copy first handed the
+ * speech model's 14 MB runtime over in one burst, and its download failed.
+ */
+async function keepAsYouGo(event) {
+  const request = event.request
   const cache = await caches.open(ASSETS)
   const kept = await cache.match(request)
   if (kept) return kept
   const response = await fetch(request)
-  // Only a good answer from our own site is kept (a 404 for a file a deploy removed never is).
-  if (response.ok && response.type === 'basic') await cache.put(request, response.clone())
+  // Only a good answer from our own site is kept (a 404 for a file a deploy removed never is). A
+  // copy that can't be kept, like a full store, costs the page nothing.
+  if (response.ok && response.type === 'basic') {
+    event.waitUntil(cache.put(request, response.clone()).catch(() => undefined))
+  }
   return response
 }

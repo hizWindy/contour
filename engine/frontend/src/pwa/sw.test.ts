@@ -30,9 +30,10 @@ const absolute = (input: string | { url: string }): string =>
 
 class FakeCache {
   entries = new Map<string, Response>()
-  put(request: string | { url: string }, response: Response): Promise<void> {
-    this.entries.set(absolute(request), response)
-    return Promise.resolve()
+  /** As a real cache does, the whole answer is read before the copy is kept. */
+  async put(request: string | { url: string }, response: Response): Promise<void> {
+    const body = await response.arrayBuffer()
+    this.entries.set(absolute(request), new Response(body, { status: response.status }))
   }
   match(request: string | { url: string }): Promise<Response | undefined> {
     // A real cache gives a fresh copy each time, so each answer can be read once.
@@ -76,7 +77,7 @@ class FakeRequest {
 }
 
 /** A good answer from our own site, as the browser labels it. */
-function good(body: string, status = 200): Response {
+function good(body: string | ReadableStream<Uint8Array>, status = 200): Response {
   const response = new Response(body, { status })
   Object.defineProperty(response, 'type', { value: 'basic' })
   return response
@@ -143,17 +144,46 @@ function startWorker(build: Build = BUILD, network: Network = () => Promise.reso
       })
       await work
     },
-    /** What the worker does with a request: nothing (it let it through), or its answer. */
+    /**
+     * A request, as the page makes it: the worker's answer as it gives it (null when it let the
+     * request through), and the work it keeps going after (`waitUntil`), like a copy being kept.
+     */
+    send(
+      url: string,
+      extra: { method?: string; mode?: string } = {},
+    ): { answered: Promise<Response> | null; kept: () => Promise<void> } {
+      const request = Object.assign(new FakeRequest(url), extra)
+      const respondWith = vi.fn()
+      const work: Promise<unknown>[] = []
+      dispatch('fetch', {
+        request,
+        respondWith,
+        waitUntil: (promise: Promise<unknown>) => {
+          work.push(promise)
+        },
+      })
+      const answer = respondWith.mock.calls[0]?.[0] as Promise<Response> | undefined
+      return {
+        answered: answer ?? null,
+        kept: async () => {
+          await answer
+          await Promise.all(work)
+        },
+      }
+    },
+    /**
+     * What the worker does with a request: nothing (it let it through), or its answer, once the
+     * work it kept going after is done.
+     */
     async request(
       url: string,
       extra: { method?: string; mode?: string } = {},
     ): Promise<{ handled: false } | { handled: true; response: Response }> {
-      const request = Object.assign(new FakeRequest(url), extra)
-      const respondWith = vi.fn()
-      dispatch('fetch', { request, respondWith })
-      if (respondWith.mock.calls.length === 0) return { handled: false }
-      const answer: unknown = respondWith.mock.calls[0]?.[0]
-      return { handled: true, response: await (answer as Promise<Response>) }
+      const { answered, kept } = this.send(url, extra)
+      if (!answered) return { handled: false }
+      const response = await answered
+      await kept()
+      return { handled: true, response }
     },
     message(data: unknown): void {
       dispatch('message', { data })
@@ -266,6 +296,38 @@ describe('what it serves', () => {
     expect([...kept.entries.keys()]).toEqual([])
     await worker.request('/assets/page-b2.js')
     expect([...kept.entries.keys()]).toEqual([absolute('/assets/page-b2.js')])
+  })
+
+  it('streams a file to the page as it comes, while its copy is kept alongside (PLAN-V24 review)', async () => {
+    // A big file, like the speech model's runtime: its bytes come a part at a time.
+    let feed: ReadableStreamDefaultController<Uint8Array> | undefined
+    const body = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        feed = controller
+      },
+    })
+    const worker = startWorker(BUILD, () => Promise.resolve(good(body)))
+    const { answered, kept } = worker.send('/assets/page-b2.js')
+    feed?.enqueue(new TextEncoder().encode('the first part'))
+    // The page has its answer, and the first part, before the rest of the file has come.
+    const notYet = new Promise<null>((resolve) => setTimeout(() => resolve(null), 500))
+    const response = await Promise.race([answered, notYet])
+    if (!response?.body) throw new Error('the page got nothing before the whole file came')
+    const reader = response.body.getReader()
+    const first = await reader.read()
+    expect(new TextDecoder().decode(first.value)).toBe('the first part')
+
+    feed?.enqueue(new TextEncoder().encode(', then the rest'))
+    feed?.close()
+    const rest = await reader.read()
+    expect(new TextDecoder().decode(rest.value)).toBe(', then the rest')
+    expect((await reader.read()).done).toBe(true)
+    // The copy, kept as the page read it: the whole file.
+    await kept()
+    const store = await worker.caches.open('contour-assets')
+    expect(await (await store.match('/assets/page-b2.js'))?.text()).toBe(
+      'the first part, then the rest',
+    )
   })
 })
 

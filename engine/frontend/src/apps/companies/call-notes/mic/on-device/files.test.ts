@@ -14,6 +14,7 @@ import {
   keptFile,
   missingFiles,
   modelFolder,
+  PROGRESS_MS,
   SERVED,
   SW_ASSETS,
   tidyKept,
@@ -216,6 +217,74 @@ describe('keepFiles', () => {
     expect(new TextDecoder().decode(await (await keptFile(one.file))?.arrayBuffer())).toBe(
       '{"model_type":"moonshine"}',
     )
+  })
+
+  /**
+   * A file's bytes in `parts` parts. `msEach`: the clock moves this much before each part, as a
+   * download over a network does; 0 is the service worker handing a kept file over at once.
+   */
+  function inParts(bytes: Uint8Array<ArrayBuffer>, parts: number, msEach = 0) {
+    const size = Math.ceil(bytes.length / parts)
+    let at = 0
+    return new ReadableStream<Uint8Array>({
+      pull: (controller) => {
+        if (at >= bytes.length) {
+          controller.close()
+          return
+        }
+        if (msEach > 0) vi.setSystemTime(Date.now() + msEach)
+        controller.enqueue(bytes.slice(at, at + size))
+        at += size
+      },
+    })
+  }
+
+  it('says the progress once for a file that comes in a thousand parts at once, then the end (PLAN-V24 review)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const big = served('/assets/ort-wasm-simd-threaded-abc123.wasm', 'runtime '.repeat(4000))
+    vi.stubGlobal('fetch', () => Promise.resolve(new Response(inParts(big.bytes, 1000))))
+    const progress: Progress[] = []
+
+    await keepFiles([big.file], (step) => progress.push(step))
+
+    expect(progress).toEqual([
+      { loaded: 0, total: big.file.bytes },
+      { loaded: big.file.bytes, total: big.file.bytes },
+    ])
+    expect(caches.paths(CACHE)).toEqual([big.file.url])
+  })
+
+  it('says the progress at most every 100 ms while a file comes over time, and always the end', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const big = served('/assets/ort-wasm-simd-threaded-abc123.wasm', 'runtime '.repeat(4000))
+    // 200 parts, 30 ms apart: 6 seconds in all.
+    vi.stubGlobal('fetch', () => Promise.resolve(new Response(inParts(big.bytes, 200, 30))))
+    const said: { at: number; loaded: number }[] = []
+
+    await keepFiles([big.file], ({ loaded }) => said.push({ at: Date.now(), loaded }))
+
+    expect(said.length).toBeGreaterThan(10)
+    expect(said.length).toBeLessThanOrEqual(6000 / PROGRESS_MS + 2)
+    for (const [index, step] of said.slice(1, -1).entries()) {
+      expect(step.at - (said[index]?.at ?? 0)).toBeGreaterThanOrEqual(PROGRESS_MS)
+    }
+    expect(said.at(-1)?.loaded).toBe(big.file.bytes)
+  })
+
+  it('downloads and keeps the files even when what shows the progress throws (PLAN-V24 review)', async () => {
+    const one = served('/voice/model-1/config.json', '{"model_type":"moonshine"}')
+    const two = served('/voice/model-1/onnx/model.onnx', 'weights '.repeat(500))
+    site({ [one.file.url]: one.bytes, [two.file.url]: two.bytes })
+    const shown = vi.fn(() => {
+      // What React threw at the profile menu's row, in a real browser on 21 Nov.
+      throw new Error('Maximum update depth exceeded')
+    })
+
+    await expect(keepFiles([one.file, two.file], shown)).resolves.toBeUndefined()
+
+    expect(caches.paths(CACHE)).toEqual([one.file.url, two.file.url])
+    // It was still told, at the start and at the end.
+    expect(shown.mock.calls.length).toBeGreaterThanOrEqual(2)
   })
 
   it('fails on a wrong checksum, and keeps nothing of that file', async () => {

@@ -186,6 +186,35 @@ export async function voiceIsKept({
 /** A download that gets no bytes for this long has stalled, and fails. */
 const STALL_MS = 30_000
 
+/**
+ * The progress is said at most this often (PLAN-V24 review). A file the service worker hands over
+ * in one burst came in thousands of chunks at once, and each one redrew the profile menu's row
+ * until React stopped ("Maximum update depth exceeded"), which failed the download.
+ */
+export const PROGRESS_MS = 100
+
+/**
+ * Says the progress, at most every `PROGRESS_MS`, and always when told to (the first and the
+ * last). A listener that throws never fails the download: the bytes still come, and the next
+ * report is tried as usual.
+ */
+function progressSayer(
+  onProgress: ((progress: Progress) => void) | undefined,
+): (progress: Progress, always?: boolean) => void {
+  let said = Number.NEGATIVE_INFINITY
+  return (progress, always = false) => {
+    if (!onProgress) return
+    const now = Date.now()
+    if (!always && now - said < PROGRESS_MS) return
+    said = now
+    try {
+      onProgress(progress)
+    } catch {
+      // The page's trouble with showing it, not the download's.
+    }
+  }
+}
+
 /** Downloads one file, reporting the bytes as they come. */
 async function download(
   file: VoiceFile,
@@ -240,6 +269,9 @@ async function sha256Of(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
  * A file that can't be checked is never kept (PLAN-V24 review): a page that can't work out a
  * sha256 is refused before any byte is downloaded, rather than keeping files checked by size only.
  * Cache Storage needs a secure page too, so in practice both are there, or neither is.
+ *
+ * The progress comes at most every `PROGRESS_MS`, with the first and the last always said, and a
+ * listener that throws never fails the download (PLAN-V24 review).
  */
 export async function keepFiles(
   files: readonly VoiceFile[],
@@ -251,12 +283,15 @@ export async function keepFiles(
   if (!canCheck()) throw new DownloadFailed('this page can’t check the files it downloads')
   const total = missing.reduce((sum, file) => sum + file.bytes, 0)
   const cache = await caches.open(CACHE)
+  const say = progressSayer(onProgress)
   let done = 0
-  onProgress?.({ loaded: 0, total })
+  say({ loaded: 0, total }, true)
   for (const file of missing) {
     let bytes: Uint8Array<ArrayBuffer>
     try {
-      bytes = await download(file, (got) => onProgress?.({ loaded: done + got, total }))
+      bytes = await download(file, (got) => {
+        say({ loaded: done + got, total })
+      })
       if ((await sha256Of(bytes)) !== file.sha256) throw new DownloadFailed(`${file.url}: checksum`)
     } catch (error) {
       await forget(file.url)
@@ -267,7 +302,7 @@ export async function keepFiles(
     // The service worker kept its own copy as the file passed: one copy, the checked one, is enough.
     if (await caches.has(SW_ASSETS)) await (await caches.open(SW_ASSETS)).delete(file.url)
     done += file.bytes
-    onProgress?.({ loaded: done, total })
+    say({ loaded: done, total }, done === total)
   }
 }
 
