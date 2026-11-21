@@ -21,8 +21,8 @@
  *   at once too, with the name as heard, as "Needs a company". Its company picked later (a choice,
  *   the search list, Add to HubSpot, or by voice) goes as a PATCH, and the call is sorted then.
  *   Until then the call takes only its outcome, and while it sorts nothing: a change said meanwhile
- *   waits on the card, and is made once it is sorted. Its Send says why it waits, and Later keeps
- *   it in Call logs. While the card waits on its company, the words said fill its company search
+ *   is kept, and made once it is sorted, even after the card has gone (`held.ts`). Its Send says
+ *   why it waits, and Later keeps it in Call logs. While the card waits on its company, the words said fill its company search
  *   (`choose.ts`), and "the first one" picks from what the search found.
  * - **Later, not Cancel, on a call** (PLAN-V23 T4-2): Later, or Esc, keeps the call in Call logs'
  *   To confirm, to send with the others ("Kept in Call logs, to send with the others.").
@@ -156,6 +156,7 @@ import { pickByVoice } from './choose'
 import type { CompanyVoice } from './company'
 import { useCompanyFind } from './find'
 import { keepCardDraft } from './drafts'
+import { heldPatchOf, keepUntilSorted } from './held'
 import { inTextBox, typingKey } from './keys'
 import { startHold } from './hold'
 import { CallLayout, EmailLayout, PreReadLayout, TaskLayout, type EditCall } from './layouts'
@@ -287,23 +288,6 @@ function refusal(error: unknown): string | null {
   const problem = toApiProblem(error)
   if (problem.status < 400 || problem.status >= 500 || problem.status === 429) return null
   return [problem.title, problem.detail].filter(Boolean).join('. ')
-}
-
-/**
- * The changes said to a call before it was sorted (PLAN-V24 T3-2), as one PATCH of the sorted
- * note, in the order said: a later change to the same part wins. Null when none can be made.
- */
-function heldPatchOf(
-  note: CallNoteOut,
-  changes: readonly AssistantChange[],
-  outcomes: readonly string[],
-): CallNotePatch | null {
-  let patch: CallNotePatch | null = null
-  for (const change of changes) {
-    const one = callPatchOf(note, change, outcomes)
-    if (one) patch = { ...(patch ?? {}), ...one }
-  }
-  return patch
 }
 
 // --- A pre-read whose meeting the command couldn't pin down --------------------------------------
@@ -628,7 +612,7 @@ function DraftCard({
   // Before its company is set a call takes only its outcome, and while it sorts it takes nothing.
   // The card keeps the rest, in the order said, and makes them once the call is sorted.
   const [held, setHeld] = useState<readonly AssistantChange[]>([])
-  /** How many of the changes kept have gone to the server. */
+  /** How many of the changes kept have gone to the server, or on to `held.ts`. */
   const heldSent = useRef(0)
   const sortedNow = note.data?.status === 'to_confirm'
   const sendHeld = useEffectEvent(() => {
@@ -642,6 +626,30 @@ function DraftCard({
   useEffect(() => {
     if (sortedNow && held.length > 0) sendHeld()
   }, [sortedNow, held])
+  // The card can go before the call is sorted: the next card replaces it, or the page moves on
+  // (PLAN-V24 review). What it kept and hadn't sent goes on outside it (`held.ts`), to be made once
+  // the call is sorted. A page closed or reloaded first still loses it (TBC).
+  const handOverHeld = useEffectEvent(() => {
+    const fresh = held.slice(heldSent.current)
+    heldSent.current = held.length
+    if (fresh.length === 0) return
+    const id = note.data?.id ?? noteId
+    const call = id ?? saving.current
+    if (call === null) return
+    keepUntilSorted({
+      client,
+      note: call,
+      changes: fresh,
+      outcomes: options.data?.outcomes ?? [],
+      sortMs: t.sort,
+    })
+  })
+  useEffect(
+    () => () => {
+      handOverHeld()
+    },
+    [],
+  )
 
   // --- The guard, the listening, and letting go ---------------------------------------------------
   useEffect(() => {

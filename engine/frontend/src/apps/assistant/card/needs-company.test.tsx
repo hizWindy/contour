@@ -60,7 +60,7 @@ const NOT_THERE = "North Wind isn't in HubSpot. Add it, or pick another company.
 const KEPT = 'Kept in Call logs, under Needs a company.'
 const WAITS = '1 call needs a company first. It stays in Call logs.'
 const STILL_NO = "Still no 'Southwind'. Say it again, or pick it later in Call logs."
-const CHANGE_WAITS = 'That change waits until the call is sorted.'
+const CHANGE_WAITS = 'That change will be made once the call is sorted.'
 const DRAFTS = 'assistant.card-drafts'
 const NOTE_TEXT = 'Spoke to Jo, the lease ends June 2027. Follow up Friday.'
 const HOLD = 5000
@@ -104,9 +104,13 @@ function problem(status: number, code: string, title: string, detail: string): R
 /**
  * The call on a fake server, as T3-1's contract has it. Saved with only the name as heard it is
  * `needs_company`, unsorted, and takes only its outcome (409 `company_first`). Its company is
- * taken once (409 `company_set` after); then it sorts, and the next read finds it sorted.
+ * taken once (409 `company_set` after); then it sorts, and the next read finds it sorted, once
+ * `sorts()` says the sorter is done.
  */
-function callServer(refusePick: (companyKey: string) => Response | undefined = () => undefined): {
+function callServer(
+  refusePick: (companyKey: string) => Response | undefined = () => undefined,
+  sorts: () => boolean = () => true,
+): {
   answers: Record<string, unknown>
   saved: () => CallNoteOut | null
 } {
@@ -183,7 +187,7 @@ function callServer(refusePick: (companyKey: string) => Response | undefined = (
       return Response.json(saved)
     }
     // A read: a call that was sorting is sorted by now, as the sorter would leave it.
-    if (saved.status === 'sorting') {
+    if (saved.status === 'sorting' && sorts()) {
       saved = {
         ...saved,
         status: 'to_confirm',
@@ -787,6 +791,76 @@ describe('the company said again (choice 19)', () => {
           'Log a call with Northwind Pty Ltd. Follow-up task on Mon 30 Nov 2099.',
         )
       })
+    },
+    LONG_TEST,
+  )
+
+  it(
+    'a change said while the call sorts is still made once it is sorted, after the next card took its card’s place (PLAN-V24 review)',
+    async () => {
+      vi.useFakeTimers(CLOCK)
+      let sorted = false
+      const server = callServer(undefined, () => sorted)
+      const followUp = 'make the follow-up Monday'
+      const nextCommand = 'Add a task to send Sample the quote'
+      const { mic, of } = page(
+        {
+          [CALL_WORDS]: northWind(),
+          [followUp]: command({
+            action: 'change',
+            read_back: 'Make the follow-up Monday.',
+            change: { box: 'follow-up', value: 'Monday', day: '2099-11-30' },
+          }),
+          [nextCommand]: taskCommand(),
+        },
+        server.answers,
+      )
+      const found = await callCard(mic)
+      const patches = () => of(notePath(), 'PATCH').map((call) => call.body)
+      await say(mic, 'Northwind')
+      await wait(300)
+      await within(found).findByRole('group', { name: 'Which company?' })
+      await say(mic, 'the first one')
+      await waitFor(() => {
+        expect(patches()).toEqual([{ company_key: NORTHWIND.key }])
+      })
+      // Said while the call sorts: kept, and said once, as it is kept.
+      await say(mic, followUp)
+      await waitFor(() => {
+        expect(line(found)).toHaveTextContent(CHANGE_WAITS)
+      })
+      // Later, then the next command: its card takes the call card's place.
+      await say(mic, 'later')
+      expect(
+        await screen.findByText('Kept in Call logs, to send with the others.'),
+      ).toBeInTheDocument()
+      await say(mic, nextCommand)
+      expect(
+        await screen.findByRole('dialog', {
+          name: 'Add a task for you: send Sample Logistics the quote, due Fri 27 Nov.',
+        }),
+      ).toBeInTheDocument()
+      expect(found).not.toBeInTheDocument()
+      expect(patches()).toEqual([{ company_key: NORTHWIND.key }])
+      // The sorter is done: the change kept goes now, on the follow-up the sort made, once.
+      sorted = true
+      await waitFor(() => {
+        expect(patches()).toEqual([
+          { company_key: NORTHWIND.key },
+          {
+            tasks: [
+              {
+                id: FOLLOW_UP.id,
+                subject: FOLLOW_UP.subject,
+                due: '2099-11-30',
+                due_words: 'Monday',
+                kind: 'call',
+              },
+            ],
+          },
+        ])
+      }, SORTED)
+      expect(server.saved()?.tasks.map((task) => task.due)).toEqual(['2099-11-30'])
     },
     LONG_TEST,
   )

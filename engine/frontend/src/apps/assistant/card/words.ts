@@ -174,8 +174,11 @@ export function stillNoWords(words: string, inCallLogs: boolean): string {
 /** Later on a call that still needs its company, under Call logs' group of that name (TBC). */
 export const KEPT_NEEDS_COMPANY = `Kept in Call logs, under ${NEEDS_COMPANY_TITLE}.`
 
-/** A change said to a call that isn't sorted yet: the card makes it once it is (TBC). */
-export const CHANGE_WAITS = 'That change waits until the call is sorted.'
+/**
+ * A change said to a call that isn't sorted yet: it is made once the call is, even if the card has
+ * closed by then (`held.ts`). Said once, as the change is kept (TBC).
+ */
+export const CHANGE_WAITS = 'That change will be made once the call is sorted.'
 
 // --- Sending (T3-4) ---------------------------------------------------------------------------------
 
