@@ -24,7 +24,13 @@ FROM ${NODE_IMAGE} AS build
 WORKDIR /app/frontend
 
 # The packages first, exactly as package-lock.json says, so a change to the code doesn't fetch them.
-COPY frontend/package.json frontend/package-lock.json ./
+# .npmrc comes with them, before `npm ci`, for its `ignore-scripts=true`: no package's install
+# script runs, as on the laptop and on App Platform. Without it, onnxruntime-node's (a Node-only
+# part of the speech model's library, PLAN-V24 T4-1) downloads CUDA files from NuGet on Linux x64,
+# at no fixed version. The build uses none of them: onnxruntime-node ships its CPU files in the
+# package, and the website never loads it. .npmrc's `engine-strict=true` comes too: every package
+# the lock installs on Linux takes this Node 22.
+COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
 RUN npm ci
 
 # Then the code. `npm run build` checks the types and then builds into dist/.
