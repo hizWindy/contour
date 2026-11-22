@@ -8,6 +8,7 @@ import AdminDataTab from './data'
 const TABLES = [
   {
     table: 'companies.call_notes',
+    editable: false,
     label: 'Call notes',
     group: 'Companies',
     newest: 'called_at',
@@ -22,6 +23,7 @@ const TABLES = [
   },
   {
     table: 'core.hubspot_contacts',
+    editable: false,
     label: 'Contacts',
     group: 'HubSpot',
     newest: 'imported_at',
@@ -32,6 +34,7 @@ const TABLES = [
   },
   {
     table: 'core.settings',
+    editable: false,
     label: 'Settings',
     group: 'Set-up',
     newest: 'updated_at',

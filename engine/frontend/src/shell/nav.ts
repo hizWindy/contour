@@ -257,7 +257,7 @@ export const ADMIN_TABS: readonly NavItem[] = [
     purpose: 'Who can sign in, and which projects each may use.',
   },
   {
-    // PLAN-V26 T4-1: a look at each table, for the Platform admin.
+    // PLAN-V26 T4-1 and T4-3: a look at each table, a few edits, for the Platform admin.
     to: '/admin/data',
     label: 'Data',
     icon: Table2,

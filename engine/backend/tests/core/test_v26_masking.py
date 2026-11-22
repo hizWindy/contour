@@ -3,6 +3,7 @@
 Every name, address and number here is made up.
 """
 
+import time
 import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -11,7 +12,7 @@ import pytest
 
 from core.api.app import create_app
 from core.data import service
-from core.data.masking import CELL_MAX, cell, hide_contacts
+from core.data.masking import CELL_MAX, DOTS, cell, hide_contacts, is_plain
 from core.db.base import Base
 
 NEVER = ("password_hash", "token_hash", "idempotency_key", "request_id", "embedding", "record_key")
@@ -44,7 +45,9 @@ def test_emails_and_phone_numbers_are_hidden(value: str, shown: str) -> None:
         "A lease to 31/03/2028",
         "Signed 2026-11-04 at noon",
         "About 12,500,000 a year and 850 sqm",
-        "https://app.hubspot.com/contacts/1234/company/28123456789",
+        "203.0.113.9",
+        "Signed 2026-11-04T01:00:00.123456+00:00",
+        "Meet @ Level 5.30pm",
         "lead:0a41f2c4-1c22-4e0a-9b1b-123456789012",
         "04123456-1234-4123-8123-123456789012",
         "Suite 4, 120 Collins Street, 2026 to 2027",
@@ -52,6 +55,54 @@ def test_emails_and_phone_numbers_are_hidden(value: str, shown: str) -> None:
 )
 def test_dates_ids_money_and_addresses_stay(value: str) -> None:
     assert hide_contacts(value) == value
+
+
+@pytest.mark.parametrize(
+    "written",
+    [
+        "Mobile0412345678",
+        "0412345678x12",
+        "412 345 678",
+        "0412&nbsp;345&nbsp;678",
+        "0412\u2013345\u2013678",
+        "0412,345,678",
+        "412,345,678",
+        "9000.1234",
+        "13 22 33",
+        "(03) 9000 1234",
+        "+61 3 9000 1234",
+        "jo%40northwind.com.au",
+        "jo&#64;northwind.com.au",
+        "jo @ northwind.com.au",
+        "jo[at]northwind.com.au",
+        "jo at northwind dot com dot au",
+        "jo.o&sample@northwind.com.au",
+        "https://zoom.us/j/88123456789",
+        "https://zoom.us/j/1?pwd=madeUpPass1",
+    ],
+)
+def test_the_ways_a_detail_gets_written_are_all_hidden(written: str) -> None:
+    shown = hide_contacts(f"Contact {written} today")
+    assert written not in shown
+    assert DOTS in shown
+    for piece in ("345", "jo.o", "jo@", "madeUpPass1", "88123456789"):
+        if piece in written:
+            assert piece not in shown, shown
+
+
+def test_a_column_of_ids_keeps_its_numbers() -> None:
+    assert is_plain("hubspot_company_id")
+    assert cell("28123456789", plain=True) == "28123456789"
+    assert cell("28123456789") == "••• 789"
+    assert cell({"company_id": "28123456789"}) == '{"company_id": "28123456789"}'
+    assert "jo@" not in (cell("jo@northwind.com.au", plain=True) or "")
+
+
+def test_a_long_run_with_no_address_in_it_is_quick() -> None:
+    started = time.perf_counter()
+    hide_contacts("a" * 100_000)
+    hide_contacts("1 " * 50_000)
+    assert time.perf_counter() - started < 3
 
 
 def test_a_marked_column_is_hidden_whatever_it_holds() -> None:

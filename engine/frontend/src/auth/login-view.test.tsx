@@ -227,3 +227,14 @@ describe('motion', () => {
     }
   })
 })
+
+describe('the sign-in records line (PLAN-V26 T3-4)', () => {
+  it('says how long records are kept, once Levi said yes', () => {
+    renderWithProviders(
+      <LoginView status={{ kind: 'ready' }} onSubmit={() => undefined} recordsDays={90} />,
+    )
+    expect(
+      screen.getByText('Contour keeps a record of sign-ins and devices for 90 days.'),
+    ).toBeInTheDocument()
+  })
+})

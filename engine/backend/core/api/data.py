@@ -1,4 +1,5 @@
-"""Admin's Data tab (PLAN-V26 T4-1): every listed table, read only, 50 rows to a page.
+"""Admin's Data tab (PLAN-V26 T4-1): every listed table, 50 rows to a page. These routes only
+read. The edit screens' routes are in data_edits.py (T4-3).
 
 No route here exports or downloads. Every route needs `PlatformAdminDep` (403
 `platform_admin_only` for anyone else).
@@ -13,7 +14,7 @@ from core.api.deps import SessionDep
 from core.api.errors import Problem
 from core.api.models import OFFSET_MAX, OutModel, SafeText
 from core.api.signin import PlatformAdminDep
-from core.data import service
+from core.data import edits, service
 
 router = APIRouter(prefix="/data/tables", tags=["data"])
 
@@ -33,6 +34,7 @@ class DataTableOut(OutModel):
     note: str | None = Field(description="Like 'Change it in HubSpot, then press Sync.'")
     screen: str | None = Field(description="The address of the table's own screen, if it has one")
     screen_label: str | None
+    editable: bool = Field(description="Some fields can change, or a row can be deleted")
 
 
 class DataRowOut(OutModel):
@@ -49,6 +51,7 @@ class DataRowsOut(OutModel):
 
 @router.get("", response_model=list[DataTableOut], summary="The tables the Data tab shows")
 async def data_tables(request: Request, admin: PlatformAdminDep) -> list[DataTableOut]:
+    can_edit = edits.editables(request.app.state.apps)
     return [
         DataTableOut(
             table=table.table,
@@ -64,6 +67,7 @@ async def data_tables(request: Request, admin: PlatformAdminDep) -> list[DataTab
             note=table.note,
             screen=table.screen,
             screen_label=table.screen_label,
+            editable=table.table in can_edit,
         )
         for table in service.listed(request.app.state.apps)
     ]

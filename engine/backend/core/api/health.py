@@ -22,7 +22,8 @@ from sqlalchemy.exc import DBAPIError
 from core.api.deps import SessionDep
 from core.api.errors import Problem
 from core.api.models import OutModel
-from core.api.signin import NowDep, PlatformAdminDep
+from core.api.signin import AuthSettingsDep, NowDep, PlatformAdminDep
+from core.auth.records import keep_days
 from core.config import get_settings
 from core.db.engine import get_sessionmaker
 from core.health.checks import Context, Probes, ScheduleState, all_checks
@@ -53,6 +54,11 @@ class HealthOut(BaseModel):
     database: Literal["ok"]
     pgvector: str
     apps: list[str]
+    sign_in_records_days: int | None = Field(
+        None,
+        description="For the sign-in page's line: how long sign-in records are kept. "
+        "null until Levi's OK (PLAN-V26 choice 15)",
+    )
 
 
 @router.get(
@@ -61,7 +67,7 @@ class HealthOut(BaseModel):
     response_model=HealthOut,
     responses={503: {"description": "The database or pgvector isn't ready"}},
 )
-async def health(request: Request, session: SessionDep) -> HealthOut:
+async def health(request: Request, session: SessionDep, auth: AuthSettingsDep) -> HealthOut:
     try:
         version = await session.scalar(
             text("SELECT extversion FROM pg_extension WHERE extname = 'vector'")
@@ -79,6 +85,7 @@ async def health(request: Request, session: SessionDep) -> HealthOut:
         database="ok",
         pgvector=str(version),
         apps=[spec.name for spec in request.app.state.apps],
+        sign_in_records_days=keep_days(auth),
     )
 
 

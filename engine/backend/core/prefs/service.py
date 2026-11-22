@@ -64,6 +64,7 @@ ENV_ONLY_KEYS: tuple[str, ...] = (
     "property_daily_to_claude_ok",
     "arealytics_to_claude_ok",
     "browser_speech_ok",  # PLAN-V18 M1
+    "sign_in_records_ok",  # PLAN-V26 T3-4
     "hard_run_cap_usd",
     "hard_scheduled_run_cap_usd",
     "hard_daily_cap_usd",
@@ -341,6 +342,11 @@ TEXT: dict[str, tuple[str, str]] = {
         "HubSpot names may go to Claude",
         "The data approval from Levi. While it is off, no HubSpot company name is sent to "
         "Claude. " + ENV_ONLY_NOTE,
+    ),
+    "sign_in_records_ok": (
+        "Old sign-in records are deleted",
+        "Deletes sign-in records after the keep time (90 days, TBC) and says so on the sign-in "
+        "page. Off until Levi says yes. " + ENV_ONLY_NOTE,
     ),
     "browser_speech_ok": (
         "The mic may use the browser's speech service",

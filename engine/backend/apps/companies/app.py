@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from apps.companies.activity import ACTIVITY, SPEND_KINDS
 from apps.companies.api import router
 from apps.companies.data_tables import DATA_TABLES
+from apps.companies.editables import EDITABLES
 from apps.companies.jobs import JOBS
 from apps.companies.meeting_form import MeetingFormRunner
 from apps.companies.note_batch import NoteSender
@@ -106,6 +107,7 @@ APP = AppSpec(
     hubspot_needs=HUBSPOT_NEEDS,
     activity=ACTIVITY,  # a person's Activity page in Admin (PLAN-V26 Part 3)
     spend_kinds=SPEND_KINDS,
+    editables=EDITABLES,  # calls not yet sent (PLAN-V26 T4-3)
     data_tables=DATA_TABLES,  # Admin's Data tab (PLAN-V26 Part 4)
     jobs=JOBS,  # the morning search ahead (PLAN-V10 D5)
     on_shutdown=stop_background,  # running preps and sorts stop and log their spend

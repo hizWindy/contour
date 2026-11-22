@@ -15,6 +15,7 @@
 import { useState } from 'react'
 import { Navigate, useLocation, useSearchParams } from 'react-router'
 import { useLogin, useMe } from '@/api/hooks'
+import { useSignInRecords } from '@/api/hooks/sign-in-records'
 import {
   noticeOf,
   rememberedLogin,
@@ -40,6 +41,7 @@ export default function LoginPage() {
   const location = useLocation()
   const me = useMe()
   const login = useLogin()
+  const records = useSignInRecords()
   const [status, setStatus] = useState<LoginStatus>({ kind: 'ready' })
   const [remembered] = useState(rememberedLogin)
   const next = safeNext(params.get('next'))
@@ -83,6 +85,7 @@ export default function LoginPage() {
       notice={notice}
       noticeText={noticeText}
       rememberedIdentifier={remembered}
+      recordsDays={records}
     />
   )
 }

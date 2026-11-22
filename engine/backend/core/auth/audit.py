@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import CursorResult, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.auth import clean
@@ -100,12 +100,31 @@ async def failures_from(db: AsyncSession, ip: str | None, since: datetime) -> li
     return list(rows)
 
 
+async def delete_before(db: AsyncSession, before: datetime) -> int:
+    """Deletes the log's entries from before that time, and nothing else (PLAN-V26 choice 14).
+    Returns how many went. The caller commits."""
+    gone: CursorResult[Any] = await db.execute(  # type: ignore[assignment]
+        delete(AuditEntry).where(AuditEntry.created_at < before)
+    )
+    return int(gone.rowcount or 0)
+
+
 async def count(db: AsyncSession) -> int:
     return int(await db.scalar(select(func.count()).select_from(AuditEntry)) or 0)
 
 
-async def is_first_sign_in(db: AsyncSession, user_id: uuid.UUID) -> bool:
-    """True when the account has signed in once and hasn't changed its own password yet."""
+async def is_first_sign_in(
+    db: AsyncSession, user_id: uuid.UUID, *, kept_since: datetime | None = None
+) -> bool:
+    """True when the account has signed in once and hasn't changed its own password yet.
+
+    `kept_since` is where the log begins, when old records are deleted (PLAN-V26 choice 14). An
+    account older than that is never on its first sign-in: the log can't show the earlier ones.
+    """
+    if kept_since is not None:
+        made = await db.scalar(select(User.created_at).where(User.id == user_id))
+        if made is None or made < kept_since:
+            return False
     sign_ins = int(
         await db.scalar(
             select(func.count())

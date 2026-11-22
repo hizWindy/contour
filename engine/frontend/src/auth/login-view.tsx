@@ -75,6 +75,8 @@ export interface LoginViewProps {
   noticeText?: string | null
   /** The email or username used last time on this device, filled in for them. */
   rememberedIdentifier?: string
+  /** How long sign-in records are kept, once Levi said yes (PLAN-V26 choice 15). */
+  recordsDays?: number | null
 }
 
 /**
@@ -159,6 +161,7 @@ function LoginLayout({
   notice = null,
   noticeText = null,
   rememberedIdentifier = '',
+  recordsDays = null,
 }: LoginViewProps) {
   const laptop = useMediaQuery(LAPTOP)
   const still = useMediaQuery(REDUCED_MOTION)
@@ -416,7 +419,9 @@ function LoginLayout({
           </section>
           <p className="flex items-center gap-2 text-caption text-muted-foreground">
             <ShieldCheck aria-hidden="true" className="size-4 shrink-0" />
-            Private system. Sign-ins are logged.
+            {recordsDays === null
+              ? 'Private system. Sign-ins are logged.'
+              : `Contour keeps a record of sign-ins and devices for ${String(recordsDays)} days.`}
           </p>
         </m.div>
       </main>

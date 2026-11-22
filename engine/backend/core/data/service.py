@@ -9,12 +9,12 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final, Literal
 
-from sqlalchemy import Table, Text, cast, func, or_, select
+from sqlalchemy import ColumnElement, String, Table, Text, and_, case, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.apps import AppSpec
 from core.data.core_tables import CORE_TABLES
-from core.data.masking import cell
+from core.data.masking import RISKY, cell, is_plain
 from core.data.spec import DataColumn, DataTable
 from core.db import models as _core_tables  # noqa: F401  (so every core table is in the metadata)
 from core.db.base import Base
@@ -51,6 +51,29 @@ def sortable(table: DataTable, column: DataColumn) -> bool:
     return type(db_table(table).c[column.key].type).__name__ not in UNSORTABLE
 
 
+def _could_hide(table: Table, key: str) -> bool:
+    return not is_plain(key) and isinstance(table.c[key].type, String)
+
+
+def guarded(table: Table, key: str) -> ColumnElement[Any]:
+    """A column as sort may read it: empty where the value could hold something hidden (`RISKY`),
+    so the order can't be used to guess it."""
+    column = table.c[key]
+    if not _could_hide(table, key):
+        return column
+    return case((column.regexp_match(RISKY, flags="i"), None), else_=column)
+
+
+def matches(table: Table, key: str, term: str) -> ColumnElement[bool]:
+    """Search in one column. A value that could hold something hidden never matches. The plain
+    match comes first, so the slow pattern only reads the values that matched."""
+    column = table.c[key]
+    found = cast(column, Text).icontains(term, autoescape=True)
+    if not _could_hide(table, key):
+        return found
+    return and_(found, ~column.regexp_match(RISKY, flags="i"))
+
+
 async def read_rows(
     db: AsyncSession,
     table: DataTable,
@@ -66,12 +89,11 @@ async def read_rows(
     where: list[Any] = []
     if q and q.strip():
         term = q.strip()
-        looked = [cast(db_rows.c[key], Text) for key in table.search]
-        where.append(or_(*(text.icontains(term, autoescape=True) for text in looked)))
+        where.append(or_(*(matches(db_rows, key, term) for key in table.search)))
     total = await db.scalar(select(func.count()).select_from(db_rows).where(*where))
 
     keys = [column.name for column in db_rows.primary_key.columns]
-    by = db_rows.c[sort or table.newest]
+    by = guarded(db_rows, sort or table.newest)
     ordered = by.asc() if sort and order == "asc" else by.desc()
     shown = [
         db_rows.c[column.key].label(f"v_{index}") for index, column in enumerate(table.columns)
@@ -100,7 +122,7 @@ def _hidden_rows(
         DataRow(
             id=":".join(str(row[f"pk_{index}"]) for index in range(len(keys))),
             values={
-                column.key: cell(row[f"v_{index}"], column.mask)
+                column.key: cell(row[f"v_{index}"], column.mask, plain=is_plain(column.key))
                 for index, column in enumerate(table.columns)
             },
         )

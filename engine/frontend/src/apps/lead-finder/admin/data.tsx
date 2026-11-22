@@ -1,16 +1,18 @@
 /**
- * Admin, Data (PLAN-V26 T4-1, choices 16, 17 and 19): a read-only look at every table. Pick a
- * table, search its names, sort by a column. 50 rows to a page, and no export or download.
+ * Admin, Data (PLAN-V26 T4-1, choices 16, 17 and 19): a look at every table. Pick a table,
+ * search its names, sort by a column. 50 rows to a page, and no export or download. A few
+ * tables have an edit screen (T4-3, `data-edit.tsx`).
  *
  * The backend picks the columns and hides contact details, so nothing secret reaches this page.
  */
-import { ArrowDown, ArrowUp } from 'lucide-react'
+import { ArrowDown, ArrowUp, Pencil } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useDataRows, useDataTables, type DataTableInfo } from '@/api/hooks/data'
 import { ErrorState } from '@/components/error-state'
 import { Pager } from '@/components/pager'
 import { PendingCards } from '@/components/skeletons'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -31,6 +33,7 @@ import {
 } from '@/components/ui/table'
 import { useDebounced } from '@/hooks/useDebounced'
 import { formatDate, formatDateTime } from '@/lib/format'
+import { EditRowSheet, TableEdits } from './data-edit'
 
 const PAGE_SIZE = 50
 const MOMENT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/
@@ -48,6 +51,7 @@ function Rows({ table }: { table: DataTableInfo }) {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<{ key: string; order: 'asc' | 'desc' } | null>(null)
   const [page, setPage] = useState(0)
+  const [editing, setEditing] = useState<string | null>(null)
   const q = useDebounced(search.trim())
   const rows = useDataRows(table.table, {
     ...(q ? { q } : {}),
@@ -129,6 +133,11 @@ function Rows({ table }: { table: DataTableInfo }) {
                     </TableHead>
                   )
                 })}
+                {table.editable ? (
+                  <TableHead>
+                    <span className="sr-only">Edit</span>
+                  </TableHead>
+                ) : null}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -142,6 +151,21 @@ function Rows({ table }: { table: DataTableInfo }) {
                       </TableCell>
                     )
                   })}
+                  {table.editable ? (
+                    <TableCell className="text-right">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setEditing(row.id)
+                        }}
+                      >
+                        <Pencil aria-hidden="true" />
+                        Edit
+                      </Button>
+                    </TableCell>
+                  ) : null}
                 </TableRow>
               ))}
             </TableBody>
@@ -152,6 +176,19 @@ function Rows({ table }: { table: DataTableInfo }) {
           />
         </>
       )}
+      {table.editable ? (
+        <>
+          <TableEdits table={table.table} />
+          <EditRowSheet
+            table={table.table}
+            label={table.label}
+            rowId={editing}
+            onClose={() => {
+              setEditing(null)
+            }}
+          />
+        </>
+      ) : null}
     </div>
   )
 }

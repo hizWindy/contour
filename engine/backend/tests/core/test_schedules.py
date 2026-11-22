@@ -205,6 +205,7 @@ async def test_the_two_defaults_are_made_once(session_factory: Factory) -> None:
         made = await service.ensure_defaults(db, defaults(), NOW)
     assert sorted(made) == [  # x.none has no default
         "core.hubspot_sync",
+        "core.sign_in_records",  # PLAN-V26 T3-4
         "lead_finder.discovery",
         "sources.property_daily.feed",
         "sources.property_daily.lease_endings",

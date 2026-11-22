@@ -136,6 +136,11 @@ ROUTES = [
     ("PUT", f"{API}/people/{{user_id}}/hubspot-owner"),  # who a person is in HubSpot (PLAN-V17)
     ("GET", f"{API}/data/tables"),  # PLAN-V26 T4-1
     ("GET", f"{API}/data/tables/{{table}}"),
+    ("GET", f"{API}/data/tables/{{table}}/rows/{{row_id}}"),  # PLAN-V26 T4-3
+    ("PATCH", f"{API}/data/tables/{{table}}/rows/{{row_id}}"),
+    ("DELETE", f"{API}/data/tables/{{table}}/rows/{{row_id}}"),
+    ("GET", f"{API}/data/edits"),
+    ("POST", f"{API}/data/edits/{{edit_id}}/undo"),
     ("POST", f"{API}/runs"),
     ("POST", f"{API}/runs/estimate"),
     ("GET", f"{API}/runs"),

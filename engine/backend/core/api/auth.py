@@ -29,7 +29,7 @@ from core.api.signin import (
     UnknownLoginsDep,
     client_ip,
 )
-from core.auth import audit, clean, cookies, service, sessions, users, words
+from core.auth import audit, clean, cookies, records, service, sessions, users, words
 from core.auth.features import Role as Role
 from core.auth.features import apps_from_features, effective_features
 from core.auth.models import AuditEntry, User, UserSession
@@ -454,13 +454,14 @@ async def change_own_password(
 
 
 @router.get("/me", response_model=MeOut, summary="Who is signed in")
-async def me(db: SessionDep, auth: MaybeAuthDep, settings: AuthSettingsDep) -> MeOut:
+async def me(db: SessionDep, auth: MaybeAuthDep, settings: AuthSettingsDep, now: NowDep) -> MeOut:
     """The signed-in user and this session. The website asks first, to know whether to show the
     sign-in page. With sign-in off on this backend, `auth_required` is false and `user` is null."""
     if auth is None:
         return MeOut(auth_required=settings.auth_required, user=None, session=None)
     admin_name = await users.platform_admin_name(db)
-    first = await audit.is_first_sign_in(db, auth.user.id)
+    kept_since = records.kept_since(settings, now)
+    first = await audit.is_first_sign_in(db, auth.user.id, kept_since=kept_since)
     return MeOut(
         auth_required=settings.auth_required,
         user=user_out(auth.user),

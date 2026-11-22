@@ -12,7 +12,7 @@ import pytest
 from apps.companies.tables import CallNote
 from core.auth.models import User
 from core.data import edits
-from core.data.edits import Editable, EditRefused
+from core.data.edits import Editable, EditRefused, Field
 from core.data.models import AdminEdit
 from core.hubspot.models import HubSpotContact
 from tests.core.auth_world import World, all_rows, make_account, make_platform_admin, sign_in
@@ -23,7 +23,7 @@ TABLES = "/api/v1/data/tables"
 NOW = datetime(2026, 11, 4, 1, 0, tzinfo=UTC)
 NOTES = Editable(
     "companies.call_notes",
-    ("company_name", "person_name", "text"),
+    (Field("company_name", "Company"), Field("person_name", "Person"), Field("text", "Note")),
     deletable=True,
     blocked=lambda row: "It's in HubSpot already." if row["status"] == "logged" else None,
 )
@@ -123,6 +123,18 @@ async def test_search_looks_in_names_and_never_in_a_contact_detail(team: Team) -
     assert [row["values"]["company_name"] for row in found["items"]] == ["Sample Logistics"]
     assert (await team.admin.get(path, params={"q": "0412"})).json()["total"] == 0
     assert (await team.admin.get(path, params={"q": "%"})).json()["total"] == 0  # not a wildcard
+
+
+async def test_search_and_sort_cant_guess_a_detail_in_a_name_column(team: Team) -> None:
+    await a_note(team.world, company_name="Northwind 0412 345 678")
+    await a_note(team.world, company_name="Aardvark", company_key="102")
+    await a_note(team.world, company_name="Zebra jo@northwind.com.au", company_key="103")
+    path = f"{TABLES}/companies.call_notes"
+    for guess in ("0412", "345", "jo@", "Zebra"):
+        assert (await team.admin.get(path, params={"q": guess})).json()["total"] == 0, guess
+    for order in ("asc", "desc"):
+        rows = (await team.admin.get(path, params={"sort": "company_name", "order": order})).json()
+        assert rows["items"][0]["values"]["company_name"] == "Aardvark"  # the others sort as empty
 
 
 async def test_fifty_to_a_page_and_sorted(team: Team) -> None:

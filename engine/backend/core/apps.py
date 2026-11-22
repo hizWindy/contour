@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     # Only for the type. Importing it would load the Claude client into every migration.
     from core.activity import ActivityPart
     from core.company_leads import CompanyLeads
+    from core.data.edits import Editable
     from core.data.spec import DataTable
     from core.runs.types import RunKind
     from core.schedules.jobs import JobSpec
@@ -48,6 +49,8 @@ class AppSpec:
     spend_kinds: "Mapping[str, str]" = field(default_factory=dict)
     # Its tables in Admin's Data tab (PLAN-V26 Part 4).
     data_tables: "tuple[DataTable, ...]" = ()
+    # Which of them an admin may edit there, and by what rules (PLAN-V26 T4-3).
+    editables: "tuple[Editable, ...]" = ()
     # Its own controls for its schedules (PLAN-V13 T1-3), mounted at /schedules<route_prefix>,
     # like the Lead Finder's one control for its city schedules at /schedules/lead-finder.
     schedule_router: APIRouter | None = None

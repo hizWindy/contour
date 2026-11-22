@@ -10,6 +10,7 @@ from datetime import time
 from decimal import Decimal
 from typing import Any, cast
 
+from core.auth.records import SIGN_IN_RECORDS_JOB
 from core.hubspot.sync import ModeChoice, SyncAlreadyRunning
 from core.schedules.calc import Cadence
 from core.schedules.jobs import (
@@ -100,5 +101,6 @@ CORE_JOBS = (
             settings={"mode": "auto"},
         ),
     ),
+    SIGN_IN_RECORDS_JOB,  # deletes nothing until Levi's OK (PLAN-V26 T3-4)
     *SOURCE_JOBS,  # Property Daily's feed and lease endings (PLAN-V16 T2-7), both off
 )

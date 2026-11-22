@@ -341,6 +341,10 @@ class Settings(BaseSettings):
     # model on the device), whether it is in .env or saved on the Settings page, and the Settings
     # page refuses to save it. Same exact-text rule.
     browser_speech_ok: StrictBool = False
+    # Sign-in records (PLAN-V26 choices 14 and 15): Levi's OK (S3, TBC). Until it is on, nothing
+    # is deleted and the sign-in page has no line about it. Same exact-text rule.
+    sign_in_records_ok: StrictBool = False
+    sign_in_keep_days: int = Field(90, ge=30, le=3650)  # TBC with Levi
     # A ceiling can't sit below the lowest value its editable settings allow (a test checks this
     # against CEILINGS), or a valid setting would be clamped to something its own minimum refuses.
     hard_run_cap_usd: Decimal = Field(Decimal("50"), ge=Decimal("1"), le=1000)
@@ -561,6 +565,7 @@ class Settings(BaseSettings):
         "hubspot_names_to_claude_ok",
         "hubspot_names_to_signalhire_ok",
         "browser_speech_ok",
+        "sign_in_records_ok",
         "hubspot_write_enabled",
         "auth_required",
         "session_cookie_secure",
