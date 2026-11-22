@@ -7,7 +7,7 @@ This plan stops Claude requests from blocking each other: a call prep never wait
 - **Status:** drafted on 22 Nov 2026 from Al-khair's chat of 21 and 22 Nov. Being built since 22 Nov on `plan-v26`, on his "implement v26" (A1). Not merged, pushed or deployed.
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
 - **Last updated:** 22 Nov 2026.
-- **Progress:** S1 under way.
+- **Progress:** S1 and Part 1 done (23 Nov). Part 2 next.
 - **Sources:**
   - Al-khair's chat on 21 and 22 Nov 2026 (his 13 asks, then his answers);
   - the code on `master` (`ff0f658`). The files this plan changes are the same as on `b84c3cf`, read on 21 Nov;
@@ -169,7 +169,7 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
   - Never touch: the main folder, `contour-v25`, `plan-v25`, `leadfinder_v25`, or the copy under `.local/share/kilo/`, which belongs to another tool.
   - Branches stay. Old databases (`leadfinder_v10` to `leadfinder_v24`, and their test databases) are listed with their sizes, and dropped only on his word (A5).
   - **Done when:** the Log has the list, what was removed and the space freed; `git worktree list` shows only the kept copies; and `contour-v25`'s commit and status are the same before and after.
-- [ ] **S1. The branch and the copy** (after `merge v25`).
+- [x] **S1. The branch and the copy** (after `merge v25`). Done 22 Nov (`3dd3b77`), from `master` on Al-khair's word. The plan list line waits for his answer (see the Log).
   - Make `plan-v26` from `master` in `../contour-v26`. Its first commit holds this plan.
   - Add the plan's line to the plan list wherever it is then. If Al-khair's move of the list from `CLAUDE.md` to `AGENTS.md` is still uncommitted, ask first.
   - Make the database `leadfinder_v26`, and check the newest migration.
@@ -185,11 +185,11 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
 
 ## Part 1: no more waiting
 
-- [ ] **T1-1. Three lanes.** (`core/claude/limiter.py`, `client.py`, `core/config.py`, `core/prefs/service.py`, and each caller). Choices 1, 2, 3 and 5.
+- [x] **T1-1. Three lanes.** Done 23 Nov (`723aedf`). (`core/claude/limiter.py`, `client.py`, `core/config.py`, `core/prefs/service.py`, and each caller). Choices 1, 2, 3 and 5.
   - **Done when:** tests pass: a run holding both Runs places doesn't delay a prep; 4 People requests run at once and the 5th waits; a search ahead prep waits in Jobs, not People; the daily limit stops every lane; and Settings shows the three sizes, each from 1 to the ceiling. The contract and the website's types are made again.
-- [ ] **T1-2. Show the wait.** (the lane tells a waiting request its place; the prep's answer gains how many are ahead; `apps/companies/script-header.tsx` and the lead card). Choice 4.
+- [x] **T1-2. Show the wait.** Done 23 Nov (`723aedf`). (the lane tells a waiting request its place; the prep's answer gains how many are ahead; `apps/companies/script-header.tsx` and the lead card). Choice 4.
   - **Done when:** tests pass: a waiting prep shows the words with the right number; the words go when it starts; a screen reader hears them once; and a request that starts at once never shows them.
-- [ ] **T1-3. Part 1 check.** Website: lint, types, tests, build, `node scripts/bundle-report.js`. Backend: ruff, mypy, the fast tests, the Companies tests and the run tests.
+- [x] **T1-3. Part 1 check.** Done 23 Nov (the numbers are in the Log). Website: lint, types, tests, build, `node scripts/bundle-report.js`. Backend: ruff, mypy, the fast tests, the Companies tests and the run tests.
   - **Done when:** all pass, and the numbers are in the Log.
 
 ## Part 2: people and passwords
@@ -289,4 +289,13 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
   - **The database** `leadfinder_v26` is a copy of the dev database (at `0024`), migrated to `0027`, the newest on `master`. `leadfinder` is unchanged.
   - **The plan list** waits. His move of the list from `CLAUDE.md` to `AGENTS.md` is still uncommitted, and S1 says to ask first.
   - **S0 isn't run:** it needs `clean copies` (A4).
+  - **S2 goes last, as M5:** its condition is still open (PLAN-V25's docs, and his uncommitted `AGENTS.md` and `CLAUDE.md`).
+  - **No helper agents:** the session builds each step itself, in the one copy, so it can stop at the usage limit he gave.
   - **A paid slip:** while looking for the usage percentage, the session ran `claude -p "/usage"`. It went to the model on the laptop's `ANTHROPIC_API_KEY` and cost about US$0.025. Nobody had approved that. The key is blanked for every command since, and usage is estimated from local token counters.
+- 23 Nov 2026, S1's baseline on `ff0f658`: 3,557 fast backend tests pass. One failed only because the shell had exported `API_PORT=8131`; alone, without it, it passes. 3,039 of 3,042 website tests passed; the 3 others timed out under load and pass when run again.
+- 23 Nov 2026, Part 1 (`723aedf`):
+  - **T1-1:** `core/work.py` says who started the work, set in three places only (the guard, the run engine, the scheduler). So no caller changed, and PLAN-V25's files are barely touched. The command line and anything nobody started are Jobs.
+  - **T1-2:** "ahead" is how many requests must end first. The lead card's Research again opens the run's page, so the words show there.
+  - **Lane sizes:** each field's own top is 4, like the other concurrency settings (a test ties it to `hard_concurrency`'s default).
+  - **T1-3's numbers:** ruff, mypy, lint, types and build pass; 3,577 fast backend tests; 717 of 719 Companies, run, schedule and settings tests; 3,048 website tests; first visit 243 kB gzip JS and 25 kB CSS. The 2 that failed under load (a speed budget and a cancel's timing, with 275 MB of memory free) pass when run again (31 tests).
+  - **Still true:** a Research again on a lead is refused while a run is going (`max_concurrent_runs` is 1). The lanes don't change that limit. For Al-khair.
