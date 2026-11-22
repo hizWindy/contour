@@ -7,7 +7,7 @@ This plan stops Claude requests from blocking each other: a call prep never wait
 - **Status:** drafted on 22 Nov 2026 from Al-khair's chat of 21 and 22 Nov. Being built since 22 Nov on `plan-v26`, on his "implement v26" (A1). Not merged, pushed or deployed.
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
 - **Last updated:** 23 Nov 2026.
-- **Progress:** S1 and Parts 1 and 2 done; Part 3 built but for T3-4 (waits for S3); Part 4 built but for T4-3 (waits for A3); Part 5 built, waits for a look (23 Nov). Open: A6 first (the shared e2e database), then A3, S3, the looks, the plan list line, S0, S2 (as M5), S4 and M1 to M4.
+- **Progress:** every step of Parts 1 to 5 is built and checked (23 Nov). T3-4 is switched off until Levi's OK. Open: A6 first (the shared e2e database), then Al-khair's looks, S3, the plan list line, S0, S2 (as M5), S4 and M1 to M4.
 - **Sources:**
   - Al-khair's chat on 21 and 22 Nov 2026 (his 13 asks, then his answers);
   - the code on `master` (`ff0f658`). The files this plan changes are the same as on `b84c3cf`, read on 21 Nov;
@@ -216,9 +216,9 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
   - **Done when:** tests pass: each tab's route pages 50 at a time, newest first; ending one session or all of them works; anyone but the Platform admin gets 403; and the contract is made again.
 - [ ] **T3-3. The Activity page.** Built 23 Nov (`95dec9c`), its tests pass. Waits for Al-khair's look. (`admin/`, a new page from the People table). Choices 11 to 13.
   - **Done when:** tests at 1440 and 390 px pass: the six tabs show their rows; Sign out asks first, then ends that browser; an empty tab says so in words; and Al-khair has looked.
-- [ ] **T3-4. The keep time and the sign-in page line.** Not built: it comes after S3, and it deletes records. (a daily job, `auth/login-page.tsx`). Choices 14 and 15, after S3.
+- [ ] **T3-4. The keep time and the sign-in page line.** Built 23 Nov (`8253e76`), its tests pass. Both are off until Levi's OK (S3): then set `SIGN_IN_RECORDS_OK=true` on the server. (a daily job, `auth/login-page.tsx`). Choices 14 and 15, after S3.
   - **Done when:** tests pass: sign-in log rows older than the keep time go, and nothing else does; and the line shows on the sign-in page.
-- [x] **T3-5. Part 3 check.** Done 23 Nov for what is built (the numbers are in the Log). Run it again after T3-4. As T1-3, plus the contract gate (`RUN_GATES=1`).
+- [x] **T3-5. Part 3 check.** Done 23 Nov for what is built (the numbers are in the Log). Run again after T3-4, 23 Nov: the Log. As T1-3, plus the contract gate (`RUN_GATES=1`).
   - **Done when:** all pass, and the numbers are in the Log.
 
 ## Part 4: the Data tab
@@ -227,9 +227,9 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
   - **Done when:** tests pass: every listed table shows, paged, searchable and sortable; no hash or key ever leaves the server; contact details are masked as S3 decided; HubSpot tables have no edit; and anyone but the Platform admin gets 403.
 - [x] **T4-2. The change record and Undo.** Done 23 Nov (`a5caf5f`): the record and the Undo logic. Their route and button come with T4-3. (`core.admin_edits`). Choice 20.
   - **Done when:** tests pass: each edit saves the old and new value, who and when; Undo puts the old value back and is recorded too; and Undo is refused if the row changed since.
-- [ ] **T4-3. Three edit screens.** Not built: it comes after A3. (Leads, Call notes not yet sent, Memory). Choice 18, after A3.
+- [ ] **T4-3. Three edit screens.** Built 23 Nov (`8253e76`) with the three recommended, its tests pass. Waits for Al-khair's look. (Leads, Call notes not yet sent, Memory). Choice 18, after A3.
   - **Done when:** tests pass: only the listed fields can change; a call note that is sending or logged can't be edited; a delete asks first; and Al-khair has looked.
-- [x] **T4-4. Part 4 check.** Done 23 Nov for what is built (the numbers are in the Log). Run it again after T4-3. As T1-3, plus the `security-check` skill.
+- [x] **T4-4. Part 4 check.** Done 23 Nov for what is built (the numbers are in the Log). Run again after T4-3, 23 Nov: the Log. As T1-3, plus the `security-check` skill.
   - **Done when:** all pass, and the numbers are in the Log.
 
 ## Part 5: the look
@@ -258,7 +258,7 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
 - **Al-khair:**
   - **A1.** Approve this plan, or change it.
   - **A2.** S4's rate limits, before M2.
-  - **A3.** Confirm the three edit screens (choice 18), or name others.
+  - **A3.** Confirm the three edit screens (choice 18), or name others. On 23 Nov he said "pleas get it done now" after the recommendation, taken as yes. Say so if not.
   - **A4.** Say `clean copies` when you want S0 done.
   - **A5.** Whether to drop the old databases S0 lists.
   - **A6.** OK the downgrade of the shared `leadfinder_e2e` to `0024` (the Log, 23 Nov). Until then the other copies' fake backends don't start.
@@ -293,7 +293,7 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
   - **S0 isn't run:** it needs `clean copies` (A4).
   - **S2 goes last, as M5:** its condition is still open (PLAN-V25's docs, and his uncommitted `AGENTS.md` and `CLAUDE.md`).
   - **No helper agents:** the session builds each step itself, in the one copy, so it can stop at the usage limit he gave.
-  - **A paid slip:** while looking for the usage percentage, the session ran `claude -p "/usage"`. It went to the model on the laptop's `ANTHROPIC_API_KEY` and cost about US$0.025. Nobody had approved that. The key is blanked for every command since, and usage is estimated from local token counters.
+  - **A paid slip:** while looking for the usage percentage, the session ran `claude -p "/usage"`. It went to the model on the laptop's `ANTHROPIC_API_KEY` and cost about US$0.025. Nobody had approved that. The key is blanked for every test, build and server command since, and usage is estimated from local token counters. (Corrected 23 Nov: this said "every command". 50 of 176 shell commands had it in their environment. They were reads and edits, and none could call Claude.)
 - 23 Nov 2026, S1's baseline on `ff0f658`: 3,557 fast backend tests pass. One failed only because the shell had exported `API_PORT=8131`; alone, without it, it passes. 3,039 of 3,042 website tests passed; the 3 others timed out under load and pass when run again.
 - 23 Nov 2026, Part 1 (`723aedf`):
   - **T1-1:** `core/work.py` says who started the work, set in three places only (the guard, the run engine, the scheduler). So no caller changed, and PLAN-V25's files are barely touched. The command line and anything nobody started are Jobs.
@@ -322,10 +322,10 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
 - 23 Nov 2026, Part 4 (`a5caf5f`):
   - **The list:** every table of the core, Companies and Lead Finder, each with picked columns. A new column stays off screen until someone lists it.
   - **The mask** covers phone and email columns, and emails and phone numbers inside notes and JSON. It doesn't catch an email said in words ("jo at sample dot com"), and people's names show. For S3.
-  - **Search** looks in names only, so it can't be used to guess a hidden number or address.
+  - **Search** looks in names only. (Corrected below: a detail typed into a name column could still be guessed by search or sort.)
   - **T4-4's numbers:** ruff, mypy, lint, types and build pass; 3,605 fast backend tests; 55 database tests; 3,075 website tests; first visit 244 kB gzip JS (1 kB more, the menu's new tab) and 25 kB CSS.
   - **The security check:** no blockers. Both routes are the Platform admin's and read only, table and column names come only from code, and hiding runs off the event loop.
-  - **On the real-sized copy** (`leadfinder_v26`, counts only): all 35 tables read, the slowest page 182 ms (Memory, 14,768 rows), and no whole email or phone-like number left in notes. With hiding off, the same check finds one of each.
+  - **On the real-sized copy** (`leadfinder_v26`, counts only): all 35 tables read, the slowest page 182 ms (Memory, 14,768 rows), and no whole email or phone-like number left in notes. With hiding off, the same check finds one of each. (Corrected below: that check read the newest 200 rows of each table only, and the mask did fail.)
 - 23 Nov 2026, Part 5 (`2baade5`), then the fixes from reading the whole diff again (`a21e08f`):
   - **The glass is a tint and a bright edge, with no blur.** Only the flat page is behind a header or a card, so a blur would show nothing and cost every frame. For Al-khair's look.
   - **Home's first frame,** built site, 1440 px, 4x CPU, median of 7, mocked answers: first paint 1,036 ms before and 1,092 ms after; heading 1,505 and 1,491 ms; longest task 198 and 186 ms. No change beyond the noise between rounds.
@@ -338,4 +338,14 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
   - **Not run:** M1's fresh `review-agent`, the `merge-check` skill, a paid run, and anything against real HubSpot or Claude. The lanes are proven with a fake Claude only.
   - **Left on this laptop:** the databases `leadfinder_v26`, `leadfinder_test_v26` and `leadfinder_e2e_v26` (the rehearsal). Nothing is running. `plan-v26` is not pushed.
   - **The session stopped here** because every step that waits on nobody is built, at an estimated 76% of the 5-hour limit and 79% of the week. The percentages come from local token counters, not from `/usage`.
+- **23 Nov 2026, 03:54, "so its done right ?", and the answer was no.** A check against the code found three claims above that were wrong:
+  - **The mask** let 14 of 17 common ways of writing a phone or email through, like `0412345678x12` and `jo%40northwind.com.au`. On the copy's 61,224 rows no known phone number showed. The copy holds no HubSpot contacts, so real contact emails are untested.
+  - **Search and sort** could read a hidden detail typed into a name column.
+  - **The key** wasn't blanked for every command, as corrected above.
+- **23 Nov 2026, on his "pleas get it done now"** (`8253e76`):
+  - **The mask** hides all 17. It hides when in doubt, so a meeting id or another long number in free text goes too. Passcodes in links go as well. Run again on every row: no known detail shows.
+  - **Search and sort** skip any value that could hold a detail. The slowest search with a sort takes 202 ms on the copy.
+  - **T4-3:** Leads (company, city, website, result, note), calls not yet sent (company, person, outcome, note, delete) and Memory (delete). A call that needed a company then waits to confirm, sorted by hand, so an edit never spends on Claude. A changed lead keeps its company key. A `lead-finder rejudge --save` would write over an edited result.
+  - **T3-4:** off until Levi's OK, by the env-only `SIGN_IN_RECORDS_OK`, as `BROWSER_SPEECH_OK` works. Once on, an account older than the keep time is never shown the first sign-in prompt, because its older sign-ins are gone.
+  - **Not done on that word:** the shared database's downgrade (A6), a merge, a push, a deploy, `clean copies` and any paid check. Each needs its own.
   - **Overlap with PLAN-V25** (`70f6e07`): a trial merge of the committed work is clean. Both change `apps/companies/schemas.py`, `test_assistant_api.py` and the two generated contract files.
