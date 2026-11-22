@@ -19,6 +19,7 @@ from fastapi import FastAPI
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from core.auth.records import SIGN_IN_RECORDS
 from core.hubspot.models import HubSpotSync
 from core.hubspot.sync import SyncAlreadyRunning
 from core.schedules import calc, runner, service
@@ -459,7 +460,7 @@ async def test_the_loop_makes_the_default_schedules_when_it_starts(
     )
     await loop.start()
     await loop.stop()
-    assert set(await _by_job(session_factory)) == {HUBSPOT_SYNC, *SOURCE_KEYS}
+    assert set(await _by_job(session_factory)) == {HUBSPOT_SYNC, SIGN_IN_RECORDS, *SOURCE_KEYS}
 
 
 # --- Daylight saving, through the loop --------------------------------------------------------
@@ -552,8 +553,12 @@ async def test_the_hubspot_job_is_running_while_a_sync_is() -> None:
 
 
 def test_the_core_offers_the_hubspot_sync_on_by_default_every_day_at_6am() -> None:
-    job, *source_jobs = CORE_JOBS
+    job, records, *source_jobs = CORE_JOBS
     assert (job.key, job.project) == (HUBSPOT_SYNC, "core")
+    # PLAN-V26 T3-4: daily at 5 am, on, and it deletes nothing until Levi's OK.
+    assert (records.key, records.project) == (SIGN_IN_RECORDS, "core")
+    assert records.default is not None and records.default.enabled
+    assert records.default.cadence == Cadence(every=1, unit="days", at=time(5, 0))
     # Property Daily's two jobs (PLAN-V16 T2-7) are there too, and off.
     assert [source.key for source in source_jobs] == list(SOURCE_KEYS)
     assert all(source.default and not source.default.enabled for source in source_jobs)
@@ -587,4 +592,4 @@ async def test_a_project_adds_its_jobs_through_its_app_spec() -> None:
     fake = Fake(key="lead_finder.discovery")
     app.state.apps = [SimpleNamespace(jobs=(fake.spec(),)), SimpleNamespace(jobs=())]
     keys = [job.key for job in schedules_runtime.all_jobs(app)]
-    assert keys == [HUBSPOT_SYNC, *SOURCE_KEYS, fake.key]
+    assert keys == [HUBSPOT_SYNC, SIGN_IN_RECORDS, *SOURCE_KEYS, fake.key]
