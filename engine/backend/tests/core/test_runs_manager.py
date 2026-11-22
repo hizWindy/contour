@@ -13,7 +13,9 @@ from typing import Any
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from core import work
 from core.api.errors import Problem
+from core.auth.models import User
 from core.config import get_settings
 from core.runs.manager import (
     PROMPT_VERSIONS_MAX,
@@ -22,7 +24,9 @@ from core.runs.manager import (
     UNEXPECTED_ERROR,
     RunManager,
 )
+from core.runs.models import Run
 from core.runs.schemas import RunCaps
+from core.work import Work
 from tests.core.conftest import MakeManager
 from tests.core.runs_fakes import (
     APP,
@@ -470,3 +474,21 @@ async def test_progress_is_saved_while_the_run_goes(
     assert progress, "a progress event every tick while the totals change"
     costs = [D(item["cost_usd"]) for item in progress]
     assert costs == sorted(costs)  # never backwards
+
+
+async def test_a_run_saves_who_started_it(
+    run_manager: RunManager, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """PLAN-V26 T3-1: the person, and none for a run nobody started, like a scheduled one."""
+    person = User(email="jo@example.test", name="Jo Sample", password_hash="$argon2id$not-real")
+    async with session_factory() as session:
+        session.add(person)
+        await session.commit()
+    with work.doing(Work("people", person.id)):
+        mine = await run_manager.start(APP, "work", {"units": 0})
+    await wait_until_idle(run_manager)
+    nobody = await run_manager.start(APP, "work", {"units": 0})
+    await wait_until_idle(run_manager)
+    async with session_factory() as session:
+        rows = [await session.get(Run, mine.id), await session.get(Run, nobody.id)]
+    assert [row.started_by if row else "gone" for row in rows] == [person.id, None]

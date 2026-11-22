@@ -106,6 +106,12 @@ export const routes: RouteObject[] = [
           adminTab('hubspot', () => import('@/apps/lead-finder/admin/hubspot')),
           adminTab('sources', () => import('@/apps/lead-finder/admin/sources')),
           adminTab('people', () => import('@/apps/lead-finder/admin/people')),
+          {
+            // One person's Activity, opened from the People table (PLAN-V26 T3-3).
+            path: 'people/:personId',
+            handle: { crumb: 'Activity' } satisfies RouteHandle,
+            ...page(() => import('@/apps/lead-finder/admin/activity')),
+          },
           adminTab('settings', () => import('@/apps/lead-finder/admin/settings')),
         ],
       },

@@ -89,6 +89,7 @@ TEST_TABLES = (
     "core.hubspot_meetings",
     "core.hubspot_calls",
     "core.hubspot_contacts",
+    "core.admin_edits",
     "core.schedules",
     "core.audit_log",
     "core.sessions",

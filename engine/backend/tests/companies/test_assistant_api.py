@@ -689,6 +689,8 @@ async def test_no_command_writes_to_hubspot_sends_an_email_or_keeps_the_words(
         assert await all_rows(world, model) == [], model.__name__
     logged: list[SearchLog] = await all_rows(world, SearchLog)
     assert len(logged) == 5  # each command's cost, so the daily limit counts it
+    [mia] = [user.id for user in await all_rows(world, User) if user.username == "mia"]
+    assert {row.user_id for row in logged} == {mia}  # who asked (PLAN-V26 T3-1)
     for row in logged:
         assert (row.app, row.step) == ("companies", "assistant:command")
         assert row.prompt_version == "assistant-2"

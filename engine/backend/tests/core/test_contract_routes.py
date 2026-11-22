@@ -125,6 +125,14 @@ ROUTES = [
     ("PATCH", f"{API}/people/{{user_id}}"),
     ("POST", f"{API}/people/{{user_id}}/password"),
     ("POST", f"{API}/people/{{user_id}}/unlock"),  # PLAN-V26 T2-4
+    ("GET", f"{API}/people/{{user_id}}/activity/sign-ins"),
+    ("GET", f"{API}/people/{{user_id}}/activity/devices"),
+    ("GET", f"{API}/people/{{user_id}}/activity/calls"),
+    ("GET", f"{API}/people/{{user_id}}/activity/preps"),
+    ("GET", f"{API}/people/{{user_id}}/activity/sent"),
+    ("GET", f"{API}/people/{{user_id}}/activity/spending"),
+    ("POST", f"{API}/people/{{user_id}}/devices/{{session_id}}/sign-out"),
+    ("POST", f"{API}/people/{{user_id}}/sign-out"),
     ("PUT", f"{API}/people/{{user_id}}/hubspot-owner"),  # who a person is in HubSpot (PLAN-V17)
     ("POST", f"{API}/runs"),
     ("POST", f"{API}/runs/estimate"),

@@ -34,13 +34,15 @@ from sqlalchemy import select
 from apps.companies.notes import SORT_STOPPED, NoteSorter
 from apps.companies.tables import CallNote, Prep
 from core.api.deps import settings_dependency
+from core.auth.models import User
 from core.config import Settings
 from core.hubspot.activities import OUTCOME_NAMES
 from core.hubspot.models import HubSpotContact, HubSpotOffice, HubSpotOwner, HubSpotWrite
+from core.searches.models import SearchLog
 from tests.companies.helpers import API, add, company, office, signed_in_as
 from tests.companies.test_notes import FakeClaude
 from tests.companies.test_script_notes import as_admin
-from tests.core.auth_world import START, World
+from tests.core.auth_world import START, World, all_rows
 
 pytestmark = pytest.mark.integration
 NOTES = f"{API}/call-notes"
@@ -247,6 +249,8 @@ async def test_with_the_ai_on_a_note_is_sorted_in_the_background(
         ("Canberra", "120"),
     ]
     assert sorted_note["person"]["id"] == "c202"  # the rep's own pick stays
+    [mia] = [user.id for user in await all_rows(world, User) if user.username == "mia"]
+    assert [row.user_id for row in await all_rows(world, SearchLog)] == [mia]  # PLAN-V26 T3-1
 
 
 async def test_a_note_with_just_an_outcome_is_saved_and_claude_gets_nothing(

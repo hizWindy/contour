@@ -81,6 +81,10 @@ class Run(Base):
     schedule_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey(f"{CORE_SCHEMA}.schedules.id", ondelete="SET NULL")
     )
+    # The person who started it (PLAN-V26 T3-1). None: a schedule did, or it's an older run.
+    started_by: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey(f"{CORE_SCHEMA}.users.id", ondelete="SET NULL")
+    )
     cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")

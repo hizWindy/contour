@@ -35,6 +35,7 @@ from apps.companies.prep import (
 )
 from apps.companies.tables import Prep, ScriptStyle
 from core.api.deps import settings_dependency
+from core.auth.models import User
 from core.claude.client import Reply, Source, WebTools
 from core.claude.pricing import Usage
 from core.config import Settings
@@ -43,7 +44,7 @@ from core.memory.models import EMBEDDING_DIM, MemoryItem
 from core.schedules.jobs import JobContext, JobSkipped
 from core.searches.models import SearchLog
 from tests.companies.helpers import API, a_small_copy, add, company, deal, signed_in_as
-from tests.core.auth_world import World
+from tests.core.auth_world import World, all_rows
 from tests.lead_finder.factories import FakeEmbedder
 
 pytestmark = pytest.mark.integration
@@ -315,6 +316,8 @@ async def test_a_prep_keeps_only_lines_with_a_real_source(
     assert [(row.app, row.step, row.cost_usd) for row in logged] == [
         ("companies", "prep:web", Decimal("0.090000"))
     ]
+    [mia] = [user.id for user in await all_rows(world, User) if user.username == "mia"]
+    assert [row.user_id for row in logged] == [mia]  # who asked (PLAN-V26 T3-1)
     assert [(note.url, note.subject) for note in notes] == [(NEWS_URL, "ABC Logistics")]
 
 

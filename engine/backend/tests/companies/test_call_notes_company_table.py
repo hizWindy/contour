@@ -98,14 +98,14 @@ def test_0027_lets_a_call_wait_for_its_company_and_runs_down_once_none_does(
     command.upgrade(config, "head")
     command.check(config)
 
-    # Going down is refused while a call needs its company, and nothing changes.
+    # Going down is refused while a call needs its company, and nothing changes: the steps down
+    # from the newest migration are one transaction, so it stays on the newest.
+    newest = ScriptDirectory.from_config(config).get_current_head()
     with pytest.raises(RuntimeError, match="still need a company"):
         command.downgrade(config, before)
     assert shape(conninfo)["columns"]["company_heard"] == "YES"
     with psycopg.connect(conninfo, autocommit=True) as connection:
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
-            NEEDS_COMPANY,
-        )
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (newest,)
         connection.execute("DELETE FROM companies.call_notes WHERE id = %s", (first,))
 
     command.downgrade(config, before)

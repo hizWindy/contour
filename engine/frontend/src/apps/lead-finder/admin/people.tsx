@@ -11,7 +11,9 @@ import {
   Check,
   Copy,
   Eye,
+  History,
   KeyRound,
+  Lock,
   LockOpen,
   Pencil,
   Shield,
@@ -20,6 +22,7 @@ import {
   UserRound,
 } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
+import { Link } from 'react-router'
 import { toast } from 'sonner'
 import { isApiProblem } from '@/api/client'
 import {
@@ -326,7 +329,8 @@ function LockedNote({ person }: { person: Person }) {
   if (!lock) return null
   return (
     <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-normal whitespace-normal">
-      <span className="text-caption text-foreground">
+      <span className="flex items-center gap-1 text-caption text-foreground">
+        <Lock aria-hidden="true" className="size-3.5 shrink-0" />
         {`Locked until ${formatTime(lock.until)} after ${String(lock.wrong_tries)} wrong tries.`}
       </span>
       <Button
@@ -786,7 +790,18 @@ function PeopleTable({ people, myId }: { people: Person[]; myId: string | null }
                 {person.last_signed_in_at ? formatRelative(person.last_signed_in_at) : 'Not yet'}
               </TableCell>
               <TableCell className="text-right">
-                <EditPerson person={person} self={self} taken={taken} />
+                <span className="flex flex-wrap justify-end gap-1">
+                  <Button asChild variant="ghost" size="sm">
+                    <Link
+                      to={`/admin/people/${person.id}`}
+                      aria-label={`${person.name}'s activity`}
+                    >
+                      <History aria-hidden="true" />
+                      Activity
+                    </Link>
+                  </Button>
+                  <EditPerson person={person} self={self} taken={taken} />
+                </span>
               </TableCell>
             </TableRow>
           )

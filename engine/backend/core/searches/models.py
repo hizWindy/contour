@@ -5,7 +5,18 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Index, Integer, Numeric, String, Text, Uuid, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    Uuid,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -19,6 +30,13 @@ class SearchLog(Base):
         # made it. It sits here, with the table, so `alembic check` stays clean whichever
         # modules are loaded.
         Index("ix_searches_created_at", "created_at"),
+        # A person's spending on the Activity page (PLAN-V26 T3-1). Migration 0029 made it.
+        Index(
+            "ix_searches_user_id_created_at",
+            "user_id",
+            text("created_at DESC"),
+            postgresql_where=text("user_id IS NOT NULL"),
+        ),
         {"schema": CORE_SCHEMA},
     )
 
@@ -43,6 +61,11 @@ class SearchLog(Base):
     answer_ok: Mapped[bool] = mapped_column(Boolean)  # the answer fitted the form
     request_id: Mapped[str | None] = mapped_column(String(128))
     note: Mapped[str | None] = mapped_column(Text)
+    # Who asked (PLAN-V26 T3-1): the person whose work it was (`core.work`). None for work nobody
+    # started, like a scheduled job, and for requests from before that migration.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey(f"{CORE_SCHEMA}.users.id", ondelete="SET NULL")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )

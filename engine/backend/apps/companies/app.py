@@ -3,6 +3,7 @@ needs. Its rows from other projects come through their `company_leads` hook."""
 
 from fastapi import FastAPI
 
+from apps.companies.activity import ACTIVITY, SPEND_KINDS
 from apps.companies.api import router
 from apps.companies.jobs import JOBS
 from apps.companies.meeting_form import MeetingFormRunner
@@ -102,6 +103,8 @@ APP = AppSpec(
     check_rules=check_rules,
     tables_module="apps.companies.tables",
     hubspot_needs=HUBSPOT_NEEDS,
+    activity=ACTIVITY,  # a person's Activity page in Admin (PLAN-V26 Part 3)
+    spend_kinds=SPEND_KINDS,
     jobs=JOBS,  # the morning search ahead (PLAN-V10 D5)
     on_shutdown=stop_background,  # running preps and sorts stop and log their spend
 )

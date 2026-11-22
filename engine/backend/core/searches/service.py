@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core import work
 from core.claude.client import Reply
 from core.searches.models import SearchLog
 
@@ -26,7 +27,8 @@ def log_reply(
     """Adds one Claude request to the session. The caller commits.
 
     `job_id` is the lead (research) or the slice (discovery). `run_id` is the run that asked,
-    if any, so the run's cost and its Searches page rows can be found again.
+    if any, so the run's cost and its Searches page rows can be found again. Who asked comes
+    from the work that is running (`core.work`), so no caller passes it.
     """
     row = SearchLog(
         app=app,
@@ -49,6 +51,7 @@ def log_reply(
         answer_ok=reply.parsed is not None,
         request_id=reply.request_id,
         note=note,
+        user_id=work.current().user_id,
     )
     session.add(row)
     return row

@@ -1,6 +1,7 @@
 """Imports every core table, so migrations and tests see them all."""
 
 from core.auth.models import AuditEntry, User, UserSession
+from core.data.models import AdminEdit
 from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOffice
 from core.memory.models import MemoryItem
 from core.prefs.models import Setting
@@ -10,6 +11,7 @@ from core.searches.models import SearchLog
 from core.sources.models import PropertyLookup, PropertyRecordRow, SourceRead, SourceState
 
 __all__ = [
+    "AdminEdit",
     "AuditEntry",
     "HubSpotCompany",
     "HubSpotDeal",

@@ -4,8 +4,8 @@ The core finds projects by name only, so it never imports from `apps` directly.
 """
 
 import importlib
-from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, FastAPI
@@ -14,6 +14,7 @@ from core.hubspot.needs import HubSpotNeeds
 
 if TYPE_CHECKING:
     # Only for the type. Importing it would load the Claude client into every migration.
+    from core.activity import ActivityPart
     from core.company_leads import CompanyLeads
     from core.runs.types import RunKind
     from core.schedules.jobs import JobSpec
@@ -40,6 +41,10 @@ class AppSpec:
     jobs: "tuple[JobSpec, ...]" = ()
     # The companies it found, for the Companies page (PLAN-V10 B2): core/company_leads.py.
     company_leads: "CompanyLeads | None" = None
+    # Its part of a person's Activity page in Admin (PLAN-V26 Part 3): the rows for a tab, and
+    # which kind of spending each of its Claude steps is, like {"prep:web": "Preps"}.
+    activity: "tuple[ActivityPart, ...]" = ()
+    spend_kinds: "Mapping[str, str]" = field(default_factory=dict)
     # Its own controls for its schedules (PLAN-V13 T1-3), mounted at /schedules<route_prefix>,
     # like the Lead Finder's one control for its city schedules at /schedules/lead-finder.
     schedule_router: APIRouter | None = None

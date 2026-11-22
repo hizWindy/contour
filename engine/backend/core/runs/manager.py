@@ -584,6 +584,7 @@ class RunManager:
             counts=job.counts.model_dump(mode="json"),
             idempotency_key=idempotency_key,
             schedule_id=job.schedule_id,
+            started_by=job.started_by,
         )
         duplicate = False
         try:
@@ -1056,6 +1057,7 @@ class RunManager:
             resume=True,
             from_status=row.status,
             schedule_id=row.schedule_id,
+            started_by=row.started_by,
         )
         launch = asyncio.ensure_future(self._reopen(entry, job))
         self._launching.add(launch)
