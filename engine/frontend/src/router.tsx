@@ -112,6 +112,7 @@ export const routes: RouteObject[] = [
             handle: { crumb: 'Activity' } satisfies RouteHandle,
             ...page(() => import('@/apps/lead-finder/admin/activity')),
           },
+          adminTab('data', () => import('@/apps/lead-finder/admin/data')),
           adminTab('settings', () => import('@/apps/lead-finder/admin/settings')),
         ],
       },

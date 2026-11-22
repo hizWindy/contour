@@ -15,6 +15,7 @@ import {
   ListChecks,
   Settings2,
   SlidersHorizontal,
+  Table2,
   Upload,
   Users,
   type LucideIcon,
@@ -254,6 +255,14 @@ export const ADMIN_TABS: readonly NavItem[] = [
     icon: Users,
     keywords: ['accounts', 'access', 'users', 'staff'],
     purpose: 'Who can sign in, and which projects each may use.',
+  },
+  {
+    // PLAN-V26 T4-1: a look at each table, for the Platform admin.
+    to: '/admin/data',
+    label: 'Data',
+    icon: Table2,
+    keywords: ['database', 'tables', 'records'],
+    purpose: 'Every table, to look at. Emails and phones are hidden.',
   },
   {
     to: '/admin/settings',

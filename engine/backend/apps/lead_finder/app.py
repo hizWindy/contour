@@ -3,6 +3,7 @@
 from apps.lead_finder.api import router
 from apps.lead_finder.api_round import router as round_router
 from apps.lead_finder.company_leads import COMPANY_LEADS
+from apps.lead_finder.data_tables import DATA_TABLES
 from apps.lead_finder.hubspot_send import mark_sent
 from apps.lead_finder.jobs import JOBS
 from apps.lead_finder.rules import load_rules
@@ -39,6 +40,7 @@ APP = AppSpec(
     jobs=JOBS,
     hubspot_needs=HUBSPOT_NEEDS,
     hubspot_written=mark_sent,
+    data_tables=DATA_TABLES,  # Admin's Data tab (PLAN-V26 Part 4)
     company_leads=COMPANY_LEADS,  # its leads on the Companies page (PLAN-V10 B2)
     schedule_router=round_router,  # one control for the city schedules (PLAN-V13 T1-3)
 )

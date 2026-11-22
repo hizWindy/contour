@@ -57,6 +57,7 @@ describe('the Admin tabs', () => {
       'HubSpot',
       'Sources',
       'People',
+      'Data', // PLAN-V26 T4-1
       'Settings',
     ])
     expect(ADMIN_TABS[0]?.purpose).toBe('Is everything working?')

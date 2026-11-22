@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, FastAPI
 from fastapi.routing import APIRoute
 from starlette.types import ASGIApp
 
-from core.api import activity, health, hubspot, memory, people, runs, runs_read, searches
+from core.api import activity, data, health, hubspot, memory, people, runs, runs_read, searches
 from core.api import auth as auth_routes
 from core.api import schedules as schedule_routes
 from core.api import settings as settings_routes
@@ -205,6 +205,7 @@ def create_app() -> FastAPI:
             dependencies=[Depends(require_app(spec.name))],
         )
     api.include_router(people.router)
+    api.include_router(data.router)  # Admin's Data tab (PLAN-V26 Part 4)
     api.include_router(activity.router)  # one person's Activity page (PLAN-V26 Part 3)
     app.include_router(api)
     _check_operation_ids(app)

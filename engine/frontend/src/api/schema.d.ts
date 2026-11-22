@@ -1205,6 +1205,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/data/tables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The tables the Data tab shows */
+        get: operations["data_tables"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/data/tables/{table}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One page of a table
+         * @description 50 rows to a page. `q` looks in the table's names only, never in a contact detail. `sort` is a sortable column's key; left out, the newest comes first. No hash or key is ever in the answer. Platform admin only.
+         */
+        get: operations["data_rows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -4598,6 +4635,34 @@ export interface components {
             /** Waived By */
             waived_by?: string[];
         };
+        /** DataColumnOut */
+        DataColumnOut: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Sortable */
+            sortable: boolean;
+        };
+        /** DataRowOut */
+        DataRowOut: {
+            /** Id */
+            id: string;
+            /**
+             * Values
+             * @description As text. Email addresses and phone numbers are hidden, like j•••@site.com.au
+             */
+            values: {
+                [key: string]: string | null;
+            };
+        };
+        /** DataRowsOut */
+        DataRowsOut: {
+            /** Items */
+            items: components["schemas"]["DataRowOut"][];
+            /** Total */
+            total: number;
+        };
         /**
          * DataSources
          * @description Which source is main for which data (PLAN-V4 C2). In each list the first source with a value
@@ -4618,6 +4683,40 @@ export interface components {
             office_m2: ("property_daily" | "arealytics" | "hubspot" | "web_research")[];
             /** Office Since */
             office_since: ("property_daily" | "arealytics" | "hubspot" | "web_research")[];
+        };
+        /** DataTableOut */
+        DataTableOut: {
+            /** Columns */
+            columns: components["schemas"]["DataColumnOut"][];
+            /** Group */
+            group: string;
+            /**
+             * Label
+             * @example Leads
+             */
+            label: string;
+            /**
+             * Newest
+             * @description It starts sorted by this, newest first
+             */
+            newest: string;
+            /**
+             * Note
+             * @description Like 'Change it in HubSpot, then press Sync.'
+             */
+            note: string | null;
+            /**
+             * Screen
+             * @description The address of the table's own screen, if it has one
+             */
+            screen: string | null;
+            /** Screen Label */
+            screen_label: string | null;
+            /**
+             * Table
+             * @example lead_finder.leads
+             */
+            table: string;
         };
         /**
          * DateRange
@@ -19852,6 +19951,251 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PrepFacts"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    data_tables: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataTableOut"][];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    data_rows: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                sort?: string | null;
+                order?: "asc" | "desc";
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                table: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataRowsOut"];
                 };
             };
             /** @description The request can't be understood */
