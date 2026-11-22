@@ -159,6 +159,11 @@ Clock = Callable[[], datetime]
 OUTCOME_NAMES: tuple[str, ...] = tuple(OUTCOMES.values())
 OUTCOME_IDS: Mapping[str, str] = MappingProxyType({name: key for key, name in OUTCOMES.items()})
 BODY_MAX_CHARS = 60_000  # HubSpot's limit for a call or note body is 65,536
+# HubSpot's "Call and meeting type" (`hs_activity_type`) for a call (PLAN-V25 T3-1), as the team
+# uses them: 96% of calls are Prospecting Call and 2% Follow Up Call (22 Nov). Each is its own
+# value in HubSpot (TBC: checked with the app's key before `deploy v25`).
+CALL_TYPES: tuple[str, ...] = ("Prospecting Call", "Follow Up Call", "Agent/Networking Phone Call")
+DEFAULT_CALL_TYPE = "Prospecting Call"
 
 STALLED_AFTER = timedelta(minutes=5)  # TBC: a "writing" write not kept this long has stopped
 # The plan's key for the step that may be on its way to HubSpot: its name from the save right
@@ -253,12 +258,22 @@ class CallIn(BaseModel):
     body: str = Field(max_length=BODY_MAX_CHARS, description="Plain text")
     outcome: str | None = Field(None, description="One of HubSpot's outcome names, or none")
     direction: Direction = "outbound"
+    call_type: str | None = Field(
+        None, description="HubSpot's call type (hs_activity_type), one of CALL_TYPES, or none"
+    )
 
     @field_validator("outcome")
     @classmethod
     def _known_outcome(cls, value: str | None) -> str | None:
         if value is not None and value not in OUTCOME_NAMES:
             raise ValueError(f"outcome must be one of: {', '.join(OUTCOME_NAMES)}")
+        return value
+
+    @field_validator("call_type")
+    @classmethod
+    def _known_call_type(cls, value: str | None) -> str | None:
+        if value is not None and value not in CALL_TYPES:
+            raise ValueError(f"call_type must be one of: {', '.join(CALL_TYPES)}")
         return value
 
 
@@ -685,6 +700,8 @@ def _call_words(call: CallIn) -> str:
     parts = [call.title.strip().rstrip(".")]
     if call.direction == "inbound":
         parts.append("They called")
+    if call.call_type:
+        parts.append(call.call_type)
     if call.outcome:
         parts.append(call.outcome)
     parts.append(_time_words(call.at))
@@ -1015,6 +1032,7 @@ def _create_of(run: _Run, name: str) -> _Create:
         _put(properties, "hs_call_body", note_html(call.body))
         if call.outcome is not None:
             properties["hs_call_disposition"] = OUTCOME_IDS[call.outcome]
+        _put(properties, "hs_activity_type", call.call_type)
         _put(properties, "hubspot_owner_id", request.owner_id)
         links = _links(request, company, person=True)
         # The title too: with no owner known, the time alone could match another rep's call.

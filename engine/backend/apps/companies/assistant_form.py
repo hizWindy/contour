@@ -18,7 +18,8 @@ from typing import Final, Literal
 
 from pydantic import BaseModel, Field
 
-from apps.companies.assistant_schemas import AssistantAction, AssistantCardIn
+from apps.companies.assistant_schemas import AssistantAction, AssistantCardIn, AssistantLastTurn
+from apps.companies.facts import scrub
 from apps.companies.note_dates import DATE_FORMS
 from core.hubspot.activities import TaskKind
 
@@ -158,9 +159,37 @@ def long_day(day: date) -> str:
     return f"{day:%A} {day.day} {day:%B %Y}"
 
 
-def command_prompt(text: str, *, source: str, today: date, card: AssistantCardIn | None) -> str:
+def last_names(last: AssistantLastTurn | None) -> str | None:
+    """The last turn's names as heard, for Claude (PLAN-V25 choice 21): never an id, an email
+    address or a phone number, and never the whole conversation."""
+    if last is None:
+        return None
+    named = [
+        f"{what} '{fenced(' '.join(scrub(words).split()))}'"
+        for what, words in (("the company", last.company_heard), ("the person", last.person_heard))
+        if words.strip()
+    ]
+    if not named:
+        return None
+    return (
+        f"The rep's last command named {' and '.join(named)}. Words like 'same company', "
+        "'them', 'her' or 'him' may mean those: copy those words as said, and code finds who."
+    )
+
+
+def command_prompt(
+    text: str,
+    *,
+    source: str,
+    today: date,
+    card: AssistantCardIn | None,
+    last: AssistantLastTurn | None = None,
+) -> str:
     """What Claude gets for one command. `text` must already be scrubbed."""
     parts = [f"Today is {long_day(today)} in Melbourne."]
+    before = last_names(last)
+    if before is not None:
+        parts.append(before)
     if card is not None:
         parts.append(
             f"A review card for {CARD_WORDS[card.action]} is open. Its boxes: "

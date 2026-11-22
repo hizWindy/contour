@@ -58,6 +58,7 @@ from apps.companies.assistant_schemas import (
     AssistantCardIn,
     AssistantCompany,
     AssistantCompanyFind,
+    AssistantLastTurn,
     AssistantMeeting,
     AssistantMeetingHit,
     AssistantOnPage,
@@ -199,6 +200,41 @@ class Context:
     app: FastAPI | None = (
         None  # for HubSpot's own search (PLAN-V23 T1-3); None asks HubSpot nothing
     )
+    last: AssistantLastTurn | None = None  # the conversation's last turn (PLAN-V25 T5-1)
+
+
+# --- The last turn (PLAN-V25 T5-1, choice 21) ----------------------------------------------------
+
+SAME_AS_BEFORE = "Same as before."
+# Words that mean the last turn's company, or its person, once tidied (`heard`) and lower case.
+SAME_COMPANY: Final = frozenset(
+    {
+        "same company",
+        "the same company",
+        "same one",
+        "the same one",
+        "that company",
+        "same place",
+        "them",
+        "there",
+        "same",
+    }
+)
+SAME_PERSON: Final = frozenset(
+    {"her", "him", "them", "same person", "the same person", "that person", "same"}
+)
+# Words that add to the last turn ("and Jo too"): its company stays.
+TOO: Final = re.compile(r"\b(?:too|also|as well|same company|again)\b", re.IGNORECASE)
+
+
+async def last_company(session: AsyncSession, ctx: Context) -> CompanyHit | None:
+    """The last turn's company, when there was one and this person may still open it."""
+    key = ctx.last.company_key if ctx.last is not None else None
+    return await company_hit(session, key, ctx.leads) if key else None
+
+
+def means_same(words: str, kinds: frozenset[str]) -> bool:
+    return " ".join(words.casefold().split()) in kinds
 
 
 # --- Words and names -----------------------------------------------------------------------------
@@ -542,6 +578,14 @@ async def find_company(
     on_page = AssistantCompany(
         heard=words, from_page=True, found=page, choices=[], level="sure", reason=ON_SCREEN
     )
+    before = await last_company(session, ctx)
+    if before is not None and (
+        means_same(words, SAME_COMPANY) or (not words and (page is None or TOO.search(ctx.said)))
+    ):
+        same = AssistantCompany(
+            heard=words, from_page=False, found=before, choices=[], level="sure"
+        )
+        return same.model_copy(update={"reason": SAME_AS_BEFORE}), None
     if not words:
         if page is None:
             return AssistantCompany(heard="", from_page=False, found=None, choices=[]), None
@@ -724,14 +768,25 @@ async def on_screen(session: AsyncSession, ctx: Context) -> OnScreen:
 
 
 async def find_person_at(
-    session: AsyncSession, said: str, company: AssistantCompany
+    session: AsyncSession,
+    said: str,
+    company: AssistantCompany,
+    last: AssistantLastTurn | None = None,
 ) -> tuple[AssistantPerson, str | None]:
-    """The person the words name, among the company's people, and a line when it isn't clear."""
+    """The person the words name, among the company's people, and a line when it isn't clear.
+    "Her" or "them" is the last turn's person, at the same company (PLAN-V25 T5-1)."""
     words = heard(said)
     hit = company.found
     if not words or hit is None:  # no company yet: the company's own line asks first
         return AssistantPerson(heard=words, found=None, choices=[]), None
     people = await people_of(session, hit.key) if hit.source == "hubspot" else []
+    same = last is not None and last.person_id and last.company_key == hit.key
+    if same and last is not None and means_same(words, SAME_PERSON):
+        for known in people:
+            if known.id == last.person_id:
+                again = PrepPerson(id=known.id, name=known.name, title=known.title)
+                kept = AssistantPerson(heard=words, found=again, choices=[], level="sure")
+                return kept.model_copy(update={"reason": SAME_AS_BEFORE}), None
     found = [
         AssistantPersonHit(id=person.id, name=person.name, title=person.title)
         for person in people_named(words, people)

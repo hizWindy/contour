@@ -62,7 +62,7 @@ log = logging.getLogger(__name__)
 
 APP = "companies"
 STEP = "assistant:command"
-PROMPT_VERSION = "assistant-2"  # PLAN-V23 T1-3: the unclear action
+PROMPT_VERSION = "assistant-3"  # PLAN-V25 T5-1: the last turn's names
 # A short sort into one of a few actions, so the lowest effort: quick and cheap. M2 checks it gets
 # at least 18 of 20 right; if not, medium is next (TBC).
 EFFORT = "low"
@@ -247,7 +247,9 @@ async def read_command(
     today = now.astimezone(MELBOURNE).date()
     answer = card_shortcut(said, body.card) or unclear_shortcut(said)
     if answer is None:
-        prompt = command_prompt(said, source=body.source, today=today, card=body.card)
+        prompt = command_prompt(
+            said, source=body.source, today=today, card=body.card, last=body.last_turn
+        )
         answer = await ask(session, assistant, prompt, settings)
     context = Context(
         said=said,
@@ -261,6 +263,7 @@ async def read_command(
         now=now,
         today=today,
         app=app,
+        last=body.last_turn,
     )
     command = await settle(session, answer, context)
     log.info(

@@ -13,6 +13,10 @@ api_assistant.py.
 5. the companies the mic gets wrong (they have learned names), then the fixed words: fitout,
    test fit, pre-read and follow up.
 
+**The places** (PLAN-V25 T4-1, the word list): the cities and suburbs of the companies and offices
+in our copy, the most common first, at most 200. They sit beside the names, not in their 50, so
+the name fix knows "Prahran" and "Parramatta" on every page.
+
 A company is said without Pty Ltd and the like ("Sample Logistics"). A name with an email address
 or a phone number in it is left out.
 
@@ -54,7 +58,13 @@ from core.company_leads import CompanyLeads
 from core.config import Settings
 from core.hubspot.matching import LEGAL_WORDS, deal_lead
 from core.hubspot.meetings import Meeting
-from core.hubspot.models import HubSpotCall, HubSpotCompany, HubSpotContact, HubSpotDeal
+from core.hubspot.models import (
+    HubSpotCall,
+    HubSpotCompany,
+    HubSpotContact,
+    HubSpotDeal,
+    HubSpotOffice,
+)
 from core.hubspot.owners import shown_name
 from core.hubspot.profiles import PLACEHOLDER_NAME
 
@@ -71,6 +81,8 @@ OWNED_MAX: Final = 25
 LEARNED_MAX: Final = 20
 NAME_CHARS: Final = 120  # a longer name is no use as a hint
 FIXED_WORDS: Final = ("fitout", "test fit", "pre-read", "follow up")
+PLACES_MAX: Final = 200  # the word list's places (PLAN-V25 T4-1)
+PLACE_CHARS: Final = 60
 EDGES: Final = " ,.;:-"
 
 
@@ -354,6 +366,41 @@ def add_all(picker: Picker, found: Iterable[tuple[str, str]]) -> None:
 # --- The list ------------------------------------------------------------------------------------
 
 
+def a_place(text: str | None) -> str | None:
+    """A city or suburb as typed in HubSpot, tidied: one line, letters, spaces, ' and - only.
+    None for anything else, like a postcode or an address."""
+    said = " ".join((text or "").split()).strip(EDGES)
+    if not said or len(said) > PLACE_CHARS:
+        return None
+    if not all(char.isalpha() or char in " '-" for char in said):
+        return None
+    return said if scrub(said) == said else None
+
+
+async def places_of(session: AsyncSession) -> list[str]:
+    """The word list's places: the cities and suburbs in our copy, the most common first, each
+    once (whatever its case), at most 200."""
+    counts: dict[str, int] = {}
+    shown: dict[str, str] = {}
+    for column in (HubSpotCompany.city, HubSpotOffice.city):
+        rows = await session.execute(
+            select(column, func.count())
+            .where(column.is_not(None))
+            .group_by(column)
+            .order_by(func.count().desc())
+            .limit(PLACES_MAX * 2)
+        )
+        for city, count in rows.all():
+            place = a_place(city)
+            if place is None:
+                continue
+            key = place.casefold()
+            counts[key] = counts.get(key, 0) + count
+            shown.setdefault(key, place)
+    ranked = sorted(counts, key=lambda key: (-counts[key], key))
+    return [shown[key] for key in ranked[:PLACES_MAX]]
+
+
 async def hint_list(
     session: AsyncSession,
     *,
@@ -389,9 +436,13 @@ async def hint_list(
         await learned_names(session, picker, leads)
     for word in FIXED_WORDS:
         picker.add(word, "word")
+    places = await places_of(session)
     if session.in_transaction():
         await session.rollback()  # it only read
-    names = AssistantNames(names=picker.names)
+    names = AssistantNames(names=picker.names, places=places)
     hints.put(key, names, now)
-    log.info("assistant_names", extra={"names": len(names.names), "screen": bool(screen)})
+    log.info(
+        "assistant_names",
+        extra={"names": len(names.names), "places": len(places), "screen": bool(screen)},
+    )
     return names

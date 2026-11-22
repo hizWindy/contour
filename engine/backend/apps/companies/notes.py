@@ -64,7 +64,7 @@ from apps.companies.tables import CallNote
 from core.claude.budget import Budget, BudgetSpent
 from core.claude.client import Claude, ClaudeError, Reply
 from core.config import Settings
-from core.hubspot.activities import OUTCOME_NAMES, TaskKind
+from core.hubspot.activities import CALL_TYPES, DEFAULT_CALL_TYPE, OUTCOME_NAMES, TaskKind
 from core.hubspot.models import HubSpotOffice
 from core.prefs.service import effective_settings
 from core.searches.service import log_reply
@@ -206,6 +206,7 @@ class Sent(BaseModel):
 class CardCall(Sent):
     summary: str = ""
     outcome: str | None = None  # one of HubSpot's outcome names, or none
+    call_type: str | None = None  # HubSpot's call type the rep picked (PLAN-V25), or the default
 
 
 class CardChange(Sent):
@@ -549,10 +550,24 @@ def rep_outcome(note: CallNote) -> str | None:
     return outcome if isinstance(outcome, str) and outcome in OUTCOME_NAMES else None
 
 
+def rep_call_type(note: CallNote) -> str | None:
+    """The call type the rep picked (kept in its card, PLAN-V25), if it is HubSpot's."""
+    call = (note.card or {}).get("call")
+    kind = call.get("call_type") if isinstance(call, dict) else None
+    return kind if isinstance(kind, str) and kind in CALL_TYPES else None
+
+
+def call_type_of(card: NoteCard) -> str:
+    """The call type a call goes with: the rep's pick, else Prospecting Call (PLAN-V25)."""
+    picked = card.call.call_type
+    return picked if picked is not None and picked in CALL_TYPES else DEFAULT_CALL_TYPE
+
+
 def manual_card(note: CallNote, *, unsure: str | None = None) -> NoteCard:
-    """The card with the AI off, or after a failed sort: the rep's own outcome, and no summary,
-    changes or tasks. The rep adds them on the card."""
-    return NoteCard(call=CardCall(summary="", outcome=rep_outcome(note)), unsure=unsure)
+    """The card with the AI off, or after a failed sort: the rep's own outcome and call type,
+    and no summary, changes or tasks. The rep adds them on the card."""
+    call = CardCall(summary="", outcome=rep_outcome(note), call_type=rep_call_type(note))
+    return NoteCard(call=call, unsure=unsure)
 
 
 def settle_by_hand(note: CallNote, now: datetime, *, unsure: str | None = None) -> None:
@@ -802,9 +817,8 @@ class NoteSorter:
                 return
             # The rep's own pick wins over the sorter's. `sorted` keeps what the sorter made.
             outcome = rep_outcome(note) or made.call.outcome
-            card = made.model_copy(
-                update={"call": made.call.model_copy(update={"outcome": outcome})}
-            )
+            mine = {"outcome": outcome, "call_type": rep_call_type(note)}
+            card = made.model_copy(update={"call": made.call.model_copy(update=mine)})
             note.sorted = made.model_dump(mode="json")
             note.card = card.model_dump(mode="json")
             note.sorted_by = "ai"

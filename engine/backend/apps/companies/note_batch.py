@@ -63,6 +63,7 @@ from apps.companies.notes import (
     PartState,
     Sent,
     call_text,
+    call_type_of,
     where_failed,
 )
 from apps.companies.schemas import CallNoteStep, CallNoteTotals, StepStatus
@@ -378,6 +379,7 @@ async def plan_send(
                 body=signed(call_body(note, card), caller, rep),
                 outcome=outcome,
                 direction="outbound",
+                call_type=call_type_of(card),  # every call sent carries one (PLAN-V25 T3-1)
             )
             if carries_call
             else None

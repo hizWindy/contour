@@ -721,7 +721,7 @@ async def test_no_command_writes_to_hubspot_sends_an_email_or_keeps_the_words(
     assert len(logged) == 5  # each command's cost, so the daily limit counts it
     for row in logged:
         assert (row.app, row.step) == ("companies", "assistant:command")
-        assert row.prompt_version == "assistant-2"
+        assert row.prompt_version == "assistant-3"
         no_words = (row.queries, row.sources, row.subject, row.note, row.job_id)
         assert no_words == ([], [], None, None, None)
         assert row.cost_usd == Decimal("0.0001") and row.answer_ok

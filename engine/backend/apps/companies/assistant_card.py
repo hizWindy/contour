@@ -13,11 +13,13 @@ first line (choice 21), and `unsure` a short line when something wasn't clear or
 
 import re
 from collections.abc import Sequence
-from typing import Final, get_args
+from datetime import date, timedelta
+from typing import Any, Final, get_args
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies.assistant_find import (
+    SAME_PERSON,
     Context,
     OnScreen,
     clean_line,
@@ -31,6 +33,7 @@ from apps.companies.assistant_find import (
     find_person_at,
     follow_up_day,
     heard,
+    means_same,
     note_after_cut,
     on_screen,
     task_due,
@@ -52,7 +55,9 @@ from apps.companies.assistant_schemas import (
     AssistantPerson,
     AssistantTask,
 )
+from apps.companies.call_words import QUICK_OUTCOMES, call_type_of, call_type_said, only_outcome
 from apps.companies.meeting_store import meeting_forms_off
+from apps.companies.note_dates import next_working_day
 from apps.companies.notes import MELBOURNE
 from core.api.access import can_feature, feature_not_allowed
 from core.auth import users
@@ -82,6 +87,12 @@ def unclear_line(words: str) -> str:
 NO_COMPANY = "No company was named. Pick the company."
 NO_ONE = "No teammate was named. Pick who gets it."
 OTHER_BOX = "That isn't one of this card's boxes."
+NOT_A_CALL_TYPE = (
+    "That isn't one of HubSpot's call types: Prospecting Call, Follow Up Call or "
+    "Agent/Networking Phone Call."
+)
+CALL_TYPE_BOXES: Final = frozenset({"call_type", "call type", "type"})
+WEEK: Final = 7
 PAGE_WORDS: Final = {
     "home": "Home",
     "today": "Today",
@@ -121,6 +132,7 @@ def command(
     opens: AssistantOpen | None = None,
     change: AssistantChange | None = None,
     unsure: str | None = None,
+    **call: Any,
 ) -> AssistantCommand:
     return AssistantCommand(
         action=action,
@@ -134,6 +146,7 @@ def command(
         open=opens,
         change=change,
         unsure=unsure,
+        **call,
     )
 
 
@@ -217,6 +230,12 @@ def on_card(answer: CommandAnswer, ctx: Context, claude: str | None) -> Assistan
         why = OTHER_BOX if answer.action == "change" else None
         return command("unknown", CAN_ON_CARD, unsure=lines(why, claude))
     value = clean_line(answer.value, VALUE_CHARS)
+    if box.casefold() in CALL_TYPE_BOXES:  # "make it a follow-up call" (PLAN-V25 T3-1)
+        kind = call_type_said(value) or call_type_said(ctx.said)
+        if kind is None:
+            return command("unknown", CAN_ON_CARD, unsure=lines(NOT_A_CALL_TYPE, claude))
+        change = AssistantChange(box=box, value=kind, day=None)
+        return command("change", f"Change the call type to {kind}.", change=change, unsure=claude)
     day = day_of(answer.when, ctx.today)
     words = day_words(day, ctx.today) if day is not None else value
     read_back = f"Change {box.replace('_', ' ')} to {words}." if words else f"Clear {box}."
@@ -266,7 +285,7 @@ async def log_call(
 ) -> AssistantCommand:
     screen = await on_screen(session, ctx)
     company, company_line = await find_company(session, answer.company, screen.company, ctx)
-    person, person_line = await find_person_at(session, answer.person, company)
+    person, person_line = await find_person_at(session, answer.person, company, ctx.last)
     if person_first(company, person):
         anywhere, anywhere_line = await find_person_anywhere(session, answer.person, ctx)
         if anywhere.choices or company.found is None:
@@ -281,13 +300,29 @@ async def log_call(
     if follow_up is not None:
         read_back += f" Follow-up task on {day_words(follow_up, ctx.today)}."
     no_company = None if company.found or person.heard else NO_COMPANY
+    unsure = lines(company_line or no_company, person_line, claude)
+    names = [person.heard, company.heard]
+    names += [found.name for found in (person.found, company.found) if found is not None]
+    outcome = only_outcome(ctx.said, names)
+    quick = (
+        outcome in QUICK_OUTCOMES
+        and company.found is not None
+        and company.level == "sure"
+        and person.found is not None
+        and follow_up is None
+        and unsure is None
+    )
     return command(
         "log_call",
         read_back,
         company=company,
         person=person,
         note_text=note_after_cut(ctx.said, answer.note_cut),
-        unsure=lines(company_line or no_company, person_line, claude),
+        unsure=unsure,
+        call_type=call_type_of(answer.note_cut, ctx.said),
+        outcome=outcome,
+        quick=quick,
+        follow_up_day=next_working_day(ctx.today),
     )
 
 
@@ -295,7 +330,7 @@ def person_first(company: AssistantCompany, person: AssistantPerson) -> bool:
     """A person named with no company said (PLAN-V25 choice 8) is searched for everywhere when
     there is no company, or when the one on screen doesn't have them. A company said still wins
     (T2-1)."""
-    if company.heard or not person.heard:
+    if company.heard or not person.heard or means_same(person.heard, SAME_PERSON):
         return False
     return company.found is None or (person.found is None and not person.choices)
 
@@ -308,18 +343,30 @@ async def add_task(
     team = await team_of(session, ctx) if heard(answer.task_for) else []
     owner = task_owner(answer.task_for, team)
     due, why = task_due(answer.when, ctx.today)
+    said_day = answer.when.strip().casefold() not in ("", "unknown")
+    guessed = why == "the date couldn't be read" or not said_day
+    subject = clean_line(answer.subject, SUBJECT_CHARS)
+    suggested = not subject
+    if suggested:  # never a blank box (PLAN-V25 choice 13)
+        about = company.found.name if company.found is not None else ""
+        subject = clean_line(f"Follow up with {about}" if about else "Follow up", SUBJECT_CHARS)
     task = AssistantTask(
-        subject=clean_line(answer.subject, SUBJECT_CHARS),
+        subject=subject,
         due=due,
         due_words=clean_line(answer.when_said, SAID_CHARS),
         kind=answer.kind,
         owner_id=owner.found.owner_id if owner is not None and owner.found is not None else None,
         owner=owner,
+        due_level="likely" if guessed else "sure",
+        due_choices=[due, week_after(due)] if guessed else [],
+        subject_suggested=suggested,
     )
     owner_line = None
     if owner is not None and owner.found is None:
         owner_line = which(owner.heard) if owner.choices else owner.problem
-    date_line = f"Check the date: {why}, so it is due on the next working day." if why else None
+    date_line = None
+    if why and said_day:  # a day said but moved or unread; none said is a suggestion instead
+        date_line = f"Check the date: {why}, so it is due on the next working day."
     return command(
         "task",
         task_words(task, company, ctx),
@@ -329,6 +376,11 @@ async def add_task(
             company_line or (None if company.found else NO_COMPANY), owner_line, date_line, claude
         ),
     )
+
+
+def week_after(day: date) -> date:
+    """'In a week': the same weekday a week on, a working day by then."""
+    return day + timedelta(days=WEEK)
 
 
 def task_words(task: AssistantTask, company: AssistantCompany, ctx: Context) -> str:

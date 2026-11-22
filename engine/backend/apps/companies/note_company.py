@@ -53,7 +53,7 @@ from core.config import Settings
 
 log = logging.getLogger(__name__)
 
-WITH_COMPANY: Final = frozenset({"company_key", "contact_id", "outcome", "teach"})
+WITH_COMPANY: Final = frozenset({"company_key", "contact_id", "outcome", "call_type", "teach"})
 # How a left-out email address or phone number starts in the words kept (facts.scrub), even when
 # the words were cut to fit: such words never teach the mic.
 LEFT_OUT: Final = tuple(gone.split(" out")[0] for gone in (EMAIL_GONE, PHONE_GONE))
@@ -122,9 +122,12 @@ async def pick_company(
         note.contact_id = contact.hubspot_id
         note.person_name = contact.name
         note.person_title = contact.job_title
-    if "outcome" in given:  # the rep's own pick: the sort keeps it
+    if given & {"outcome", "call_type"}:  # the rep's own picks: the sort keeps them
         card = NoteCard.model_validate(note.card or {})
-        card.call.outcome = patch.outcome
+        if "outcome" in given:
+            card.call.outcome = patch.outcome
+        if "call_type" in given:
+            card.call.call_type = patch.call_type
         note.card = card.model_dump(mode="json")
     await start_sort(session, note, settings=settings, now=now)
     taught = await teach(session, note, maker=maker_of(auth)) if patch.teach else False

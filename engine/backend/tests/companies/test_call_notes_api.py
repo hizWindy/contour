@@ -216,7 +216,12 @@ async def test_with_the_ai_off_a_note_waits_for_the_rep_and_claude_gets_nothing(
     async with signed_in_as(world, "mia", ["companies"]) as client:
         note = await log_call(client)
     assert (note["status"], note["sorted_by"]) == ("to_confirm", "person")
-    assert note["call"] == {"summary": "", "outcome": "Connected", "in_hubspot": False}
+    assert note["call"] == {
+        "summary": "",
+        "outcome": "Connected",
+        "call_type": "Prospecting Call",
+        "in_hubspot": False,
+    }
     assert (note["changes"], note["tasks"], note["steps"]) == ([], [], [])
     assert note["person"] == {"id": "c201", "name": "Jo Sample", "title": "Manager"}  # named
     assert note["made_by"] == "Mia" and note["company_name"] == "Sample Logistics Pty Ltd"
@@ -259,7 +264,12 @@ async def test_a_note_with_just_an_outcome_is_saved_and_claude_gets_nothing(
         empty = await client.post(NOTES, json=note_body(text="", outcome=None))
     # No words: nothing for Claude to sort, so it waits for the rep at once, free.
     assert (note["status"], note["sorted_by"]) == ("to_confirm", "person")
-    assert note["call"] == {"summary": "", "outcome": "No answer", "in_hubspot": False}
+    assert note["call"] == {
+        "summary": "",
+        "outcome": "No answer",
+        "call_type": "Prospecting Call",
+        "in_hubspot": False,
+    }
     assert claude.asked == [] and not sorter.running(uuid.UUID(note["id"]))
     assert (empty.status_code, empty.json()["code"]) == (422, "note_empty")
     assert empty.json()["detail"] == "Write or say something, or pick how the call went."
@@ -453,6 +463,7 @@ async def test_the_reps_edits_are_checked_as_the_sorter_checks_them(
     assert body["call"] == {
         "summary": "Jo will send the floor plan.\nCall [number left out] after 2pm.",
         "outcome": None,
+        "call_type": "Prospecting Call",
         "in_hubspot": False,
     }
     assert body["person"] == {"id": "c202", "name": "Sam Sample", "title": None}

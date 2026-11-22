@@ -130,7 +130,12 @@ async def test_a_call_with_no_company_is_saved_with_the_name_as_heard_and_isnt_s
     assert (saved["company_key"], saved["company_name"]) == (None, None)
     assert saved["company_heard"] == "North Wind"
     assert (saved["person"], saved["steps"], saved["changes"], saved["tasks"]) == (None, [], [], [])
-    assert saved["call"] == {"summary": "", "outcome": "Connected", "in_hubspot": False}
+    assert saved["call"] == {
+        "summary": "",
+        "outcome": "Connected",
+        "call_type": "Prospecting Call",
+        "in_hubspot": False,
+    }
     assert read == saved
     assert (again.status_code, again.json()["id"]) == (200, saved["id"])  # a double press
     assert number["company_heard"] == "North Wind [number left out]"
@@ -218,7 +223,12 @@ async def test_with_the_ai_off_a_picked_call_waits_in_to_confirm_at_once(
     body = picked.json()
     assert (body["status"], body["sorted_by"]) == ("to_confirm", "person")
     assert body["person"] == {"id": "c201", "name": "Jo Sample", "title": "Manager"}  # named
-    assert body["call"] == {"summary": "", "outcome": "Connected", "in_hubspot": False}
+    assert body["call"] == {
+        "summary": "",
+        "outcome": "Connected",
+        "call_type": "Prospecting Call",
+        "in_hubspot": False,
+    }
     assert claude.asked == [] and not sorter.running(uuid.UUID(waiting["id"]))
     row = await the_row(world, waiting["id"])
     assert row.sorted_at == START
