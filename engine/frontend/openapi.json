@@ -152,6 +152,82 @@
         "title": "AssistantChange",
         "type": "object"
       },
+      "AssistantChoice": {
+        "description": "One of several companies that match (PLAN-V25 T1-1).",
+        "properties": {
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one detail that tells it apart from the other choices: its city, its owner ('Owner: Sam Sample') or its last call ('Last call 12 Nov')",
+            "title": "Detail"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its strongest signal in plain words, like 'Yours.' or 'Open deal.' None: none",
+            "title": "Reason"
+          },
+          "source": {
+            "enum": [
+              "hubspot",
+              "lead"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "city",
+          "industry",
+          "source"
+        ],
+        "title": "AssistantChoice",
+        "type": "object"
+      },
       "AssistantCommand": {
         "description": "What a command would do. Nothing is written or sent: the review card does that.",
         "properties": {
@@ -350,9 +426,9 @@
             "type": "boolean"
           },
           "choices": {
-            "description": "Two or more that match, best first",
+            "description": "Two or more that match, best first, at most 3. For likely, the first is the suggestion",
             "items": {
-              "$ref": "#/components/schemas/CompanyHit"
+              "$ref": "#/components/schemas/AssistantChoice"
             },
             "title": "Choices",
             "type": "array"
@@ -366,7 +442,7 @@
                 "type": "null"
               }
             ],
-            "description": "The one company that matches"
+            "description": "The company to use: the one that matches, or the sure one of several"
           },
           "from_hubspot": {
             "description": "True when our copy didn't have it and HubSpot's own search found it (or the choices): it is in our copy now (PLAN-V23 T1-3)",
@@ -382,6 +458,35 @@
             "description": "The company as heard. Empty when the command named none",
             "title": "Heard",
             "type": "string"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sure",
+                  "likely",
+                  "unsure"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How sure code is (PLAN-V25): sure (used at once, with Change and Undo), likely (the first choice is suggested, with its reason) or unsure (choose). None when nothing was found",
+            "title": "Level"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why, in a few plain words, like 'You meet them at 2 pm.': for sure, the one found; for likely, the first choice. None when there is nothing to say",
+            "title": "Reason"
           }
         },
         "required": [
@@ -699,6 +804,35 @@
             "description": "The words that named the meeting, like Thursday's meeting. Empty if none",
             "title": "Heard",
             "type": "string"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sure",
+                  "likely",
+                  "unsure"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How sure code is (PLAN-V25): sure (used at once, with Change and Undo), likely (the first choice is suggested, with its reason) or unsure (choose). None when nothing was found",
+            "title": "Level"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why, in a few plain words, like 'You meet them at 2 pm.': for sure, the one found; for likely, the first choice. None when there is nothing to say",
+            "title": "Reason"
           }
         },
         "required": [
@@ -926,9 +1060,9 @@
       "AssistantPerson": {
         "properties": {
           "choices": {
-            "description": "Two or more at the company who match, best first, each with a job title",
+            "description": "Two or more at the company who match, best first, each with a job title, at most 3. Found without the company (PLAN-V25 T2-1), one or more, each with their company: taking one fills the company too",
             "items": {
-              "$ref": "#/components/schemas/PrepPerson"
+              "$ref": "#/components/schemas/AssistantPersonHit"
             },
             "title": "Choices",
             "type": "array"
@@ -948,6 +1082,35 @@
             "description": "The client person as heard, like James. Empty if none",
             "title": "Heard",
             "type": "string"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sure",
+                  "likely",
+                  "unsure"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How sure code is (PLAN-V25): sure (used at once, with Change and Undo), likely (the first choice is suggested, with its reason) or unsure (choose). None when nothing was found",
+            "title": "Level"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why, in a few plain words, like 'You meet them at 2 pm.': for sure, the one found; for likely, the first choice. None when there is nothing to say",
+            "title": "Reason"
           }
         },
         "required": [
@@ -956,6 +1119,73 @@
           "choices"
         ],
         "title": "AssistantPerson",
+        "type": "object"
+      },
+      "AssistantPersonHit": {
+        "description": "A client person as a choice (PLAN-V25 T2-1). Found without the company, they bring it.",
+        "properties": {
+          "company_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Their company (a HubSpot id) when they were found without it. None when the company was already found",
+            "title": "Company Key"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "That company's name",
+            "title": "Company Name"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why they come first, like 'You called them on Tuesday.' None: nothing to say",
+            "title": "Reason"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "title"
+        ],
+        "title": "AssistantPersonHit",
         "type": "object"
       },
       "AssistantRecipient": {
@@ -996,6 +1226,23 @@
             "description": "The name or address as heard",
             "title": "Heard",
             "type": "string"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sure",
+                  "likely",
+                  "unsure"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How sure code is (PLAN-V25): sure (used at once, with Change and Undo), likely (the first choice is suggested, with its reason) or unsure (choose). None when nothing was found",
+            "title": "Level"
           },
           "problem": {
             "anyOf": [

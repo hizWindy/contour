@@ -2458,6 +2458,35 @@ export interface components {
             value: string;
         };
         /**
+         * AssistantChoice
+         * @description One of several companies that match (PLAN-V25 T1-1).
+         */
+        AssistantChoice: {
+            /** City */
+            city: string | null;
+            /**
+             * Detail
+             * @description The one detail that tells it apart from the other choices: its city, its owner ('Owner: Sam Sample') or its last call ('Last call 12 Nov')
+             */
+            detail?: string | null;
+            /** Industry */
+            industry: string | null;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /**
+             * Reason
+             * @description Its strongest signal in plain words, like 'Yours.' or 'Open deal.' None: none
+             */
+            reason?: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "hubspot" | "lead";
+        };
+        /**
          * AssistantCommand
          * @description What a command would do. Nothing is written or sent: the review card does that.
          */
@@ -2521,10 +2550,10 @@ export interface components {
             can_add?: boolean;
             /**
              * Choices
-             * @description Two or more that match, best first
+             * @description Two or more that match, best first, at most 3. For likely, the first is the suggestion
              */
-            choices: components["schemas"]["CompanyHit"][];
-            /** @description The one company that matches */
+            choices: components["schemas"]["AssistantChoice"][];
+            /** @description The company to use: the one that matches, or the sure one of several */
             found: components["schemas"]["CompanyHit"] | null;
             /**
              * From Hubspot
@@ -2541,6 +2570,16 @@ export interface components {
              * @description The company as heard. Empty when the command named none
              */
             heard: string;
+            /**
+             * Level
+             * @description How sure code is (PLAN-V25): sure (used at once, with Change and Undo), likely (the first choice is suggested, with its reason) or unsure (choose). None when nothing was found
+             */
+            level?: ("sure" | "likely" | "unsure") | null;
+            /**
+             * Reason
+             * @description Why, in a few plain words, like 'You meet them at 2 pm.': for sure, the one found; for likely, the first choice. None when there is nothing to say
+             */
+            reason?: string | null;
         };
         /** AssistantCompanyAdded */
         AssistantCompanyAdded: {
@@ -2694,6 +2733,16 @@ export interface components {
              * @description The words that named the meeting, like Thursday's meeting. Empty if none
              */
             heard: string;
+            /**
+             * Level
+             * @description How sure code is (PLAN-V25): sure (used at once, with Change and Undo), likely (the first choice is suggested, with its reason) or unsure (choose). None when nothing was found
+             */
+            level?: ("sure" | "likely" | "unsure") | null;
+            /**
+             * Reason
+             * @description Why, in a few plain words, like 'You meet them at 2 pm.': for sure, the one found; for likely, the first choice. None when there is nothing to say
+             */
+            reason?: string | null;
         };
         /** AssistantMeetingHit */
         AssistantMeetingHit: {
@@ -2791,9 +2840,9 @@ export interface components {
         AssistantPerson: {
             /**
              * Choices
-             * @description Two or more at the company who match, best first, each with a job title
+             * @description Two or more at the company who match, best first, each with a job title, at most 3. Found without the company (PLAN-V25 T2-1), one or more, each with their company: taking one fills the company too
              */
-            choices: components["schemas"]["PrepPerson"][];
+            choices: components["schemas"]["AssistantPersonHit"][];
             /** @description The one person at the company who matches */
             found: components["schemas"]["PrepPerson"] | null;
             /**
@@ -2801,6 +2850,43 @@ export interface components {
              * @description The client person as heard, like James. Empty if none
              */
             heard: string;
+            /**
+             * Level
+             * @description How sure code is (PLAN-V25): sure (used at once, with Change and Undo), likely (the first choice is suggested, with its reason) or unsure (choose). None when nothing was found
+             */
+            level?: ("sure" | "likely" | "unsure") | null;
+            /**
+             * Reason
+             * @description Why, in a few plain words, like 'You meet them at 2 pm.': for sure, the one found; for likely, the first choice. None when there is nothing to say
+             */
+            reason?: string | null;
+        };
+        /**
+         * AssistantPersonHit
+         * @description A client person as a choice (PLAN-V25 T2-1). Found without the company, they bring it.
+         */
+        AssistantPersonHit: {
+            /**
+             * Company Key
+             * @description Their company (a HubSpot id) when they were found without it. None when the company was already found
+             */
+            company_key?: string | null;
+            /**
+             * Company Name
+             * @description That company's name
+             */
+            company_name?: string | null;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Reason
+             * @description Why they come first, like 'You called them on Tuesday.' None: nothing to say
+             */
+            reason?: string | null;
+            /** Title */
+            title: string | null;
         };
         /**
          * AssistantRecipient
@@ -2824,6 +2910,11 @@ export interface components {
              * @description The name or address as heard
              */
             heard: string;
+            /**
+             * Level
+             * @description How sure code is (PLAN-V25): sure (used at once, with Change and Undo), likely (the first choice is suggested, with its reason) or unsure (choose). None when nothing was found
+             */
+            level?: ("sure" | "likely" | "unsure") | null;
             /**
              * Problem
              * @description Why this one can't be sent to yet, in plain words: not on the team list, no Contour account, or not a Contour address. None when it can

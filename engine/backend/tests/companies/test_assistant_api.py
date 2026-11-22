@@ -297,11 +297,15 @@ async def test_a_call_finds_the_company_the_person_and_keeps_the_note_word_for_w
         "choices": [],
         "from_hubspot": False,
         "can_add": False,
+        "level": "sure",
+        "reason": "You meet them at 9:30 pm.",  # PLAN-V25: the rep meets them today
     }
     assert found["person"] == {
         "heard": "James Sample",
         "found": {"id": "c2", "name": "James Sample", "title": "Finance Director"},
         "choices": [],
+        "level": "sure",
+        "reason": None,
     }
     assert found["note_text"] == "He wants the floor plan. Follow up Friday."
     assert found["unsure"] is None
@@ -329,8 +333,22 @@ async def test_two_people_named_james_give_two_choices_best_first(
         found = await ask(client, "Log a call with James at Sample Logistics, no answer.")
     assert found["person"]["found"] is None
     assert found["person"]["choices"] == [
-        {"id": "c2", "name": "James Sample", "title": "Finance Director"},
-        {"id": "c3", "name": "James Other", "title": "Head of Property"},
+        {
+            "id": "c2",
+            "name": "James Sample",
+            "title": "Finance Director",
+            "company_key": None,
+            "company_name": None,
+            "reason": None,
+        },
+        {
+            "id": "c3",
+            "name": "James Other",
+            "title": "Head of Property",
+            "company_key": None,
+            "company_name": None,
+            "reason": None,
+        },
     ]
     assert found["unsure"] == "Which James?"
     assert found["note_text"] == "No answer."
@@ -358,8 +376,16 @@ async def test_an_unknown_company_gives_none_with_the_words_as_heard(
         "choices": [],
         "from_hubspot": False,
         "can_add": False,  # HubSpot isn't connected here, so it wasn't searched
+        "level": None,
+        "reason": None,
     }
-    assert found["person"] == {"heard": "James", "found": None, "choices": []}
+    assert found["person"] == {
+        "heard": "James",
+        "found": None,
+        "choices": [],
+        "level": None,
+        "reason": None,
+    }
     assert found["unsure"] == "We couldn't find 'Zebra Holdings' in HubSpot. Pick the company."
     assert found["read_back"] == "Log a call with James at Zebra Holdings."
     assert found["note_text"] == ""
@@ -373,8 +399,11 @@ async def test_a_short_name_gives_each_company_with_it_and_the_one_on_screen_win
     async with rep(world) as client:
         three = await ask(client, "Log a call with Sample.")
         on_screen = await ask(client, "Log a call with Sample.", on_page={"company_key": "201"})
-    assert [hit["key"] for hit in three["company"]["choices"]] == ["203", "202", "201"]
+    # PLAN-V25 T1-1: ranked by what's likely. Mia meets 201 tonight and 202 tomorrow, so neither
+    # is likely; among those two, the closer name first (as before), then 203 with no meeting.
+    assert [hit["key"] for hit in three["company"]["choices"]] == ["202", "201", "203"]
     assert three["company"]["found"] is None and three["unsure"] == "Which Sample?"
+    assert three["company"]["level"] == "unsure"
     assert on_screen["company"]["found"]["key"] == "201" and on_screen["company"]["from_page"]
     assert on_screen["unsure"] is None
 
@@ -451,7 +480,8 @@ async def test_two_meetings_on_the_day_give_choices_and_none_that_day_offers_tho
     assert [m["id"] for m in tuesday["meeting"]["choices"]] == ["9103", "9104"]
     assert tuesday["unsure"] == "Which meeting on Tue 10 Nov?"
     # Friday's is cancelled: the meetings ahead are offered, and the cancelled one isn't.
-    assert [m["id"] for m in friday["meeting"]["choices"]] == ["9100", "9101", "9103", "9104"]
+    # At most 3 choices, plus Search (PLAN-V25 choice 4).
+    assert [m["id"] for m in friday["meeting"]["choices"]] == ["9100", "9101", "9103"]
     assert friday["unsure"] == (
         "Sample Logistics Pty Ltd has no meeting in HubSpot on Fri 6 Nov. Pick one of the "
         "meetings ahead, or start a pre-read and type the date."
