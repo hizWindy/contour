@@ -180,7 +180,9 @@ async def test_a_new_password_replaces_the_old_one_and_ends_every_session(
         changed = (
             await db.scalars(select(AuditEntry).where(AuditEntry.event == "password_changed"))
         ).all()
-    assert [entry.details for entry in changed] == [{"by": "command", "sessions_ended": 2}]
+    assert [entry.details for entry in changed] == [
+        {"by": "command", "signed_out": True, "sessions_ended": 2}
+    ]
     assert changed[0].user_id == made.id
 
 

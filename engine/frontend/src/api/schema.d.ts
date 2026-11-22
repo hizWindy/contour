@@ -1968,7 +1968,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Change a person's ticks, position, role or whether they can sign in */
+        /** Change a person's username, ticks, position, role or whether they can sign in */
         patch: operations["change_person"];
         trace?: never;
     };
@@ -2002,10 +2002,30 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Reset a person's password and sign them out
-         * @description Generates a new starting password, ends all open sessions for that person, and returns the password once. Platform admin only.
+         * Reset a person's password
+         * @description Generates a new starting password and returns it once. It works at once, and it lifts a lock. `sign_out` (the default, also with no body) ends all open sessions of that person; false keeps their open browsers signed in (PLAN-V26). Platform admin only.
          */
         post: operations["reset_person_password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/people/{user_id}/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unlock a person
+         * @description Lifts the lock that too many wrong passwords set and clears the count, so the right password works at once. A person who isn't locked is returned as they are. Platform admin only.
+         */
+        post: operations["unlock_person"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6205,6 +6225,20 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** LockOut */
+        LockOut: {
+            /**
+             * Until
+             * Format: date-time
+             * @description When the lock ends by itself
+             */
+            until: string;
+            /**
+             * Wrong Tries
+             * @description The wrong passwords in a row that locked it
+             */
+            wrong_tries: number;
+        };
         /** LogEntryOut */
         LogEntryOut: {
             /**
@@ -7135,6 +7169,8 @@ export interface components {
             id: string;
             /** Last Signed In At */
             last_signed_in_at: string | null;
+            /** @description Too many wrong passwords in a row locked this account (PLAN-V26). null: not locked */
+            lock?: components["schemas"]["LockOut"] | null;
             /** Name */
             name: string;
             /**
@@ -7247,6 +7283,8 @@ export interface components {
             id: string;
             /** Last Signed In At */
             last_signed_in_at: string | null;
+            /** @description Too many wrong passwords in a row locked this account (PLAN-V26). null: not locked */
+            lock?: components["schemas"]["LockOut"] | null;
             /** Name */
             name: string;
             /**
@@ -7275,6 +7313,11 @@ export interface components {
             position?: string | null;
             /** Role */
             role?: ("admin" | "staff" | "viewer") | null;
+            /**
+             * Username
+             * @description Lower case, no @, not taken (409 `username_taken`). null or empty: no username, so they sign in with their email
+             */
+            username?: string | null;
         };
         /** PlanReadyData */
         PlanReadyData: {
@@ -7948,6 +7991,15 @@ export interface components {
              * @example cultureamp.com
              */
             website?: string | null;
+        };
+        /** ResetPasswordIn */
+        ResetPasswordIn: {
+            /**
+             * Sign Out
+             * @description Sign them out everywhere. false: the new password works at once, and their open browsers stay signed in
+             * @default true
+             */
+            sign_out: boolean;
         };
         /** ResetPasswordOut */
         ResetPasswordOut: {
@@ -24928,7 +24980,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordIn"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -24937,6 +24993,127 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResetPasswordOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    unlock_person: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonOut"];
                 };
             };
             /** @description The request can't be understood */

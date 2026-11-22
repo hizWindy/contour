@@ -500,9 +500,14 @@ describe('PLAN-V19 T3-3: Position, ticks, generated starting/reset passwords & C
     ).toBeInTheDocument()
     expect(within(sheet).getByText('amber cedar pine 42')).toBeInTheDocument()
 
-    await user.click(within(sheet).getByRole('button', { name: 'Copy' }))
-    expect(writeText).toHaveBeenCalledWith('amber cedar pine 42')
-    expect(within(sheet).getByRole('button', { name: 'Copied' })).toBeInTheDocument()
+    await user.click(within(sheet).getByRole('button', { name: 'Copy sign-in details' }))
+    // PLAN-V26 choice 7: the address, who signs in (their email with no username) and the password.
+    expect(writeText).toHaveBeenCalledWith(
+      `Contour HQ: ${window.location.origin}
+Username: jo@example.test
+Password: amber cedar pine 42`,
+    )
+    expect(await within(sheet).findByRole('button', { name: 'Copied' })).toBeInTheDocument()
 
     await user.click(within(sheet).getByRole('button', { name: 'Done' }))
     await waitFor(() => {

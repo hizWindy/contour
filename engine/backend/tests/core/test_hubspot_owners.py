@@ -487,7 +487,12 @@ async def test_an_admin_sees_sets_and_clears_who_a_person_is_in_hubspot(
                 .order_by(AuditEntry.id)
             )
         )
-    assert [entry.details for entry in entries] == [
+    # Without who made it (PLAN-V26 T2-5), which test_v26_people.py checks.
+    changes = [
+        {key: value for key, value in entry.details.items() if not key.startswith("admin_")}
+        for entry in entries
+    ]
+    assert changes == [
         {"fields": ["hubspot_owner"], "hubspot_owner_id": "301", "hubspot": "linked"},
         {"fields": ["hubspot_owner"], "hubspot_owner_id": None, "hubspot": "not_set"},
     ]

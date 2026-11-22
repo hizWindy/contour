@@ -9234,6 +9234,27 @@
         "title": "LearnedNamePage",
         "type": "object"
       },
+      "LockOut": {
+        "properties": {
+          "until": {
+            "description": "When the lock ends by itself",
+            "format": "date-time",
+            "title": "Until",
+            "type": "string"
+          },
+          "wrong_tries": {
+            "description": "The wrong passwords in a row that locked it",
+            "title": "Wrong Tries",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "until",
+          "wrong_tries"
+        ],
+        "title": "LockOut",
+        "type": "object"
+      },
       "LogEntryOut": {
         "properties": {
           "created_at": {
@@ -11365,6 +11386,17 @@
             ],
             "title": "Last Signed In At"
           },
+          "lock": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LockOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Too many wrong passwords in a row locked this account (PLAN-V26). null: not locked"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -11665,6 +11697,17 @@
             ],
             "title": "Last Signed In At"
           },
+          "lock": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LockOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Too many wrong passwords in a row locked this account (PLAN-V26). null: not locked"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -11788,6 +11831,20 @@
               }
             ],
             "title": "Role"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Lower case, no @, not taken (409 `username_taken`). null or empty: no username, so they sign in with their email",
+            "title": "Username"
           }
         },
         "title": "PersonPatch",
@@ -13389,6 +13446,19 @@
           "company"
         ],
         "title": "ResearchRequest",
+        "type": "object"
+      },
+      "ResetPasswordIn": {
+        "additionalProperties": false,
+        "properties": {
+          "sign_out": {
+            "default": true,
+            "description": "Sign them out everywhere. false: the new password works at once, and their open browsers stay signed in",
+            "title": "Sign Out",
+            "type": "boolean"
+          }
+        },
+        "title": "ResetPasswordIn",
         "type": "object"
       },
       "ResetPasswordOut": {
@@ -39774,7 +39844,7 @@
             "sessionCookie": []
           }
         ],
-        "summary": "Change a person's ticks, position, role or whether they can sign in",
+        "summary": "Change a person's username, ticks, position, role or whether they can sign in",
         "tags": [
           "people"
         ]
@@ -39941,7 +40011,7 @@
     },
     "/people/{user_id}/password": {
       "post": {
-        "description": "Generates a new starting password, ends all open sessions for that person, and returns the password once. Platform admin only.",
+        "description": "Generates a new starting password and returns it once. It works at once, and it lifts a lock. `sign_out` (the default, also with no body) ends all open sessions of that person; false keeps their open browsers signed in (PLAN-V26). Platform admin only.",
         "operationId": "reset_person_password",
         "parameters": [
           {
@@ -39955,6 +40025,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ResetPasswordIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -40082,7 +40169,156 @@
             "sessionCookie": []
           }
         ],
-        "summary": "Reset a person's password and sign them out",
+        "summary": "Reset a person's password",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/people/{user_id}/unlock": {
+      "post": {
+        "description": "Lifts the lock that too many wrong passwords set and clears the count, so the right password works at once. A person who isn't locked is returned as they are. Platform admin only.",
+        "operationId": "unlock_person",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Unlock a person",
         "tags": [
           "people"
         ]

@@ -104,9 +104,31 @@ async def create(
     return user
 
 
+async def change_username(db: AsyncSession, user: User, username: str | None) -> None:
+    """Gives a user another username, or none: then they sign in with their email (PLAN-V26
+    choice 8). `username` must already be clean.
+
+    Raises `LoginTaken` if it is in use. The transaction is rolled back first, as in `create`.
+    """
+    user.username = username
+    try:
+        await db.flush()
+    except IntegrityError as error:
+        await db.rollback()
+        diag = getattr(error.orig, "diag", None)
+        if "uq_users_username" not in str(getattr(diag, "constraint_name", "") or ""):
+            raise  # a rule other than "taken": that is a bug, not a name in use
+        raise LoginTaken("username") from error
+
+
 def set_password(user: User, password_hash: str, now: datetime) -> None:
     """The new hash is the only password. A lock and the count of wrong tries start again."""
     user.password_hash = password_hash
     user.password_changed_at = now
+    unlock(user)
+
+
+def unlock(user: User) -> None:
+    """Lifts the lock and clears the count of wrong tries."""
     user.failed_attempts = 0
     user.locked_until = None

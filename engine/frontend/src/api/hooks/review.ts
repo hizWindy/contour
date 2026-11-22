@@ -96,15 +96,29 @@ export function useAddPerson() {
   })
 }
 
+/** A new password. `signOut` false keeps their open browsers signed in (PLAN-V26 choice 6). */
 export function useResetPersonPassword() {
   const queryClient = useQueryClient()
-  return useMutation<ResetPassword, ApiProblem, string>({
-    mutationFn: async (userId) =>
+  return useMutation<ResetPassword, ApiProblem, { userId: string; signOut: boolean }>({
+    mutationFn: async ({ userId, signOut }) =>
       unwrap(
         await api.POST('/people/{user_id}/password', {
           params: { path: { user_id: userId } },
+          body: { sign_out: signOut },
         }),
       ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: KEYS.people })
+    },
+  })
+}
+
+/** Lifts a person's lock and clears the wrong tries (PLAN-V26 choice 9). */
+export function useUnlockPerson() {
+  const queryClient = useQueryClient()
+  return useMutation<Person, ApiProblem, string>({
+    mutationFn: async (userId) =>
+      unwrap(await api.POST('/people/{user_id}/unlock', { params: { path: { user_id: userId } } })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: KEYS.people })
     },

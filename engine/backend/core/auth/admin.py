@@ -7,8 +7,9 @@ its own entry in the sign-in log in the same transaction, and commits. The comma
 asks for the password (twice, never shown) and calls these.
 """
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -84,10 +85,12 @@ async def create_person(
     by: str = BY_COMMAND,
     hubspot_owner_id: str | None = None,
     no_hubspot_user: bool = False,
+    made_by: Mapping[str, Any] | None = None,
 ) -> User:
     """Makes an account with a role, optional position, and ticks (`PLAN-V19 T1-4, T1-5`). It may
     start linked to a HubSpot owner the caller has checked (set by hand), or marked "No HubSpot
-    user" (PLAN-V23 T3-1), in the same transaction."""
+    user" (PLAN-V23 T3-1), in the same transaction. `made_by` is the admin who did it, for the
+    log (`audit.made_by`)."""
     email = clean.email(email)
     username = clean.username(username)
     cleaned_position = clean.position(position)
@@ -120,7 +123,7 @@ async def create_person(
         user.hubspot_owner_matched_by = "person"  # an Admin picked it: the sync never changes it
     else:
         user.no_hubspot_user = no_hubspot_user
-    details: dict[str, object] = {"by": by, "role": user.role}
+    details: dict[str, object] = {"by": by, "role": user.role, **(made_by or {})}
     if hubspot_owner_id is not None or no_hubspot_user:
         details["hubspot"] = "linked" if hubspot_owner_id is not None else "none"
     audit.add_entry(db, "account_created", user_id=user.id, details=details, at=now)
@@ -165,19 +168,22 @@ async def reset_password(
     now: datetime,
     hasher: Hasher | None = None,
     by: str = BY_COMMAND,
+    sign_out: bool = True,
+    made_by: Mapping[str, Any] | None = None,
 ) -> int:
-    """Gives a user a new password. Every session of that user ends, so whoever had the old
-    password (or a stolen cookie) is out. The lock, if there is one, is lifted. Returns how many
-    sessions ended. Raises `PasswordRefused` for a password that breaks the rules."""
+    """Gives a user a new password. With `sign_out` (the default) every session of that user
+    ends, so whoever had the old password (or a stolen cookie) is out. Without it their open
+    browsers stay signed in (PLAN-V26 choice 6). The lock, if there is one, is lifted. Returns
+    how many sessions ended. Raises `PasswordRefused` for a password that breaks the rules."""
     require_good_password(password, email=user.email, username=user.username)
     password_hash = await (hasher or get_hasher()).ahash(password)
     users.set_password(user, password_hash, now)
-    ended = await sessions.end_for_user(db, user.id, now)
+    ended = await sessions.end_for_user(db, user.id, now) if sign_out else 0
     audit.add_entry(
         db,
         "password_changed",
         user_id=user.id,
-        details={"by": by, "sessions_ended": ended},
+        details={"by": by, "signed_out": sign_out, "sessions_ended": ended, **(made_by or {})},
         at=now,
     )
     await db.commit()

@@ -3,12 +3,16 @@
  * role, optional position, feature ticks in three groups (Companies, Assistant and Lead Finder,
  * PLAN-V22 choice 4), HubSpot user (PLAN-V23 T3-4, `hubspot-user.tsx`: a HubSpot user, "No
  * HubSpot user", or "Not set" for an older account), and starting/reset passwords.
+ *
+ * PLAN-V26 Part 2: Reset password has "Sign them out everywhere", the username can be changed,
+ * a locked person's row has Unlock, and one button copies the sign-in details.
  */
 import {
   Check,
   Copy,
   Eye,
   KeyRound,
+  LockOpen,
   Pencil,
   Shield,
   ShieldCheck,
@@ -24,6 +28,7 @@ import {
   useMe,
   usePeople,
   useResetPersonPassword,
+  useUnlockPerson,
   type Person,
 } from '@/api/hooks'
 import {
@@ -83,7 +88,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatRelative } from '@/lib/format'
+import { formatRelative, formatTime } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
 import { firstName } from '@/shell/home-words'
 import { ROLE_NAMES, roleName } from '@/shell/roles'
@@ -211,16 +216,25 @@ function accessOf(person: Person): string {
   return parts.join(', ')
 }
 
-function MadePasswordBox({
-  name,
-  password,
-  onDone,
-}: {
+/** A new password with who signs in with it: their username, or their email without one. */
+interface SignIn {
   name: string
+  login: string
   password: string
-  onDone?: () => void
-}) {
+}
+
+/** What "Copy sign-in details" copies. The address is the site this admin is on (choice 7). */
+function signInDetails({ login, password }: SignIn): string {
+  return [
+    `Contour HQ: ${window.location.origin}`,
+    `Username: ${login}`,
+    `Password: ${password}`,
+  ].join('\n')
+}
+
+function MadePasswordBox({ made, onDone }: { made: SignIn; onDone?: () => void }) {
   const [copied, setCopied] = useState(false)
+  const [copyFailed, setCopyFailed] = useState(false)
   const timerRef = useRef<number | null>(null)
 
   useEffect(() => {
@@ -231,8 +245,14 @@ function MadePasswordBox({
     }
   }, [])
 
-  const copy = (): void => {
-    void navigator.clipboard?.writeText(password).catch(() => undefined)
+  const copy = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(signInDetails(made))
+    } catch {
+      setCopyFailed(true) // the password is on screen, so it can still be selected
+      return
+    }
+    setCopyFailed(false)
     setCopied(true)
     if (timerRef.current !== null) {
       window.clearTimeout(timerRef.current)
@@ -246,16 +266,28 @@ function MadePasswordBox({
   return (
     <div className="flex flex-col gap-3 rounded-lg border bg-card p-4">
       <p className="text-ui text-foreground">
-        Send this to {firstName(name)} yourself. It won&apos;t show again.
+        Send this to {firstName(made.name)} yourself. It won&apos;t show again.
       </p>
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2">
-        <code className="font-mono text-body font-semibold text-foreground select-all">
-          {password}
-        </code>
-        <Button type="button" variant="outline" size="sm" onClick={copy}>
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1 rounded-md border bg-muted/40 px-3 py-2">
+        <dt className="text-caption text-muted-foreground">Username</dt>
+        <dd className="text-ui break-all text-foreground select-all">{made.login}</dd>
+        <dt className="text-caption text-muted-foreground">Password</dt>
+        <dd className="min-w-0">
+          <code className="font-mono text-body font-semibold break-all text-foreground select-all">
+            {made.password}
+          </code>
+        </dd>
+      </dl>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={() => void copy()}>
           {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? 'Copied' : 'Copy sign-in details'}
         </Button>
+        {copyFailed ? (
+          <p role="alert" className="text-caption text-foreground">
+            Copying didn&apos;t work. Select the password and copy it.
+          </p>
+        ) : null}
       </div>
       {onDone ? (
         <div>
@@ -268,6 +300,18 @@ function MadePasswordBox({
   )
 }
 
+/** What a reset does, before it is confirmed (PLAN-V26 choice 6). */
+function resetWords(name: string, self: boolean, signOut: boolean): string {
+  if (self) {
+    return signOut
+      ? "We'll make a new starting password for you and sign you out."
+      : "We'll make a new starting password for you. You stay signed in."
+  }
+  return signOut
+    ? `We'll make a new starting password for ${name} and sign them out on every device.`
+    : `We'll make a new starting password for ${name}. It works at once, and their open browsers stay signed in.`
+}
+
 /** The ticks a new person starts with: the role's, or Call logs only with no HubSpot user. */
 function startingTicks(role: AssignableRole, noHubSpotUser: boolean): readonly Feature[] {
   if (role === 'admin') return ALL_FEATURES
@@ -275,9 +319,110 @@ function startingTicks(role: AssignableRole, noHubSpotUser: boolean): readonly F
   return noHubSpotUser ? ['companies.call_logs'] : DEFAULT_FEATURES_BY_ROLE[role]
 }
 
+/** "Locked until 3:40 pm after 10 wrong tries." with Unlock (PLAN-V26 choice 9). */
+function LockedNote({ person }: { person: Person }) {
+  const unlock = useUnlockPerson()
+  const { lock } = person
+  if (!lock) return null
+  return (
+    <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-normal whitespace-normal">
+      <span className="text-caption text-foreground">
+        {`Locked until ${formatTime(lock.until)} after ${String(lock.wrong_tries)} wrong tries.`}
+      </span>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        aria-label={`Unlock ${person.name}`}
+        disabled={unlock.isPending}
+        onClick={() => {
+          unlock.mutate(person.id, {
+            onSuccess: () => {
+              toast(`${person.name} can try again now.`)
+            },
+            onError: toastProblem,
+          })
+        }}
+      >
+        <LockOpen aria-hidden="true" />
+        Unlock
+      </Button>
+    </span>
+  )
+}
+
 /**
- * Edits to one person, applied at once: role, position, ticks, HubSpot user, sign-in and password
- * reset. `taken`: the HubSpot users linked to someone, and to whom.
+ * The username, saved on its own (PLAN-V26 choice 8). The backend checks it: lower case, no @,
+ * not taken.
+ */
+function UsernameField({ id, person }: { id: string; person: Person }) {
+  const change = useChangePerson()
+  const [draft, setDraft] = useState(person.username ?? '')
+  const [error, setError] = useState<string | null>(null)
+  const next = draft.trim()
+  const changed = next !== (person.username ?? '')
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (!changed || change.isPending) return
+        setError(null)
+        change.mutate(
+          { userId: person.id, patch: { username: next === '' ? null : next } },
+          {
+            onSuccess: (saved) => {
+              setDraft(saved.username ?? '')
+              toast(
+                saved.username
+                  ? `${person.name} signs in as ${saved.username} now. Tell them.`
+                  : `${person.name} signs in with their email now. Tell them.`,
+              )
+            },
+            onError: (problem) => {
+              const wrong = isApiProblem(problem)
+                ? problem.errors.find((item) => item.field.replace(/^body\./, '') === 'username')
+                : undefined
+              if (wrong) setError(wrong.message)
+              else toastProblem(problem)
+            },
+          },
+        )
+      }}
+    >
+      <Field>
+        <FieldLabel htmlFor={id}>Username</FieldLabel>
+        <div className="flex items-center gap-2">
+          <Input
+            id={id}
+            value={draft}
+            maxLength={64}
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder="None: they use their email"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={`${id}-hint`}
+            onChange={(event) => {
+              setDraft(event.target.value)
+              setError(null)
+            }}
+          />
+          <Button type="submit" variant="outline" size="sm" disabled={!changed || change.isPending}>
+            Save
+          </Button>
+        </div>
+        <FieldDescription id={`${id}-hint`}>
+          Tell them if you change it: the old one stops at once. Their email always works.
+        </FieldDescription>
+        {error ? <FieldError>{error}</FieldError> : null}
+      </Field>
+    </form>
+  )
+}
+
+/**
+ * Edits to one person, applied at once: role, username, position, ticks, HubSpot user, sign-in and
+ * password reset. `taken`: the HubSpot users linked to someone, and to whom.
  */
 function EditPerson({
   person,
@@ -293,6 +438,7 @@ function EditPerson({
   const id = useId()
   const [open, setOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
+  const [signOut, setSignOut] = useState(true)
   const [resetResult, setResetResult] = useState<string | null>(null)
   const [positionDraft, setPositionDraft] = useState(person.position ?? '')
   const [positionError, setPositionError] = useState<string | null>(null)
@@ -361,13 +507,16 @@ function EditPerson({
   }
 
   const runReset = (): void => {
-    resetPassword.mutate(person.id, {
-      onSuccess: (answer) => {
-        setConfirmReset(false)
-        setResetResult(answer.starting_password)
+    resetPassword.mutate(
+      { userId: person.id, signOut },
+      {
+        onSuccess: (answer) => {
+          setConfirmReset(false)
+          setResetResult(answer.starting_password)
+        },
+        onError: toastProblem,
       },
-      onError: toastProblem,
-    })
+    )
   }
 
   return (
@@ -422,6 +571,8 @@ function EditPerson({
               </>
             )}
           </Field>
+
+          <UsernameField id={`${id}-username`} person={person} />
 
           <form
             onSubmit={(event) => {
@@ -508,10 +659,16 @@ function EditPerson({
               <div className="flex flex-col">
                 <span className="text-ui font-semibold">Password</span>
                 <span className="text-caption text-muted-foreground">
-                  Make a new starting password and sign them out on every device.
+                  Make a new starting password. It works at once.
                 </span>
               </div>
-              <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
+              <AlertDialog
+                open={confirmReset}
+                onOpenChange={(next) => {
+                  if (next) setSignOut(true) // on by default, each time
+                  setConfirmReset(next)
+                }}
+              >
                 <AlertDialogTrigger asChild>
                   <Button
                     type="button"
@@ -527,11 +684,23 @@ function EditPerson({
                   <AlertDialogHeader>
                     <AlertDialogTitle>Reset {person.name}&apos;s password?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      {self
-                        ? "We'll make a new starting password for you and sign you out."
-                        : `We'll make a new starting password for ${person.name} and sign them out on every device.`}
+                      {resetWords(person.name, self, signOut)}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
+                  <label
+                    htmlFor={`${id}-sign-out`}
+                    className="flex min-h-11 items-center justify-between gap-3 text-ui"
+                  >
+                    <span className="font-semibold">
+                      {self ? 'Sign me out everywhere' : 'Sign them out everywhere'}
+                    </span>
+                    <Switch
+                      id={`${id}-sign-out`}
+                      checked={signOut}
+                      disabled={resetPassword.isPending}
+                      onCheckedChange={setSignOut}
+                    />
+                  </label>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
@@ -548,7 +717,13 @@ function EditPerson({
               </AlertDialog>
             </div>
             {resetResult !== null ? (
-              <MadePasswordBox name={person.name} password={resetResult} />
+              <MadePasswordBox
+                made={{
+                  name: person.name,
+                  login: person.username ?? person.email,
+                  password: resetResult,
+                }}
+              />
             ) : null}
           </div>
         </div>
@@ -594,6 +769,7 @@ function PeopleTable({ people, myId }: { people: Person[]; myId: string | null }
                   <span className="truncate text-caption text-muted-foreground">
                     {person.email}
                   </span>
+                  <LockedNote person={person} />
                 </span>
               </TableCell>
               <TableCell>
@@ -637,7 +813,7 @@ function AddPerson({ taken }: { taken: ReadonlyMap<string, string> }) {
     () => new Set(DEFAULT_FEATURES_BY_ROLE.staff),
   )
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [created, setCreated] = useState<{ name: string; password: string } | null>(null)
+  const [created, setCreated] = useState<SignIn | null>(null)
 
   const resetForm = (): void => {
     setName('')
@@ -695,7 +871,11 @@ function AddPerson({ taken }: { taken: ReadonlyMap<string, string> }) {
       {
         onSuccess: (person) => {
           toast(`${person.name} can sign in now.`)
-          setCreated({ name: person.name, password: person.starting_password })
+          setCreated({
+            name: person.name,
+            login: person.username ?? person.email,
+            password: person.starting_password,
+          })
           resetForm()
         },
         onError: (error) => {
@@ -739,8 +919,7 @@ function AddPerson({ taken }: { taken: ReadonlyMap<string, string> }) {
         {created ? (
           <div className="px-4">
             <MadePasswordBox
-              name={created.name}
-              password={created.password}
+              made={created}
               onDone={() => {
                 handleOpenChange(false)
               }}

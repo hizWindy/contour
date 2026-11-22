@@ -124,6 +124,7 @@ ROUTES = [
     ("POST", f"{API}/people"),
     ("PATCH", f"{API}/people/{{user_id}}"),
     ("POST", f"{API}/people/{{user_id}}/password"),
+    ("POST", f"{API}/people/{{user_id}}/unlock"),  # PLAN-V26 T2-4
     ("PUT", f"{API}/people/{{user_id}}/hubspot-owner"),  # who a person is in HubSpot (PLAN-V17)
     ("POST", f"{API}/runs"),
     ("POST", f"{API}/runs/estimate"),

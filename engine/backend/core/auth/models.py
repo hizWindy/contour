@@ -10,7 +10,8 @@ of every sign-in (core.audit_log). PLAN-V6 B1.
   (unless "keep me signed in") after the idle time: that rule is in `core.auth.sessions`.
 - **The log.** Every sign-in, failure, lock, sign-out and password change, with the time and the IP
   address. Never a password, a token or a login name that was typed (`details` is for facts like
-  how many sessions ended). It keeps its rows when a user is deleted (the user becomes empty).
+  how many sessions ended, a username an admin changed, and which admin made a change). It keeps
+  its rows when a user is deleted (the user becomes empty).
 - **Who a user is in HubSpot** (PLAN-V17 T1-4): a HubSpot owner's id, so the calls a rep logs land
   under their name, and how it was matched (`email` by the sync, or `person`: set by an Admin).
   Never the owner's email. `core.hubspot.owners` keeps it.

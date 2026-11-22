@@ -59,6 +59,18 @@ def add_entry(
     return entry
 
 
+def made_by(admin: User | None, *, ip: str | None, user_agent: str | None) -> dict[str, Any]:
+    """Who made an admin's change, for that entry's `details` (PLAN-V26 choice 10): the admin,
+    their address and their device. They aren't in the entry's own `ip` and `user_agent`: those
+    two say where the account's own person was. `admin` is None where sign-in is off."""
+    return {
+        "admin_id": str(admin.id) if admin else None,
+        "admin_name": admin.name if admin else None,
+        "admin_ip": clean.ip(ip),
+        "admin_device": clean.device(user_agent),
+    }
+
+
 async def newest(
     db: AsyncSession, *, limit: int = DEFAULT_LIMIT, offset: int = 0
 ) -> list[tuple[AuditEntry, User | None]]:
