@@ -94,6 +94,15 @@ function page(answers: Record<string, AssistantCommand>, { keep = true } = {}) {
   return { mic, of, ...view }
 }
 
+/** What the task command leaves for the next turn (PLAN-V25 T5-1). */
+const LAST_TASK = {
+  action: 'task',
+  company_key: '201',
+  company_heard: 'Sample Logistics',
+  person_id: null,
+  person_heard: '',
+}
+
 async function wait(ms: number) {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(ms)
@@ -188,10 +197,10 @@ describe('the card in a conversation (T2-3)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('where')).toHaveTextContent('/assistant/call-logs')
     })
-    // A new command: the card's action and boxes don't go with it.
+    // A new command: the card's action and boxes don't go with it; the last turn does (PLAN-V25 T5-1).
     expect(of(API.command).map((call) => call.body)).toEqual([
       { text: TASK_WORDS, source: 'mic' },
-      { text: 'Open call logs', source: 'mic' },
+      { text: 'Open call logs', source: 'mic', last_turn: LAST_TASK },
     ])
     expect(mic.live()).toBe(1)
   })
@@ -241,6 +250,7 @@ describe('the card in a conversation (T2-3)', () => {
       text: change,
       source: 'mic',
       card: { action: 'task', boxes: ['subject', 'due', 'kind', 'body'] },
+      last_turn: LAST_TASK,
     })
     // The card is still open, and still hears.
     expect(strip(card)).toHaveTextContent('Listening')

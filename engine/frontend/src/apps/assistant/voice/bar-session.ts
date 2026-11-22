@@ -66,6 +66,7 @@ import type {
   AssistantCardIn,
   AssistantCommand,
   AssistantCommandIn,
+  AssistantLastTurn,
   AssistantOnPage,
   CommandSource,
   VoiceToolKind,
@@ -84,6 +85,7 @@ import type { AfterAnswer, Heard } from './hand-over'
 import { pauseFor } from './pauses'
 import { browserScreen, type KeptOn, type ScreenEnv } from './screen'
 import type { Tone } from './tone'
+import { lastTurnOf } from './last-turn'
 import { endsConversation, isShortTurn } from './turns'
 
 export const TIMES = {
@@ -367,6 +369,11 @@ export class BarSession {
   private readonly screen: ScreenEnv
   /** The wake lock while the conversation listens, and which ask for it is the newest. */
   private kept: KeptOn | null = null
+  /**
+   * The conversation's last turn (PLAN-V25 T5-1): its company and person, sent with the next
+   * command so "same company" and "her" work. Kept until the bar closes, never after.
+   */
+  private previousTurn: AssistantLastTurn | null = null
   private keepAsk = 0
   private unwatchPage: (() => void) | null = null
   private readonly tone: Tone | null
@@ -1134,11 +1141,13 @@ export class BarSession {
       source: turn.source,
       ...(onPage ? { on_page: onPage } : {}),
       ...(ear ? { card: ear.card() } : {}),
+      ...(this.previousTurn ? { last_turn: this.previousTurn } : {}),
     }
     this.read(body, request.signal).then(
       (command) => {
         if (this.turnRequest !== request || this.over) return
         this.turnRequest = null
+        this.previousTurn = lastTurnOf(command) ?? this.previousTurn
         this.turnAnswered({ kind: 'command', command, words: turn.text, source: turn.source }, ear)
       },
       (error: unknown) => {
@@ -1248,11 +1257,13 @@ export class BarSession {
       source,
       ...(this.onPage ? { on_page: this.onPage } : {}),
       ...(this.card ? { card: this.card } : {}),
+      ...(this.previousTurn ? { last_turn: this.previousTurn } : {}),
     }
     this.read(body, request.signal).then(
       (command) => {
         if (this.request !== request || this.over) return
         this.request = null
+        this.previousTurn = lastTurnOf(command) ?? this.previousTurn
         this.answered({ kind: 'command', command, words: text, source })
       },
       (error: unknown) => {

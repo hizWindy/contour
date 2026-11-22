@@ -752,3 +752,46 @@ describe('phones and windows (PLAN-V24 T2-5)', () => {
     expect(fake.state).toMatchObject({ taken: 1, released: 1 })
   })
 })
+
+describe('the last turn (PLAN-V25 T5-1)', () => {
+  it('goes with the next command, and a turn that found nobody keeps the one before', async () => {
+    const { mic, sent, answer } = await listening({ slow: true })
+    await sayTurn(mic, LOG_CALL)
+    await answer(
+      command({
+        action: 'log_call',
+        company: {
+          heard: 'Sample Logistics',
+          from_page: false,
+          found: {
+            key: '201',
+            name: 'Sample Logistics Pty Ltd',
+            city: 'Perth',
+            industry: null,
+            source: 'hubspot',
+          },
+          choices: [],
+        },
+        person: {
+          heard: 'Jo Sample',
+          found: { id: 'c1', name: 'Jo Sample', title: null },
+          choices: [],
+        },
+      }),
+    )
+    await sayTurn(mic, OPEN_TODAY)
+    await answer(command({ action: 'open' }))
+    await sayTurn(mic, ADD_TASK)
+    expect(sent).toHaveLength(3)
+    expect(sent[0]?.last_turn).toBeUndefined()
+    const kept = {
+      action: 'log_call',
+      company_key: '201',
+      company_heard: 'Sample Logistics',
+      person_id: 'c1',
+      person_heard: 'Jo Sample',
+    }
+    expect(sent[1]?.last_turn).toEqual(kept)
+    expect(sent[2]?.last_turn).toEqual(kept)
+  })
+})
