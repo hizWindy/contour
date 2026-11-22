@@ -75,6 +75,8 @@ async def test_every_listed_table_shows(team: Team) -> None:
     for table in tables:
         answer = await team.admin.get(f"{TABLES}/{table['table']}")
         assert answer.status_code == 200, f"{table['table']}: {answer.text}"
+        found = await team.admin.get(f"{TABLES}/{table['table']}", params={"q": "sample"})
+        assert found.status_code == 200, f"{table['table']} search: {found.text}"
         for column in table["columns"]:
             if column["sortable"]:
                 params = {"sort": column["key"], "order": "asc"}

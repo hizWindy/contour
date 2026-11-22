@@ -15,7 +15,7 @@ from fastapi import Request
 from apps.companies import assistant, notes
 from apps.companies.tables import CallNote, MeetingForm, Prep
 from core import work
-from core.auth.models import User
+from core.auth.models import AuditEntry, User, UserSession
 from core.claude.client import Reply
 from core.claude.pricing import Usage
 from core.runs.models import Run
@@ -232,6 +232,56 @@ async def test_spending_and_sign_ins_page_fifty_at_a_time(team: Team) -> None:
     assert log["items"][0]["device"] is None  # Jo didn't do it
     assert log["items"][0]["details"]["admin_name"] == "Al Khair"
     assert "account_created" in [row["event"] for row in log["items"]]
+
+
+@pytest.mark.parametrize("tab", TABS)
+async def test_every_tab_pages_fifty_newest_first(team: Team, tab: str) -> None:
+    """T3-2's "Done when", for each of the six routes."""
+    mine = team.jo_user.id
+    start = team.world.clock.now
+    rows: list[Any] = []
+    for number in range(53):
+        at = WHEN + timedelta(days=number)
+        called = {"company_key": str(number), "company_name": f"Sample {number:02}"}
+        if tab == "sign-ins":
+            rows.append(AuditEntry(user_id=mine, event="sign_in_failed", created_at=at))
+        elif tab == "devices":
+            seen = start - timedelta(seconds=number + 1)
+            rows.append(
+                UserSession(
+                    user_id=mine,
+                    token_hash=f"{number:064x}",
+                    created_at=seen,
+                    last_seen_at=seen,
+                    expires_at=start + timedelta(days=1),
+                )
+            )
+        elif tab in ("calls", "sent"):
+            status = "logged" if tab == "sent" else "to_confirm"
+            rows.append(
+                CallNote(
+                    made_by=mine,
+                    text="No answer",
+                    source="typed",
+                    called_at=at,
+                    finished_at=at,
+                    status=status,
+                    **called,
+                )
+            )
+        elif tab == "preps":
+            rows.append(Prep(made_by=mine, status="ready", created_at=at, **called))
+        else:
+            rows.append(search(mine, "prep:web", "0.01", created_at=at))
+    await team.save(*rows)
+
+    first, second = await team.tab(tab), await team.tab(tab, 50)
+    when = {"devices": "last_used_at", "spending": "day"}.get(tab, "at")
+    assert first["total"] >= 53
+    assert len(first["items"]) == 50
+    assert len(second["items"]) == min(50, first["total"] - 50)
+    shown = [datetime.fromisoformat(row[when]) for row in first["items"] + second["items"]]
+    assert shown == sorted(shown, reverse=True)
 
 
 async def test_devices_list_each_browser_and_one_can_be_signed_out(team: Team) -> None:
