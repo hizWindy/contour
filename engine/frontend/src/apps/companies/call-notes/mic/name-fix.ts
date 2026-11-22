@@ -10,8 +10,14 @@
  *   or more;
  * - the same first letter, and at most 1 letter off (2 for a name of 8 letters or more);
  * - never a common word, even with a capital at the start of a sentence.
+ *
+ * PLAN-V25 T4-2 adds **sounds like** (choice 17): a capitalised word that sounds like one name,
+ * and only one, as Australians say it ("Prarn" for Prahran: an r after a vowel isn't said), with the
+ * same guards, and never an everyday word ("Shall" never becomes "Shell"). And a short **said like**
+ * list (`au-words.ts`) for names the sound alone doesn't find ("Pran" for Prahran).
  * Pure code, so the tests prove each case.
  */
+import { SAID_LIKE } from './au-words'
 
 export interface NameFix {
   from: string
@@ -129,10 +135,48 @@ export function lettersApart(a: string, b: string): number {
   return cost[a.length]?.[b.length] ?? 0
 }
 
-/** The name a heard word is a near miss of, or null. */
+/**
+ * How a word sounds, as a short key (PLAN-V25 T4-2): the first letter, then the consonants said.
+ * Australian English drops an r after a vowel ("Prahran" and "Pran" are both "prn"), an h after a
+ * vowel is silent, and ph, ck, c, q, x and z are written as they sound. Doubled letters count once.
+ */
+export function soundKey(word: string): string {
+  let said = word.toLowerCase().replace(/[^a-z]/g, '')
+  if (said === '') return ''
+  said = said
+    .replace(/^kn/, 'n')
+    .replace(/^wr/, 'r')
+    .replace(/^wh/, 'w')
+    .replace(/^ps/, 's')
+    .replace(/ph/g, 'f')
+    .replace(/ck/g, 'k')
+    .replace(/dge/g, 'j')
+    .replace(/gh/g, '')
+    .replace(/c(?=[eiy])/g, 's')
+    .replace(/[cq]/g, 'k')
+    .replace(/x/g, 'ks')
+    .replace(/z/g, 's')
+    .replace(/([aeiou])h/g, '$1')
+    .replace(/([aeiou])r(?=[^aeiou]|$)/g, '$1')
+  const rest = said.slice(1).replace(/[aeiouyhw]/g, '')
+  return `${said[0]}${rest}`.replace(/(.)\1+/g, '$1')
+}
+
+/** The one name a heard word sounds like, or null: none, or two that sound the same. */
+function soundsLike(word: string, names: readonly string[]): string | null {
+  const key = word.toLowerCase()
+  const sound = soundKey(word)
+  if (sound.length < 3) return null
+  const found = new Set(
+    names.filter((name) => name.toLowerCase() !== key && soundKey(name) === sound),
+  )
+  return found.size === 1 ? ([...found][0] ?? null) : null
+}
+
+/** The name a heard word is a near miss of, by spelling, else by sound, or null. */
 function nearName(word: string, names: readonly string[]): string | null {
   const key = word.toLowerCase()
-  if (word.length < 4 || !/^\p{Lu}/u.test(word) || COMMON.has(key)) return null
+  if (word.length < 4 || !/^\p{Lu}/u.test(word) || everyday(key)) return null
   for (const name of names) {
     const target = name.toLowerCase()
     if (target === key) return null
@@ -141,7 +185,7 @@ function nearName(word: string, names: readonly string[]): string | null {
     if (Math.abs(target.length - key.length) > allowed) continue
     if (lettersApart(key, target) <= allowed) return name
   }
-  return null
+  return soundsLike(word, names)
 }
 
 /**
@@ -197,7 +241,9 @@ const EVERYDAY = new Set(
   ),
 )
 
-const everyday = (key: string): boolean => COMMON.has(key) || EVERYDAY.has(key) || GENERIC.has(key)
+function everyday(key: string): boolean {
+  return COMMON.has(key) || EVERYDAY.has(key) || GENERIC.has(key)
+}
 
 /** A name's words, as written: "Sample Logistics Pty Ltd" has four. */
 function wordsOf(name: string): string[] {
@@ -311,10 +357,37 @@ function fixRuns(text: string, names: readonly string[]): { text: string; fixes:
  * tool writes names: with capitals (the browser's service, as before) or in any case (the model on
  * the device).
  */
+/** Names as people say them (`SAID_LIKE`), each whole word, in any case. */
+function fixSaidLike(text: string): { text: string; fixes: NameFix[] } {
+  const fixes: NameFix[] = []
+  const fixed = text.replace(/[\p{L}][\p{L}'-]*/gu, (word) => {
+    const name = SAID_LIKE[word.toLowerCase()]
+    if (!name || name === word) return word
+    if (!fixes.some((fix) => fix.from === word && fix.to === name))
+      fixes.push({ from: word, to: name })
+    return name
+  })
+  return { text: fixed, fixes }
+}
+
 export function fixNames(
   text: string,
   names: readonly string[],
   nameCase: NameCase = 'capitals',
+): { text: string; fixes: NameFix[] } {
+  const said = fixSaidLike(text)
+  const fixed = fixByName(said.text, names, nameCase)
+  const fixes = [...said.fixes]
+  for (const fix of fixed.fixes) {
+    if (!fixes.some((kept) => kept.from === fix.from && kept.to === fix.to)) fixes.push(fix)
+  }
+  return { text: fixed.text, fixes }
+}
+
+function fixByName(
+  text: string,
+  names: readonly string[],
+  nameCase: NameCase,
 ): { text: string; fixes: NameFix[] } {
   if (nameCase === 'any') return fixRuns(text, names)
   const words = nameWords(names)
