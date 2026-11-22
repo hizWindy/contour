@@ -7,7 +7,7 @@ This plan stops Claude requests from blocking each other: a call prep never wait
 - **Status:** drafted on 22 Nov 2026 from Al-khair's chat of 21 and 22 Nov. Being built since 22 Nov on `plan-v26`, on his "implement v26" (A1). Not merged, pushed or deployed.
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
 - **Last updated:** 22 Nov 2026.
-- **Progress:** S1 and Parts 1 and 2 done (23 Nov). Part 3 under way.
+- **Progress:** S1 and Parts 1 and 2 done; Part 3 built but for T3-4, which waits for S3 (23 Nov). Part 4 under way.
 - **Sources:**
   - Al-khair's chat on 21 and 22 Nov 2026 (his 13 asks, then his answers);
   - the code on `master` (`ff0f658`). The files this plan changes are the same as on `b84c3cf`, read on 21 Nov;
@@ -209,15 +209,15 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
 
 ## Part 3: the Activity page
 
-- [ ] **T3-1. Save who asked.** (the migration; who asked, set once per request and per job; the search log; `runs`). Choice 13.
+- [x] **T3-1. Save who asked.** Done 23 Nov (`95dec9c`). (the migration; who asked, set once per request and per job; the search log; `runs`). Choice 13.
   - **Done when:** tests pass: a prep, a call note and an Assistant command save the person; a scheduled job saves none; a run saves who started it; and the migration goes up and down cleanly.
-- [ ] **T3-2. The Activity routes.** (a new `core/api/activity.py`, Platform admin only). Choices 11 and 12.
+- [x] **T3-2. The Activity routes.** Done 23 Nov (`95dec9c`). (a new `core/api/activity.py`, Platform admin only). Choices 11 and 12.
   - **Done when:** tests pass: each tab's route pages 50 at a time, newest first; ending one session or all of them works; anyone but the Platform admin gets 403; and the contract is made again.
-- [ ] **T3-3. The Activity page.** (`admin/`, a new page from the People table). Choices 11 to 13.
+- [ ] **T3-3. The Activity page.** Built 23 Nov (`95dec9c`), its tests pass. Waits for Al-khair's look. (`admin/`, a new page from the People table). Choices 11 to 13.
   - **Done when:** tests at 1440 and 390 px pass: the six tabs show their rows; Sign out asks first, then ends that browser; an empty tab says so in words; and Al-khair has looked.
-- [ ] **T3-4. The keep time and the sign-in page line.** (a daily job, `auth/login-page.tsx`). Choices 14 and 15, after S3.
+- [ ] **T3-4. The keep time and the sign-in page line.** Not built: it comes after S3, and it deletes records. (a daily job, `auth/login-page.tsx`). Choices 14 and 15, after S3.
   - **Done when:** tests pass: sign-in log rows older than the keep time go, and nothing else does; and the line shows on the sign-in page.
-- [ ] **T3-5. Part 3 check.** As T1-3, plus the contract gate (`RUN_GATES=1`).
+- [x] **T3-5. Part 3 check.** Done 23 Nov for what is built (the numbers are in the Log). Run it again after T3-4. As T1-3, plus the contract gate (`RUN_GATES=1`).
   - **Done when:** all pass, and the numbers are in the Log.
 
 ## Part 4: the Data tab
@@ -305,3 +305,9 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
   - **T2-5:** the admin's IP address and device go in the entry's details, so the entry's own address stays the person's.
   - **T2-6's numbers:** ruff, mypy, lint, types and build pass; 3,580 fast backend tests; 147 People and sign-in database tests; 3,060 website tests; first visit 243 kB gzip JS and 25 kB CSS. Four older tests were updated for the new log details and route.
   - **The security check:** no blockers. Every route is the Platform admin's, no allow list changed, no new package, nothing new in the logs. One risk is by choice: with the switch off, a stolen session outlives a reset, so the switch is on by default and the log says which.
+- 23 Nov 2026, Part 3 (`95dec9c`):
+  - **The migration:** `0029_v26_activity` follows `0027` on this branch. **At M1, point its `down_revision` at PLAN-V25's `0028`.** It went up, down and up cleanly on `leadfinder_v26`. It also removes a saved `claude_concurrency`, and it adds `admin_edits.row_after`, a hash that lets Undo see a row changed since.
+  - **Sent** is the person's calls that reached HubSpot and the pre-reads they emailed. A lead sent to HubSpot isn't there: that write doesn't save who pressed it.
+  - **Run now** on a schedule saves the admin who pressed it. A start on time saves nobody.
+  - **T3-5's numbers:** ruff, mypy, lint, types and build pass; 3,582 fast backend tests; 172 database tests, after one older migration test learned the new newest migration; 3,068 website tests; first visit 243 kB gzip JS and 25 kB CSS.
+  - **The contract gate** passes run alone. Inside the whole fast suite it fails on `master` (`ff0f658`) too: two `Literal`s with the same words in another order (`high, medium, low`) share Python's cache, so the enum's order follows the test order. Not fixed here. For M1: run `tests/gates` alone.
