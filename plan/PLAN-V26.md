@@ -7,7 +7,7 @@ This plan stops Claude requests from blocking each other: a call prep never wait
 - **Status:** drafted on 22 Nov 2026 from Al-khair's chat of 21 and 22 Nov. Being built since 22 Nov on `plan-v26`, on his "implement v26" (A1). Not merged, pushed or deployed.
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
 - **Last updated:** 22 Nov 2026.
-- **Progress:** S1 and Part 1 done (23 Nov). Part 2 next.
+- **Progress:** S1 and Parts 1 and 2 done (23 Nov). Part 3 under way.
 - **Sources:**
   - Al-khair's chat on 21 and 22 Nov 2026 (his 13 asks, then his answers);
   - the code on `master` (`ff0f658`). The files this plan changes are the same as on `b84c3cf`, read on 21 Nov;
@@ -194,17 +194,17 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
 
 ## Part 2: people and passwords
 
-- [ ] **T2-1. Reset with a switch.** (`core/api/people.py`, `admin/people.tsx`). Choice 6.
+- [x] **T2-1. Reset with a switch.** Done 23 Nov (`0338f24`). (`core/api/people.py`, `admin/people.tsx`). Choice 6.
   - **Done when:** tests pass: on, every session ends; off, open sessions stay and the new password works; and the log says which.
-- [ ] **T2-2. Copy sign-in details.** (`admin/people.tsx`). Choice 7.
+- [x] **T2-2. Copy sign-in details.** Done 23 Nov (`0338f24`). (`admin/people.tsx`). Choice 7.
   - **Done when:** tests pass: the copied text matches choice 7 exactly; with no username it has the email; and "Copied" shows for 2 seconds.
-- [ ] **T2-3. Change the username.** (`core/api/people.py`, Edit person). Choice 8.
+- [x] **T2-3. Change the username.** Done 23 Nov (`0338f24`). (`core/api/people.py`, Edit person). Choice 8.
   - **Done when:** tests pass: a change works; a taken name is refused (409); an @ is refused; clearing works; the old username can't sign in and the new one can; and the log has the change.
-- [ ] **T2-4. Unlock.** (a new route beside reset, the person's row). Choice 9.
+- [x] **T2-4. Unlock.** Done 23 Nov (`0338f24`). (a new route beside reset, the person's row). Choice 9.
   - **Done when:** tests pass: a locked person shows the lock and its end time; Unlock clears it; the right password then works at once; and the log has the unlock.
-- [ ] **T2-5. Who changed it.** (`core/api/people.py`, `core/auth/audit.py`). Choice 10.
+- [x] **T2-5. Who changed it.** Done 23 Nov (`0338f24`). (`core/api/people.py`, `core/auth/audit.py`). Choice 10.
   - **Done when:** tests pass: every admin route's log entry has the admin, the IP address and the device.
-- [ ] **T2-6. Part 2 check.** As T1-3, plus the `security-check` skill on sign-in and passwords.
+- [x] **T2-6. Part 2 check.** Done 23 Nov (the numbers are in the Log). As T1-3, plus the `security-check` skill on sign-in and passwords.
   - **Done when:** all pass, and the numbers are in the Log.
 
 ## Part 3: the Activity page
@@ -299,3 +299,9 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
   - **Lane sizes:** each field's own top is 4, like the other concurrency settings (a test ties it to `hard_concurrency`'s default).
   - **T1-3's numbers:** ruff, mypy, lint, types and build pass; 3,577 fast backend tests; 717 of 719 Companies, run, schedule and settings tests; 3,048 website tests; first visit 243 kB gzip JS and 25 kB CSS. The 2 that failed under load (a speed budget and a cancel's timing, with 275 MB of memory free) pass when run again (31 tests).
   - **Still true:** a Research again on a lead is refused while a run is going (`max_concurrent_runs` is 1). The lanes don't change that limit. For Al-khair.
+- 23 Nov 2026, Part 2 (`0338f24`):
+  - **T2-2:** with no username, the copied line still says `Username:`, with the email after it, as choice 7's shape has it.
+  - **T2-4:** an Unlock is logged as `account_changed` with `unlocked`, because the log's kinds are a fixed list in the database (choice 10: no new table). Unlock doesn't lift the separate limit on one IP address's tries.
+  - **T2-5:** the admin's IP address and device go in the entry's details, so the entry's own address stays the person's.
+  - **T2-6's numbers:** ruff, mypy, lint, types and build pass; 3,580 fast backend tests; 147 People and sign-in database tests; 3,060 website tests; first visit 243 kB gzip JS and 25 kB CSS. Four older tests were updated for the new log details and route.
+  - **The security check:** no blockers. Every route is the Platform admin's, no allow list changed, no new package, nothing new in the logs. One risk is by choice: with the switch off, a stolen session outlives a reset, so the switch is on by default and the log says which.
