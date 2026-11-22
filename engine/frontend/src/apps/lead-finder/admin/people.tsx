@@ -329,8 +329,8 @@ function LockedNote({ person }: { person: Person }) {
   if (!lock) return null
   return (
     <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-normal whitespace-normal">
-      <span className="flex items-center gap-1 text-caption text-foreground">
-        <Lock aria-hidden="true" className="size-3.5 shrink-0" />
+      <span className="flex items-start gap-1 text-caption text-foreground">
+        <Lock aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
         {`Locked until ${formatTime(lock.until)} after ${String(lock.wrong_tries)} wrong tries.`}
       </span>
       <Button

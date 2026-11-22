@@ -120,6 +120,21 @@ function renderRun() {
   )
 }
 
+describe('the wait at Claude (PLAN-V26 T1-2)', () => {
+  it('shows on a Research again', async () => {
+    mockApi(() => run({ params: { recheck: true }, waiting_ahead: 1 }))
+    renderRun()
+    expect(await screen.findAllByText('Waiting for Claude: 1 ahead of you.')).not.toHaveLength(0)
+  })
+
+  it('never shows on a run nobody waits for', async () => {
+    mockApi(() => run({ waiting_ahead: 1 }))
+    renderRun()
+    await screen.findByRole('heading', { level: 1 })
+    expect(screen.queryAllByText(/^Waiting for Claude/)).toHaveLength(0)
+  })
+})
+
 describe('the run page', () => {
   it('shows the live counters, results so far, cost against the cap and the feed', async () => {
     mockApi(() => run())

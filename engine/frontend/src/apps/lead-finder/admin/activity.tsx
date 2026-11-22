@@ -361,6 +361,7 @@ export default function AdminPersonActivity() {
           <Segmented
             aria-label="Activity"
             size="sm"
+            className="w-fit max-w-full"
             options={TABS}
             value={tab}
             onChange={(next) => {

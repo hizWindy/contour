@@ -26,11 +26,13 @@ _EMAIL = re.compile(
 # Australian number (+61 or 0, 1300 and 1800, or 8 digits that start 6 to 9), or a foreign one
 # that starts with +.
 _NUMBER = re.compile(
-    r"(?P<keep>\d{4}[-/.]\d{2}[-/.]\d{2}|(?<!\d)\d{1,2}[-/.]\d{1,2}[-/.]\d{4}(?!\d)"
+    r"(?P<keep>(?<!\d)(?:19|20)\d\d[-/.]\d{2}[-/.]\d{2}"
+    r"|(?<!\d)\d{1,2}[-/.]\d{1,2}[-/.](?:19|20)\d\d(?!\d)"
     r"|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"
     r"|(?<![\w+])(?P<phone>"
     r"\+\s?61[\s()./-]*(?:0[\s()./-]*)?[2-478](?:[\s()./-]*\d){8}"
     r"|\(?0[2-478]\)?(?:[\s()./-]*\d){8}"
+    r"|61[\s.-]*4(?:[\s.-]?\d){8}"
     r"|1[38]00(?:[\s.-]?\d){6}"
     r"|\+(?!\s?61)\d(?:[\s()./-]*\d){7,13}"
     r"|[6-9]\d{3}[\s-]\d{4}"
@@ -64,7 +66,10 @@ def _mask_for(key: str) -> Mask | None:
 def _hidden(value: Any, mask: Mask | None) -> Any:
     """`value` with what must be hidden hidden, at any depth."""
     if isinstance(value, Mapping):
-        return {str(key): _hidden(item, mask or _mask_for(str(key))) for key, item in value.items()}
+        return {
+            hide_contacts(str(key)): _hidden(item, mask or _mask_for(str(key)))
+            for key, item in value.items()
+        }
     if isinstance(value, list | tuple):
         return [_hidden(item, mask) for item in value]
     if value is None or isinstance(value, bool):
@@ -90,5 +95,7 @@ def cell(value: Any, mask: Mask | None = None) -> str | None:
         if isinstance(value, int | float | Decimal | UUID):
             return str(value)
     hidden = _hidden(value, mask)
-    text = hidden if isinstance(hidden, str) else json.dumps(hidden, ensure_ascii=False)
+    text = (
+        hidden if isinstance(hidden, str) else json.dumps(hidden, ensure_ascii=False, default=str)
+    )
     return text if len(text) <= CELL_MAX else text[:CELL_MAX] + "…"

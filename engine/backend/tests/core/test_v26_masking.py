@@ -30,6 +30,8 @@ NEVER = ("password_hash", "token_hash", "idempotency_key", "request_id", "embedd
         ("1300 555 019", "••• 019"),
         ("their line is 9000 1234", "their line is ••• 234"),
         ("+44 20 7946 0958", "••• 958"),
+        ("61 412 345 678", "••• 678"),
+        ("0412.34.56.78", "••• 678"),  # dots don't make it a date
     ],
 )
 def test_emails_and_phone_numbers_are_hidden(value: str, shown: str) -> None:
@@ -71,6 +73,10 @@ def test_json_is_hidden_at_every_depth() -> None:
     assert "Jo Sample" in shown
     for secret in ("jo@", "555 0199", "0412", "5550199"):
         assert secret not in shown
+
+
+def test_an_address_used_as_a_json_key_is_hidden() -> None:
+    assert "jo@" not in (cell({"jo@northwind.com.au": "sent"}) or "")
 
 
 def test_a_key_is_never_shown() -> None:

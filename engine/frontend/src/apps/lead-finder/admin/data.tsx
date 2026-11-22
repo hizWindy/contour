@@ -33,7 +33,7 @@ import { useDebounced } from '@/hooks/useDebounced'
 import { formatDate, formatDateTime } from '@/lib/format'
 
 const PAGE_SIZE = 50
-const MOMENT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/
+const MOMENT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/
 const DAY = /^\d{4}-\d{2}-\d{2}$/
 
 /** A cell's words. The backend sends text, so a time is told by its shape. */

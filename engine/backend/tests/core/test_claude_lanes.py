@@ -5,13 +5,14 @@ import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 
 import anthropic
 import httpx
 import httpx2
 import pytest
 from fastapi import FastAPI
+from langgraph.graph import END, START, StateGraph
 
 from apps.companies.prep import PrepRunner, prep_out, wait_key
 from apps.companies.schemas import PrepStatus
@@ -330,3 +331,20 @@ def test_only_a_searching_prep_says_how_many_are_ahead(
         finished_at=None,
     )
     assert prep_out(cast(Any, prep), made_by=None).waiting_ahead == said
+
+
+class _Step(TypedDict):
+    lane: str
+
+
+async def test_a_runs_lane_reaches_langgraphs_steps() -> None:
+    async def step(state: _Step) -> _Step:
+        return {"lane": work.current().lane}
+
+    builder = StateGraph(_Step)
+    builder.add_node("step", step)
+    builder.add_edge(START, "step")
+    builder.add_edge("step", END)
+    with work.doing(Work("runs", SOMEONE)):
+        task = asyncio.create_task(builder.compile().ainvoke({"lane": ""}))
+    assert (await task)["lane"] == "runs"

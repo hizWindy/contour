@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from core import work
 from core.api.errors import Problem
 from core.auth.models import User
+from core.claude.client import claude_holder
 from core.config import get_settings
 from core.runs.manager import (
     PROMPT_VERSIONS_MAX,
@@ -492,3 +493,16 @@ async def test_a_run_saves_who_started_it(
     async with session_factory() as session:
         rows = [await session.get(Run, mine.id), await session.get(Run, nobody.id)]
     assert [row.started_by if row else "gone" for row in rows] == [person.id, None]
+
+
+async def test_a_run_that_waits_says_how_many_are_ahead(
+    run_manager: RunManager, fakes: FakeState, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PLAN-V26 T1-2: only while it is active."""
+    monkeypatch.setattr(claude_holder.lanes, "ahead", lambda key: 2)
+    run = await run_manager.start(APP, "block", {})
+    await fakes.entered.wait()
+    assert (await run_manager.get_run(run.id)).waiting_ahead == 2
+    fakes.gate.set()
+    await wait_until_idle(run_manager)
+    assert (await run_manager.get_run(run.id)).waiting_ahead is None
