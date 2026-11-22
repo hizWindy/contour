@@ -6,6 +6,8 @@
  * - `open` goes to its page, and the bar closes (no card: choice 24).
  * - `log_call`, `task` and `email` open the review card (`card/`), and the bar closes. Nothing is
  *   sent from here: the card does that, after the rep's check.
+ * - A quick log (PLAN-V25 T3-3, `command.quick`) skips the card: the bar's `quickLog` saves the
+ *   call and starts the hold, whose toast says what goes, with Undo (`card/quick.ts`).
  * - `pre_read`: its card is the pre-read's own page (choice 24). With the meeting found, the page
  *   opens, after the pre-read starts if it has none yet ("Working it out" stays on meanwhile).
  *   With two or more meetings, or none ahead, the card asks.
@@ -71,6 +73,11 @@ export interface HandOverTools {
   dictate?: (words: string, source: CommandSource) => boolean
   /** For tests: starts a pre-read. */
   start?: StartPreRead
+  /**
+   * A quick log (PLAN-V25 T3-3): a call that is only an outcome, sure of its company and person,
+   * skips the card. True: it started. Left out, or false: the card opens, as before.
+   */
+  quickLog?: (heard: Extract<Heard, { kind: 'command' }>) => boolean
 }
 
 /** The actions whose card is the review card. */
@@ -144,7 +151,7 @@ export function openMeeting(
 
 export function handOver(
   heard: Heard,
-  { go, dictate = () => false, start = startPreRead }: HandOverTools,
+  { go, dictate = () => false, start = startPreRead, quickLog = () => false }: HandOverTools,
 ): AfterAnswer | Promise<AfterAnswer> {
   if (heard.kind === 'dictation') {
     // V still works as dictation: the words go in a new call note (choice 17).
@@ -160,6 +167,7 @@ export function handOver(
   if (command.action === 'pre_read' && command.meeting?.found) {
     return openMeeting(command.meeting.found, go, start)
   }
+  if (command.action === 'log_call' && command.quick === true && quickLog(heard)) return CLOSE
   if (CARD_ACTIONS.has(command.action) || command.action === 'pre_read') {
     openCard({ kind: 'command', command, words: heard.words, source: heard.source })
     return CLOSE

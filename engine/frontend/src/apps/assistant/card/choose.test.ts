@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { AssistantCommand, TeamMember } from '@/api/types'
-import { pickByVoice } from './choose'
+import { pickByVoice, yesOrNo } from './choose'
 import { draftOf, type CallDraft, type CardDraft, type EmailDraft, type TaskDraft } from './draft'
 import {
   callCommand,
@@ -318,5 +318,19 @@ describe('a teammate (T2-4)', () => {
     ['an email', whichSamEmail],
   ])('for %s, a name that isn’t on the team changes nothing, and the card says so', (_, made) => {
     expect(pickByVoice(made(), 'Sam Smith')).toEqual({ kind: 'none', words: 'Sam Smith' })
+  })
+})
+
+describe('a yes or a no to the card’s question (PLAN-V25 T3-2)', () => {
+  it.each([
+    ['yes', 'yes'],
+    ['Yeah, please.', 'yes'],
+    ['use it', 'yes'],
+    ['no', 'no'],
+    ['nope, not that one', 'no'],
+    ['make it Friday', null],
+    ['Jo Sample', null],
+  ] as const)('%s', (said, answer) => {
+    expect(yesOrNo(said)).toBe(answer)
   })
 })

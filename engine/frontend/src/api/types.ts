@@ -216,6 +216,8 @@ export type AssistantCommand = Schemas['AssistantCommand']
 export type AssistantCommandIn = Schemas['AssistantCommandIn']
 export type AssistantOnPage = Schemas['AssistantOnPage']
 export type AssistantOpen = Schemas['AssistantOpen']
+// PLAN-V25 T5-1: the conversation's last turn, sent with the next command
+export type AssistantLastTurn = Schemas['AssistantLastTurn']
 export type CommandSource = AssistantCommandIn['source']
 
 // The review card (PLAN-V22 T3-3): what it shows, and what it sends (the contract parts 1, 3, 4)
@@ -224,6 +226,9 @@ export type AssistantChange = Schemas['AssistantChange']
 export type AssistantRecipient = Schemas['AssistantRecipient']
 export type AssistantTask = Schemas['AssistantTask']
 export type AssistantMeetingHit = Schemas['AssistantMeetingHit']
+// PLAN-V25 T1-1 and T2-1: a company or a person to pick, with its reason (and its detail)
+export type AssistantChoice = Schemas['AssistantChoice']
+export type AssistantPersonHit = Schemas['AssistantPersonHit']
 export type AssistantTaskIn = Schemas['AssistantTaskIn']
 export type AssistantEmailIn = Schemas['AssistantEmailIn']
 export type TeamEmail = Schemas['TeamEmail']

@@ -127,6 +127,7 @@ import { sparing } from '@/shell/preload'
 import { CardHost } from '../card/host'
 import { cardShownOf, openCard, openedCard, useOpenCard, type CardRequest } from '../card/store'
 import { BarSession, MAX_CHARS, type BarProblem, type BarSnapshot, type Times } from './bar-session'
+import { startQuickLog } from '../card/quick'
 import { handOver } from './hand-over'
 import { isKeepListeningOn, useKeepListening } from './keep-listening'
 import { isPlainV, somethingElseOpen, VOICE_BAR } from './keys'
@@ -495,6 +496,14 @@ export default function VoiceBar({
                 openCard({ kind: 'dictation', words, source })
                 return true
               },
+              // A quick log skips the card (PLAN-V25 T3-3): its hold's toast says what goes.
+              quickLog: (heard) =>
+                startQuickLog(heard, {
+                  client,
+                  go: (to) => {
+                    void navigate(to)
+                  },
+                }),
             }),
           onClose: closeVoiceBar,
           env,

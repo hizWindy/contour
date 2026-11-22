@@ -3,7 +3,7 @@
  * plain, sentence case, no em dash, and no setting or file name (the screen-words test reads them).
  * The wording is Al-khair's to change.
  */
-import type { CallNoteOut, TaskKind } from '@/api/types'
+import type { CallNoteOptions, CallNoteOut, TaskKind } from '@/api/types'
 import {
   formatDate,
   formatDateTime,
@@ -48,6 +48,36 @@ export const NO_ONE = 'No one in particular'
 export const NO_OUTCOME = 'No outcome'
 export const OUTCOME = 'Outcome'
 export const SUMMARY = 'Summary'
+
+/** HubSpot's call types (PLAN-V25 T3-1, choice 12), the default first, as the server lists them. */
+export type CallType = NonNullable<CallNoteOut['call']['call_type']>
+export const CALL_TYPES: readonly CallType[] = [
+  'Prospecting Call',
+  'Follow Up Call',
+  'Agent/Networking Phone Call',
+]
+export const DEFAULT_CALL_TYPE: CallType = 'Prospecting Call'
+export const CALL_TYPE = 'Call type'
+/** Each type in short, plain words on screen; HubSpot keeps its own names (TBC at Al-khair's look). */
+export const CALL_TYPE_LABELS: Readonly<Record<CallType, string>> = {
+  'Prospecting Call': 'Prospecting',
+  'Follow Up Call': 'Follow-up',
+  'Agent/Networking Phone Call': 'Agent or networking',
+}
+
+/** A value said or sent, if it is one of HubSpot's call types. */
+export function callTypeOf(value: string | null | undefined): CallType | null {
+  return CALL_TYPES.find((one) => one === value) ?? null
+}
+
+/** HubSpot's call types as the server lists them, else the three PLAN-V25 names. */
+export function callTypesOf(options: Pick<CallNoteOptions, 'call_types'> | undefined): CallType[] {
+  const listed = (options?.call_types ?? []).flatMap((one) => {
+    const type = callTypeOf(one)
+    return type ? [type] : []
+  })
+  return listed.length > 0 ? listed : [...CALL_TYPES]
+}
 
 /** The longest summary the server takes (`CallNotePatch.summary`). */
 export const SUMMARY_MAX_CHARS = 600

@@ -13,7 +13,12 @@ import {
   readBackOf,
   sendOrCancel,
   cardWordsOf,
+  isDueSuggested,
+  noteBodyOf,
+  nudgeDayOf,
+  pickDue,
   taskBodyOf,
+  type CallDraft,
   type TaskDraft,
 } from './draft'
 import { isTyping } from '@/lib/is-typing'
@@ -171,6 +176,99 @@ describe('a change by voice', () => {
       tasks: [{ subject: 'Follow up', due: '2099-11-30', due_words: 'Monday', kind: 'call' }],
     })
     expect(callPatchOf(note(), { box: 'follow-up', value: 'soon', day: null }, outcomes)).toBeNull()
+  })
+})
+
+describe('the gaps the card fills (PLAN-V25 T3-1 to T3-3)', () => {
+  function callDraft(change: Parameters<typeof callCommand>[0] = {}): CallDraft {
+    const made = draftOf({ command: callCommand(change), words: 'log a call', source: 'mic' }, null)
+    if (made?.action !== 'log_call') throw new Error('not a call')
+    return made
+  }
+
+  it('a call keeps the type heard, Prospecting Call by default, and saves it with the outcome', () => {
+    expect(callDraft().callType).toBe('Prospecting Call')
+    const follow = callDraft({ call_type: 'Follow Up Call', outcome: 'No answer' })
+    expect(follow).toMatchObject({ callType: 'Follow Up Call', outcome: 'No answer' })
+    expect(noteBodyOf(follow)).toMatchObject({
+      company_key: '201',
+      contact_id: 'c-1',
+      call_type: 'Follow Up Call',
+      outcome: 'No answer',
+    })
+    // No outcome heard: the sorter reads it from the note.
+    expect(noteBodyOf(callDraft())).not.toHaveProperty('outcome')
+    // A draft kept before PLAN-V25 has no type: Prospecting Call.
+    const old = { ...callDraft(), callType: undefined }
+    expect(noteBodyOf(old)?.call_type).toBe('Prospecting Call')
+  })
+
+  it('a call type said goes as a PATCH; a type HubSpot doesn’t list is no change', () => {
+    const change = (value: string) =>
+      callPatchOf(note(), { box: 'call_type', value, day: null }, [])
+    expect(change('Follow Up Call')).toEqual({ call_type: 'Follow Up Call' })
+    expect(change('Cold call')).toBeNull()
+  })
+
+  it('a day not said is a suggestion until the rep picks or types one', () => {
+    const made = draftOf(
+      {
+        command: taskCommand({
+          task: {
+            subject: 'Follow up with Sample Logistics Pty Ltd',
+            subject_suggested: true,
+            due: '2099-11-30',
+            due_words: '',
+            due_level: 'likely',
+            due_choices: ['2099-11-30', '2099-12-07'],
+            kind: 'todo',
+            owner: null,
+            owner_id: null,
+          },
+        }),
+        words: 'add a task for Sample Logistics',
+        source: 'mic',
+      },
+      null,
+    )
+    if (made?.action !== 'task') throw new Error('not a task')
+    expect(made).toMatchObject({
+      when: 'Mon 30 Nov 2099',
+      dueLevel: 'likely',
+      dueChoices: ['2099-11-30', '2099-12-07'],
+      subjectSuggested: true,
+    })
+    expect(isDueSuggested(made)).toBe(true)
+    // Sent as it is, the day suggested goes (it never holds a send up).
+    expect(taskBodyOf(made, TODAY)).toMatchObject({ due: '2099-11-30' })
+    const week = pickDue(made, '2099-12-07')
+    expect(isDueSuggested(week)).toBe(false)
+    expect(week).toMatchObject({ when: 'Mon 7 Dec 2099', due: '2099-12-07', dueLevel: 'sure' })
+    expect(isDueSuggested({ ...made, when: 'Friday' })).toBe(false)
+    // Said by voice: sure, and the subject is the rep's own.
+    expect(applyChange(made, { box: 'due', value: 'Friday', day: '2099-12-04' })).toMatchObject({
+      dueLevel: 'sure',
+    })
+    expect(applyChange(made, { box: 'subject', value: 'Send the quote', day: null })).toMatchObject(
+      { subject: 'Send the quote', subjectSuggested: false },
+    )
+    // A day said: sure, no question.
+    expect(isDueSuggested(taskDraft())).toBe(false)
+  })
+
+  it('the nudge: a Connected call with no follow-up, once sorted; never a No answer', () => {
+    const draft = callDraft({ follow_up_day: '2099-11-27' })
+    expect(nudgeDayOf(draft, note({ tasks: [] }))).toBe('2099-11-27')
+    expect(nudgeDayOf(draft, note())).toBeNull()
+    expect(nudgeDayOf(draft, note({ tasks: [], status: 'sorting' }))).toBeNull()
+    expect(
+      nudgeDayOf(
+        draft,
+        note({ tasks: [], call: { in_hubspot: false, outcome: 'No answer', summary: '' } }),
+      ),
+    ).toBeNull()
+    expect(nudgeDayOf(callDraft(), note({ tasks: [] }))).toBeNull()
+    expect(nudgeDayOf(draft, undefined)).toBeNull()
   })
 })
 

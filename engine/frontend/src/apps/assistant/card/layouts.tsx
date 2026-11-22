@@ -12,12 +12,15 @@
  *   when there is none ahead, with New pre-read.
  *
  * A choice the command left open ("Which James?") shows as buttons in its place, and the part
- * shows once it is picked. Every part a send waits for carries `data-box`. The company, with
+ * shows once it is picked. With a level (PLAN-V25 T1-2), each unclear company, person, teammate and
+ * meeting shows in the one suggestion part (`suggest.tsx`): a suggestion with its reason, or up to
+ * 3 choices and Search. A person found before their company (T2-2) is suggested with it ("Jo
+ * Sample at Northwind Sample Pty Ltd?"), and taking them fills both. Every part a send waits for carries `data-box`. The company, with
  * "Add to HubSpot" when it is nowhere (PLAN-V23 T1-6), is its own part (`company.tsx`).
  */
 import { useQueryClient } from '@tanstack/react-query'
 import { Hourglass, X } from 'lucide-react'
-import { useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { useTeam } from '@/api/hooks/meetings'
 import { queryKeys } from '@/api/query'
@@ -43,13 +46,16 @@ import {
   TaskList,
 } from '@/apps/companies/call-logs/note-parts'
 import {
+  callTypesOf,
   changeLabel,
+  DEFAULT_CALL_TYPE,
   isMeetingNotes,
   KIND_LABELS,
   removedChangeWords,
   removedTaskWords,
   SORTING,
   UNDO,
+  type CallType,
 } from '@/apps/companies/call-logs/words'
 import { useNoHubSpotUser } from '@/auth/hubspot-user'
 import { ChipGroup, Segmented } from '@/components/motion'
@@ -62,17 +68,27 @@ import { CompanyPart, type CompanyVoice } from './company'
 import {
   BODY_MAX,
   dueOf,
+  isDueSuggested,
   isPending,
+  isPersonFirst,
+  isPersonNowhere,
   MOST_PEOPLE,
+  nudgeDayOf,
   pickCompany,
+  pickDue,
+  pickPerson,
   recipientOf,
   SUBJECT_MAX,
+  turnDown,
   type CallDraft,
+  type CompanyFind,
   type EmailDraft,
   type Recipient,
   type TaskDraft,
 } from './draft'
+import { CallTypePart, DueChoices, FollowUpNudge, SubjectAsk } from './gaps'
 import { BoxField, CardLine, ChoiceList, PartProblem } from './parts'
+import { SuggestPart } from './suggest'
 import { FollowUpFor, TeammatePicker } from './teammate'
 import { GIVE_IT_TO_A_TEAMMATE, ownerIdOf } from './teammate-rules'
 import {
@@ -80,16 +96,21 @@ import {
   ADD_PLACEHOLDER,
   ADD_SOMEONE,
   BODY,
+  dueAskWords,
   dueLine,
+  followUpWithWords,
   FOR_WHOM,
   FOR_YOU,
   HOW_IT_WENT,
   HUBSPOT_OFF,
   KIND,
+  MEETING,
   MORE,
   NEW_PRE_READ,
   noMeetingWords,
   NO_ONE,
+  personAtWords,
+  personNowhereWords,
   NOTHING_ADDED,
   OPEN_CALL_LOGS,
   REMOVE,
@@ -349,6 +370,73 @@ export interface CallLayoutProps {
   previewMs?: number
   /** The company said again (PLAN-V24 T3-2). */
   voice?: CompanyVoice | null
+  /**
+   * The company part changed by its level (PLAN-V25): a suggestion turned down, or a sure company
+   * changed or undone. A saved call's own company changes through the card (`card.tsx`).
+   */
+  onCompany?: ((next: CompanyFind) => void) | null
+  /** A call type tapped (PLAN-V25 T3-1): the card keeps it, and tells the server. */
+  onCallType?: ((type: CallType) => void) | null
+}
+
+/** A follow-up the nudge adds (PLAN-V25 T3-2): due on its day, on the call's person or company. */
+function nudgeTask(draft: CallDraft, day: string): CallNoteTask {
+  const name = draft.person.found?.name ?? draft.company.found?.name ?? draft.company.heard
+  return {
+    id: `${NEW_PART}${crypto.randomUUID()}`,
+    subject: followUpWithWords(name),
+    due: day,
+    due_words: '',
+    kind: 'call',
+    owner: null,
+    in_hubspot: false,
+  }
+}
+
+/**
+ * The person a call was with, when the command wasn't sure (PLAN-V25 T1-2, T2-2): found before
+ * their company, each choice brings it ("Jo Sample at Northwind Sample Pty Ltd?") and is told apart
+ * by it; at the company, by their job title, with "No one in particular" last.
+ */
+function PersonSuggest({
+  draft,
+  onDraft,
+  onSearch,
+}: {
+  draft: CallDraft
+  onDraft: (draft: CallDraft) => void
+  onSearch: (() => void) | null
+}) {
+  const { person } = draft
+  const first = isPersonFirst(draft)
+  const [one] = person.choices
+  return (
+    <SuggestPart
+      box={first ? 'company' : 'person'}
+      label={WHO}
+      level={person.level === 'likely' ? 'likely' : 'unsure'}
+      suggestion={one ? personAtWords(one.name, first ? one.company_name : null) : undefined}
+      reason={person.reason}
+      question={whichWords(person.heard, WHICH_PERSON)}
+      choices={person.choices.map((choice) => ({
+        id: choice.id,
+        title: choice.name,
+        // What tells two alike apart: their company when found before it, else their job title.
+        detail: first ? (choice.company_name ?? choice.title) : choice.title,
+      }))}
+      extra={first ? null : { id: '', title: NO_ONE }}
+      onPick={(id) => {
+        const picked = person.choices.find((choice) => choice.id === id) ?? null
+        onDraft(pickPerson(draft, picked))
+      }}
+      onTurnDown={() => {
+        // The last one turned down, found first: the search for people and companies opens.
+        if (first && person.choices.length <= 1) onSearch?.()
+        onDraft({ ...draft, person: turnDown(person), edited: true })
+      }}
+      onSearch={onSearch}
+    />
+  )
 }
 
 export function CallLayout({
@@ -363,26 +451,66 @@ export function CallLayout({
   onLeaveBox,
   previewMs = 0,
   voice = null,
+  onCompany = null,
+  onCallType = null,
 }: CallLayoutProps) {
   const { person } = draft
+  // The follow-up nudge (PLAN-V25 T3-2, choice 14): "No" puts it away for this card.
+  const [noNudge, setNoNudge] = useState(false)
+  const nudgeDay = noNudge ? null : nudgeDayOf(draft, note)
   const companyPicked = draft.company.found !== null
   const fresh = preview?.items.find((one) => one.id === note?.id)
   // Saved before its company (PLAN-V24 T3-2): neither sorted nor sorting until it is picked.
   const needsCompany = note?.status === 'needs_company'
   const sorted = note !== undefined && note.status !== 'sorting' && !needsCompany
+  // A person named with no company (PLAN-V25 T2-2): suggested with their company, or, found
+  // nowhere or searched for, the search list finds people too (choice 11).
+  const [peopleSearch, setPeopleSearch] = useState(false)
+  const personFirst = isPersonFirst(draft) && !peopleSearch
+  const nowhere = isPersonNowhere(draft)
+  const people =
+    !companyPicked && (nowhere || (peopleSearch && draft.company.heard.trim() === ''))
+      ? {
+          heard: person.heard,
+          // The plan's words when the command found them nowhere; none once the rep searched.
+          line: peopleSearch ? null : personNowhereWords(person.heard),
+          onPick: (picked: Parameters<typeof pickPerson>[1]) => {
+            onDraft(pickPerson(draft, picked, 'by_hand'))
+          },
+        }
+      : null
   return (
     <div className="flex flex-col gap-4">
-      <CompanyPart
-        company={draft.company}
-        previewMs={previewMs}
-        voice={voice}
-        savedCall={needsCompany}
-        onPick={(company, how) => {
-          onDraft({ ...draft, company: pickCompany(draft.company, company, how), edited: true })
-        }}
-      />
+      {personFirst ? (
+        <PersonSuggest
+          draft={draft}
+          onDraft={onDraft}
+          onSearch={() => {
+            setPeopleSearch(true)
+          }}
+        />
+      ) : (
+        <CompanyPart
+          company={draft.company}
+          previewMs={previewMs}
+          voice={voice}
+          savedCall={needsCompany}
+          people={people}
+          onCompany={
+            onCompany ??
+            ((next) => {
+              onDraft({ ...draft, company: next, edited: true })
+            })
+          }
+          onPick={(company, how) => {
+            onDraft({ ...draft, company: pickCompany(draft.company, company, how), edited: true })
+          }}
+        />
+      )}
       {companyPicked ? (
-        isPending(person) ? (
+        isPending(person) && person.level ? (
+          <PersonSuggest draft={draft} onDraft={onDraft} onSearch={null} />
+        ) : isPending(person) ? (
           <ChoiceList
             label={whichWords(person.heard, WHICH_PERSON)}
             box="person"
@@ -410,6 +538,13 @@ export function CallLayout({
           </CardLine>
         )
       ) : null}
+      {companyPicked && onCallType ? (
+        <CallTypePart
+          value={draft.callType ?? DEFAULT_CALL_TYPE}
+          types={callTypesOf(options)}
+          onChange={onCallType}
+        />
+      ) : null}
       {draft.noteId !== null && (companyPicked || !needsCompany) ? (
         sorted ? (
           <>
@@ -421,6 +556,25 @@ export function CallLayout({
               onEdit={onEdit}
               onLeaveBox={onLeaveBox}
             />
+            {nudgeDay ? (
+              <FollowUpNudge
+                day={nudgeDay}
+                onAdd={() => {
+                  const task = nudgeTask(draft, nudgeDay)
+                  onEdit(
+                    {
+                      tasks: [
+                        { subject: task.subject, due: task.due, due_words: '', kind: 'call' },
+                      ],
+                    },
+                    (now) => ({ ...now, tasks: [...now.tasks, task] }),
+                  )
+                }}
+                onNo={() => {
+                  setNoNudge(true)
+                }}
+              />
+            ) : null}
             {preview && !preview.sending_ready ? (
               <div className="flex flex-col items-start gap-2">
                 <PartProblem>{HUBSPOT_OFF}</PartProblem>
@@ -456,12 +610,55 @@ function RecipientPart({
   label,
   onPick,
   onRemove,
+  onTurnDown,
 }: {
   one: Recipient
   label: string
   onPick: (member: TeamMember) => void
   onRemove: () => void
+  /** "Not this one" on a suggested teammate (PLAN-V25). */
+  onTurnDown: () => void
 }) {
+  // Search: the team list, with a box to find the rest (as for someone with no HubSpot user).
+  const [searching, setSearching] = useState(false)
+  const box = label === FOR_WHOM ? 'for-whom' : 'to'
+  if (one.found === null && one.level && (searching || one.level !== 'sure')) {
+    const [first] = one.choices
+    return (
+      <li>
+        {searching || !first ? (
+          <TeammatePicker
+            question={whichWords(one.heard, WHICH_TEAMMATE)}
+            box={box}
+            onPick={(member) => {
+              setSearching(false)
+              onPick(member)
+            }}
+          />
+        ) : (
+          <SuggestPart
+            box={box}
+            label={label}
+            level={one.level === 'likely' ? 'likely' : 'unsure'}
+            suggestion={first.name}
+            question={whichWords(one.heard, WHICH_TEAMMATE)}
+            choices={one.choices.map((member) => ({ id: member.owner_id, title: member.name }))}
+            onPick={(id) => {
+              const member = one.choices.find((choice) => choice.owner_id === id)
+              if (member) onPick(member)
+            }}
+            onTurnDown={() => {
+              if (one.choices.length <= 1) setSearching(true)
+              onTurnDown()
+            }}
+            onSearch={() => {
+              setSearching(true)
+            }}
+          />
+        )}
+      </li>
+    )
+  }
   if (one.found === null && one.choices.length > 0) {
     return (
       <li>
@@ -590,49 +787,96 @@ export function TaskLayout({
     onDraft({ ...draft, ...part, edited: true })
   }
   const names = draft.company.found ? [draft.company.found.name] : []
+  // A day or a subject not said (PLAN-V25 T3-2): a suggestion, asked about, never a blank box.
+  const dueAsked = isDueSuggested(draft) ? draft.due : null
+  const subjectBox = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
+  // "Type it": the subject's box shows, with its words selected to type over.
+  const typeSubject = useRef(false)
+  const asksSubject = draft.subjectSuggested === true
+  useEffect(() => {
+    if (!typeSubject.current || asksSubject) return
+    typeSubject.current = false
+    subjectBox.current?.focus()
+    subjectBox.current?.select()
+  }, [asksSubject])
   return (
     <div className="flex flex-col gap-4">
       <CompanyPart
         company={draft.company}
         previewMs={previewMs}
         voice={voice}
+        onCompany={(company) => {
+          change({ company })
+        }}
         onPick={(company, how) => {
           change({ company: pickCompany(draft.company, company, how) })
         }}
       />
-      <BoxField
-        label={WHAT}
-        box="subject"
-        value={draft.subject}
-        max={SUBJECT_MAX.task}
-        mic={mic}
-        names={names}
-        invalid={checked && draft.subject.trim() === ''}
-        onChange={(subject) => {
-          change({ subject })
-        }}
-      />
-      <BoxField
-        label={WHEN}
-        box="due"
-        value={draft.when}
-        max={60}
-        mic={null}
-        // Words that can't be read say so at once; an empty box, once checked.
-        invalid={due.kind !== 'date' && (checked || due.kind !== 'empty')}
-        hint={
-          due.kind === 'date' ? (
-            dueLine(dueDateText(due.date))
-          ) : due.kind === 'past' ? (
-            <PartProblem>{WHEN_PAST}</PartProblem>
-          ) : due.kind === 'unreadable' ? (
-            <PartProblem>{WHEN_UNREADABLE}</PartProblem>
-          ) : null
-        }
-        onChange={(when) => {
-          change({ when })
-        }}
-      />
+      {asksSubject && draft.subject.trim() !== '' ? (
+        <SubjectAsk
+          label={WHAT}
+          subject={draft.subject}
+          onUse={() => {
+            change({ subjectSuggested: false })
+          }}
+          onType={() => {
+            typeSubject.current = true
+            change({ subjectSuggested: false })
+          }}
+        />
+      ) : (
+        <BoxField
+          ref={subjectBox}
+          label={WHAT}
+          box="subject"
+          value={draft.subject}
+          max={SUBJECT_MAX.task}
+          mic={mic}
+          names={names}
+          invalid={checked && draft.subject.trim() === ''}
+          onChange={(subject) => {
+            change({ subject })
+          }}
+        />
+      )}
+      <div className="flex flex-col gap-2">
+        <BoxField
+          label={WHEN}
+          box="due"
+          value={draft.when}
+          max={60}
+          mic={null}
+          // Words that can't be read say so at once; an empty box, once checked.
+          invalid={due.kind !== 'date' && (checked || due.kind !== 'empty')}
+          hint={
+            dueAsked !== null ? (
+              // A day not said: the suggestion as a question (PLAN-V25 choice 13).
+              <span data-slot="due-ask" className="text-ui text-foreground">
+                {dueAskWords(dueAsked)}
+              </span>
+            ) : due.kind === 'date' ? (
+              dueLine(dueDateText(due.date))
+            ) : due.kind === 'past' ? (
+              <PartProblem>{WHEN_PAST}</PartProblem>
+            ) : due.kind === 'unreadable' ? (
+              <PartProblem>{WHEN_UNREADABLE}</PartProblem>
+            ) : null
+          }
+          onChange={(when) => {
+            change({ when })
+          }}
+        />
+        {dueAsked !== null ? (
+          <DueChoices
+            due={dueAsked}
+            inAWeek={draft.dueChoices?.[1] ?? null}
+            today={today}
+            onPick={(date) => {
+              onDraft(pickDue(draft, date))
+            }}
+          />
+        ) : null}
+      </div>
       <div className="flex flex-col gap-1.5">
         <span className="text-caption text-muted-foreground">{KIND}</span>
         <Segmented
@@ -653,10 +897,15 @@ export function TaskLayout({
               label={FOR_WHOM}
               onPick={(member) => {
                 if (draft.forWhom)
-                  change({ forWhom: { ...draft.forWhom, found: member, choices: [] } })
+                  change({
+                    forWhom: { ...draft.forWhom, found: member, choices: [], level: null },
+                  })
               }}
               onRemove={() => {
                 change({ forWhom: null })
+              }}
+              onTurnDown={() => {
+                if (draft.forWhom) change({ forWhom: turnDown(draft.forWhom) })
               }}
             />
           </ul>
@@ -750,12 +999,19 @@ export function EmailLayout({ draft, onDraft, preview, mic, checked = true }: Em
                 onPick={(member) => {
                   change({
                     to: draft.to.map((each) =>
-                      each.id === one.id ? { ...each, found: member, choices: [] } : each,
+                      each.id === one.id
+                        ? { ...each, found: member, choices: [], level: null }
+                        : each,
                     ),
                   })
                 }}
                 onRemove={() => {
                   change({ to: draft.to.filter((each) => each.id !== one.id) })
+                }}
+                onTurnDown={() => {
+                  change({
+                    to: draft.to.map((each) => (each.id === one.id ? turnDown(each) : each)),
+                  })
                 }}
               />
             ))}
@@ -809,9 +1065,51 @@ export interface PreReadLayoutProps {
   company: string
   onPick: (meeting: AssistantMeetingHit) => void
   onNew: () => void
+  /** How sure the command step is (PLAN-V25): likely suggests the first, with its reason. */
+  level?: 'sure' | 'likely' | 'unsure' | null
+  reason?: string | null
 }
 
-export function PreReadLayout({ meetings, company, onPick, onNew }: PreReadLayoutProps) {
+function meetingDetail(meeting: AssistantMeetingHit): string {
+  return [meeting.company_name, formatDateTime(meeting.starts_at)].join(' · ')
+}
+
+export function PreReadLayout({
+  meetings: all,
+  company,
+  onPick,
+  onNew,
+  level = null,
+  reason = null,
+}: PreReadLayoutProps) {
+  // "Not this one" on a suggested meeting: the others show (PLAN-V25 T1-2).
+  const [turnedDown, setTurnedDown] = useState(false)
+  const meetings = turnedDown ? all.slice(1) : all
+  if (level !== null && meetings.length > 0) {
+    const [first] = meetings
+    return (
+      <SuggestPart
+        box="company"
+        label={MEETING}
+        level={level === 'likely' && !turnedDown ? 'likely' : 'unsure'}
+        suggestion={first ? `${first.title}, ${formatDateTime(first.starts_at)}` : undefined}
+        reason={reason}
+        question={WHICH_MEETING}
+        choices={meetings.map((meeting, index) => ({
+          id: String(index),
+          title: meeting.title,
+          detail: meetingDetail(meeting),
+        }))}
+        onPick={(index) => {
+          const meeting = meetings[Number(index)]
+          if (meeting) onPick(meeting)
+        }}
+        onTurnDown={() => {
+          setTurnedDown(true)
+        }}
+      />
+    )
+  }
   if (meetings.length === 0) {
     return (
       <div className="flex flex-col items-start gap-3">
@@ -829,7 +1127,7 @@ export function PreReadLayout({ meetings, company, onPick, onNew }: PreReadLayou
       options={meetings.map((meeting, index) => ({
         id: String(index),
         title: meeting.title,
-        detail: [meeting.company_name, formatDateTime(meeting.starts_at)].join(' · '),
+        detail: meetingDetail(meeting),
       }))}
       onPick={(index) => {
         const meeting = meetings[Number(index)]

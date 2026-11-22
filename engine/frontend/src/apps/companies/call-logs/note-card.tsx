@@ -52,7 +52,7 @@ import type {
 } from '@/api/types'
 import { ownerIdOf } from '@/apps/assistant/card/teammate-rules'
 import { useNoHubSpotUser } from '@/auth/hubspot-user'
-import { ChipGroup, Reveal, TickIn } from '@/components/motion'
+import { ChipGroup, Reveal, Segmented, TickIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -60,8 +60,12 @@ import { cn } from '@/lib/utils'
 import { NEW_PART, CardText, ChangeList, SummaryField, TaskList } from './note-parts'
 import type { Landing } from './use-batch'
 import {
+  CALL_TYPE,
+  CALL_TYPE_LABELS,
   callCompany,
+  callTypesOf,
   changeLabel,
+  DEFAULT_CALL_TYPE,
   CHECK_THIS_ONE,
   DONE,
   EDIT,
@@ -281,6 +285,7 @@ export function NoteCard({
 }: NoteCardProps) {
   const titleId = useId()
   const outcomeId = useId()
+  const callTypeId = useId()
   // Mounted while the note was being sorted: its parts fade in when they come.
   const [revealParts] = useState(note.status === 'sorting')
   const sorting = note.status === 'sorting'
@@ -404,6 +409,28 @@ export function NoteCard({
               onChange={([picked]) => {
                 const next = picked ?? null
                 edit({ outcome: next }, (now) => ({ ...now, call: { ...now.call, outcome: next } }))
+              }}
+            />
+          </section>
+        ) : null}
+        {editing && !isMeetingNotes(note) ? (
+          // HubSpot's call type (PLAN-V25 T3-1): changed here as on the Assistant's card.
+          <section aria-labelledby={callTypeId} className="flex flex-col gap-2">
+            <h3 id={callTypeId} className="text-ui font-semibold text-foreground">
+              {CALL_TYPE}
+            </h3>
+            <Segmented
+              aria-labelledby={callTypeId}
+              options={callTypesOf(options).map((type) => ({
+                value: type,
+                label: CALL_TYPE_LABELS[type],
+              }))}
+              value={note.call.call_type ?? DEFAULT_CALL_TYPE}
+              onChange={(type) => {
+                edit({ call_type: type }, (now) => ({
+                  ...now,
+                  call: { ...now.call, call_type: type },
+                }))
               }}
             />
           </section>

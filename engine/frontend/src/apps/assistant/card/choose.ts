@@ -19,10 +19,24 @@
  * - **A reply or a sound alone** ("okay", "hmm", "great", "thank you") names nothing (PLAN-V24
  *   review): it never picks or searches, and the bar drops it as a short turn. The card hears a
  *   turn before the bar's short-turn filter, so one stray word would otherwise ask HubSpot.
+ * - **A suggestion** (PLAN-V25 T1-2, choice 6): "yes", "use it" or "the first one" takes it;
+ *   "no" or "not this one" turns it down, and the other choices show. A name picks as before.
+ * - **A person found before their company** (T2-2): the question is the person, and each choice
+ *   is known by their name and their company's. Taking one fills both. In the search list, a person
+ *   shown with their company is picked the same way (choice 11).
  */
 import type { CallNotePerson, TeamMember } from '@/api/types'
 import { FILLERS } from '../voice/turns'
-import { pickCompany, type CardDraft, type Company } from './draft'
+import type { ShownChoice } from './company'
+import {
+  isPersonFirst,
+  pickCompany,
+  pickPerson,
+  turnDown,
+  type CardDraft,
+  type Company,
+  type PersonChoice,
+} from './draft'
 
 /** What a choice by voice did. */
 export type VoicePick =
@@ -49,6 +63,11 @@ interface Question {
   /** The name the command heard ("James"): words that share it are a name. */
   heard: string
   options: readonly Option[]
+  /**
+   * A suggestion (PLAN-V25, likely): "yes" takes the first option, and "no" turns it down with
+   * this draft. Null: no suggestion shows.
+   */
+  turnDown: (() => CardDraft) | null
 }
 
 /** Small letters and digits, a word at a time: "It's James Example." is its, james, example. */
@@ -64,39 +83,84 @@ function wordsIn(text: string): string[] {
  * The card's first choice still to make, as a question with its options, or null. `search`: the
  * companies the card's search list shows now, or null when it shows none (choice 19).
  */
-function questionOf(draft: CardDraft, search: readonly Company[] | null): Question | null {
-  if (draft.action !== 'email' && draft.company.found === null) {
+function questionOf(draft: CardDraft, search: readonly ShownChoice[] | null): Question | null {
+  if (draft.action !== 'email' && draft.company.found === null && search !== null) {
+    // The search list on screen was found by hand (PLAN-V23). A person in it brings their company.
     const { company } = draft
-    // The search list on screen was found by hand; the command's own choices weren't (PLAN-V23).
-    const [list, how] =
-      search !== null ? ([search, 'by_hand'] as const) : ([company.choices, 'choice'] as const)
     return {
       people: false,
       heard: company.heard,
-      options: list.map((one: Company) => ({
+      turnDown: null,
+      options: search.map((one) => ({
+        words: wordsIn(one.person ? `${one.person.name} ${one.name}` : one.name),
+        pick: (): CardDraft => {
+          const picked: Company = { key: one.key, name: one.name }
+          if (draft.action === 'log_call' && one.person) {
+            return pickPerson(
+              draft,
+              { ...one.person, company_key: one.key, company_name: one.name },
+              'by_hand',
+            )
+          }
+          return { ...draft, company: pickCompany(company, picked, 'by_hand'), edited: true }
+        },
+      })),
+    }
+  }
+  if (draft.action === 'log_call' && isPersonFirst(draft)) {
+    // A person found before their company (PLAN-V25 T2-2): taking one fills both.
+    const { person } = draft
+    return {
+      people: true,
+      heard: person.heard,
+      turnDown:
+        person.level === 'likely'
+          ? () => ({ ...draft, person: turnDown(person), edited: true })
+          : null,
+      options: person.choices.map((one: PersonChoice) => ({
+        words: wordsIn(`${one.name} ${one.company_name ?? ''}`),
+        pick: () => pickPerson(draft, one),
+      })),
+    }
+  }
+  if (draft.action !== 'email' && draft.company.found === null) {
+    const { company } = draft
+    // The command's own choices teach nothing (PLAN-V23).
+    return {
+      people: false,
+      heard: company.heard,
+      turnDown:
+        company.level === 'likely'
+          ? () => ({ ...draft, company: turnDown(company), edited: true })
+          : null,
+      options: company.choices.map((one: Company) => ({
         words: wordsIn(one.name),
-        pick: () => ({ ...draft, company: pickCompany(company, one, how), edited: true }),
+        pick: () => ({
+          ...draft,
+          company: pickCompany(company, { key: one.key, name: one.name }, 'choice'),
+          edited: true,
+        }),
       })),
     }
   }
   if (draft.action === 'log_call') {
     const { person } = draft
     if (person.found !== null || person.choices.length === 0) return null
-    const pickPerson = (found: CallNotePerson | null) => (): CardDraft => ({
-      ...draft,
-      person: { ...person, found, choices: [] },
-      edited: true,
-    })
+    const pickOne = (found: CallNotePerson | null) => (): CardDraft => pickPerson(draft, found)
     return {
       people: true,
       heard: person.heard,
+      turnDown:
+        person.level === 'likely'
+          ? () => ({ ...draft, person: turnDown(person), edited: true })
+          : null,
       options: [
         ...person.choices.map((one) => ({
           words: wordsIn(`${one.name} ${one.title ?? ''}`),
-          pick: pickPerson(one),
+          pick: pickOne(one),
         })),
         // "No one in particular", last on screen: picked by its place or its own words only.
-        { words: [], pick: pickPerson(null) },
+        { words: [], pick: pickOne(null) },
       ],
     }
   }
@@ -106,11 +170,15 @@ function questionOf(draft: CardDraft, search: readonly Company[] | null): Questi
     return {
       people: true,
       heard: forWhom.heard,
+      turnDown:
+        forWhom.level === 'likely'
+          ? () => ({ ...draft, forWhom: turnDown(forWhom), edited: true })
+          : null,
       options: forWhom.choices.map((member: TeamMember) => ({
         words: wordsIn(member.name),
         pick: () => ({
           ...draft,
-          forWhom: { ...forWhom, found: member, choices: [] },
+          forWhom: { ...forWhom, found: member, choices: [], level: null },
           edited: true,
         }),
       })),
@@ -122,12 +190,20 @@ function questionOf(draft: CardDraft, search: readonly Company[] | null): Questi
     return {
       people: true,
       heard: open.heard,
+      turnDown:
+        open.level === 'likely'
+          ? () => ({
+              ...draft,
+              to: draft.to.map((one) => (one.id === open.id ? turnDown(one) : one)),
+              edited: true,
+            })
+          : null,
       options: open.choices.map((member) => ({
         words: wordsIn(member.name),
         pick: () => ({
           ...draft,
           to: draft.to.map((one) =>
-            one.id === open.id ? { ...one, found: member, choices: [] } : one,
+            one.id === open.id ? { ...one, found: member, choices: [], level: null } : one,
           ),
           edited: true,
         }),
@@ -371,6 +447,45 @@ function isYes(words: readonly string[]): boolean {
   return words.some((word) => YES.has(word)) && words.every((word) => AROUND.has(word))
 }
 
+/** The whole turn takes a suggestion: a yes, or "use it", "take it", "go with it" (PLAN-V25). */
+function takesIt(words: readonly string[]): boolean {
+  const take = (word: string): boolean => YES.has(word) || word === 'use' || word === 'take'
+  return words.some(take) && words.every((word) => AROUND.has(word))
+}
+
+/** The whole turn turns a suggestion down: "no", "not this one", "nope, not that one" (PLAN-V25). */
+const NOT_IT: ReadonlySet<string> = new Set([
+  'no',
+  'nope',
+  'nah',
+  'not',
+  'this',
+  'that',
+  'one',
+  'it',
+  'the',
+  'wrong',
+  'other',
+  'another',
+  'thanks',
+  'please',
+])
+function turnsItDown(words: readonly string[]): boolean {
+  const no = (word: string): boolean => word === 'no' || word === 'nope' || word === 'nah'
+  const notIt = words.includes('not') || words.includes('wrong') || words.some(no)
+  return words.length > 0 && notIt && words.every((word) => NOT_IT.has(word))
+}
+
+/**
+ * A whole turn that answers a yes-or-no question on the card (PLAN-V25 T3-2): "yes" or "use it",
+ * "no" or "not that one". Null: other words.
+ */
+export function yesOrNo(said: string): 'yes' | 'no' | null {
+  const words = wordsIn(said)
+  if (takesIt(words)) return 'yes'
+  return turnsItDown(words) ? 'no' : null
+}
+
 /**
  * What a turn picks on the card, with no AI, or null when it isn't an answer to the card's
  * question (it goes to the command step, as now). `search`: the companies the card's search list
@@ -381,13 +496,19 @@ function isYes(words: readonly string[]): boolean {
 export function pickByVoice(
   draft: CardDraft,
   said: string,
-  search: readonly Company[] | null = null,
+  search: readonly ShownChoice[] | null = null,
   asksOne = false,
 ): VoicePick | null {
   const question = questionOf(draft, search)
   if (!question) return null
   const words = wordsIn(said)
   const { options } = question
+  // A suggestion: "yes" takes it, "not this one" turns it down (PLAN-V25 choice 6).
+  if (question.turnDown) {
+    const [suggested] = options
+    if (suggested && takesIt(words)) return { kind: 'picked', draft: suggested.pick() }
+    if (turnsItDown(words)) return { kind: 'picked', draft: question.turnDown() }
+  }
   const place = placeOf(words, options.length)
   if (place !== null) {
     const option = options[place]

@@ -297,6 +297,8 @@ describe('saved at once (choice 17)', () => {
       text: NOTE_TEXT,
       source: 'typed',
       called_at: expect.any(String) as string,
+      // HubSpot's call type goes with every call (PLAN-V25 T3-1).
+      call_type: 'Prospecting Call',
     })
     expect(saved?.headers?.get('idempotency-key')).toBeTruthy()
     // The server has it: the card says so, over the search list, with Add to HubSpot and Later.

@@ -107,6 +107,15 @@ export async function previewNote(id: string, signal?: AbortSignal): Promise<Cal
   return unwrap(await api.POST('/companies/call-notes/preview', { body: { ids: [id] }, signal }))
 }
 
+/**
+ * Removes a call not yet sent (`DELETE /call-notes/{id}`): a call saved with the company the card
+ * used at once, when the rep changes or undoes it (PLAN-V25 T1-2). The server takes a call's
+ * company once, so the call is saved again with the new one.
+ */
+export async function removeNote(id: string): Promise<void> {
+  unwrap(await api.DELETE('/companies/call-notes/{note_id}', { params: { path: { note_id: id } } }))
+}
+
 export async function patchNote(id: string, patch: CallNotePatch): Promise<CallNoteOut> {
   return unwrap(
     await api.PATCH('/companies/call-notes/{note_id}', {

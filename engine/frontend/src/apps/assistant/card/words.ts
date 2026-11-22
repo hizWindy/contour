@@ -29,6 +29,7 @@ export const KEYS_NAME = 'Keys'
 
 export const COMPANY = 'Company'
 export const WHO = 'Who'
+export const MEETING = 'Meeting'
 export const NO_ONE = 'No one in particular'
 export const HOW_IT_WENT = 'How it went'
 export const THE_NOTE = 'The note'
@@ -62,6 +63,81 @@ export const WHICH_COMPANY = 'Which company?'
 export const WHICH_PERSON = 'Which person?'
 export const WHICH_TEAMMATE = 'Which teammate?'
 export const WHICH_MEETING = 'Which meeting?'
+
+// --- The suggestion part (PLAN-V25 T1-2 and T2-2, choices 4 to 7 and 11; TBC at Al-khair's look) ---
+
+/**
+ * The card's one best guess, with its reason, as the server says it in `unsure` (the plan's "Words
+ * on screen"): "Sample Logistics Pty Ltd? You meet them at 2 pm." The part shows the same words, so
+ * the server's paragraph leaves them out (`lines.ts`).
+ */
+export function likelyWords(name: string, reason: string | null | undefined): string {
+  const why = reason?.trim()
+  return why ? `${name}? ${why}` : `${name}?`
+}
+
+/** A person found before their company: "Jo Sample at Northwind Sample Pty Ltd?" (T2-2). */
+export function personAtWords(name: string, company: string | null | undefined): string {
+  const where = company?.trim()
+  return where ? `${name} at ${where}` : name
+}
+
+/** A person named with no company, found nowhere (the plan's words, as the server says them). */
+export function personNowhereWords(heard: string): string {
+  return `There's no '${heard.trim()}' in HubSpot. Say the company, or pick the person.`
+}
+
+/** Take the suggestion (Enter, "yes" or a tap). */
+export const USE_IT = 'Use it'
+/** Turn the suggestion down: the other choices and Search show. */
+export const NOT_THIS_ONE = 'Not this one'
+/** Find another than the choices shown. */
+export const SEARCH = 'Search'
+/** A sure pick, used at once: pick another, or take it back (DESIGN.md "Act at once, undo after"). */
+export const CHANGE = 'Change'
+export const UNDO_PICK = 'Undo'
+/** The search box when a person was named: it finds people and companies (choice 11). */
+export const FIND_PERSON_OR_COMPANY = 'Find the person or company'
+/** The voice bar's pill beside a card with a suggestion (TBC). */
+export const SAY_YES = "Say 'yes' to use it, or say the name."
+/** Why a change of a saved call's company couldn't be made (the old call stays as it was). */
+export const NOT_CHANGED_COMPANY = "The company couldn't be changed. Try again."
+
+// --- Fill the gaps (PLAN-V25 Part 3, the plan's "Words on screen"; TBC at Al-khair's look) -------
+
+const WEEKDAY = new Intl.DateTimeFormat('en-AU', { weekday: 'long', timeZone: 'UTC' })
+
+/** "Monday", for a calendar day (YYYY-MM-DD). */
+export function weekdayOf(date: string): string {
+  return WEEKDAY.format(new Date(`${date}T12:00:00Z`))
+}
+
+/** A task's day not said, suggested: "Due Monday?". */
+export function dueAskWords(date: string): string {
+  return `Due ${weekdayOf(date)}?`
+}
+export const IN_A_WEEK = 'In a week'
+export const PICK_A_DAY = 'Pick a day'
+
+/** A task with no subject said: Use it keeps the suggestion, Type it puts the focus in the box. */
+export const TYPE_IT = 'Type it'
+
+/** The subject a follow-up gets when none was said: "Follow up with Jo Sample". */
+export function followUpWithWords(name: string): string {
+  return `Follow up with ${name}`
+}
+
+/** A Connected call with no follow-up (choice 14): "No follow-up yet. Add one for Friday?". */
+export function nudgeWords(date: string): string {
+  return `No follow-up yet. Add one for ${weekdayOf(date)}?`
+}
+export const ADD_IT = 'Add it'
+export const NO = 'No'
+
+/** The quick log's toast (choice 15): "Logging No answer with Jo Sample, Northwind.". */
+export function quickLogWords(outcome: string, person: string, company: string): string {
+  return `Logging ${outcome} with ${person}, ${company}.`
+}
 
 // --- What can go wrong (the plan's table, word for word) ----------------------------------------
 

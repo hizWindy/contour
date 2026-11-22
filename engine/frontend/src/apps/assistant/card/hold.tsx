@@ -30,6 +30,11 @@ export const HOLD_MS = 5000
 
 export interface HoldOptions {
   action: CardAction
+  /**
+   * What goes, in the toast's title. Left out: the action's own ("Sending the call to HubSpot"). A
+   * quick log says exactly what goes (PLAN-V25 T3-3): the toast is its preview.
+   */
+  title?: string
   /** Runs once, after the hold, unless it was stopped. */
   send: () => void
   /** Undo: nothing goes, and the card opens again. */
@@ -42,6 +47,7 @@ export interface HoldOptions {
 /** Starts the hold. The returned function stops it without sending (the card's own tests). */
 export function startHold({
   action,
+  title,
   send,
   onUndo,
   stillSignedIn = () => true,
@@ -76,7 +82,7 @@ export function startHold({
     event.stopPropagation()
     undo()
   }
-  id = toast(HOLD_TITLES[action], {
+  id = toast(title ?? HOLD_TITLES[action], {
     description: <HoldCountdown ms={ms} />,
     // The hold keeps its own time: a toast's own timer stops while it is pointed at.
     duration: Infinity,
