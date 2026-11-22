@@ -449,6 +449,9 @@ RUN_KINDS: tuple[RunKind[Any], ...] = (
         estimate=estimate_company,
         caps_override=caps_override,
         versions=run_versions,
+        # Research again on a lead card: one company, searched again. Someone waits for it, so it
+        # asks Claude in the People lane (PLAN-V26 choice 1).
+        person_waits=lambda params: params.recheck and len(params.companies) == 1,
     ),
     RunKind(
         mode="testset",

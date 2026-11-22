@@ -188,7 +188,7 @@ def claude_that_answers(
     sent: list[httpx2.Request], *messages: BetaMessage, **options: Any
 ) -> AnthropicClaude:
     """The real client on a fake network. It gives these messages in turn, then repeats the last.
-    `options` go to `AnthropicClaude` (like `gate=` or `daily=`)."""
+    `options` go to `AnthropicClaude` (like `lanes=` or `daily=`)."""
     queue = list(messages)
 
     def handler(request: httpx2.Request) -> httpx2.Response:

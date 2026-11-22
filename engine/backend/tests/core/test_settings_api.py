@@ -177,10 +177,11 @@ async def test_a_change_reaches_the_next_request_and_the_shared_claude(
     app: FastAPI, client: httpx.AsyncClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
     await client.patch(
-        SETTINGS, json={"values": {"model_discover": "claude-haiku-5-5", "claude_concurrency": 1}}
+        SETTINGS,
+        json={"values": {"model_discover": "claude-haiku-5-5", "claude_runs_concurrency": 1}},
     )
     async with session_factory() as session:
         settings = await settings_dependency(session)  # what the next request's route gets
     assert settings.model_for("discover") == "claude-haiku-5-5"
-    assert settings.claude_concurrency == 1
-    assert claude_holder.gate.limit == 1  # the shared gate follows at once, no restart
+    assert settings.claude_runs_concurrency == 1
+    assert claude_holder.lanes["runs"].limit == 1  # the shared lane follows at once, no restart

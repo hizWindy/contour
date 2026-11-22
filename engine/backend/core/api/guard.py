@@ -32,6 +32,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from core import work
 from core.api.errors import problem
 from core.api.signin import auth_settings_dependency, sign_in_needed
 from core.auth import cookies, sessions
@@ -39,6 +40,7 @@ from core.auth.clock import utcnow
 from core.auth.sessions import AuthContext, Gone, Limits
 from core.config import Settings
 from core.db.engine import get_sessionmaker
+from core.work import Work
 
 API_PREFIX = "/api/v1"
 # The only operations that need no session: the health check (the container's own check calls it)
@@ -87,7 +89,8 @@ class SessionGuard:
         app: FastAPI = scope["app"]
         settings = sign_in_settings(app)
         if not settings.auth_required or is_public(scope, app):
-            await self.app(scope, receive, send)
+            with work.doing(Work("people")):
+                await self.app(scope, receive, send)
             return
 
         token = cookies.read_token(
@@ -102,7 +105,9 @@ class SessionGuard:
                 return
             if isinstance(found, AuthContext):
                 scope.setdefault("state", {})["auth"] = found
-                await self.app(scope, receive, send)
+                # Who asked, set once here for all the request starts (PLAN-V26 T1-1, T3-1).
+                with work.doing(Work("people", found.user.id)):
+                    await self.app(scope, receive, send)
                 return
             gone = found
         refusal = sign_in_needed(gone, settings)

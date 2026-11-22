@@ -33,6 +33,7 @@ import { ErrorState } from '@/components/error-state'
 import { PageHeader } from '@/components/page-header'
 import { ResultBadge } from '@/components/result-badge'
 import { StatusBadge } from '@/components/status-badge'
+import { WaitingForClaude } from '@/components/waiting-for-claude'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -80,6 +81,9 @@ function Stat({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
+
+/** How often a Research again is read while it goes, for its wait at Claude. */
+const WAIT_POLL_MS = 2000
 
 /**
  * How far along the run is: the bar and its words. While a discovery run sweeps (PLAN-V21 T3-4),
@@ -132,6 +136,13 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
   // Resume goes on with a run whose stream had closed at its end, so the stream opens again.
   const [streamKey, setStreamKey] = useState(0)
   const events = useRunEvents(runId, { restartKey: streamKey })
+  // Research again on a lead: someone waits for it, so its wait at Claude shows (PLAN-V26 T1-2).
+  // The stream doesn't carry the wait, so only such a run is read again while it goes.
+  const watched =
+    run.mode === 'company' &&
+    run.params.recheck === true &&
+    !isTerminalRunStatus(events.status ?? run.status)
+  useRun(runId, { refetchInterval: watched ? WAIT_POLL_MS : false })
   const cancel = useCancelRun()
   const resume = useResumeRun()
   const { state, connection } = events
@@ -252,6 +263,7 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
               ) : (
                 <p className="text-ui text-muted-foreground">Planning the run.</p>
               )}
+              {watched ? <WaitingForClaude ahead={run.waiting_ahead} /> : null}
               <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 {counts.slices > 0 ? (
                   <Stat

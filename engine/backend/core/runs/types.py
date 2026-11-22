@@ -252,6 +252,9 @@ type VersionsFn = Callable[[], RunVersions]
 type FinishedFn = Callable[[RunOut, AsyncSession, Settings], Awaitable[None]]
 
 
+type PersonWaitsFn[P: BaseModel] = Callable[[P], bool]
+
+
 @dataclass(frozen=True)
 class RunKind[P: BaseModel]:
     """One kind of run a project offers.
@@ -264,6 +267,9 @@ class RunKind[P: BaseModel]:
     - `versions()` gives the rules and prompt versions. The manager saves them in the run row
       (`rules_version`, `prompt_versions`), puts them in `run_started` and in the `RunContext`.
       Without it they are empty text.
+    - `person_waits(params)` says someone sits and waits for this run, like Research again on a
+      lead card. Such a run asks Claude in the People lane, unless a schedule started it
+      (PLAN-V26 choice 1). Without it a run is in the Runs lane.
     - `finished(run, session, settings)` is called once the run has ended for good (done, failed
       or cancelled), after its last write. An interrupted run is not over: it carries on later.
     """
@@ -277,6 +283,7 @@ class RunKind[P: BaseModel]:
     caps_override: CapsOverrideFn[P] | None = None
     versions: VersionsFn | None = None
     finished: FinishedFn | None = None
+    person_waits: PersonWaitsFn[P] | None = None
 
 
 # --- What the manager is built from -------------------------------------------------------

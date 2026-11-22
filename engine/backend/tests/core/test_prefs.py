@@ -98,9 +98,9 @@ def test_a_row_that_breaks_a_rule_between_settings_is_left_out_and_the_rest_kept
 
 def test_the_ceilings_from_env_clamp_the_result() -> None:
     env = base(hard_run_cap_usd=D("10"), hard_concurrency=2, run_cap_usd=D("10"))
-    resolved = resolve_settings(env, {"run_cap_usd": "40.00", "claude_concurrency": 4})
+    resolved = resolve_settings(env, {"run_cap_usd": "40.00", "claude_people_concurrency": 4})
     assert resolved.settings.run_cap_usd == D("10")
-    assert resolved.settings.claude_concurrency == 2
+    assert resolved.settings.claude_people_concurrency == 2
 
 
 def test_a_model_override_and_null_for_use_the_main_model() -> None:
@@ -171,7 +171,9 @@ def test_the_top_shown_is_the_lower_of_the_bound_and_the_ceiling() -> None:
     env = base(hard_run_cap_usd=D("30"), hard_concurrency=3)
     fields = fields_of(build_settings_out(resolve_settings(env, {}), D("1")))
     assert fields["run_cap_usd"].max == "30.00"
-    assert fields["claude_concurrency"].max == 3
+    for lane in ("people", "runs", "jobs"):  # PLAN-V26 T1-1: each from 1 to the ceiling
+        field = fields[f"claude_{lane}_concurrency"]
+        assert (field.min, field.max) == (1, 3)
     assert fields["company_cap_usd"].max == "5.00"  # the bound, at or below its ceiling
     assert set(CEILINGS) <= set(EDITABLE_KEYS)
 

@@ -1,8 +1,10 @@
 """How many Claude requests may run at once, for the whole process.
 
-One `ClaudeGate` is shared by every run, every endpoint and the command line, so the limit holds
-across all of them. A request takes a place with `async with gate.acquire():` and gives it back
-when the block ends, however it ends.
+There are three lanes (PLAN-V26 T1-1): People, Runs and Jobs, each with a `ClaudeGate` of its own,
+so a request in one lane never waits for another lane. `ClaudeLanes` picks the lane from who
+started the work (`core.work`). One set of lanes is shared by every run, every endpoint and the
+command line. A request takes a place with `async with lanes.acquire():` and gives it back when
+the block ends, however it ends.
 
 - The limit can change at any time (`set_limit`). Growing it lets waiting requests in at once.
   Shrinking it never stops a request that is already running: new requests wait until enough
@@ -19,6 +21,20 @@ import asyncio
 from collections import deque
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from typing import Final
+
+from core import work
+from core.work import LANES, Lane
+
+# A wait is shown once it is longer than this (PLAN-V26 choice 4, TBC).
+WAIT_SHOWN_AFTER_SECONDS: Final = 1.0
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class _Ticket:
+    key: str | None  # the work that asks (`core.work.Work.key`)
+    since: float  # the loop's clock when it joined the line
 
 
 class _Places:
@@ -28,7 +44,8 @@ class _Places:
         self.loop = loop
         self.condition = asyncio.Condition()  # opened by the first request that waits
         self.in_flight = 0
-        self.line: deque[object] = deque()  # one ticket for each request still waiting
+        self.line: deque[_Ticket] = deque()  # one ticket for each request still waiting
+        self.holding: list[str | None] = []  # the key of each request that holds a place
         self.wakers: set[asyncio.Task[None]] = set()  # keeps the wake-up tasks alive
 
 
@@ -60,20 +77,38 @@ class ClaudeGate:
         if self._places is not None:
             self._wake(self._places)  # a bigger limit may let waiting requests in
 
+    def ahead(self, key: str, *, waited: float = WAIT_SHOWN_AFTER_SECONDS) -> int | None:
+        """How many requests must end before this work's next one starts.
+
+        None when the work isn't waiting: it holds a place, it isn't in the line, or it has
+        waited less than `waited` seconds.
+        """
+        places = self._places
+        if places is None or places.loop.is_closed() or key in places.holding:
+            return None
+        for index, ticket in enumerate(places.line):
+            if ticket.key == key:
+                if places.loop.time() - ticket.since < waited:
+                    return None
+                return max(1, places.in_flight + index + 1 - self._limit)
+        return None
+
     @asynccontextmanager
-    async def acquire(self) -> AsyncIterator[None]:
-        """Waits for a place, holds it for the block, and gives it back at the end.
+    async def acquire(self, key: str | None = None) -> AsyncIterator[None]:
+        """Waits for a place, holds it for the block, and gives it back at the end. `key` names
+        the work, for `ahead`.
 
         Cancelling the wait is safe: no place is taken. A place is always given back, also when
         the block is cancelled.
         """
         places = self._places_for_this_loop()
-        await self._enter(places)
+        await self._enter(places, key)
         try:
             yield
         finally:
             # No await here, so a second cancel can't stop the place from coming back.
             places.in_flight -= 1
+            places.holding.remove(key)
             self._wake(places)
 
     # --- Inside ----------------------------------------------------------------------------
@@ -85,8 +120,8 @@ class ClaudeGate:
             self._places = _Places(loop)
         return self._places
 
-    async def _enter(self, places: _Places) -> None:
-        ticket = object()
+    async def _enter(self, places: _Places, key: str | None) -> None:
+        ticket = _Ticket(key, places.loop.time())
         async with places.condition:
             places.line.append(ticket)
             try:
@@ -94,6 +129,7 @@ class ClaudeGate:
                     lambda: places.line[0] is ticket and places.in_flight < self._limit
                 )
                 places.in_flight += 1
+                places.holding.append(key)
             finally:
                 # Leave the line when the place is taken, and also when the wait is cancelled.
                 # Either way the next in line must look again.
@@ -126,6 +162,34 @@ class ClaudeGate:
         task = places.loop.create_task(notify())
         places.wakers.add(task)
         task.add_done_callback(places.wakers.discard)
+
+
+class ClaudeLanes:
+    """The three lanes, each with its own places and its own line."""
+
+    def __init__(self, *, people: int = 4, runs: int = 2, jobs: int = 1) -> None:
+        sizes: dict[Lane, int] = {"people": people, "runs": runs, "jobs": jobs}
+        self._gates = {lane: ClaudeGate(sizes[lane]) for lane in LANES}
+
+    def __getitem__(self, lane: Lane) -> ClaudeGate:
+        return self._gates[lane]
+
+    def set_limits(self, *, people: int, runs: int, jobs: int) -> None:
+        self._gates["people"].set_limit(people)
+        self._gates["runs"].set_limit(runs)
+        self._gates["jobs"].set_limit(jobs)
+
+    @asynccontextmanager
+    async def acquire(self) -> AsyncIterator[None]:
+        """A place in the lane of the work that asks."""
+        now = work.current()
+        async with self._gates[now.lane].acquire(now.key):
+            yield
+
+    def ahead(self, key: str) -> int | None:
+        """`ClaudeGate.ahead`, in whichever lane this work waits."""
+        waits = (gate.ahead(key) for gate in self._gates.values())
+        return next((ahead for ahead in waits if ahead is not None), None)
 
 
 def _checked(limit: int) -> int:

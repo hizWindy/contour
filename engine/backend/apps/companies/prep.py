@@ -68,6 +68,7 @@ from apps.companies.schemas import (
 from apps.companies.script_notes import StyleNotes, notes_for_prompt
 from apps.companies.tables import Prep
 from apps.companies.tones import TONE_DEFAULT, TONE_PRESETS, tone_for, tone_words
+from core import work
 from core.claude.budget import Budget, BudgetSpent
 from core.claude.client import (
     Claude,
@@ -76,6 +77,7 @@ from core.claude.client import (
     ClaudeUnavailable,
     Reply,
     WebTools,
+    claude_holder,
 )
 from core.company_leads import CompanyLeads
 from core.memory.embedder import Embedder
@@ -509,6 +511,11 @@ def check_answer(
 # --- Reading a prep -------------------------------------------------------------------------------
 
 
+def wait_key(prep_id: uuid.UUID) -> str:
+    """What a prep's wait at Claude is asked by (PLAN-V26 T1-2)."""
+    return f"prep:{prep_id}"
+
+
 def prep_out(prep: Prep, *, made_by: str | None, reused: bool = False) -> PrepOut:
     facts = prep.facts or {}
     person = (
@@ -524,6 +531,9 @@ def prep_out(prep: Prep, *, made_by: str | None, reused: bool = False) -> PrepOu
         kind="cold" if prep.kind == "cold" else "person",
         trigger="search_ahead" if prep.trigger == "search_ahead" else "person",
         status=prep.status,
+        waiting_ahead=(
+            claude_holder.lanes.ahead(wait_key(prep.id)) if prep.status == "searching" else None
+        ),
         stage=prep.stage,
         error=prep.error,
         script=PrepScript.model_validate(prep.script) if prep.script else None,
@@ -721,14 +731,15 @@ class PrepRunner:
             granted = 0
         claude = self._claude()
         try:
-            reply = await claude.ask(
-                system=SYSTEM,
-                prompt=prompt,
-                form=PrepAnswer,
-                web=_web_tools(granted) if web else None,
-                model=context.model,
-                max_continues=1,
-            )
+            with work.waiting_as(wait_key(prep.id)):
+                reply = await claude.ask(
+                    system=SYSTEM,
+                    prompt=prompt,
+                    form=PrepAnswer,
+                    web=_web_tools(granted) if web else None,
+                    model=context.model,
+                    max_continues=1,
+                )
         except BaseException:
             if granted:
                 budget.release(granted)

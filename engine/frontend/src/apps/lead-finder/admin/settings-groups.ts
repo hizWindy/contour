@@ -34,7 +34,9 @@ const GROUP_OF: Record<string, GroupId> = {
   claude_effort: 'claude',
   claude_effort_discover: 'claude', // PLAN-V21 T1-1: the Lead Finder's two steps
   claude_effort_research: 'claude',
-  claude_concurrency: 'claude',
+  claude_people_concurrency: 'claude', // PLAN-V26 T1-1: the three lanes
+  claude_runs_concurrency: 'claude',
+  claude_jobs_concurrency: 'claude',
   run_max_companies: 'runs',
   target_companies_default: 'runs', // PLAN-V21 T1-4: the target and the sweeps
   discovery_max_sweeps: 'runs',

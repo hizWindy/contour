@@ -4,8 +4,9 @@ Projects depend on the `Claude` protocol, not on the Anthropic SDK, so tests can
 fake that returns saved answers and costs nothing.
 
 The real client (`AnthropicClaude`) is shared by the whole process, so its limits hold for every
-run and request at once: the Claude gate (how many requests run together) and the daily cap (how
-much Claude may cost in 24 hours). `claude_holder` keeps the shared one.
+run and request at once: the Claude lanes (how many requests run together in each) and the daily
+cap (how much Claude may cost in 24 hours, every lane together). `claude_holder` keeps the shared
+one.
 """
 
 import asyncio
@@ -20,7 +21,7 @@ from anthropic.types.beta import BetaMessage
 from pydantic import BaseModel, ValidationError
 
 from core.claude.forms import form_schema
-from core.claude.limiter import ClaudeGate
+from core.claude.limiter import ClaudeLanes
 from core.claude.pricing import Usage, cost_usd
 from core.config import Settings, get_settings
 
@@ -134,12 +135,12 @@ class AnthropicClaude:
         client: anthropic.AsyncAnthropic | None = None,
         *,
         settings: Settings | None = None,
-        gate: ClaudeGate | None = None,
+        lanes: ClaudeLanes | None = None,
         daily: "DailyCap | None" = None,
     ) -> None:
         """`client` is for tests. Normally the SDK client is made from settings. A client that is
-        passed in is used with retries off too. `gate` and `daily` are the shared ones; without
-        them this instance has its own gate and no daily limit."""
+        passed in is used with retries off too. `lanes` and `daily` are the shared ones; without
+        them this instance has its own lanes and no daily limit."""
         settings = settings or get_settings()
         key = settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else None
         # With no key in .env, the SDK looks for ANTHROPIC_API_KEY or an `ant` login when it
@@ -153,12 +154,12 @@ class AnthropicClaude:
         self._client = client
         self._model = settings.claude_model
         self._effort = settings.claude_effort
-        self._gate = gate or ClaudeGate(settings.claude_concurrency)
+        self._lanes = lanes or ClaudeLanes(**lane_sizes(settings))
         self._daily = daily
 
     @property
-    def gate(self) -> ClaudeGate:
-        return self._gate
+    def lanes(self) -> ClaudeLanes:
+        return self._lanes
 
     def configure(self, settings: Settings) -> None:
         """Uses these (effective) settings from the next request on: the default model and
@@ -168,7 +169,7 @@ class AnthropicClaude:
         """
         self._model = settings.claude_model
         self._effort = settings.claude_effort
-        self._gate.set_limit(settings.claude_concurrency)
+        self._lanes.set_limits(**lane_sizes(settings))
         if self._daily is not None:
             self._daily.configure(
                 daily_cap_usd=settings.daily_cap_usd,
@@ -192,7 +193,7 @@ class AnthropicClaude:
     ) -> Reply[T]:
         """One question, one checked answer.
 
-        The request waits for a place at the gate, then the daily limit is checked and money is
+        The request waits for a place in its lane, then the daily limit is checked and money is
         held (`DailyLimitReached` if it would pass the cap, before anything is sent). A paused
         turn is sent again at most `max_continues` times, and each time with the searches and
         page reads left (the paused turn's own use is taken off).
@@ -242,7 +243,7 @@ class AnthropicClaude:
 
         continues = MAX_CONTINUES if max_continues is None else max(0, max_continues)
         responses: list[BetaMessage] = []
-        async with self._gate.acquire(), self._hold():
+        async with self._lanes.acquire(), self._hold():
             try:
                 for attempt in range(continues + 1):
                     if attempt > 0:
@@ -425,8 +426,17 @@ def _usage(response: BetaMessage) -> Usage:
 # --- The shared client ----------------------------------------------------------------------
 
 
+def lane_sizes(settings: Settings) -> dict[str, int]:
+    """How many requests may run at once in each lane (PLAN-V26 T1-1)."""
+    return {
+        "people": settings.claude_people_concurrency,
+        "runs": settings.claude_runs_concurrency,
+        "jobs": settings.claude_jobs_concurrency,
+    }
+
+
 class ClaudeHolder:
-    """The one shared Claude of the process, with its gate and its daily limit.
+    """The one shared Claude of the process, with its lanes and its daily limit.
 
     A plain object, not a cache, so a test can start clean with `reset()`. The app builds the
     Claude client when it is first asked for, and the lifespan closes it with `aclose()`.
@@ -435,14 +445,14 @@ class ClaudeHolder:
     """
 
     def __init__(self) -> None:
-        self._gate = ClaudeGate()
+        self._lanes = ClaudeLanes()
         self._daily: DailyCap | None = None
         self._claude: AnthropicClaude | None = None
         self._settings: Settings | None = None
 
     @property
-    def gate(self) -> ClaudeGate:
-        return self._gate
+    def lanes(self) -> ClaudeLanes:
+        return self._lanes
 
     @property
     def daily(self) -> "DailyCap":
@@ -461,9 +471,11 @@ class ClaudeHolder:
         """The shared client. Raises ClaudeUnavailable when it can't be made."""
         if self._claude is None:
             settings = self._settings or get_settings()
-            self._gate.set_limit(settings.claude_concurrency)
+            self._lanes.set_limits(**lane_sizes(settings))
             try:
-                self._claude = AnthropicClaude(settings=settings, gate=self._gate, daily=self.daily)
+                self._claude = AnthropicClaude(
+                    settings=settings, lanes=self._lanes, daily=self.daily
+                )
             except anthropic.AnthropicError as error:
                 log.error("claude_not_started", extra={"reason": type(error).__name__})
                 raise ClaudeUnavailable(
@@ -474,7 +486,7 @@ class ClaudeHolder:
     def configure(self, settings: Settings) -> None:
         """Makes the shared Claude use these effective settings from the next request on."""
         self._settings = settings
-        self._gate.set_limit(settings.claude_concurrency)
+        self._lanes.set_limits(**lane_sizes(settings))
         if self._daily is not None:
             self._daily.configure(
                 daily_cap_usd=settings.daily_cap_usd,
@@ -491,7 +503,7 @@ class ClaudeHolder:
 
     def reset(self) -> None:
         """Forgets everything, for a test that wants a clean start. It closes nothing."""
-        self._gate = ClaudeGate()
+        self._lanes = ClaudeLanes()
         self._daily = None
         self._claude = None
         self._settings = None

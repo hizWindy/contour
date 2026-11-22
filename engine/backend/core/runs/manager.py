@@ -45,9 +45,10 @@ from sqlalchemy import String, func, select, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from core import work
 from core.api.errors import Problem
 from core.apps import AppSpec
-from core.claude.client import ClaudeUnavailable
+from core.claude.client import ClaudeUnavailable, claude_holder
 from core.config import Settings
 from core.db.base import CORE_SCHEMA
 from core.logs import redact, scrub
@@ -88,11 +89,18 @@ from core.runs.types import (
 )
 from core.runs.validation import find_kind, parse_params
 from core.searches.models import SearchLog
+from core.work import Lane, Work
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
 
 log = logging.getLogger(__name__)
+
+
+def run_key(run_id: UUID) -> str:
+    """What a run's wait at Claude is asked by (PLAN-V26 T1-2)."""
+    return f"run:{run_id}"
+
 
 STOPPED_BY_PERSON = "Stopped by a person"
 BACKEND_STOPPED = "The backend stopped while this run was going"
@@ -196,7 +204,8 @@ class _Key:
 
 @dataclass(frozen=True)
 class _Job:
-    """What the task needs, worked out before it starts."""
+    """What the task needs, worked out before it starts. `started_by` is who started the run, not
+    who resumed it."""
 
     kind: RunKind[Any]
     params: BaseModel
@@ -206,6 +215,7 @@ class _Job:
     counts: RunCounts
     saver: "BaseCheckpointSaver[Any]"
     schedule_id: UUID | None = None  # the schedule that started this run, if one did
+    started_by: UUID | None = None  # the person who started it, if one did
     resume: bool = False
     from_status: str = ""
 
@@ -459,6 +469,7 @@ class RunManager:
             counts=RunCounts(),
             saver=saver,
             schedule_id=schedule_id,
+            started_by=work.current().user_id,
         )
         # The save and the launch can't be left half done if this request is cancelled.
         launch = asyncio.ensure_future(self._create(entry, job, dumped, idempotency_key, key))
@@ -631,8 +642,18 @@ class RunManager:
             )
             key.created.exception()  # marks it as read, so nobody is told it was forgotten
 
+    @staticmethod
+    def _work(entry: _Entry, job: _Job) -> Work:
+        """The run's lane at Claude and who started it (PLAN-V26 T1-1). A resumed run keeps
+        both, whoever resumed it."""
+        waits = job.kind.person_waits
+        watched = job.schedule_id is None and waits is not None and waits(job.params)
+        lane: Lane = "people" if watched else "runs"
+        return Work(lane, job.started_by, run_key(entry.run_id))
+
     def _launch(self, entry: _Entry, job: _Job) -> None:
-        task = asyncio.create_task(self._run_task(entry, job), name=f"run-{entry.run_id}")
+        with work.doing(self._work(entry, job)):  # the task, and all it starts, is this run's work
+            task = asyncio.create_task(self._run_task(entry, job), name=f"run-{entry.run_id}")
         entry.task = task  # `_active` holds the entry, so it holds the task until it is over
         task.add_done_callback(partial(self._task_done, entry))
 
@@ -1195,8 +1216,12 @@ class RunManager:
     # --- Reading (B1b; these only call reads.py and estimate.py) --------------------------
 
     async def get_run(self, run_id: UUID) -> RunOut:
-        """One run. Raises Problem 404 for an unknown id."""
-        return await reads.get_run(self.session_factory, run_id)
+        """One run, with its wait at Claude while it waits (PLAN-V26 T1-2). Raises Problem 404
+        for an unknown id."""
+        run = await reads.get_run(self.session_factory, run_id)
+        if run_id not in self._active:
+            return run
+        return run.model_copy(update={"waiting_ahead": claude_holder.lanes.ahead(run_key(run_id))})
 
     async def list_runs(
         self,

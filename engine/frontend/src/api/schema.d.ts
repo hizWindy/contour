@@ -7513,6 +7513,11 @@ export interface components {
              */
             trigger: "person" | "search_ahead";
             /**
+             * Waiting Ahead
+             * @description While it waits over a second for Claude: how many requests are ahead of it in its lane (PLAN-V26). None when it isn't waiting
+             */
+            waiting_ahead?: number | null;
+            /**
              * Web Checked
              * @description True when this prep searched the web itself
              */
@@ -8781,6 +8786,11 @@ export interface components {
              * @description Why the run ended, in plain words
              */
             stop_reason: string | null;
+            /**
+             * Waiting Ahead
+             * @description While it waits over a second for Claude: how many requests are ahead of it in its lane (PLAN-V26). Only `GET /runs/{run_id}` fills it.
+             */
+            waiting_ahead: number | null;
             /** Web Searches */
             web_searches: number;
         };

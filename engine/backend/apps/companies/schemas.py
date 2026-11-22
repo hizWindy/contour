@@ -381,7 +381,9 @@ class StyleUsed(Out):
 class PrepOut(Out):
     model_config = ConfigDict(
         json_schema_serialization_defaults_required=True,
-        json_schema_extra=optional_in_types("style_used", "tone_used", "stage_used"),
+        json_schema_extra=optional_in_types(
+            "style_used", "tone_used", "stage_used", "waiting_ahead"
+        ),
     )
 
     id: uuid.UUID
@@ -412,6 +414,12 @@ class PrepOut(Out):
     )
     stage_used: RelationshipStage | None = Field(
         None, description="The relationship stage it was written for. None before 12 Nov"
+    )
+    waiting_ahead: int | None = Field(
+        None,
+        description="While it waits over a second for Claude: how many requests are ahead of it "
+        "in its lane (PLAN-V26). None when it isn't waiting",
+        json_schema_extra=no_default_in_types,
     )
 
 

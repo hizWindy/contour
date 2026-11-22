@@ -59,6 +59,7 @@ function run(id: string, createdAt: string, cost: string, pass: number, cities: 
     error_id: null,
     schedule_id: '5d1b7c44-0000-4000-8000-000000000010',
     cancel_requested_at: null,
+    waiting_ahead: null,
     created_at: createdAt,
     started_at: createdAt,
     finished_at: createdAt,

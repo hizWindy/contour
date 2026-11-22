@@ -239,9 +239,19 @@ TEXT: dict[str, tuple[str, str]] = {
         "forms and Why now. Medium cost about US$0.34 to 0.42 a company; max about US$1.75. TBC: "
         "the test set decides between medium and high.",
     ),
-    "claude_concurrency": (
-        "Claude requests at once",
-        "The most requests to Claude running together, across every run and request.",
+    "claude_people_concurrency": (
+        "Claude requests at once for people",
+        "Work someone is waiting for: call prep, Research again, a call note, the Assistant and "
+        "a pre-read. It never waits behind a run. TBC.",
+    ),
+    "claude_runs_concurrency": (
+        "Claude requests at once for runs",
+        "Lead Finder runs, all of them together. Each run keeps its own limits as well.",
+    ),
+    "claude_jobs_concurrency": (
+        "Claude requests at once for scheduled work",
+        "The morning search ahead, the morning's meeting forms and other work that starts on "
+        "its own.",
     ),
     "prep_enabled": (
         "Call prep is on",

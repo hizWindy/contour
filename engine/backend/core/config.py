@@ -84,7 +84,10 @@ EDITABLE_KEYS: Final[list[str]] = [
     # The effort of the Lead Finder's two steps (PLAN-V21 T1-1)
     "claude_effort_discover",
     "claude_effort_research",
-    "claude_concurrency",
+    # Claude's three lanes (PLAN-V26 T1-1)
+    "claude_people_concurrency",
+    "claude_runs_concurrency",
+    "claude_jobs_concurrency",
     # How many companies a run tries to research, and its sweeps (PLAN-V21 T1-4)
     "target_companies_default",
     "discovery_max_sweeps",
@@ -130,7 +133,9 @@ CEILINGS: Final[dict[str, str]] = {
     "run_company_concurrency": "hard_concurrency",
     "run_discover_concurrency": "hard_concurrency",
     "max_concurrent_runs": "hard_concurrency",
-    "claude_concurrency": "hard_concurrency",
+    "claude_people_concurrency": "hard_concurrency",
+    "claude_runs_concurrency": "hard_concurrency",
+    "claude_jobs_concurrency": "hard_concurrency",
 }
 
 
@@ -359,7 +364,12 @@ class Settings(BaseSettings):
     claude_effort_discover: ClaudeEffort = "medium"
     claude_effort_research: ClaudeEffort = "medium"
     claude_timeout_seconds: float = Field(300, gt=0, le=3600)
-    claude_concurrency: int = Field(2, ge=1, le=4)  # requests at once. New keys have low limits.
+    # Claude's lanes: requests at once in each, up to hard_concurrency (PLAN-V26 choice 1). A
+    # request in one lane never waits for another. 4 for People is TBC, and so are all three until
+    # the account's rate limits are checked against them (S4).
+    claude_people_concurrency: int = Field(4, ge=1, le=4)  # work someone waits on, like call prep
+    claude_runs_concurrency: int = Field(2, ge=1, le=4)  # Lead Finder runs
+    claude_jobs_concurrency: int = Field(1, ge=1, le=4)  # scheduled work and the command line
     # One model per kind of step. None means use claude_model.
     model_discover: ClaudeModel | None = None
     model_search: ClaudeModel | None = None

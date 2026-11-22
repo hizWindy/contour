@@ -12355,6 +12355,18 @@
             "title": "Trigger",
             "type": "string"
           },
+          "waiting_ahead": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "While it waits over a second for Claude: how many requests are ahead of it in its lane (PLAN-V26). None when it isn't waiting",
+            "title": "Waiting Ahead"
+          },
           "web_checked": {
             "description": "True when this prep searched the web itself",
             "title": "Web Checked",
@@ -15142,6 +15154,18 @@
             "description": "Why the run ended, in plain words",
             "title": "Stop Reason"
           },
+          "waiting_ahead": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "While it waits over a second for Claude: how many requests are ahead of it in its lane (PLAN-V26). Only `GET /runs/{run_id}` fills it.",
+            "title": "Waiting Ahead"
+          },
           "web_searches": {
             "title": "Web Searches",
             "type": "integer"
@@ -15164,6 +15188,7 @@
           "error",
           "error_id",
           "schedule_id",
+          "waiting_ahead",
           "cancel_requested_at",
           "created_at",
           "started_at",

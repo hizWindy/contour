@@ -110,7 +110,9 @@ def test_defaults_are_the_ones_in_the_design() -> None:
     assert s.slice_reserve_usd == Decimal("0.60")  # TBC: 12 default slices fit $8.00
     assert s.discovery_share == 0.40
     assert (s.run_company_concurrency, s.run_discover_concurrency) == (2, 3)
-    assert (s.max_concurrent_runs, s.claude_concurrency) == (1, 2)
+    assert s.max_concurrent_runs == 1
+    lanes = (s.claude_people_concurrency, s.claude_runs_concurrency, s.claude_jobs_concurrency)
+    assert lanes == (4, 2, 1)
     assert (s.memory_fresh_days, s.match_fuzzy_min, s.match_profile_min) == (30, 90, 0.90)
     assert (s.model_discover, s.model_search, s.model_extract) == (None, None, None)
     assert (s.hard_run_cap_usd, s.hard_company_cap_usd) == (Decimal("50"), Decimal("5"))
@@ -639,7 +641,7 @@ def test_the_ceilings_pull_values_down() -> None:
         hard_run_cap_usd="10",
         hard_concurrency=1,
         run_company_concurrency=3,
-        claude_concurrency=4,
+        claude_people_concurrency=4,
     )
     clamped = clamp_to_ceilings(s)
     assert clamped.company_cap_usd == Decimal("1")  # 2.50 was above the ceiling
@@ -647,7 +649,7 @@ def test_the_ceilings_pull_values_down() -> None:
     assert clamped.slice_reserve_usd == Decimal("0.60")  # already below it
     assert clamped.run_cap_usd == Decimal("10")
     assert (clamped.run_company_concurrency, clamped.run_discover_concurrency) == (1, 1)
-    assert (clamped.max_concurrent_runs, clamped.claude_concurrency) == (1, 1)
+    assert (clamped.max_concurrent_runs, clamped.claude_people_concurrency) == (1, 1)
     assert s.company_cap_usd == Decimal("2.50")  # the original is not changed
 
 

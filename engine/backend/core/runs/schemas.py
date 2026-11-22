@@ -117,6 +117,11 @@ class RunOut(OutModel):
         None,
         description="The schedule that started this run. Empty when a person started it.",
     )
+    waiting_ahead: int | None = Field(
+        None,
+        description="While it waits over a second for Claude: how many requests are ahead of it "
+        "in its lane (PLAN-V26). Only `GET /runs/{run_id}` fills it.",
+    )
     cancel_requested_at: datetime | None
     created_at: datetime
     started_at: datetime | None

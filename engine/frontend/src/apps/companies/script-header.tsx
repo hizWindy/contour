@@ -8,7 +8,8 @@
  *   US$0.25 (**TBC** with Al-khair).
  * - **It is always there.** Call prep off: greyed out, and the hint says an admin can switch it
  *   on. Names off: it still writes a new script, with no web check. While it runs, the 3-step bar.
- *   After a failure, "Try again".
+ *   After a failure, "Try again". While it waits for a place at Claude, how many are ahead
+ *   (PLAN-V26 T1-2).
  * - **On a phone** the button is full width under the title.
  */
 import { CircleCheck, CircleDashed, RefreshCw } from 'lucide-react'
@@ -17,6 +18,7 @@ import type { ToneKey } from '@/api/hooks/script'
 import type { PrepOut, StyleUsed } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import { WaitingForClaude } from '@/components/waiting-for-claude'
 import { formatRelative, formatTime } from '@/lib/format'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
@@ -159,6 +161,7 @@ export function ScriptHeader(props: ScriptHeaderProps) {
         ) : null}
       </div>
       {running ? <Searching stage={stage} /> : null}
+      <WaitingForClaude ahead={running ? props.prep?.waiting_ahead : null} />
     </div>
   )
 }

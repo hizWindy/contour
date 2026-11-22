@@ -24,9 +24,11 @@ from typing import Literal
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from core import work
 from core.auth.clock import utcnow
 from core.schedules import service
 from core.schedules.jobs import JobContext, JobSkipped, JobSpec
+from core.work import Work
 
 log = logging.getLogger(__name__)
 
@@ -125,7 +127,10 @@ class Scheduler:
         try:
             if spec.running is not None and await spec.running(context):
                 return await self._finish(claim, "skipped", reason=STILL_RUNNING)
-            result = await spec.start(context)
+            # Scheduled work is the Jobs lane, also from "Run now" (PLAN-V26 choice 2). Run now
+            # keeps the person who pressed it. A start on time has nobody.
+            with work.doing(Work("jobs", work.current().user_id)):
+                result = await spec.start(context)
         except JobSkipped as skipped:
             return await self._finish(claim, "skipped", reason=skipped.reason)
         except Exception:
