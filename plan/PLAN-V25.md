@@ -6,8 +6,8 @@ This plan makes the Assistant and the mic guess better and ask less. When someth
 
 - **Status:** written on 22 Nov 2026 from Al-khair's chat, and checked against it the same day. Approved by Al-khair on 22 Nov (`implement v25`), and being built on `plan-v25` in `../contour-v25`.
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
-- **Last updated:** 22 Nov 2026.
-- **Progress:** S0 done. Part 1 being built.
+- **Last updated:** 23 Nov 2026.
+- **Progress:** every build step is done except T4-3, which waits on PLAN-V24's S1. The part checks (T1-3, T2-3, T3-4, T4-4, T5-2) run together before M1.
 - **Sources:**
   - Al-khair's chat on 22 Nov 2026, after the PLAN-V24 deploy;
   - the code on `master` (`1d7a5ce`), read on 22 Nov;
@@ -193,29 +193,29 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
 
 ## Part 1: smart choices
 
-- [ ] **T1-1. Rank and say why.** (`apps/companies/assistant_find.py`, and a new file beside it for the ranking). Choices 1 to 3.
+- [x] **T1-1. Rank and say why.** Done 22 Nov 2026 (`6cbf12c`). (`apps/companies/assistant_find.py`, and a new file beside it for the ranking). Choices 1 to 3.
   - **Done when:** tests with made-up companies pass: each signal puts its company first in the order of choice 2; each choice carries its level and one reason; the three levels come out as choice 1 says; a learned name stays sure; and nothing new is asked of Claude. The contract and the website's types are made again.
-- [ ] **T1-2. The suggestion part.** (`assistant/card/`). Choices 4 to 7.
+- [x] **T1-2. The suggestion part.** Done 23 Nov 2026 (`9f4906c`). (`assistant/card/`). Choices 4 to 7.
   - **Done when:** tests at 1440 and 390 px pass: a likely pick shows one suggestion with its reason; Enter, "yes" or a tap takes it; "Not this one" shows up to 3 choices and Search; the keys 1 to 3 pick; a sure pick is used at once with Change and Undo; a screen reader hears the suggestion once; and the same part serves a company, a person, a teammate and a meeting.
 - [ ] **T1-3. Part 1 check.** Website: lint, types, tests, build, `node scripts/bundle-report.js`. Backend: ruff, mypy, the fast tests and the Companies tests. The `design-review` skill on the card.
   - **Done when:** all pass, the first visit grew by 1 kB at most, and the numbers are in the Log.
 
 ## Part 2: start from the person
 
-- [ ] **T2-1. Find a person without the company.** (`assistant_find.py`, `store.py`). Choices 8 to 10.
+- [x] **T2-1. Find a person without the company.** Done 22 Nov 2026 (`70f6e07`). (`assistant_find.py`, `store.py`). Choices 8 to 10.
   - **Done when:** tests pass: "Log a call with Jo Sample" with no company finds her, her company and its open deal; two Jo Samples give choices with their companies; ranking follows choice 9; a person the rep can't see is never offered; and a company said with the person still wins.
-- [ ] **T2-2. The card for a person found first.** (`assistant/card/`). Choice 11.
+- [x] **T2-2. The card for a person found first.** Done 23 Nov 2026 (`9f4906c`). (`assistant/card/`). Choice 11.
   - **Done when:** tests pass: the suggestion reads "Jo Sample at Northwind?"; taking it fills the company and the person; a person found nowhere opens the people search; and "Needs a company" works as before.
 - [ ] **T2-3. Part 2 check.** As T1-3.
   - **Done when:** all pass, and the numbers are in the Log.
 
 ## Part 3: fill the gaps
 
-- [ ] **T3-1. The call type.** (`core/hubspot/activities.py`, the call notes routes, the migration, the card). Choice 12.
+- [x] **T3-1. The call type.** Done 23 Nov 2026 (`6f401c8`, `9f4906c`), with no migration (see the Log). (`core/hubspot/activities.py`, the call notes routes, the migration, the card). Choice 12.
   - **Done when:** tests with the fake HubSpot pass: every call sent carries `hs_activity_type`; the default is "Prospecting Call"; "make it a follow-up call" changes it; a type HubSpot doesn't list is refused; and the migration goes up and down cleanly.
-- [ ] **T3-2. A clear task and a follow-up nudge.** (`assistant_card.py`, the card). Choices 13 and 14.
+- [x] **T3-2. A clear task and a follow-up nudge.** Done 23 Nov 2026 (`6f401c8`, `9f4906c`). (`assistant_card.py`, the card). Choices 13 and 14.
   - **Done when:** tests pass: a task with no day suggests one, with two other choices; a task with no subject suggests one from the call; two teammates with the same name give choices; a connected call with no follow-up shows the nudge; "yes" adds it; and a no-answer gets no nudge.
-- [ ] **T3-3. The quick log.** (`assistant/card/`, `hold.tsx`). Choice 15, after Al-khair decides A2.
+- [x] **T3-3. The quick log.** Done 23 Nov 2026 (`6f401c8`, `9f4906c`). (`assistant/card/`, `hold.tsx`). Choice 15, after Al-khair decides A2.
   - **Done when:** tests pass: "No answer, Jo Sample" with a sure person sends after the hold with no card; the toast names the outcome, person and company; Undo opens the card; and words, a follow-up or any doubt still open the card.
 - [ ] **T3-4. Part 3 check.** As T1-3, plus the contract gate (`RUN_GATES=1`) and the `security-check` skill on the HubSpot write.
   - **Done when:** all pass, and the numbers are in the Log.
@@ -224,9 +224,9 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
 
 Needs PLAN-V24's S1 and S2 first.
 
-- [ ] **T4-1. The word list.** (a list file beside `name-fix.ts`, and the hint list). Choice 16.
+- [x] **T4-1. The word list.** Done 23 Nov 2026 (`6f401c8`, `b878c1f`). (a list file beside `name-fix.ts`, and the hint list). Choice 16.
   - **Done when:** tests pass: the places come from our copy; the office words come from the list; the name fix and Chrome's hints both get them; and the first visit doesn't grow.
-- [ ] **T4-2. Sounds like.** (`companies/call-notes/mic/name-fix.ts`). Choice 17.
+- [x] **T4-2. Sounds like.** Done 23 Nov 2026 (`b878c1f`). (`companies/call-notes/mic/name-fix.ts`). Choice 17.
   - **Done when:** tests pass: "Pran" becomes Prahran; a name said the Australian way is fixed; no everyday word ever changes ("shall" never becomes "Shell"); and every fix still shows once on the card.
 - [ ] **T4-3. Hints on, and a language per person.** (`voice-tool.ts`, the profile menu). Choices 18 and 19.
   - **Done when:** tests pass: the hints go on only where S1 said yes; the language row lists the choices; English (Australia) is the default; and the choice stays after a reload.
@@ -235,7 +235,7 @@ Needs PLAN-V24's S1 and S2 first.
 
 ## Part 5: a short memory
 
-- [ ] **T5-1. The last turn.** (the bar's session, the command route, `assistant.py`). Choice 21.
+- [x] **T5-1. The last turn.** Done 23 Nov 2026 (`6f401c8`, `01a1dce`). (the bar's session, the command route, `assistant.py`). Choice 21.
   - **Done when:** tests pass: "same company" uses the last turn's company; "and Jo too" adds a second call with the same company; the memory ends with the conversation; and Claude gets no more than the last turn's names.
 - [ ] **T5-2. Part 5 check.** As T1-3.
   - **Done when:** all pass, and the numbers are in the Log.
@@ -283,3 +283,10 @@ Needs PLAN-V24's S1 and S2 first.
 - 22 Nov 2026: checked against the chat, on Al-khair's ask. Added the "never a blank box" rule, the person-first decision, Whisper's numbers, a suggested subject for a task, and the house look for choices.
 - 22 Nov 2026, S0: Al-khair's answers before the build: A1 approved; A2 yes (a quick log may skip the card); Part 4 builds T4-1 and T4-2 now and leaves T4-3 until PLAN-V24's S1; the plan's line goes in `CLAUDE.md`, where the list is on `master` (his move to `AGENTS.md` stays uncommitted in the main folder). `plan-v25` made from `master` (`ff0f658`) in `../contour-v25`. Database `leadfinder_v25` copied from `leadfinder_v24`, at `0027_v24_call_needs_company`, the newest migration. Baseline: backend fast tests 3,558 passed and 28 skipped; the website tests pass.
 - 22 Nov 2026, S0: HubSpot's call type options couldn't be read again from here (the connector lacks `crm.objects.calls.read`). The three types this plan names are used as their own values: **TBC**, checked with the app's key before `deploy v25`.
+- 22 Nov 2026, T1-1 (`6cbf12c`): `assistant_rank.py` ranks matches by choice 2's signals, read from our copy in four small queries (no Claude request). How the levels read: one match is sure, as before (so no new question for the usual case); among several, the only one of the rep's own is sure (used at once, the others kept for Change), a signal only the top one has is likely, and none or a shared one is unsure. Reasons: "On screen.", "Picked for these words before.", "You meet them at 2 pm." (or "tomorrow at"), "Yours.", "You called them on Monday.", "Open deal.". The detail is the city, else "Owner: ...", else "Last call 12 Nov". At most 3 choices now, for companies, people, meetings and teammates. Teammates and meetings carry a level too (found sure, choices unsure). 14 new tests; 8 older ones changed for the new fields, the 3-choice cap and the ranked order.
+- 22 Nov 2026, T2-1 (`70f6e07`): a call with a person and no company said searches every company's people in our copy (an inner join, so a company the rep can't open is never offered). Each choice brings its company. One that stands out is likely ("Jo Sample at Northwind Sample Pty Ltd? You called them on Monday."). The one on screen wins when it has the person, and gives way when it doesn't. The open deal follows the company when the call is sent, as it did (`one_open_deal`). The reason says "them", never "her": we don't know a person's pronouns. 7 new tests.
+- 23 Nov 2026, T3-1 to T3-3, T4-1, T5-1 backend (`6f401c8`): the call type is kept in the call's card JSON (`call.call_type`), not a new column, so there is no migration 0028: a call's card already travels with it, and the batch reads it from there (`call_type_of`, Prospecting Call when none). A type HubSpot doesn't list is refused (422). Task suggestions: no day said gives the next working day as `due_level: likely`, with a week after; no subject gives "Follow up with {company}". The quick log is judged by code: an outcome only (No answer, Left voicemail, Busy, Wrong number), a sure company, a found person, no follow-up and no doubt. The last turn: "same company", "the same", "her", "them" and "too" use it; Claude gets only the names as heard (prompt `assistant-3`). The hint list gives up to 200 places from our copy's companies and offices. 9 older tests changed for `call_type` and the prompt version. Checks: ruff and mypy clean; the Companies and HubSpot activity tests 781 passed after the fixes; the hook's fast tests passed.
+- 23 Nov 2026, T4-1, T4-2 website (`b878c1f`): the office words and a said-like list in `au-words.ts`; the name fix matches by sound the Australian way, only when one name sounds like the word, never for an everyday word.
+- 23 Nov 2026, T1-2, T2-2, T3-1 to T3-3 website (`9f4906c`): built by two frontend agents and reviewed here. The call type is a Segmented choice on the call card and in Call logs' edit form. The quick log saves the call at once, holds 5 seconds with "Logging No answer with Jo Sample, Northwind." and Undo, waits up to 60 seconds for the sort (TBC), then sends as the card's Send does. **TBC:** the three call types' labels; a suggested day or subject doesn't stop a send; the quick log keeps the words, so the sort still asks Claude (a few seconds). Not yet seen in a browser.
+- 23 Nov 2026, T5-1 website (`01a1dce`): the bar keeps the last turn until it closes and sends it with each command.
+- 23 Nov 2026, checks so far: website lint 0 problems, types 0 errors, the build passes, the first visit 243 kB of JavaScript (gzip) in 41 files (the same as PLAN-V24). The full website test run was stopped twice by Claude Code for low memory (1.3 GB free of 15.6 GB); 511 of 514 tests in the 17 files it reached passed, and the 3 that failed pass now (2 needed the new `last_turn`, 1 timed out under the memory pressure). The full run, `RUN_GATES=1` and the `security-check` are still to run, before M1.
