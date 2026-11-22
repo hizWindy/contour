@@ -157,6 +157,7 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
 - **The copy:** `git worktree add ../contour-v26 -b plan-v26 master`, after `merge v25`.
 - **Ports and database:** backend `API_PORT=8131`, website 5301, database `leadfinder_v26` (a copy of the dev database at PLAN-V25's newest migration), test suffix `_v26`. Leave 8000, 5173, PLAN-V25's 8121 and 5291, and older plans' ports alone.
 - **One copy only.** No helper copies. Agents work in this copy one at a time.
+- **Never start `tests.e2e.serve` from this copy as it is.** It migrates the shared `leadfinder_e2e` to this plan's migration, and then no older copy's fake backend starts (the Log, 23 Nov). A browser check here uses a database of this plan's own, checked by name before the start, or mocked answers.
 - **No Claude key and no HubSpot key** in the copy. Blank `ANTHROPIC_API_KEY` for the process.
 - **Made-up names only,** like "Northwind" and "Jo Sample". Check any new example name against our copy before a commit (the `github` skill, "Never on GitHub").
 - **After S2,** read only the topic files a step needs.
@@ -260,6 +261,7 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
   - **A3.** Confirm the three edit screens (choice 18), or name others.
   - **A4.** Say `clean copies` when you want S0 done.
   - **A5.** Whether to drop the old databases S0 lists.
+  - **A6.** OK the downgrade of the shared `leadfinder_e2e` to `0024` (the Log, 23 Nov). Until then the other copies' fake backends don't start.
 - **Levi:** S3's three answers.
 
 ## Risks
@@ -311,6 +313,12 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
   - **Run now** on a schedule saves the admin who pressed it. A start on time saves nobody.
   - **T3-5's numbers:** ruff, mypy, lint, types and build pass; 3,582 fast backend tests; 172 database tests, after one older migration test learned the new newest migration; 3,068 website tests; first visit 243 kB gzip JS and 25 kB CSS.
   - **The contract gate** (T3-5) passes run alone. Inside the whole fast suite it fails on `master` (`ff0f658`) too: two `Literal`s with the same words in another order (`high, medium, low`) share Python's cache, so the enum's order follows the test order. Not fixed here. For M1: run `tests/gates` alone.
+- **23 Nov 2026, 02:15, a mistake that waits for Al-khair's OK (A6): the shared `leadfinder_e2e` was migrated.**
+  - **What:** to measure Home, the session wrapped `tests.e2e.serve` to use a database of its own. The wrapper missed one default, so the migrate step ran on the shared `leadfinder_e2e` and took it from `0024` to `0029_v26_activity`. The session hadn't checked the wrapper before running it.
+  - **Effect:** the fake backend in the main folder, `contour-v25` and older copies can't start, because they don't know `0029`.
+  - **Not touched:** no rows were lost (the wipe step failed on the other, empty database). `leadfinder`, `leadfinder_v25` and every other database are at their own revision.
+  - **The fix, not run:** from `contour-v26/engine/backend`, in PowerShell: `$env:POSTGRES_DB='leadfinder_e2e'; uv run --no-sync python -m alembic downgrade 0024_v18_teams_activity; Remove-Item Env:POSTGRES_DB`. Rehearsed on a copy (`leadfinder_e2e_v26`): back at `0024`, the same rows in every table, the same columns as the dev database.
+  - **Since:** the wrapper is disabled, and Home is measured with mocked answers and no backend.
 - 23 Nov 2026, Part 4 (`a5caf5f`):
   - **The list:** every table of the core, Companies and Lead Finder, each with picked columns. A new column stays off screen until someone lists it.
   - **The mask** covers phone and email columns, and emails and phone numbers inside notes and JSON. It doesn't catch an email said in words ("jo at sample dot com"), and people's names show. For S3.
