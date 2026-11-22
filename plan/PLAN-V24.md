@@ -338,7 +338,7 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
 
 - [x] **T3-1. Calls saved before their company** Done 21 Nov 2026 (`866e20e` to `1e579e0`, built on `plan-v24-api` and cherry-picked). (backend: `apps/companies/schemas.py`, `tables.py`, `note_store.py`, `note_batch.py`, `api_notes.py`, and the migration). Choices 17, 18 and 21, and "The contract".
   - **Done when:** tests pass: a call with no company is saved as `needs_company`, with the name as heard, and isn't sorted; the PATCH sets its company and starts the sort; a company the person can't see gives 422; a company on a call already sorted gives 409; the send leaves a `needs_company` call out and says why; a Viewer can't do any of it; and the migration goes up and down cleanly.
-- [x] **T3-2. The card saves at once, and hears the company again** Done 21 Nov 2026 (`4cd8e3e` to `b5f0a2a`, then `b26504a` to `2e6ed48` for choice 19's find, on Al-khair's word). Built, waiting for Al-khair's look. (`card/card.tsx`, `card/company.tsx`, `card/send.ts` and `card/drafts.ts`). Choices 17 and 19.
+- [x] **T3-2. The card saves at once, and hears the company again** Done 21 Nov 2026 (`4cd8e3e` to `b5f0a2a`, then `45247d9` to `0d06950` for choice 19's find, on Al-khair's word). Built, waiting for Al-khair's look. (`card/card.tsx`, `card/company.tsx`, `card/send.ts` and `card/drafts.ts`). Choices 17 and 19.
   - **Done when:** tests pass: a call whose company isn't found is saved at once as "Needs a company"; Later keeps it in Call logs, not in this browser; the next words fill the company search and show its results as choices; "the first one" picks, and the call is sorted; a name found nowhere says so and keeps the call; and tasks and emails are still kept in this browser, as now.
 - [x] **T3-3. "Needs a company" in Call logs** Done 21 Nov 2026 (`c90e8be` to `4747216`, built on `plan-v24-logs` and cherry-picked). Built, waiting for Al-khair's look. (`apps/companies/call-logs/`). Choice 20.
   - **Done when:** tests at 1440 and 390 px pass: the group sits at the top with its count; each row shows the name as heard and "Pick company"; a pick moves the call to To confirm once it is sorted; a send leaves these calls out and says why; and Al-khair has seen it.
@@ -436,7 +436,7 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - "Still no '{words}'. Say it again, or pick it later in Call logs.", and on a task card "Still no '{words}'. Say it again, or pick it.";
   - "1 call needs a company first. It stays in Call logs.", with Open Call logs.
 
-- 21 Nov 2026: Al-khair's two backend changes were built by a backend agent in 3 commits on `plan-v24-api` (`08ac349`, `9371bdb` and `0198862`). They were cherry-picked onto `plan-v24-card` (`01f48b5` to `e9af013`) for the card's side, and onto `plan-v24` as `b26504a` to `7a6ea90`.
+- 21 Nov 2026: Al-khair's two backend changes were built by a backend agent in 3 commits on `plan-v24-api` (`08ac349`, `9371bdb` and `0198862`). They were cherry-picked onto `plan-v24-card` (`01f48b5` to `e9af013`) for the card's side, and onto `plan-v24` as `45247d9` to `63bbd32`.
 - **The find:** `GET /companies/assistant/companies/find?words=...`, with no AI.
   - It runs the command step's own company search, now one shared function (`company_for_words`): the learned names, our copy, then HubSpot's own search.
   - It answers with the command step's company shape (found, up to 5 choices, and `can_add`) and its line.
@@ -454,7 +454,7 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - the words travel in the address, as `GET /companies/search?q=` does today, so the host's request logs may keep a company name. A POST would avoid it;
   - the find has no limit for each person. Each name our copy lacks costs one free HubSpot search.
 - Outside the two changes: `no_default_in_types` moved to `core/api/models.py`, so `teach` stays optional in the website's types.
-- 21 Nov 2026: the card's side of choice 19's find was built by the same frontend agent in 3 commits on `plan-v24-card` (`2bb86fc`, `bc12399` and `47ef71c`). With the backend's 3, they were cherry-picked onto `plan-v24` as `b26504a` to `2e6ed48`. This closes the gap above.
+- 21 Nov 2026: the card's side of choice 19's find was built by the same frontend agent in 3 commits on `plan-v24-card` (`2bb86fc`, `bc12399` and `47ef71c`). With the backend's 3, they were cherry-picked onto `plan-v24` as `45247d9` to `0d06950`. This closes the gap above.
   - A name said again, or typed and then entered, goes through the find:
     - one found becomes the card's company at once, with "… is new in HubSpot. We'll use it." when HubSpot's search found it;
     - two or more show as choices ("Which North Wind?");
@@ -467,7 +467,7 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
     - a single match from the find is picked at once, with no second look. Once sent, it can't be redone (409 `company_set`);
     - a find answer that comes after the rep typed something else still picks, if it found one company.
 
-- 21 Nov 2026, T3-4, the Part 3 check, on `plan-v24` at `4495167`:
+- 21 Nov 2026, T3-4, the Part 3 check, on `plan-v24` at `d0a74c3`:
   - **The backend** is the same as `plan-v24-api`'s checked tip: `git diff` is empty for `engine/backend`, `openapi.json`, `schema.d.ts` and `engine/schema`. There, Ruff and its format check were clean (479 files), and so was mypy (443 files). The fast tests passed 3,558 and skipped 28. The Companies tests passed 679. The contract gate passed alone (3 passed).
   - **The review's run on `plan-v24`:**
     - Ruff, the format check and mypy are the same;
@@ -477,7 +477,7 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - **The contract:** a fresh `engine openapi` and openapi-typescript match the files byte for byte. There is one migration head (`0027`), and `schema_map --check` matches.
   - **The website:** lint 0 problems, types 0 errors, 2,958 of 2,958 tests passed in 189 files, and the build passes. The first visit is 249,092 B of JavaScript (gzip) in 41 files (+497 B on S0), and 25,331 B of CSS (+131 B).
   - **The `security-check` skill:** no blocker on T3-1 (one more test added), on the find route and `teach` (two low points, **TBC**), or in the review's own pass.
-  - **The `design-review` skill and the browser pass** on the card's company step and Call logs' group: no design must-fix. The browser pass found three things, fixed in `eafa0b8`, `387a308` and `df51ec2`:
+  - **The `design-review` skill and the browser pass** on the card's company step and Call logs' group: no design must-fix. The browser pass found three things, fixed in `e3fdaf2`, `59aada4` and `284545b`:
     - the focus started on the dimmed Send;
     - Esc in the send dialog dropped the focus;
     - a single find result was picked at once.
@@ -489,10 +489,10 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
 - [x] **T4-1. The model's files and the worker** Done 21 Nov 2026 (`442ec59` to `d0356aa`, built on `plan-v24-device` and cherry-picked). App Platform's size limit is checked on paper only; it is tried live at M2 (**TBC**). (a build script in `engine/frontend/scripts/`, a Web Worker beside `voice-tool.ts`, `index.html`, the Caddyfile and `csp.test.ts`). Choices 23 and 25.
   - Check first that App Platform's static site serves files this big (**TBC**). If it can't, stop and tell Al-khair.
   - **Done when:** the build fetches the model at its fixed version and fails on a wrong checksum; the worker loads it and turns a made-up test sound file into words; nothing of it is in the first visit; and `csp.test.ts` passes with the new rules.
-- [x] **T4-2. The on-device voice tool** Done 21 Nov 2026 (`5a629de` to `ab0ddd6`, built on `plan-v24-device` and cherry-picked). (`voice-tool.ts` and a new file beside it, and choice 27's words). Choices 24, 26, 27 and 28.
+- [x] **T4-2. The on-device voice tool** Done 21 Nov 2026 (`5a629de` to `9b4acef`, built on `plan-v24-device` and cherry-picked). (`voice-tool.ts` and a new file beside it, and choice 27's words). Choices 24, 26, 27 and 28.
   - It gives the same five events as the browser's tool (`onReady`, `onWords`, `onHearing`, `onFinished` and `onProblem`), so the bar and the card don't change. It listens to our own mic track, the one Part 1 cleaned.
   - **Done when:** tests with a fake worker pass: speech then a pause gives the words once; a long talk gives the words turn by turn; Stop gives the last words, then `onFinished`; a worker that fails gives the "voice tool didn't load" problem; a slow device gives the too-slow problem; and a test proves no request carries the sound.
-- [x] **T4-3. The engine picks itself, and the download** Done 21 Nov 2026 (`42ab3b0` to `2636c98`, and `9232e30`). Built, waiting for Al-khair's look at the download line and the menu row. (`voiceToolFor` in `voice-tool.ts`, `session.ts`, and the profile menu). Choices 22, 25 and 27.
+- [x] **T4-3. The engine picks itself, and the download** Done 21 Nov 2026 (`b2129e9` to `af3dd56`, and `b3d9a76`). Built, waiting for Al-khair's look at the download line and the menu row. (`voiceToolFor` in `voice-tool.ts`, `session.ts`, and the profile menu). Choices 22, 25 and 27.
   - **Done when:** tests pass: Safari and the installed app on an iPhone, and Firefox, get the model; Chrome on a laptop and on Android gets the service; a service that doesn't start in 5 seconds moves to the model and remembers it; `browser_model` gets the model everywhere; the download shows its progress line and can be skipped with Type instead; and a second visit doesn't download again.
 - [x] **T4-4. Part 4 check.** Done 21 Nov 2026 (numbers in the Log). The 4x number is an estimate: Chrome can't slow a worker, so S2 gives the real slow-device number. As T2-6, plus the `speed-check` skill, and the `security-check` skill on the new package and the content policy. Its numbers: the first visit, the worker's size, and the model's time on a laptop at 4x CPU slowdown.
   - **Done when:** all pass, and the numbers are in the Log.
@@ -532,7 +532,7 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - "Send it." misheard: padding a short turn with silence is being tried.
 - The S2 page is in `plan/shots/v24/s2/` in `../contour-v24-device`, which git ignores. Its README has the iPhone steps.
 
-- 21 Nov 2026: the three fixes, in 4 more commits on `plan-v24-device` (`676657f` to `268c92e`). All 12 commits were cherry-picked onto `plan-v24-wire` (`6a1ea15` to `0cbf545`) in `../contour-v24-device`, a branch made from `plan-v24` at `c9b90a2`, where T4-3 was built. They are on `plan-v24` as `5a629de` to `491006f`.
+- 21 Nov 2026: the three fixes, in 4 more commits on `plan-v24-device` (`676657f` to `268c92e`). All 12 commits were cherry-picked onto `plan-v24-wire` (`6a1ea15` to `0cbf545`) in `../contour-v24-device`, a branch made from `plan-v24` at `c9b90a2`, where T4-3 was built. They are on `plan-v24` as `5a629de` to `8687317`.
 - **A wrong kept file never counts as kept.** Only a copy in our own store counts, and only if it carries the size written when its check passed. A failed check deletes the address from both stores, ours and the service worker's.
 - **Choice 28 on the model's words.** The model's tool says its words don't capitalise names. Then:
   - a run of 2 or more words that is a name, ignoring case, gets the name's capitals: "sample logistics" becomes "Sample Logistics";
@@ -550,7 +550,7 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - Whisper base on the CPU heard every line right, but took 3.5 s.
 - The fixes' checks: lint 0 problems, types 0 errors, 2,536 of 2,536 tests passed, and the build passes. The first visit is the same (+0 kB). The everyday-word list adds about 2 kB to the bar's and the mic card's late files.
 
-- 21 Nov 2026: T4-3 was built by a frontend agent in 8 commits on `plan-v24-wire` (`2e208bc` to `4745dfa`), after Part 4's 12. It was cherry-picked onto `plan-v24` as `42ab3b0` to `2636c98`, by the Part 5 agent. It is built and waiting for Al-khair's look at the download line and the menu row. Nothing was tried in a real browser, or with a real download.
+- 21 Nov 2026: T4-3 was built by a frontend agent in 8 commits on `plan-v24-wire` (`2e208bc` to `4745dfa`), after Part 4's 12. It was cherry-picked onto `plan-v24` as `b2129e9` to `af3dd56`, by the Part 5 agent. It is built and waiting for Al-khair's look at the download line and the menu row. Nothing was tried in a real browser, or with a real download.
 - **The engine choice.** `engineFor` (`call-notes/mic/voice-engine.ts`) gives:
   - the browser's service: Chrome or Edge on a laptop, and Chrome on Android;
   - the model: any browser on an iPhone or iPad, including the installed app and an iPad that shows a Mac's user agent, plus Safari on a Mac and Firefox;
@@ -590,14 +590,14 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - on an iPhone, whether the sound starts after a long download without a fresh tap (S2);
   - the download runs on the main thread.
 
-- 21 Nov 2026, T4-4, the Part 4 check, on `plan-v24` at `4495167`, with the website numbers as T3-4's.
+- 21 Nov 2026, T4-4, the Part 4 check, on `plan-v24` at `d0a74c3`, with the website numbers as T3-4's.
 - **The `security-check` skill:**
   - `@huggingface/transformers` is 4.3.2 exactly (Apache-2.0), with an integrity hash in the lock;
   - `onnxruntime-web` is a nightly build (1.31.0-dev.20260914), pinned exactly by the lock, and the build checks its 3 files' sha256;
   - all 5 model weight files match Hugging Face's own sha256 and size at the pinned commits (checked 21 Nov);
   - the content policy matches the Caddyfile, with no `'unsafe-eval'` and no `blob:` worker;
   - no request carries the sound.
-- **The security check also found two things, fixed in `fe41204` and `f34dbaf`:**
+- **The security check also found two things, fixed in `0d3ccf9` and `5b8ab74`:**
   - the Docker image's `npm ci` ran before `.npmrc` was copied, so onnxruntime-node downloaded CUDA files;
   - on App Platform the page's content policy doesn't reach the worker, so only the code's settings keep it to our own site. A test now guards them.
 - **The `speed-check` skill:**
@@ -605,26 +605,26 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - the late files, own file then what opening adds (gzip): the bar 31,095 B (76,027 B), the mic card 3,477 B (25,688 B), the profile menu 3,830 B (14,378 B), and Call logs 16,048 B (72,286 B);
   - only where the model is the engine: the tool, 4,708 B gzip; the worker, 561,410 B raw (160,666 B gzip); the CPU runtime's script, 24,381 B; the sound tap, 494 B; the runtime, 14.26 MB (26.86 MB with WebGPU); and the models, 66.9 MB plus 2.2 MB;
   - none of the first visit's 41 files mentions the model.
-- **The model's time:** Chromium 159 headless, 12 cores, no WebGPU adapter, the S2 page at `4495167`, two made-up sound files, 4 runs each.
+- **The model's time:** Chromium 159 headless, 12 cores, no WebGPU adapter, the S2 page at `d0a74c3`, two made-up sound files, 4 runs each.
   - Moonshine Base on the CPU takes 0.10 s of model time per second of sound. The words come 0.7 to 0.8 s after the speech ends.
   - **At 4x slowdown, it can't be measured this way.** Chrome's CPU throttling doesn't reach a Web Worker ("Operation is only supported for pages, not workers"). Slowing the page alone delayed the words to 0.8 to 1.5 s after the speech.
   - Times four gives about 0.4 s per second of sound, under the too-slow rule. That is an estimate. The slow-device number comes from S2, on a real phone.
-- **The browser pass found "Get voice ready" in the profile menu failing on every first visit,** with the service worker on: React error #185 in the download's progress. Fixed in `23377e8`, with one copy of the runtime kept since `bd3f8c8`.
+- **The browser pass found "Get voice ready" in the profile menu failing on every first visit,** with the service worker on: React error #185 in the download's progress. Fixed in `2aa5673`, with one copy of the runtime kept since `e42cd68`.
 
 ## Part 5: listening you can see
 
 **Progress:** 3 of 3. T5-1 waits for Al-khair's look.
 
-- [x] **T5-1. The pill, the tone and the lines** Done 21 Nov 2026 (`b5f9e3a`, `0ba196f`, `07f8bc3` and `cfa4e09`). Built, waiting for Al-khair's look. (`voice/bar.tsx`, `voice/words.ts`). Choices 29 to 31.
+- [x] **T5-1. The pill, the tone and the lines** Done 21 Nov 2026 (`91b125b`, `2eb3d1e`, `8fdc6e2` and `74d719a`). Built, waiting for Al-khair's look. (`voice/bar.tsx`, `voice/words.ts`). Choices 29 to 31.
   - **Done when:** tests at 1440 and 390 px pass: the pill shows while a card is open and goes at the end; Stop on it ends the conversation; each tone plays once (a fake sound); each line is said once to a screen reader; and Al-khair has seen it.
-- [x] **T5-2. A button for every voice step.** Done 21 Nov 2026 (`fadb0e7`). "Decided in chat" 5.
+- [x] **T5-2. A button for every voice step.** Done 21 Nov 2026 (`58f87c3`). "Decided in chat" 5.
   - **Done when:** two tests do a conversation's work with the mic off, one by keyboard only and one by clicks only: a command typed, a choice picked, a company picked for a call that needs one, Send, Later, Try again, Type instead and Stop.
 - [x] **T5-3. Part 5 check.** Done 21 Nov 2026 (numbers in the Log). Lighthouse and INP weren't run. As T2-6, plus the `speed-check` skill. Each screen at 1440, 1280, 768 and 390 px, light and dark, by keyboard only, and with reduced motion.
   - **Done when:** all pass, and the numbers are in the Log.
 
 ### Part 5 Log
 
-- 21 Nov 2026: T5-1 and T5-2 were built by a frontend agent on `plan-v24` in 6 commits (`9232e30` to `cfa4e09`), after it cherry-picked Part 4 and T4-3. They are built and waiting for Al-khair's look. Screenshots of a throwaway page with the real parts are in `plan/shots/v24/t5-1/`, which git ignores.
+- 21 Nov 2026: T5-1 and T5-2 were built by a frontend agent on `plan-v24` in 6 commits (`b3d9a76` to `74d719a`), after it cherry-picked Part 4 and T4-3. They are built and waiting for Al-khair's look. Screenshots of a throwaway page with the real parts are in `plan/shots/v24/t5-1/`, which git ignores.
 - **The pill** (`voice/pill.tsx`, `voice/pill-state.ts`):
   - It sits under the card, 384 px wide, inside the card's dialog layer (`MicSheet`'s new `aside` slot).
   - It holds the bars, the bar's title and Stop (V). Under them go the words, the last line or a hint.
@@ -664,7 +664,7 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - a V pressed within 150 ms after Esc types a "v" into the closing text line;
   - a line from a turn's answer, after Stop over a card, shows only once the card closes, as with the old strip.
 
-- 21 Nov 2026, T5-3, the Part 5 check, on `plan-v24` at `4495167`, with the website and speed numbers as T3-4's and T4-4's.
+- 21 Nov 2026, T5-3, the Part 5 check, on `plan-v24` at `d0a74c3`, with the website and speed numbers as T3-4's and T4-4's.
 - **The browser pass** (the `simulator-agent`): six screens at 1440, 1280, 768 and 390 px, light and dark, by keyboard only, and with reduced motion. The screens: the bar in a conversation, the card with the pill, the company step, Call logs' group, the profile menu, and the download.
   - No layout or contrast problems: no text under 4.5:1, nothing cut off, no sideways scroll.
   - The words match the plan's table.
@@ -672,22 +672,22 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - The quiet stop came after a real 2 minutes, on a phone size. V to Listening took 0.77 s.
   - 163 screenshots are in `plan/shots/v24/t5-3/`. Some show real company names from the dev copy, so they stay local.
 - **Found and fixed:**
-  - "Get voice ready" on a first visit (`23377e8`, `bd3f8c8`);
-  - a single company found is asked about before it is picked (`eafa0b8`);
-  - the focus starts in "Find a company" (`387a308`);
-  - Esc in Call logs' send dialog puts the focus back (`df51ec2`);
-  - a connection lost after the quiet tries has its own words (`0749dae`);
-  - a new command said over an open card keeps its words (`2ee5b76`);
-  - "Use your keyboard's mic" shows only on a phone or tablet (`3a48270`);
-  - on a phone, a call that needs a company opens on Send, so the phone's keyboard doesn't rise over the card (`a328990`).
-- **A browser re-check on `bd3f8c8` passed all five fixes it was given:**
+  - "Get voice ready" on a first visit (`2aa5673`, `e42cd68`);
+  - a single company found is asked about before it is picked (`e3fdaf2`);
+  - the focus starts in "Find a company" (`59aada4`);
+  - Esc in Call logs' send dialog puts the focus back (`284545b`);
+  - a connection lost after the quiet tries has its own words (`c25a3bb`);
+  - a new command said over an open card keeps its words (`477d2d2`);
+  - "Use your keyboard's mic" shows only on a phone or tablet (`83fb035`);
+  - on a phone, a call that needs a company opens on Send, so the phone's keyboard doesn't rise over the card (`676e610`).
+- **A browser re-check on `e42cd68` passed all five fixes it was given:**
   - "Get voice ready" showed its progress and then "Voice is ready on this phone" on 3 fresh visits, in about 2 s. Only our store held the runtime, and Speak afterwards downloaded nothing;
   - a single find result is a one-item choice, picked by "yes", "the first one", a tap or the keyboard;
   - the focus starts in "Find a company" on a computer;
   - Esc in the send dialog puts the focus back on Send;
   - the lost-connection words show in the bar and the pill, with Try again and Type instead.
   Screenshots are in `plan/shots/v24/t5-3/recheck/`.
-- **The final run on `plan-v24` at `a328990`:** lint 0 problems, types 0 errors, and the build passes. The first visit is 249,004 B of JavaScript (gzip) in 41 files (+409 B on S0), and 25,331 B of CSS. The full test run there was stopped by Claude Code for low memory after 13 files (422 tests passed). All 3,041 tests passed in 193 files one commit before (`bd3f8c8`), and the changed card tests pass on `a328990` (23 of 23).
+- **The final run on `plan-v24` at `676e610`:** lint 0 problems, types 0 errors, and the build passes. The first visit is 249,004 B of JavaScript (gzip) in 41 files (+409 B on S0), and 25,331 B of CSS. The full test run there was stopped by Claude Code for low memory after 13 files (422 tests passed). All 3,041 tests passed in 193 files one commit before (`e42cd68`), and the changed card tests pass on `676e610` (23 of 23).
 - **Not checked:**
   - a real mic, speech service, iPhone, Android, Safari, Firefox or screen reader;
   - "Now using {mic}", the Windows busy-mic line, the tone and WebGPU;
@@ -700,7 +700,7 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
 
 ## Merge, checks and going live
 
-- [x] **M1. Merge** Done 21 Nov 2026 (`988454c` and `5805746`, then this tick; `master` moved from `b84c3cf`). (`merge v24`, on Al-khair's word). Make the contract and the website's types again. Run the full backend checks (with `RUN_GATES=1`) and the full website checks, the `merge-check` skill and a fresh `review-agent`. Then move `master` to `plan-v24` with `git merge --ff-only`. If it won't fast-forward, stop and ask.
+- [x] **M1. Merge** Done 21 Nov 2026 (`8908979`, then this tick; `master` moved from `b84c3cf`). (`merge v24`, on Al-khair's word). Make the contract and the website's types again. Run the full backend checks (with `RUN_GATES=1`) and the full website checks, the `merge-check` skill and a fresh `review-agent`. Then move `master` to `plan-v24` with `git merge --ff-only`. If it won't fast-forward, stop and ask.
   - **Done when:** everything passes and `master` has moved.
 - [ ] **M2. Deploy** (`deploy v24`). Push `master` and deploy to App Platform. The migration runs on deploy. It only adds a column, lets two be empty and widens the status list, so the old code runs with it. There is no live switch.
   - **Done when:** the live site answers on the new version, the model's files load from it, and the Log says so.
@@ -798,7 +798,7 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - A company find for the card, with no AI: our copy, then the learned names, then HubSpot's own search, as the command step finds.
   - A pick from the command's own choices ("Which Sample?") that doesn't teach the mic, so those calls are saved at once too.
   - They are built by a backend agent on `plan-v24-api`, and the card's side follows on `plan-v24`.
-- 21 Nov 2026: the review's and the browser pass's fixes were built by a frontend agent in 17 commits on `plan-v24-fix`, and cherry-picked onto `plan-v24` as `fe41204` to `bd3f8c8`. Each has a test that fails on the old code.
+- 21 Nov 2026: the review's and the browser pass's fixes were built by a frontend agent in 17 commits on `plan-v24-fix`, and cherry-picked onto `plan-v24` as `0d3ccf9` to `e42cd68`. Each has a test that fails on the old code.
 - **The review's fixes:**
   - the website's Docker image installs with no install scripts, so no CUDA download;
   - a test guards the worker's "only from our own site" rule;
@@ -824,7 +824,7 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - whether App Platform's CDN answers a no-store download from its edge isn't known.
 - 21 Nov 2026, M1 (`merge v24`), on Al-khair's word in chat: "yes please merge it to the main and deploy it".
   - **The joins:** the contract and the website's types were made again, with no change. There is one migration head (`0027`), and the schema map matches. `uv.lock` is unchanged, and `package-lock.json` adds only `@huggingface/transformers` 4.3.2 and its packages.
-  - **Website:** lint and types clean, and Prettier clean after `988454c` (one line break from T1-2).
+  - **Website:** lint and types clean, and Prettier clean after `8908979` (one line break from T1-2).
     - Tests: 3,039 of 3,042 passed in the full run. The other 3 failed only because the laptop slept in the middle of them, about 82 minutes each. Their 3 files then passed alone, 79 of 79.
     - The build passes, with its 101.2 MB of model files checked.
     - First visit: 243 kB of JavaScript (gzip) in 41 files, and 25 kB of CSS, the same as before M1.
@@ -833,7 +833,11 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
     - In core, one test timed out connecting to the database on the busy laptop. Its file then passed alone, 28 of 28.
     - Ruff, the format check (479 files) and mypy (443 files) are clean.
   - **The review** (a fresh `review-agent` with `merge-check`): Ready with notes, no Blockers.
-    - Fixed: real company names in a test (`5805746`).
+    - Fixed: real company names in a test. Before the push they were taken out of the whole history (the Log line of 22 Nov).
     - Added: M2's line on rolling back.
     - Notes: check on live that the runtime's `.mjs` file comes as JavaScript (M2). A phone number or email said as a company's words reaches the host's logs before the server refuses it (A2's POST point). T2-5, T3-3 and T5-1 are ticked as built, and still wait for Al-khair's look. S1 and S2 are open by his choice.
   - **`master`** moved from `b84c3cf` to `plan-v24` with `--ff-only`. The main folder's uncommitted `CLAUDE.md` (the move to `AGENTS.md`) was set aside for it and put back unchanged. This plan's line was added to the main folder's `AGENTS.md`.
+- 22 Nov 2026, before the push, on Al-khair's word ("Rewrite, then push"): three company names in that test are in our HubSpot copy. So the 82 unpushed commits were rewritten with `git filter-branch`, as for PLAN-V22, and the test has made-up names from its first commit (`688494e`).
+  - 45 commits got new numbers, and this plan's numbers were remapped. The fix's own commit fell away, as it was then empty. The final code is the same, byte for byte.
+  - `master` was moved to the rewritten `plan-v24`.
+  - The old copies stay on this laptop only, never to be pushed: `backup/master-before-v24-name-swap` and `backup/plan-v24-before-name-swap` (both the old `9aae36b`), and the helper branches `plan-v24-card` and `plan-v24-fix`.
