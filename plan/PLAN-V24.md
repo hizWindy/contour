@@ -5,8 +5,8 @@ This plan makes the Assistant's mic strong on every device, and changes nothing 
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
-- **Last updated:** 21 Nov 2026 (M1 done on Al-khair's word: checked again, and `master` moved to `plan-v24`. M2, the deploy, is next. Every screen still waits for his look. S1, S2, M3 and M4 wait for him).
-- **Progress:** Before the build: 1 of 3. Part 1: 5 of 5. Part 2: 6 of 6. Part 3: 4 of 4. Part 4: 4 of 4. Part 5: 3 of 3. M1 to M4: 1 of 4.
+- **Last updated:** 22 Nov 2026 (M1 and M2 done on Al-khair's word: `master` `1d7a5ce` is pushed and live since 22 Nov, 10:48 pm Melbourne time. Every screen still waits for his look. S1, S2, M3 with Levi and M4 wait for him).
+- **Progress:** Before the build: 1 of 3. Part 1: 5 of 5. Part 2: 6 of 6. Part 3: 4 of 4. Part 4: 4 of 4. Part 5: 3 of 3. M1 to M4: 2 of 4.
 - **Sources:**
   - Al-khair's chat on 21 Nov, after Levi tried the Assistant with him on 20 Nov;
   - the code on `master` (`b84c3cf`), read on 21 Nov;
@@ -702,7 +702,7 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
 
 - [x] **M1. Merge** Done 21 Nov 2026 (`8908979`, then this tick; `master` moved from `b84c3cf`). (`merge v24`, on Al-khair's word). Make the contract and the website's types again. Run the full backend checks (with `RUN_GATES=1`) and the full website checks, the `merge-check` skill and a fresh `review-agent`. Then move `master` to `plan-v24` with `git merge --ff-only`. If it won't fast-forward, stop and ask.
   - **Done when:** everything passes and `master` has moved.
-- [ ] **M2. Deploy** (`deploy v24`). Push `master` and deploy to App Platform. The migration runs on deploy. It only adds a column, lets two be empty and widens the status list, so the old code runs with it. There is no live switch.
+- [x] **M2. Deploy** Done 22 Nov 2026 (`master` `1d7a5ce`, deploy `73763ae0`). (`deploy v24`). Push `master` and deploy to App Platform. The migration runs on deploy. It only adds a column, lets two be empty and widens the status list, so the old code runs with it. There is no live switch.
   - **Done when:** the live site answers on the new version, the model's files load from it, and the Log says so.
   - **Rolling back** (from M1's review): if live goes back to `b84c3cf` while any call needs a company, the old code breaks there. History in Call logs gives a 500 error, because the old `CallNoteOut` needs a company, and the V name hints fail on the empty company. So first pick a company for, or remove, every "Needs a company" call. The migration's down step refuses while such calls exist, but an App Platform rollback doesn't run it.
 - [ ] **M3. The live test with Levi,** on his own devices.
@@ -752,7 +752,7 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
       - The words travel in the address, as the company search's do today. A POST would keep them out of the host's logs.
       - It has no limit for each person.
     - **Before `deploy v24`:**
-      - "Keep listening" is on by default while Levi's W2 is still open. So on Chrome and Edge, more room sound goes to Google or Microsoft. Get W2 answered, or turn the default off.
+      - "Keep listening" is on by default while Levi's W2 is still open. So on Chrome and Edge, more room sound goes to Google or Microsoft. Get W2 answered, or turn the default off. On 22 Nov Al-khair chose to deploy with it on, and to ask Levi W2 at M3.
     - **For `merge v24`:**
       - the main folder has uncommitted changes to `CLAUDE.md` (the move to `AGENTS.md`), and `plan-v24` changes `CLAUDE.md` too. So `git merge --ff-only plan-v24` would refuse there, until that work is committed or set aside. At M1 it was set aside for the fast-forward and put back unchanged, and this plan's line was added to the main folder's `AGENTS.md`. Committing that work stays Al-khair's.
     - **Small, from the browser check:**
@@ -841,3 +841,16 @@ The call notes routes sit under `/api/v1/companies/`. Each change goes in `tests
   - 45 commits got new numbers, and this plan's numbers were remapped. The fix's own commit fell away, as it was then empty. The final code is the same, byte for byte.
   - `master` was moved to the rewritten `plan-v24`.
   - The old copies stay on this laptop only, never to be pushed: `backup/master-before-v24-name-swap` and `backup/plan-v24-before-name-swap` (both the old `9aae36b`), and the helper branches `plan-v24-card` and `plan-v24-fix`.
+- 22 Nov 2026, M2 (`deploy v24`), on Al-khair's word: "merge it to the main and deploy it". In chat he also chose to deploy with "Keep listening" on by default, and to ask Levi W2 at M3.
+  - **The push:** `b84c3cf..1d7a5ce` to GitHub. Before the deploy, the live log showed no Lead Finder run going, only the HubSpot copy's refresh.
+  - **The deploy** (`73763ae0`, by hand with `doctl`): 11:41 to 11:48 UTC, which is 10:41 to 10:48 pm Melbourne time.
+    - The build took 4 minutes. The website's build fetched and checked the 101.2 MB of model files from Hugging Face.
+    - The `migrate` job ran `0026` to `0027_v24_call_needs_company`.
+    - The new backend took over the run engine (`run_engine_taken_over`, 11:48:19 UTC). The log has only the planned "another backend holds the run engine" warning from the swap, and no restarts.
+  - **Live checks,** on https://contourhq.online:
+    - The backend, the website and `migrate` all run `1d7a5ce`, and the health check answers 200.
+    - The page carries the new content policy (`'wasm-unsafe-eval'` and `worker-src 'self'`). The first visit is the same 41 files as the local build, and its main file is the same size (238,084 B raw). Its name differs from the local build's; why isn't confirmed yet.
+    - Every model file the app uses loads with its listed size, 101,233,273 B in all, and each small one matches its sha256.
+    - The runtime's `.mjs` file comes as `text/javascript`, and the two `.wasm` files as `application/wasm`. That clears M1's review note.
+  - **The old address** (`contour-hq-mxeqw.ondigitalocean.app`) no longer reaches the backend: it answers 400 `host_not_allowed`, since the custom domain of 20 Nov. Use https://contourhq.online.
+  - **Not checked live:** a real mic, Speak or "Get voice ready" in a browser (that is M3, with Levi), and any page behind sign-in (no account was used).
