@@ -137,7 +137,7 @@ Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence 
   - **Tablet (640 to 1023px):** the menu starts folded to its icons so the page keeps the room. The cost card on Start moves under the form, with a bar at the bottom of the screen for the cost and the Start button.
   - **Phone (under 640px):** one column. The menu is a panel that slides in, and slides shut once you pick a page (a project's own row only opens or closes its list). The top bar is one line (a search icon, the breadcrumbs shorten with "..."). Admin tabs are one row that scrolls sideways. Tables show only the columns that tell rows apart (the rest are one tap away in the side panel). Results filters sit behind one Filters button that opens a sheet. The run page orders its cards: progress, cost, links, companies, events, setup.
   - **Nothing scrolls the whole page sideways at any width.** A wide table scrolls inside its own box.
-- **Touch:** a phone, or any screen you tap with a finger, gets bigger controls (the `touch:` variant in `index.css`): buttons, toggles, fields and menu rows are 44px tall, and checkboxes have a larger hit area. Fields use 16px text so iPhones don't zoom in on focus. A mouse keeps the 36px sizes.
+- **Touch:** a phone, or any screen you tap with a finger, gets bigger controls (the `touch:` variant in `index.css`): buttons, toggles, fields and menu rows are 44px tall, and checkboxes have a larger hit area. Fields use 16px text so iPhones don't zoom in on focus. A mouse keeps the 36px sizes, but for the sidebar's rows: 32px with 2px between them (PLAN-V26 choice 22), and still 44px with 4px on touch and under 640px.
 
 ## shadcn parts
 
@@ -185,7 +185,8 @@ Smooth and quick, like a well-made phone app (PLAN-V13, 11 Nov 2026). Motion sho
 - **Second exception, waiting for an OK (TBC):** the sign-in avatar reacts to the form. Its eyes follow the login as it is typed (150ms), it shakes its head once after a wrong try (0.6s) and waves once after a sign-out (1.8s). Nothing loops, and reduced motion keeps it still (the face still changes).
 - **One exception, waiting for an OK (TBC):** the sign-in page's contour lines draw once, over 1.6s, when the page opens. They never loop, and reduced motion turns them off.
 - **Glass on the menu:** one pane of see-through glass slides from row to row of the sidebar after the pointer or the keyboard focus (`GlassMenu`; `layoutId`, so only `transform` and `opacity` move). It is white at 58% (9% in dark) with a bright rim, a shine along its top edge and a soft shadow (the `--glass-*` tokens in `tokens.css`). It fades in when it first meets the menu and out in 150ms when it leaves. The selected page has its own pane, the accent's tint with its 2px bar, and it slides when you change page. Nothing is blurred and no colour ramps, because the menu behind it is one flat colour, so it is a tint with a rim, not glassmorphism. A finger never calls it up, and with reduced motion the panes simply appear. (Al-khair's Improvements 1 list, 17 Nov 2026, #7: "glass like on iPhone, a smooth hover")
-- **Subtle glass on floating layers (PLAN-V19 T3-6, choice 17):** floating surfaces above content use `.glass-surface` (`--glass-surface` with static 16px backdrop blur: popovers, dropdown menus, selects, `Ctrl+K`, and sticky sheet headers), the sticky top bar uses `.glass-bar` (`--glass-bar` with static 14px blur) only while the page scrolls under it, and dialog, alert dialog, and sheet dims use `.glass-overlay` with a light 4px blur. Cards, tables, forms, and the page background stay flat and solid. Blur never animates, and `@media (prefers-reduced-transparency: reduce)` (or `@supports` fallback) returns every floating layer to its solid token colour with `backdrop-filter: none`.
+- **Faint glass on the page (PLAN-V26 choice 21, which changes PLAN-V19's choice 17):** each page's header band (`.glass-band`) and Home's cards (`.glass-cards` on their grid) are see-through card colour with a bright top edge (`--glass-band`, `--glass-card`, `--glass-edge`). Nothing is blurred, because only the flat page is behind them. Text on them keeps 4.5:1 in light and dark (`src/test/faint-glass.test.ts`), and `prefers-reduced-transparency` makes them solid. Tables, rows, forms and lists stay solid.
+- **Subtle glass on floating layers (PLAN-V19 T3-6, choice 17):** floating surfaces above content use `.glass-surface` (`--glass-surface` with static 16px backdrop blur: popovers, dropdown menus, selects, `Ctrl+K`, and sticky sheet headers), the sticky top bar uses `.glass-bar` (`--glass-bar` with static 14px blur) only while the page scrolls under it, and dialog, alert dialog, and sheet dims use `.glass-overlay` with a light 4px blur. Tables, forms, cards away from Home and the page background stay flat and solid. Blur never animates, and `@media (prefers-reduced-transparency: reduce)` (or `@supports` fallback) returns every floating layer to its solid token colour with `backdrop-filter: none`.
 
 ## Actions and forms
 
@@ -265,12 +266,12 @@ PLAN-V15 (12 Nov 2026). The words for every case are in `src/api/words.ts` ("Wor
 
 ## Banned (no AI slop)
 
-- Gradients, glow, and heavy glassmorphism. Only the menu's hover pane and the floating layers named in Motion may use subtle glass; cards, tables, forms, and the page stay flat and solid.
+- Gradients, glow, and heavy glassmorphism. Only the menu's hover pane, the floating layers named in Motion, and the faint glass on a page's header band and Home's cards may use glass; tables, rows, forms, lists and other cards stay flat and solid.
 - Pills: fully round buttons or badges.
 - Sparkle icons, emoji, robot mascots, and words like "magic" or "AI-powered".
 - shadcn's default look shipped as is: grey on white, the default font, untouched.
 - Hover that grows, moves or adds a shadow (but for the menu's glass pane above). Pulsing or looping animation. Shimmer. A bounce, except the very small one a toggle or a chip gets from the motion kit's `soft` spring.
-- Glow, blur and glass, even on the dashboards the references use them on. Sparkle icons and AI-assistant blobs.
+- Glow, blur and glass (but for the glass named above), even on the dashboards the references use them on. Sparkle icons and AI-assistant blobs.
 - A wall of big vanity numbers. Every number on screen helps a decision.
 - Centred body text. Text is left-aligned, and numbers are right-aligned.
 - A third typeface, or Navy or the accent as body text.

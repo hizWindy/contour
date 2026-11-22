@@ -136,7 +136,7 @@ export function PendingDetail({ label, titled = true }: { label: string; titled?
     <Pending label={label}>
       <div className="flex flex-col gap-6">
         {titled ? (
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 py-3">
             <Skeleton className="h-7 w-64" />
             <Skeleton className="h-6 w-24" />
             <Skeleton className="h-6 w-20" />

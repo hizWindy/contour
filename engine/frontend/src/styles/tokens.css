@@ -160,6 +160,11 @@
   --glass-surface: light-dark(rgb(251 251 248 / 74%), rgb(50 46 37 / 74%));
   --glass-bar: light-dark(rgb(244 245 239 / 78%), rgb(38 35 27 / 78%));
   --glass-surface-border: light-dark(rgb(255 255 255 / 70%), rgb(255 255 255 / 12%));
+  /* Faint glass on a page's header band and Home's cards (PLAN-V26 T5-1, choice 21). See-through
+     card colour with a bright top edge, never a blur: only the flat page is behind them. */
+  --glass-band: light-dark(rgb(251 251 248 / 55%), rgb(50 46 37 / 50%));
+  --glass-card: light-dark(rgb(251 251 248 / 78%), rgb(50 46 37 / 78%));
+  --glass-edge: light-dark(rgb(255 255 255 / 80%), rgb(255 255 255 / 7%));
 
   /* ---- Depth: flat surfaces, and a soft shadow only for things that float ------------------ */
   --elevation-color: light-dark(rgb(38 35 27 / 16%), rgb(0 0 0 / 50%));

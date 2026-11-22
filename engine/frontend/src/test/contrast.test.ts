@@ -111,6 +111,11 @@ const TRANSLUCENT = new Set([
   'glass-surface',
   'glass-bar',
   'glass-surface-border',
+  // The faint glass (PLAN-V26 T5-1). Text sits on it, so faint-glass.test.ts checks the contrast
+  // on the colour it makes over the page.
+  'glass-band',
+  'glass-card',
+  'glass-edge',
 ])
 
 describe('tokens.css structure', () => {

@@ -101,7 +101,8 @@ function SubLink({ item, pathname }: { item: NavItem; pathname: string }) {
       <SidebarMenuSubButton
         asChild
         isActive={here}
-        className="h-9 touch:h-11 data-active:font-semibold [&>svg]:size-5"
+        // 32px with a mouse, 44px for a finger and under 640px (PLAN-V26 T5-2).
+        className="h-8 touch:h-11 data-active:font-semibold [&>svg]:size-5"
       >
         <Link to={item.to} aria-current={here ? 'page' : undefined} onClick={closeOnPhone}>
           <Icon aria-hidden="true" />

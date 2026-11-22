@@ -49,6 +49,13 @@ const GLASS_HOSTS = new Set([
   'apps/companies/call-notes/note-view.tsx',
 ])
 
+// PLAN-V26 choice 21: the faint glass is for a page's header band and Home's cards only.
+const FAINT_GLASS_HOSTS = new Set([
+  'styles/index.css',
+  'components/page-header.tsx',
+  'shell/home.tsx',
+])
+
 const COLOUR_FAMILIES =
   'red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone|black|white'
 
@@ -125,6 +132,15 @@ export const DESIGN_RULES: DesignRule[] = [
     skip: (path) => GLASS_HOSTS.has(path),
     bad: ['glass-surface', 'glass-bar', 'glass-overlay'],
     good: ['bg-card', 'bg-background', '--glass-surface'],
+  },
+  {
+    id: 'glass-faint-only',
+    message:
+      "Faint glass is only for a page's header band and Home's cards, never lists or tables.",
+    pattern: /(?<![\w-])glass-(?:band|cards)\b/,
+    skip: (path) => FAINT_GLASS_HOSTS.has(path),
+    bad: ['glass-band', 'glass-cards'],
+    good: ['bg-card', '--glass-band', '--glass-card'],
   },
   {
     id: 'gradients',

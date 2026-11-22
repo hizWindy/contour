@@ -17,7 +17,11 @@ export interface PageHeaderProps {
   className?: string
 }
 
-/** The title of a page: 24px semibold, with an optional line under it and actions at the end. */
+/**
+ * The title of a page: 24px semibold, with an optional line under it and actions at the end. It
+ * sits on a band of faint glass (PLAN-V26 T5-1) that reaches 12px past the content on each side,
+ * so the title stays in line with the page under it.
+ */
 export function PageHeader({
   title,
   description,
@@ -29,7 +33,10 @@ export function PageHeader({
   return (
     <header
       data-slot="page-header"
-      className={cn('flex flex-wrap items-start justify-between gap-4', className)}
+      className={cn(
+        'glass-band -mx-3 flex flex-wrap items-start justify-between gap-4 rounded-lg px-3 py-3',
+        className,
+      )}
     >
       <div className="flex min-w-0 items-start gap-3">
         {Icon ? (

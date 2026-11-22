@@ -141,7 +141,10 @@ function Greeting({ modules }: { modules: readonly AppModule[] }) {
   const firstSignIn = me?.state === 'signed_in' && me.firstSignIn === true
   const lines = modules.flatMap((app) => (app.homeLine ? [{ id: app.id, Line: app.homeLine }] : []))
   return (
-    <header data-slot="page-header" className="relative flex flex-col gap-2 overflow-hidden pt-2">
+    <header
+      data-slot="page-header"
+      className="glass-band relative -mx-3 flex flex-col gap-2 overflow-hidden rounded-lg px-3 py-3"
+    >
       <ContourLines />
       <p className="relative text-ui text-muted-foreground">{longDate(now)}</p>
       <h1 className="relative text-display font-semibold text-foreground">
@@ -209,7 +212,7 @@ function Cards({ modules }: { modules: readonly AppModule[] }) {
   // A wide card is two rows tall only when two narrow cards, always there, can stand beside it.
   const tall = placed.filter((card) => !card.wide && !card.late).length >= 2
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-flow-dense lg:grid-cols-3">
+    <div className="glass-cards grid grid-cols-1 gap-6 lg:grid-flow-dense lg:grid-cols-3">
       {placed.map((card, index) =>
         card.late ? (
           // It brings its own fade when it comes, and takes no place while it draws nothing. Its

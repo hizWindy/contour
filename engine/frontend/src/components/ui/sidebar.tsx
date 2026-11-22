@@ -443,7 +443,7 @@ function SidebarMenu({ className, ...props }: React.ComponentProps<"ul">) {
     <ul
       data-slot="sidebar-menu"
       data-sidebar="menu"
-      className={cn("flex w-full min-w-0 flex-col gap-1", className)}
+      className={cn("flex w-full min-w-0 flex-col gap-0.5 touch:gap-1", className)}
       {...props}
     />
   )
@@ -464,7 +464,7 @@ const sidebarMenuButtonVariants = cva(
   // The hover and selected backgrounds are the glass's (`useGlassRow`): the row is `relative isolate`
   // so the pane sits behind its text, and it must not clip its box, or the pane is cut off as it
   // slides in from the row before.
-  "peer/menu-button group/menu-button relative isolate flex w-full items-center gap-2 rounded-md p-2 text-left text-ui transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-9! group-data-[collapsible=icon]:p-2! hover:text-sidebar-accent-foreground active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-active:font-semibold data-active:text-sidebar-selected-foreground [&_svg]:size-5 [&_svg]:shrink-0 [&>span:last-child]:truncate",
+  "peer/menu-button group/menu-button relative isolate flex w-full items-center gap-2 rounded-md p-2 text-left text-ui transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-1.5! hover:text-sidebar-accent-foreground active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-active:font-semibold data-active:text-sidebar-selected-foreground [&_svg]:size-5 [&_svg]:shrink-0 [&>span:last-child]:truncate",
   {
     variants: {
       variant: {
@@ -473,9 +473,12 @@ const sidebarMenuButtonVariants = cva(
           "border border-sidebar-border bg-sidebar hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
       },
       size: {
-        default: "h-9 text-ui touch:h-11",
+        // 32px with a mouse, 44px for a finger and under 640px (PLAN-V26 T5-2).
+        // Folded on a touch screen it is 36px wide, all the rail has room for, and still 44px tall.
+        default:
+          "h-8 text-ui touch:h-11 touch:group-data-[collapsible=icon]:h-11! touch:group-data-[collapsible=icon]:w-9! touch:group-data-[collapsible=icon]:px-2! touch:group-data-[collapsible=icon]:py-3!",
         sm: "h-7 text-caption",
-        lg: "h-12 text-ui group-data-[collapsible=icon]:p-0!",
+        lg: "h-12 text-ui group-data-[collapsible=icon]:p-0! touch:group-data-[collapsible=icon]:h-11! touch:group-data-[collapsible=icon]:w-9!",
       },
     },
     defaultVariants: {
@@ -626,7 +629,7 @@ function SidebarMenuSub({ className, ...props }: React.ComponentProps<"ul">) {
       data-slot="sidebar-menu-sub"
       data-sidebar="menu-sub"
       className={cn(
-        "mx-3.5 flex min-w-0 translate-x-px flex-col gap-1 border-l border-sidebar-border px-2.5 py-0.5 group-data-[collapsible=icon]:hidden",
+        "mx-3.5 flex min-w-0 translate-x-px flex-col gap-0.5 border-l border-sidebar-border px-2.5 py-0.5 group-data-[collapsible=icon]:hidden touch:gap-1",
         className
       )}
       {...props}

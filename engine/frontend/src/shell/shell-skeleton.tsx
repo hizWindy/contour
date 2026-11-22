@@ -40,7 +40,7 @@ export function ShellSkeleton() {
             <Skeleton className="h-4 w-40" />
           </div>
           <div className="mx-auto flex w-full max-w-(--content-max) min-w-0 flex-1 flex-col gap-6 p-4 sm:p-6">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 py-3">
               <Skeleton className="size-10 rounded-lg" />
               <div className="flex flex-col gap-2">
                 <Skeleton className="h-7 w-48" />

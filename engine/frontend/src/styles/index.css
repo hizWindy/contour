@@ -471,7 +471,35 @@
   }
 }
 
+/*
+  Faint glass on each page's header band and on Home's cards (PLAN-V26 T5-1, choice 21): a tint
+  and a bright top edge. No blur: only the flat page is behind them, so a blur would show nothing
+  and cost every frame. Tables, rows, forms and lists get neither class.
+*/
+.glass-band,
+.glass-cards [data-slot='card'] {
+  box-shadow: inset 0 1px 0 var(--glass-edge);
+}
+
+.glass-band {
+  background-color: var(--glass-band);
+}
+
+.glass-cards [data-slot='card'] {
+  background-color: var(--glass-card);
+}
+
 @media (prefers-reduced-transparency: reduce) {
+  .glass-band {
+    background-color: var(--background);
+    box-shadow: none;
+  }
+
+  .glass-cards [data-slot='card'] {
+    background-color: var(--card);
+    box-shadow: none;
+  }
+
   .glass-surface {
     background-color: var(--popover);
     -webkit-backdrop-filter: none;
