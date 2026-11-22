@@ -18,7 +18,9 @@ heard.
   names on, for a company said again, with no Claude request and no company on screen.
 - **The person:** among that company's people (`people_of`): the full name (`find_person`, the
   call note sorter's test), else every word said matching a word of their name. A word of 4
-  letters or more may be spelled slightly wrong ("Sampel").
+  letters or more may be spelled slightly wrong ("Sampel"). With no company named, or not at the
+  company on screen, among the people of every company in our copy (PLAN-V25 T2-1,
+  `find_person_anywhere`): each choice brings its company, ranked by `rank_people`.
 - **The meeting:** the one on screen, else the company's meetings in the next 60 days (with no
   company named, my own): on the day said ("Thursday's meeting"), else the next one. A cancelled
   one doesn't count.
@@ -47,8 +49,10 @@ from apps.companies.assistant_rank import (
     CHOICES_SHOWN,
     LEARNED,
     ON_SCREEN,
+    PEOPLE_POOL,
     Asker,
     rank_companies,
+    rank_people,
 )
 from apps.companies.assistant_schemas import (
     AssistantCardIn,
@@ -95,7 +99,7 @@ from core.config import Settings
 from core.email.internal import only_internal
 from core.hubspot.matching import core_tokens, match_company, names_are_close
 from core.hubspot.meetings import DAYS_AHEAD, Meeting
-from core.hubspot.models import HubSpotCompany
+from core.hubspot.models import HubSpotCompany, HubSpotContact
 from core.hubspot.profiles import PLACEHOLDER_NAME
 
 MAX_CHOICES: Final = CHOICES_SHOWN  # at most 3 choices, plus Search (PLAN-V25 choice 4)
@@ -136,6 +140,11 @@ def isnt_in_hubspot(name: str) -> str:
 
 def which(heard: str) -> str:
     return f"Which {heard}?"
+
+
+def person_nowhere(heard: str) -> str:
+    """PLAN-V25 "Words on screen": a person named with no company, found nowhere."""
+    return f"There's no '{heard}' in HubSpot. Say the company, or pick the person."
 
 
 def not_at_company(heard: str, company: str) -> str:
@@ -738,6 +747,86 @@ async def find_person_at(
         level="unsure" if found else None,
     )
     return person, line
+
+
+# --- The person, without the company (PLAN-V25 T2-1, choices 8 to 10) ---------------------------
+
+
+async def people_called(session: AsyncSession, words: str) -> list[AssistantPersonHit]:
+    """The people in our copy with a word of their name starting with each word said, at a
+    company in our copy (so one the rep can open), each with that company. Then the same test as
+    at one company (`people_named`), so a full name said finds that person only."""
+    said = [word for word in name_words(words) if LETTERS.fullmatch(word)]
+    if not said:
+        return []
+    contact = HubSpotContact
+    rows = await session.execute(
+        select(contact, HubSpotCompany.name)
+        .join(HubSpotCompany, HubSpotCompany.hubspot_id == contact.hubspot_company_id)
+        .where(
+            *(contact.name.regexp_match(rf"\m{re.escape(w)}", flags="i") for w in said[:4]),
+            func.lower(func.btrim(HubSpotCompany.name)) != PLACEHOLDER_NAME,
+        )
+        .order_by(contact.last_activity.desc().nulls_last(), contact.name, contact.hubspot_id)
+        .limit(PEOPLE_POOL)
+    )
+    found = rows.all()
+    people = [
+        CompanyPerson(
+            id=person.hubspot_id,
+            name=person.name,
+            title=person.job_title,
+            phone=None,
+            last_activity=person.last_activity,
+        )
+        for person, _ in found
+    ]
+    companies = {person.hubspot_id: (person.hubspot_company_id, name) for person, name in found}
+    hits: list[AssistantPersonHit] = []
+    for person in people_named(words, people):
+        key, name = companies[person.id]
+        hits.append(
+            AssistantPersonHit(
+                id=person.id,
+                name=person.name,
+                title=person.title,
+                company_key=key,
+                company_name=name,
+            )
+        )
+    return hits
+
+
+def person_at_line(person: AssistantPersonHit, reason: str | None) -> str:
+    """'Jo Sample at Northwind Pty Ltd? You called them on Tuesday.'"""
+    asked = f"{person.name} at {person.company_name}?"
+    return f"{asked} {reason}" if reason else asked
+
+
+async def find_person_anywhere(
+    session: AsyncSession, said: str, ctx: Context
+) -> tuple[AssistantPerson, str | None]:
+    """A person named with no company: among the people of every company in our copy, ranked
+    (choice 9). Each choice brings its company, and its open deal goes with the call as it does
+    now (choice 10). The top one is suggested when it stands out; found nowhere, the card's
+    people search opens (choice 11)."""
+    words = heard(said)
+    if not words:
+        return AssistantPerson(heard="", found=None, choices=[]), None
+    hits = await people_called(session, words)
+    if not hits:
+        return AssistantPerson(heard=words, found=None, choices=[]), person_nowhere(words)
+    ranked = await rank_people(session, hits, await asker_of(session, ctx))
+    person = AssistantPerson(
+        heard=words,
+        found=None,
+        choices=ranked.choices,
+        level=ranked.level,
+        reason=ranked.reason,
+    )
+    if ranked.level == "likely":
+        return person, person_at_line(ranked.choices[0], ranked.reason)
+    return person, which(words)
 
 
 # --- The meeting ---------------------------------------------------------------------------------

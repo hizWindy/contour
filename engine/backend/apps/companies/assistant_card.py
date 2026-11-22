@@ -27,6 +27,7 @@ from apps.companies.assistant_find import (
     email_recipients,
     find_company,
     find_meeting,
+    find_person_anywhere,
     find_person_at,
     follow_up_day,
     heard,
@@ -266,6 +267,12 @@ async def log_call(
     screen = await on_screen(session, ctx)
     company, company_line = await find_company(session, answer.company, screen.company, ctx)
     person, person_line = await find_person_at(session, answer.person, company)
+    if person_first(company, person):
+        anywhere, anywhere_line = await find_person_anywhere(session, answer.person, ctx)
+        if anywhere.choices or company.found is None:
+            # Found elsewhere, or no company at all: the person comes first (PLAN-V25 T2-1).
+            company = AssistantCompany(heard="", from_page=False, found=None, choices=[])
+            person, person_line, company_line = anywhere, anywhere_line, None
     follow_up = follow_up_day(answer.when, ctx.today)
     who = person.found.name if person.found is not None else person.heard
     where = company.found.name if company.found is not None else company.heard
@@ -273,14 +280,24 @@ async def log_call(
     read_back = f"Log a call with {with_whom}." if with_whom else "Log a call."
     if follow_up is not None:
         read_back += f" Follow-up task on {day_words(follow_up, ctx.today)}."
+    no_company = None if company.found or person.heard else NO_COMPANY
     return command(
         "log_call",
         read_back,
         company=company,
         person=person,
         note_text=note_after_cut(ctx.said, answer.note_cut),
-        unsure=lines(company_line or (None if company.found else NO_COMPANY), person_line, claude),
+        unsure=lines(company_line or no_company, person_line, claude),
     )
+
+
+def person_first(company: AssistantCompany, person: AssistantPerson) -> bool:
+    """A person named with no company said (PLAN-V25 choice 8) is searched for everywhere when
+    there is no company, or when the one on screen doesn't have them. A company said still wins
+    (T2-1)."""
+    if company.heard or not person.heard:
+        return False
+    return company.found is None or (person.found is None and not person.choices)
 
 
 async def add_task(
