@@ -7,7 +7,7 @@ This plan stops Claude requests from blocking each other: a call prep never wait
 - **Status:** drafted on 22 Nov 2026 from Al-khair's chat of 21 and 22 Nov. Being built since 22 Nov on `plan-v26`, on his "implement v26" (A1). Not merged, pushed or deployed.
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
 - **Last updated:** 22 Nov 2026.
-- **Progress:** S1 and Parts 1 and 2 done; Part 3 built but for T3-4 (waits for S3); Part 4 built but for T4-3 (waits for A3) (23 Nov). Part 5 under way.
+- **Progress:** S1 and Parts 1 and 2 done; Part 3 built but for T3-4 (waits for S3); Part 4 built but for T4-3 (waits for A3); Part 5 built, waits for a look (23 Nov). Open: A6 first (the shared e2e database), then A3, S3, the looks, the plan list line, S0, S2 (as M5), S4 and M1 to M4.
 - **Sources:**
   - Al-khair's chat on 21 and 22 Nov 2026 (his 13 asks, then his answers);
   - the code on `master` (`ff0f658`). The files this plan changes are the same as on `b84c3cf`, read on 21 Nov;
@@ -234,16 +234,16 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
 
 ## Part 5: the look
 
-- [ ] **T5-1. A faint glass.** (`styles/index.css`, `components/page-header.tsx`, Home's cards, `engine/DESIGN.md`). Choice 21.
+- [ ] **T5-1. A faint glass.** Built 23 Nov (`2baade5`), its tests pass and Home was measured (the Log). Waits for Al-khair's look. (`styles/index.css`, `components/page-header.tsx`, Home's cards, `engine/DESIGN.md`). Choice 21.
   - **Done when:** the contrast tests pass (4.5 to 1 for text, light and dark); no list or table has blur; with reduced transparency it falls back to solid; Home's first frame is measured before and after, in the Log; and Al-khair has looked.
-- [ ] **T5-2. A tighter sidebar.** (`shell/app-sidebar.tsx`, `components/ui/sidebar.tsx`, `engine/DESIGN.md`). Choice 22.
+- [ ] **T5-2. A tighter sidebar.** Built 23 Nov (`2baade5`), its tests pass. Waits for Al-khair's look. (`shell/app-sidebar.tsx`, `components/ui/sidebar.tsx`, `engine/DESIGN.md`). Choice 22.
   - **Done when:** tests pass: rows are 32px with a mouse at 1440 px, and 44px at 390 px and on touch; and Al-khair has looked.
-- [ ] **T5-3. Part 5 check.** As T1-3, plus the `design-review` skill.
+- [x] **T5-3. Part 5 check.** Done 23 Nov (the numbers are in the Log). As T1-3, plus the `design-review` skill.
   - **Done when:** all pass, and the numbers are in the Log.
 
 ## Merge, checks and going live
 
-- [ ] **M1. Merge** (`merge v26`, on Al-khair's word). Full checks, the `merge-check` skill and a fresh `review-agent`. Then `git merge --ff-only plan-v26` in the main folder.
+- [ ] **M1. Merge** (`merge v26`, on Al-khair's word). First: `plan-v26` takes `master` once PLAN-V25 is there; `0029`'s `down_revision` becomes PLAN-V25's `0028`; the contract and types are made again; and the main folder's untracked `plan/PLAN-V26.md` moves aside, or the fast-forward stops on it. Full checks, the `merge-check` skill and a fresh `review-agent`. Then `git merge --ff-only plan-v26` in the main folder.
 - [ ] **M2. Deploy** (`deploy v26`), after S4. Push `master` and deploy. The migration runs on deploy.
 - [ ] **M3. The live check:**
   1. Start a small Lead Finder run, then open a call prep: the prep starts at once. This is paid (a small run plus one prep, capped at US$0.25), so on Al-khair's word.
@@ -325,3 +325,13 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
   - **Search** looks in names only, so it can't be used to guess a hidden number or address.
   - **T4-4's numbers:** ruff, mypy, lint, types and build pass; 3,605 fast backend tests; 55 database tests; 3,075 website tests; first visit 244 kB gzip JS (1 kB more, the menu's new tab) and 25 kB CSS.
   - **The security check:** no blockers. Both routes are the Platform admin's and read only, table and column names come only from code, and hiding runs off the event loop.
+  - **On the real-sized copy** (`leadfinder_v26`, counts only): all 35 tables read, the slowest page 182 ms (Memory, 14,768 rows), and no whole email or phone-like number left in notes. With hiding off, the same check finds one of each.
+- 23 Nov 2026, Part 5 (`2baade5`), then the fixes from reading the whole diff again (`a21e08f`):
+  - **The glass is a tint and a bright edge, with no blur.** Only the flat page is behind a header or a card, so a blur would show nothing and cost every frame. For Al-khair's look.
+  - **Home's first frame,** built site, 1440 px, 4x CPU, median of 7, mocked answers: first paint 1,036 ms before and 1,092 ms after; heading 1,505 and 1,491 ms; longest task 198 and 186 ms. No change beyond the noise between rounds.
+  - **The sidebar, measured:** 32 px and 2 px apart with a mouse; 44 px and 4 px on a phone. Folded on a touch tablet it is 36 wide by 44 tall: the 52 px rail has no room for 44 wide.
+  - **T5-3's numbers:** lint, types and build pass; 3,103 website tests; first visit 244 kB gzip JS and 25 kB CSS.
+  - **The design review:** fixed the Activity switch's width, the lock icon's place, the loading header's height and the folded touch rows. Text and links on the glass keep 4.5:1. No page scrolls sideways at 1440, 1280 or 390, light and dark (mocked answers). The shots are in `plan/shots/v26/`. Not tried: real data on these screens, a real phone, a screen reader.
+  - **The fixes:** the mask missed a phone written with dots, or with 61 and no plus, and JSON keys. A note starting with a time showed as "Unknown".
+  - **Found, older than this plan, not fixed:** resetting your own password with sign-out on signs you out at once, so the new password may leave the screen before it's copied. The switch avoids it. For Al-khair.
+  - **Overlap with PLAN-V25** (`70f6e07`): a trial merge of the committed work is clean. Both change `apps/companies/schemas.py`, `test_assistant_api.py` and the two generated contract files.
