@@ -7,7 +7,7 @@ This plan stops Claude requests from blocking each other: a call prep never wait
 - **Status:** drafted on 22 Nov 2026 from Al-khair's chat of 21 and 22 Nov. Being built since 22 Nov on `plan-v26`, on his "implement v26" (A1). Not merged, pushed or deployed.
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
 - **Last updated:** 22 Nov 2026.
-- **Progress:** S1 and Parts 1 and 2 done; Part 3 built but for T3-4, which waits for S3 (23 Nov). Part 4 under way.
+- **Progress:** S1 and Parts 1 and 2 done; Part 3 built but for T3-4 (waits for S3); Part 4 built but for T4-3 (waits for A3) (23 Nov). Part 5 under way.
 - **Sources:**
   - Al-khair's chat on 21 and 22 Nov 2026 (his 13 asks, then his answers);
   - the code on `master` (`ff0f658`). The files this plan changes are the same as on `b84c3cf`, read on 21 Nov;
@@ -222,13 +222,13 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
 
 ## Part 4: the Data tab
 
-- [ ] **T4-1. The view.** (a new `core/api/data.py`, `admin/data.tsx`). Choices 16, 17 and 19.
+- [ ] **T4-1. The view.** Built 23 Nov (`a5caf5f`) with choice 17's mask, its tests pass. Waits for S3 to confirm the mask. (a new `core/api/data.py`, `admin/data.tsx`). Choices 16, 17 and 19.
   - **Done when:** tests pass: every listed table shows, paged, searchable and sortable; no hash or key ever leaves the server; contact details are masked as S3 decided; HubSpot tables have no edit; and anyone but the Platform admin gets 403.
-- [ ] **T4-2. The change record and Undo.** (`core.admin_edits`). Choice 20.
+- [x] **T4-2. The change record and Undo.** Done 23 Nov (`a5caf5f`): the record and the Undo logic. Their route and button come with T4-3. (`core.admin_edits`). Choice 20.
   - **Done when:** tests pass: each edit saves the old and new value, who and when; Undo puts the old value back and is recorded too; and Undo is refused if the row changed since.
-- [ ] **T4-3. Three edit screens.** (Leads, Call notes not yet sent, Memory). Choice 18, after A3.
+- [ ] **T4-3. Three edit screens.** Not built: it comes after A3. (Leads, Call notes not yet sent, Memory). Choice 18, after A3.
   - **Done when:** tests pass: only the listed fields can change; a call note that is sending or logged can't be edited; a delete asks first; and Al-khair has looked.
-- [ ] **T4-4. Part 4 check.** As T1-3, plus the `security-check` skill.
+- [x] **T4-4. Part 4 check.** Done 23 Nov for what is built (the numbers are in the Log). Run it again after T4-3. As T1-3, plus the `security-check` skill.
   - **Done when:** all pass, and the numbers are in the Log.
 
 ## Part 5: the look
@@ -310,4 +310,10 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
   - **Sent** is the person's calls that reached HubSpot and the pre-reads they emailed. A lead sent to HubSpot isn't there: that write doesn't save who pressed it.
   - **Run now** on a schedule saves the admin who pressed it. A start on time saves nobody.
   - **T3-5's numbers:** ruff, mypy, lint, types and build pass; 3,582 fast backend tests; 172 database tests, after one older migration test learned the new newest migration; 3,068 website tests; first visit 243 kB gzip JS and 25 kB CSS.
-  - **The contract gate** passes run alone. Inside the whole fast suite it fails on `master` (`ff0f658`) too: two `Literal`s with the same words in another order (`high, medium, low`) share Python's cache, so the enum's order follows the test order. Not fixed here. For M1: run `tests/gates` alone.
+  - **The contract gate** (T3-5) passes run alone. Inside the whole fast suite it fails on `master` (`ff0f658`) too: two `Literal`s with the same words in another order (`high, medium, low`) share Python's cache, so the enum's order follows the test order. Not fixed here. For M1: run `tests/gates` alone.
+- 23 Nov 2026, Part 4 (`a5caf5f`):
+  - **The list:** every table of the core, Companies and Lead Finder, each with picked columns. A new column stays off screen until someone lists it.
+  - **The mask** covers phone and email columns, and emails and phone numbers inside notes and JSON. It doesn't catch an email said in words ("jo at sample dot com"), and people's names show. For S3.
+  - **Search** looks in names only, so it can't be used to guess a hidden number or address.
+  - **T4-4's numbers:** ruff, mypy, lint, types and build pass; 3,605 fast backend tests; 55 database tests; 3,075 website tests; first visit 244 kB gzip JS (1 kB more, the menu's new tab) and 25 kB CSS.
+  - **The security check:** no blockers. Both routes are the Platform admin's and read only, table and column names come only from code, and hiding runs off the event loop.
