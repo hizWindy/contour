@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from apps.companies.tables import CallNote
 from apps.lead_finder.tables import Lead
@@ -16,6 +16,7 @@ from core.auth import audit, records
 from core.auth.models import AuditEntry, User
 from core.data.models import AdminEdit
 from core.hubspot.models import HubSpotCompany, HubSpotContact
+from core.logs import REDACTED
 from core.memory.models import EMBEDDING_DIM, MemoryItem
 from core.runs.models import Run
 from core.schedules.jobs import JobContext
@@ -312,6 +313,29 @@ async def test_the_edits_say_who_what_and_whether_undo_is_left(team: Team) -> No
     assert (await team.undo(edit_id)).status_code == 409
 
 
+async def test_the_edits_show_names_and_words_not_ids(team: Team) -> None:
+    call, lead = note(team.world), make_lead("Northwind")
+    call_id, lead_id = call.id, lead.id
+    await team.save(company("101", "Northwind"), person("c2", "101", "Sam Example"), call, lead)
+    assert (await team.edit(NOTES, call_id, person="c2")).status_code == 200
+    assert (await team.edit(LEADS, lead_id, result="watch")).status_code == 200
+    said = []
+    for table in (NOTES, LEADS):
+        listed = (await team.admin.get(f"{DATA}/edits", params={"table": table})).json()
+        said += listed["items"][0]["changes"]
+    assert said == [
+        {"label": "Person", "before": "Jo Example", "after": "Sam Example"},
+        {"label": "Result", "before": "Pass", "after": "Watch"},
+    ]
+
+
+async def test_a_redacted_key_is_never_saved_over_the_real_text(team: Team) -> None:
+    lead = make_lead("Northwind")
+    lead_id = lead.id
+    await team.save(lead)
+    assert (await team.edit(LEADS, lead_id, note=f"the key is {REDACTED}")).status_code == 422
+
+
 async def test_undo_is_refused_once_someone_changed_the_row(team: Team) -> None:
     lead = make_lead("Northwind")
     lead_id = lead.id
@@ -382,6 +406,18 @@ async def test_with_the_ok_the_sign_in_page_is_told_without_a_session(team: Team
     team.world.settings(sign_in_records_ok=True)
     async with team.world.browser() as nobody:
         assert (await nobody.get("/api/v1/health")).json()["sign_in_records_days"] == 90
+
+
+async def test_signing_in_to_an_old_account_never_says_first_sign_in(team: Team) -> None:
+    team.world.settings(sign_in_records_ok=True)
+    old = team.world.clock.now - timedelta(days=120)
+    await make_account(team.world, email="sam@example.test", username="samsample", name="Sam")
+    async with team.world.factory() as db:
+        await db.execute(update(User).where(User.username == "samsample").values(created_at=old))
+        await db.commit()
+    async with team.world.browser() as browser:
+        answer = await sign_in(browser, login="samsample")
+        assert answer.json()["first_sign_in"] is False
 
 
 async def test_an_old_account_isnt_new_again_once_its_records_are_gone(team: Team) -> None:

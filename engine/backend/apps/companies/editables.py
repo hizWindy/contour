@@ -66,6 +66,13 @@ def read(row: Row, field: Field) -> str | None:
     return text
 
 
+def show(row: Row, field: Field) -> str | None:
+    if field.key == "person":
+        name: str | None = row.get("person_name")
+        return name
+    return read(row, field)
+
+
 async def choices(db: AsyncSession, row: Row, field: Field) -> tuple[Choice, ...]:
     if field.key == "outcome":
         return tuple(Choice(name, name) for name in OUTCOME_NAMES)
@@ -140,6 +147,7 @@ CALL_NOTES: Final = Editable(
     deletable=True,
     blocked=blocked,
     read=read,
+    show=show,
     columns=columns,
     choices=choices,
 )

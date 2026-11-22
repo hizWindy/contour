@@ -32,6 +32,7 @@ from core.apps import AppSpec
 from core.data.masking import DOTS, hide_contacts
 from core.data.models import AdminEdit
 from core.db.base import Base
+from core.logs import REDACTED
 
 type Row = dict[str, Any]
 type Values = Mapping[str, str | None]
@@ -116,6 +117,8 @@ class Editable:
         _columns_plain
     )
     choices: Callable[[AsyncSession, Row, Field], Awaitable[tuple[Choice, ...]]] = _no_choices
+    # A field in the list of edits, when it doesn't read as `read` does, like a person's name.
+    show: Callable[[Row, Field], str | None] | None = None
 
 
 def editables(specs: Sequence[AppSpec]) -> dict[str, Editable]:
@@ -190,7 +193,7 @@ async def _checked(
         if field is None:
             raise ValueRefused(key, NOT_HERE)
         kept = (value or "").strip() or None
-        if kept is not None and DOTS in kept:
+        if kept is not None and (DOTS in kept or REDACTED in kept):
             raise ValueRefused(key, STILL_HIDDEN)
         if kept is None and field.required:
             raise ValueRefused(key, f"{field.label} can't be empty.")
@@ -364,7 +367,11 @@ def what_changed(editable: Editable | None, edit: AdminEdit) -> list[Changed]:
     for field in editable.fields:
         if field.stored_in not in edit.before and field.stored_in not in edit.after:
             continue
-        old, new = editable.read(edit.before, field), editable.read(edit.after, field)
+        show = editable.show or editable.read
+        old, new = show(edit.before, field), show(edit.after, field)
+        said = {choice.value: choice.label for choice in field.choices}
+        old = said.get(old, old) if old else old
+        new = said.get(new, new) if new else new
         if old != new:
             found.append(
                 Changed(

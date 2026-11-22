@@ -32,7 +32,9 @@ PLAIN_KEYS: Final = frozenset({"id", "ip", "user_agent", "key", "seq", "slug"})
 
 # --- The same address, written so a page or a link hides it --------------------------------------
 
-_AS_AT = re.compile(r"%40|&#0*64;|&#x0*40;|&commat;|\s*[\[({]\s{0,3}at\s{0,3}[\])}]\s*", re.I)
+_AS_AT = re.compile(
+    r"%40|&#0*64;|&#x0*40;|&commat;|\s{0,3}[\[({]\s{0,3}at\s{0,3}[\])}]\s{0,3}", re.I
+)
 _AS_SPACE = re.compile(r"&nbsp;|&#0*160;|&#x0*a0;|%20", re.I)
 _PASSCODE = re.compile(
     r"(?P<name>[?&](?:pwd|passcode|password|token|key|secret)=)[^&\s\"'<>]+", re.I

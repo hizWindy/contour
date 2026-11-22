@@ -331,7 +331,9 @@ async def login(
         ),
     )
     admin_name = await users.platform_admin_name(db)
-    first = await audit.is_first_sign_in(db, result.user.id)
+    first = await audit.is_first_sign_in(
+        db, result.user.id, kept_since=records.kept_since(settings, now)
+    )
     return LoginOut(
         user=user_out(result.user),
         session=session_out(result.session, current=True, limits=limits),

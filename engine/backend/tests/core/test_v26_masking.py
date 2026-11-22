@@ -102,6 +102,7 @@ def test_a_long_run_with_no_address_in_it_is_quick() -> None:
     started = time.perf_counter()
     hide_contacts("a" * 100_000)
     hide_contacts("1 " * 50_000)
+    hide_contacts("x" + " " * 100_000 + "y")
     assert time.perf_counter() - started < 3
 
 
