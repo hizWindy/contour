@@ -6,7 +6,7 @@ This plan stops Claude requests from blocking each other: a call prep never wait
 
 - **Status:** drafted on 22 Nov 2026 from Al-khair's chat of 21 and 22 Nov. Being built since 22 Nov on `plan-v26`, on his "implement v26" (A1). Not merged, pushed or deployed.
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
-- **Last updated:** 22 Nov 2026.
+- **Last updated:** 23 Nov 2026.
 - **Progress:** S1 and Parts 1 and 2 done; Part 3 built but for T3-4 (waits for S3); Part 4 built but for T4-3 (waits for A3); Part 5 built, waits for a look (23 Nov). Open: A6 first (the shared e2e database), then A3, S3, the looks, the plan list line, S0, S2 (as M5), S4 and M1 to M4.
 - **Sources:**
   - Al-khair's chat on 21 and 22 Nov 2026 (his 13 asks, then his answers);
@@ -212,7 +212,7 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
 
 - [x] **T3-1. Save who asked.** Done 23 Nov (`95dec9c`). (the migration; who asked, set once per request and per job; the search log; `runs`). Choice 13.
   - **Done when:** tests pass: a prep, a call note and an Assistant command save the person; a scheduled job saves none; a run saves who started it; and the migration goes up and down cleanly.
-- [x] **T3-2. The Activity routes.** Done 23 Nov (`95dec9c`). (a new `core/api/activity.py`, Platform admin only). Choices 11 and 12.
+- [x] **T3-2. The Activity routes.** Done 23 Nov (`95dec9c`; the paging test for all six tabs in `8c49680`). (a new `core/api/activity.py`, Platform admin only). Choices 11 and 12.
   - **Done when:** tests pass: each tab's route pages 50 at a time, newest first; ending one session or all of them works; anyone but the Platform admin gets 403; and the contract is made again.
 - [ ] **T3-3. The Activity page.** Built 23 Nov (`95dec9c`), its tests pass. Waits for Al-khair's look. (`admin/`, a new page from the People table). Choices 11 to 13.
   - **Done when:** tests at 1440 and 390 px pass: the six tabs show their rows; Sign out asks first, then ends that browser; an empty tab says so in words; and Al-khair has looked.
@@ -334,4 +334,8 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
   - **The design review:** fixed the Activity switch's width, the lock icon's place, the loading header's height and the folded touch rows. Text and links on the glass keep 4.5:1. No page scrolls sideways at 1440, 1280 or 390, light and dark (mocked answers). The shots are in `plan/shots/v26/`. Not tried: real data on these screens, a real phone, a screen reader.
   - **The fixes:** the mask missed a phone written with dots, or with 61 and no plus, and JSON keys. A note starting with a time showed as "Unknown".
   - **Found, older than this plan, not fixed:** resetting your own password with sign-out on signs you out at once, so the new password may leave the screen before it's copied. The switch avoids it. For Al-khair.
+  - **The whole backend suite** on `a21e08f`: 5,176 passed, 28 skipped, none failed. After it, two test files gained checks (`8c49680`, their 33 tests pass).
+  - **Not run:** M1's fresh `review-agent`, the `merge-check` skill, a paid run, and anything against real HubSpot or Claude. The lanes are proven with a fake Claude only.
+  - **Left on this laptop:** the databases `leadfinder_v26`, `leadfinder_test_v26` and `leadfinder_e2e_v26` (the rehearsal). Nothing is running. `plan-v26` is not pushed.
+  - **The session stopped here** because every step that waits on nobody is built, at an estimated 76% of the 5-hour limit and 79% of the week. The percentages come from local token counters, not from `/usage`.
   - **Overlap with PLAN-V25** (`70f6e07`): a trial merge of the committed work is clean. Both change `apps/companies/schemas.py`, `test_assistant_api.py` and the two generated contract files.
