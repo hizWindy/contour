@@ -261,7 +261,7 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
   - **A3.** Confirm the three edit screens (choice 18), or name others. On 23 Nov he said "pleas get it done now" after the recommendation, taken as yes. Say so if not.
   - **A4.** Say `clean copies` when you want S0 done.
   - **A5.** Whether to drop the old databases S0 lists.
-  - **A6.** OK the downgrade of the shared `leadfinder_e2e` to `0024` (the Log, 23 Nov). Until then the other copies' fake backends don't start.
+  - **A6.** Done 23 Nov, 07:07, on his "Please get this done": `leadfinder_e2e` is back at `0024`.
 - **Levi:** S3's three answers.
 
 ## Risks
@@ -338,6 +338,7 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
   - **Not run:** M1's fresh `review-agent`, the `merge-check` skill, a paid run, and anything against real HubSpot or Claude. The lanes are proven with a fake Claude only.
   - **Left on this laptop:** the databases `leadfinder_v26`, `leadfinder_test_v26` and `leadfinder_e2e_v26` (the rehearsal). Nothing is running. `plan-v26` is not pushed.
   - **The session stopped here** because every step that waits on nobody is built, at an estimated 76% of the 5-hour limit and 79% of the week. The percentages come from local token counters, not from `/usage`.
+- **23 Nov 2026, 07:07, A6 done** on Al-khair's "Please get this done", which answered "Reply `rerun checks` and `fix A6`". Before: `leadfinder_e2e` at `0029`, nobody connected, and the new columns and table empty. The rehearsed downgrade then took it to `0024`. After: every table has the same rows as before, and its columns are the same as the dev database's at `0024`. `master` and `contour-v25` know `0024`, so their fake backends start again and migrate it up themselves.
 - **23 Nov 2026, 03:54, "so its done right ?", and the answer was no.** A check against the code found three claims above that were wrong:
   - **The mask** let 14 of 17 common ways of writing a phone or email through, like `0412345678x12` and `jo%40northwind.com.au`. On the copy's 61,224 rows no known phone number showed. The copy holds no HubSpot contacts, so real contact emails are untested.
   - **Search and sort** could read a hidden detail typed into a name column.
