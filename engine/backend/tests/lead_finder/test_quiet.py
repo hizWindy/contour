@@ -173,6 +173,21 @@ def test_an_old_dissolved_deal_follows_the_activity() -> None:
     assert decision.left_out_hubspot == ["Worked Co"]
 
 
+def test_a_deal_dissolved_recently_is_work_on_the_company_so_it_is_never_quiet() -> None:
+    recent = HubSpotMatch(
+        status="dissolved_deal",
+        hubspot_id="8",
+        matched_by="domain",
+        last_dissolved=date(2026, 10, 1),
+    )
+    assert quiet_check(recent, None, 12, TODAY).status == "dissolved_deal"
+    assert quiet_check(recent, None, 12, TODAY).last_activity == date(2026, 10, 1)
+    gone = company("Gone Co")
+    # with no activity date at all, the dissolved deal still keeps it out of the run
+    decision = choose([gone], {gone.key: recent}, {"8": None})
+    assert decision.chosen == [] and decision.left_out_hubspot == ["Gone Co"]
+
+
 def test_a_maybe_is_researched() -> None:
     unsure = company("Northwind")
     decision = choose([unsure], {unsure.key: maybe()}, {})

@@ -9,17 +9,20 @@ the id route would swallow them and answer 422.
 
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, Response
 
 from apps.lead_finder import lead_store, override
 from apps.lead_finder.context import Origin
+from apps.lead_finder.hubspot_pick import pick_match
 from apps.lead_finder.lead_store import SORT_COLUMNS, lead_conditions, newest_only
 from apps.lead_finder.rules import Result, load_rules
 from apps.lead_finder.schemas import (
     CityGroupFilter,
+    HubSpotPick,
     HubSpotStatus,
     LeadDetail,
     LeadFacets,
@@ -39,6 +42,9 @@ from core.api.access import SignedInDep, need
 from core.api.deps import EmbedderDep, SessionDep
 from core.api.errors import Problem
 from core.api.models import INT32_MAX, OFFSET_MAX, SafeText
+from core.prefs.service import effective_settings
+
+MELBOURNE = ZoneInfo("Australia/Melbourne")
 
 __all__ = ["SORT_COLUMNS", "LeadFilters", "lead_conditions", "newest_only", "router"]
 
@@ -330,6 +336,45 @@ async def patch_lead(
 )
 async def similar_leads(lead_id: uuid.UUID, session: SessionDep) -> SimilarOut:
     return await similar_for(session, lead_id)
+
+
+@router.post(
+    "/{lead_id}/hubspot-match",
+    response_model=LeadDetail,
+    dependencies=[Depends(need("lead_finder.results", write=True))],
+    summary="Settle a possible HubSpot match: the same company, or new",
+    description=(
+        "For a lead whose HubSpot status is `possible_match` (PLAN-V27 T1-3). `pick: same` with "
+        "the `hubspot_id` of one of its candidates links the lead to that company: its status "
+        "becomes the company's own, or `quiet` when nobody has worked it for "
+        "`hubspot_quiet_months`. `pick: new` says it isn't in HubSpot. The card is judged again "
+        "with its saved facts, and says who settled it. Free: our HubSpot copy only. Answers 404 "
+        "for an unknown lead, 409 `not_a_maybe` when it isn't a possible match (already "
+        "settled), 422 `not_a_candidate` for another company, and 409 `hubspot_company_gone` "
+        "when that company left our copy."
+    ),
+)
+async def settle_hubspot_match(
+    lead_id: uuid.UUID, body: HubSpotPick, session: SessionDep, auth: SignedInDep
+) -> LeadDetail:
+    by = (auth.user.name or auth.user.email) if auth is not None else "a person on this computer"
+    settings = await effective_settings(session)
+    card = await pick_match(
+        session,
+        lead_id,
+        body.pick,
+        body.hubspot_id,
+        by=by,
+        rules=load_rules(),
+        quiet_months=settings.hubspot_quiet_months,
+        today=datetime.now(MELBOURNE).date(),
+    )
+    if card is None:
+        raise Problem(404, *lead_store.NOT_FOUND)
+    detail = await lead_store.get_detail(session, lead_id)
+    if detail is None:  # the lead was deleted a moment ago
+        raise Problem(404, *lead_store.NOT_FOUND)
+    return detail
 
 
 @router.post(

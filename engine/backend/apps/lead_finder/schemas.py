@@ -336,6 +336,22 @@ class LeadDetail(LeadCard):
     )
 
 
+class HubSpotPick(BaseModel):
+    """Settle a possible HubSpot match (PLAN-V27 T1-3): `same` with one candidate's
+    `hubspot_id`, or `new`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pick: Literal["same", "new"] = Field(
+        description="same: it is that HubSpot company. new: it isn't in HubSpot."
+    )
+    hubspot_id: str | None = Field(
+        None,
+        max_length=32,
+        description="With `same`: the HubSpot id of one of the lead's candidates.",
+    )
+
+
 class LeadPatch(BaseModel):
     """A merge patch: a field you leave out stays as it is, and `null` clears it.
 

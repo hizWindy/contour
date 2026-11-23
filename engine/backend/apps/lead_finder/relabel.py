@@ -45,6 +45,8 @@ async def relabel(session: AsyncSession, *, write: bool, today: date | None = No
     moves: Counter[tuple[str, str]] = Counter()
     changed = 0
     for lead in leads:
+        if (lead.card or {}).get("hubspot", {}).get("confirmed_by"):
+            continue  # a person settled its match on the card (PLAN-V27 T1-3)
         match = await match_company(
             session,
             lead.company,

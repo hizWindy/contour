@@ -32,7 +32,7 @@ from typing import Any
 
 from apps.lead_finder.context import Signal
 from apps.lead_finder.fields import CompanyFacts, Fact, TriggerFound
-from apps.lead_finder.quiet import CAN_BE_QUIET, SURE_MATCH, is_quiet
+from apps.lead_finder.quiet import CAN_BE_QUIET, SURE_MATCH, is_quiet, last_worked
 from apps.lead_finder.rules import LeadFinderRules, Sign
 from apps.lead_finder.scoring import DAYS_PER_YEAR, Group, judge, parse_date
 from apps.lead_finder.sources import source_kind
@@ -233,7 +233,7 @@ def _worked_recently(
         return False
     if match.matched_by not in SURE_MATCH:
         return False
-    return not is_quiet(activity.get(match.hubspot_id), months, today)
+    return not is_quiet(last_worked(match, activity.get(match.hubspot_id)), months, today)
 
 
 def _day(moment: datetime) -> date:

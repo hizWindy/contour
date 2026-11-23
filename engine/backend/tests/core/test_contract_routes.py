@@ -190,6 +190,9 @@ ROUTES = [
     ("POST", f"{LF}/leads/{{lead_id}}/hubspot/send"),
     ("POST", f"{LF}/leads/{{lead_id}}/recheck"),
     ("POST", f"{LF}/leads/{{lead_id}}/override-exclusion"),
+    ("POST", f"{LF}/leads/{{lead_id}}/hubspot-match"),  # PLAN-V27 T1-3
+    ("POST", f"{LF}/leads/hubspot/preview-many"),  # PLAN-V27 T3-1
+    ("POST", f"{LF}/leads/hubspot/send-many"),
     ("GET", f"{LF}/leads/{{lead_id}}/profile"),  # PLAN-V16 T1-10
     ("GET", f"{LF}/watchlist"),
     ("GET", f"{LF}/review/{{run_id}}"),

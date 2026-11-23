@@ -257,6 +257,13 @@ class HubSpotOut(BaseModel):
             "from our copy. Empty when it isn't in HubSpot or has no activity date (PLAN-V27)."
         ),
     )
+    confirmed_by: str | None = Field(
+        None,
+        description=(
+            "Who settled a possible match by hand: 'Same company' or 'It's new' on the lead card "
+            "(PLAN-V27 T1-3). A HubSpot sync's relabel leaves a settled lead as it is."
+        ),
+    )
 
 
 class NoteOut(BaseModel):

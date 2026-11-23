@@ -8,7 +8,8 @@ copy (`HubSpotCompany.last_activity`: the newest call, email, meeting, note or t
   laptop's copy had a date for 145 of its 13,921 companies (TBC: the live copy's count, S2).
 - 0 months: no company is ever quiet, so every HubSpot company is left out (A2).
 - An open deal is never quiet: the deal rule leaves it out first. A dissolved deal or a plain
-  "in HubSpot" company can be.
+  "in HubSpot" company can be. A deal dissolving is work on the company too, so the day it
+  dissolved counts as activity (`last_worked`): a deal dissolved last month is never quiet.
 
 A quiet company is researched, and its lead's HubSpot status is `quiet`, so its card says "In
 HubSpot, quiet since March 2025" and Results shows it with the new leads. Free: our copy only.
@@ -67,6 +68,12 @@ async def last_activity_of(session: AsyncSession, ids: Collection[str]) -> dict[
     return {hubspot_id: moment.date() if moment else None for hubspot_id, moment in rows}
 
 
+def last_worked(match: HubSpotMatch, last_activity: date | None) -> date | None:
+    """The later of HubSpot's last activity day and the day its last deal dissolved."""
+    days = [day for day in (last_activity, match.last_dissolved) if day is not None]
+    return max(days) if days else None
+
+
 @dataclass(frozen=True)
 class QuietCheck:
     """A lead's HubSpot status after the quiet rule, and the day it was last worked."""
@@ -79,14 +86,15 @@ def quiet_check(
     match: HubSpotMatch, last_activity: date | None, months: int, today: date
 ) -> QuietCheck:
     """`quiet` for a HubSpot company nobody has worked for `months`; otherwise the match's own
-    status. The day is kept either way, for the card."""
+    status. The day it was last worked (`last_worked`) is kept either way, for the card."""
+    last = last_worked(match, last_activity)
     if (
         match.status in CAN_BE_QUIET
         and match.hubspot_id is not None
-        and is_quiet(last_activity, months, today)
+        and is_quiet(last, months, today)
     ):
-        return QuietCheck(QUIET, last_activity)
-    return QuietCheck(match.status, last_activity)
+        return QuietCheck(QUIET, last)
+    return QuietCheck(match.status, last)
 
 
 async def quiet_status(

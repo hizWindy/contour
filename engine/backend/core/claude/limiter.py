@@ -9,7 +9,9 @@ the block ends, however it ends.
 - The limit can change at any time (`set_limit`). Growing it lets waiting requests in at once.
   Shrinking it never stops a request that is already running: new requests wait until enough
   of the running ones are done.
-- Requests are let in in the order they came.
+- Requests are let in in the order they came, except that a request whose work is `behind`
+  (PLAN-V27 choice 20) lets every other request in its line go first, and a work with `most`
+  never holds more places than that: its next request waits without holding up the line.
 - A request that is cancelled while it waits takes no place, and does not stop the ones behind it.
 - The gate keeps nothing that belongs to one event loop until a request asks for a place, and it
   starts again from nothing when the next request comes from another loop. So one gate can serve
@@ -35,6 +37,8 @@ WAIT_SHOWN_AFTER_SECONDS: Final = 1.0
 class _Ticket:
     key: str | None  # the work that asks (`core.work.Work.key`)
     since: float  # the loop's clock when it joined the line
+    behind: bool = False  # lets the others go first (`core.work.Work.behind`)
+    most: int | None = None  # the most places this work holds at once
 
 
 class _Places:
@@ -94,15 +98,17 @@ class ClaudeGate:
         return None
 
     @asynccontextmanager
-    async def acquire(self, key: str | None = None) -> AsyncIterator[None]:
+    async def acquire(
+        self, key: str | None = None, *, behind: bool = False, most: int | None = None
+    ) -> AsyncIterator[None]:
         """Waits for a place, holds it for the block, and gives it back at the end. `key` names
-        the work, for `ahead`.
+        the work, for `ahead`. `behind` and `most`: see the module text.
 
         Cancelling the wait is safe: no place is taken. A place is always given back, also when
         the block is cancelled.
         """
         places = self._places_for_this_loop()
-        await self._enter(places, key)
+        await self._enter(places, _Ticket(key, places.loop.time(), behind, most))
         try:
             yield
         finally:
@@ -120,21 +126,32 @@ class ClaudeGate:
             self._places = _Places(loop)
         return self._places
 
-    async def _enter(self, places: _Places, key: str | None) -> None:
-        ticket = _Ticket(key, places.loop.time())
+    async def _enter(self, places: _Places, ticket: _Ticket) -> None:
         async with places.condition:
-            places.line.append(ticket)
+            if ticket.behind:
+                places.line.append(ticket)
+            else:  # before the first ticket that lets others go first
+                at = next((i for i, t in enumerate(places.line) if t.behind), len(places.line))
+                places.line.insert(at, ticket)
             try:
-                await places.condition.wait_for(
-                    lambda: places.line[0] is ticket and places.in_flight < self._limit
-                )
+                await places.condition.wait_for(lambda: self._next(places) is ticket)
                 places.in_flight += 1
-                places.holding.append(key)
+                places.holding.append(ticket.key)
             finally:
                 # Leave the line when the place is taken, and also when the wait is cancelled.
                 # Either way the next in line must look again.
                 places.line.remove(ticket)
                 places.condition.notify_all()
+
+    def _next(self, places: _Places) -> _Ticket | None:
+        """The ticket that takes the next free place: the first in line whose work holds fewer
+        places than its `most`. None when no place is free."""
+        if places.in_flight >= self._limit:
+            return None
+        for ticket in places.line:
+            if ticket.most is None or places.holding.count(ticket.key) < ticket.most:
+                return ticket
+        return None
 
     def _wake(self, places: _Places) -> None:
         """Tells the waiting requests to look again. Called when a place frees or the limit grows.
@@ -183,7 +200,7 @@ class ClaudeLanes:
     async def acquire(self) -> AsyncIterator[None]:
         """A place in the lane of the work that asks."""
         now = work.current()
-        async with self._gates[now.lane].acquire(now.key):
+        async with self._gates[now.lane].acquire(now.key, behind=now.behind, most=now.most):
             yield
 
     def ahead(self, key: str) -> int | None:
