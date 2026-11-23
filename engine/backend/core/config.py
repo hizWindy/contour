@@ -92,6 +92,8 @@ EDITABLE_KEYS: Final[list[str]] = [
     "target_companies_default",
     "discovery_max_sweeps",
     "memory_fresh_days",
+    # New leads only (PLAN-V27 choice 3)
+    "hubspot_quiet_months",
     "match_fuzzy_min",
     "match_profile_min",
     # Call prep (PLAN-V10 D3, D5)
@@ -477,6 +479,9 @@ class Settings(BaseSettings):
 
     # --- Memory first and matching -----------------------------------------------------
     memory_fresh_days: int = Field(30, ge=1, le=365)  # notes younger than this are reused
+    # A HubSpot company nobody has worked for this many months counts as new (PLAN-V27 choice 3,
+    # TBC with Levi). 0: every HubSpot company is left out of a Find new leads run.
+    hubspot_quiet_months: int = Field(12, ge=0, le=60)
     match_fuzzy_min: int = Field(90, ge=70, le=100)  # close-name score, 0 to 100
     match_profile_min: float = Field(0.90, ge=0.70, le=1.0)  # look-alike similarity
 

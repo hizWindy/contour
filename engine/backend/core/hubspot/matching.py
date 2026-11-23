@@ -5,6 +5,10 @@ The checks run in this order and the first that finds the company wins:
 1. `hubspot_id`: the watchlist already knows which company it is.
 2. The website domain, exactly.
 3. The cleaned name, exactly: the name that was asked for first, then the name Claude found.
+   With `name_needs_city` (the Lead Finder, PLAN-V27 choice 26), the same name counts only in the
+   same city: when the company's offices are known and none is in the city asked for, it is a
+   possible match (`same_name`) instead, so a different company with the same name is never left
+   out of a run.
 Then, if none of those found it, three looser checks look for companies that MIGHT be the same.
 They never say "it is": they give `possible_match` with up to 3 `candidates`, best first, and a
 person decides. Nothing here drops a lead.
@@ -195,14 +199,20 @@ MIN_CORE_CHARS = 3
 MAX_CANDIDATES = 3
 PROFILE_POOL = 25  # profiles read from memory before the second sign is checked
 
-Status = Literal["new", "in_hubspot", "open_deal", "dissolved_deal", "possible_match"]
-MatchedBy = Literal["domain", "name", "hubspot_id", "close_name", "similar_profile", "name_in_deal"]
-CandidateReason = Literal["close_name", "similar_profile", "name_in_deal"]
+# `quiet` is never a match's answer: a lead's status gets it when its HubSpot company is in our copy
+# but nobody has worked it for a while (PLAN-V27 choice 3, `apps/lead_finder/quiet.py`).
+Status = Literal["new", "in_hubspot", "open_deal", "dissolved_deal", "possible_match", "quiet"]
+MatchedBy = Literal[
+    "domain", "name", "hubspot_id", "close_name", "similar_profile", "name_in_deal", "same_name"
+]
+# same_name: the exact name, but its offices are in another city (PLAN-V27 choice 26)
+CandidateReason = Literal["same_name", "close_name", "similar_profile", "name_in_deal"]
 # Which check is stronger evidence. Candidates are listed in this order, then by score.
 REASON_ORDER: dict[CandidateReason, int] = {
-    "name_in_deal": 0,
-    "close_name": 1,
-    "similar_profile": 2,
+    "same_name": 0,
+    "name_in_deal": 1,
+    "close_name": 2,
+    "similar_profile": 3,
 }
 
 
@@ -710,6 +720,28 @@ async def _similar_profile(
     return found
 
 
+async def _split_by_city(
+    session: AsyncSession, found: Sequence[_Known], city: str | None
+) -> tuple[list[_Known], list[_Known]]:
+    """The companies with this exact name that may be in `city`, and the ones whose known offices
+    are all elsewhere (PLAN-V27 choice 26). An unknown city, or a company with no office in a
+    known city, never says "elsewhere" (`same_city`). Reads the office labels of these few only."""
+    if not city or not city.strip():
+        return list(found), []
+    cities: dict[str, set[str]] = {}
+    for company_id, label in await session.execute(
+        select(HubSpotOffice.hubspot_company_id, HubSpotOffice.label).where(
+            HubSpotOffice.hubspot_company_id.in_([item.row.hubspot_id for item in found])
+        )
+    ):
+        if office_city := metro_city(label):
+            cities.setdefault(company_id, set()).add(office_city.casefold())
+    here = [
+        item for item in found if same_city(city, frozenset(cities.get(item.row.hubspot_id, ())))
+    ]
+    return here, [item for item in found if item not in here]
+
+
 async def match_company(
     session: AsyncSession,
     name: str,
@@ -722,6 +754,7 @@ async def match_company(
     found_name: str | None = None,
     fuzzy_min: int = DEFAULT_FUZZY_MIN,
     profile_min: float = DEFAULT_PROFILE_MIN,
+    name_needs_city: bool = False,
 ) -> HubSpotMatch:
     """Finds the company in HubSpot (the order is at the top of this file).
 
@@ -733,6 +766,7 @@ async def match_company(
     - `embedder` and `profile_text` (from `build_profile_text_from_facts`): needed for the
       similar-profile check. Without them that check is skipped.
     - `fuzzy_min` (0 to 100) and `profile_min` (0 to 1): the thresholds, from the settings.
+    - `name_needs_city`: the exact name is sure only in the same city (check 3 above).
     """
     if hubspot_id:
         company = await session.get(HubSpotCompany, hubspot_id)
@@ -753,14 +787,20 @@ async def match_company(
             return _found(best.row, best.deals, "domain")
 
     names = _names_to_try(name, found_name)
+    elsewhere: list[_Known] = []  # the same name, but every known office in another city
     for wanted in (clean_name(n) for n in names):
         same_name = copy.by_name.get(wanted)
+        if same_name and name_needs_city:
+            here, away = await _split_by_city(session, same_name, city)
+            elsewhere += [item for item in away if item not in elsewhere]
+            same_name = here
         if same_name:
             best = _best_of(same_name)
             return _found(best.row, best.deals, "name")
 
     # Every company is scored here: CPU work, in a thread, so the backend keeps answering.
-    candidates = await asyncio.to_thread(_loose_candidates, copy, names, fuzzy_min)
+    candidates = [_candidate(item, "same_name", 1.0) for item in elsewhere]
+    candidates += await asyncio.to_thread(_loose_candidates, copy, names, fuzzy_min)
     if embedder is not None and profile_text and names:
         candidates += await _similar_profile(
             session,

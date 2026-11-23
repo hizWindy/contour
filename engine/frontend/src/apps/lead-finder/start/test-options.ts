@@ -1,7 +1,7 @@
 /**
  * A small `RunOptions` for the Start page tests: "All of Australia" and a city in each of the four
- * groups (PLAN-V16), three triggers, four modes, the three sources with Property Daily switched
- * off, and how many companies with the top up (PLAN-V21).
+ * groups (PLAN-V16), three triggers, Find new leads alone (PLAN-V27), the three sources with
+ * Property Daily switched off, and how many companies (PLAN-V21).
  */
 import type { RunOptions } from '@/api/types'
 
@@ -71,17 +71,7 @@ export const OPTIONS: RunOptions = {
     { id: 'new_ceo', label: 'New CEO or culture change', group: 'weak', default: false },
   ],
   since_days: { choices: [7, 30, 90, 180], default: 90 },
-  modes: [
-    { mode: 'discovery', title: 'Find new leads', needs_approval: false, approved: true },
-    {
-      mode: 'watchlist',
-      title: 'Research the HubSpot watchlist',
-      needs_approval: true,
-      approved: false,
-    },
-    { mode: 'company', title: 'Research companies by name', needs_approval: false, approved: true },
-    { mode: 'testset', title: 'Run the test set', needs_approval: false, approved: true },
-  ],
+  modes: [{ mode: 'discovery', title: 'Find new leads', needs_approval: false, approved: true }],
   watchlist_cities: ['Melbourne', 'Adelaide', 'Perth'],
   companies_limit: { min: 1, max: 25 },
   caps: {
@@ -90,9 +80,8 @@ export const OPTIONS: RunOptions = {
     company_cap_usd: '2.50',
     daily_left_usd: '50.00',
   },
-  // PLAN-V21: the presets come cut to the run's company limit (70), and the top up is allowed.
+  // PLAN-V21: the presets come cut to the run's company limit (70).
   target_companies: { default: 50, min: 5, max: 70, presets: [25, 50, 70] },
-  top_up: { default: true, allowed: true, message: null },
   sources: {
     web: { on: true, ready: true, message: null },
     property_daily: { on: false, ready: false, message: PROPERTY_DAILY_OFF },
@@ -117,6 +106,6 @@ export const OPTIONS: RunOptions = {
     companies: [],
     recheck: false,
     target_companies: null,
-    top_up: true,
+    top_up: false,
   },
 }

@@ -91,6 +91,24 @@ def not_approved() -> Problem:
     return Problem(409, NOT_APPROVED_TITLE, NOT_APPROVED_DETAIL, code=NOT_APPROVED_CODE)
 
 
+# The Run tab is for new leads only (PLAN-V27 choices 1 and 2). The HubSpot watchlist run, and Old
+# offices (a watchlist run with the office questions first), are switched off, not deleted: set
+# this to True to bring them back. Typed companies (`company`) stay for the lead card's Re-check.
+WATCHLIST_RUNS_ON = False
+# The run types the Start page offers (`modes` in the run options).
+START_MODES = ("discovery",)
+SWITCHED_OFF_CODE = "run_type_off"
+SWITCHED_OFF_TITLE = "This run type is switched off"
+SWITCHED_OFF_DETAIL = (
+    "The Lead Finder finds new leads only, so this run type is switched off. Use Find new leads, "
+    "or ask the Assistant to research one company."
+)
+
+
+def switched_off() -> Problem:
+    return Problem(409, SWITCHED_OFF_TITLE, SWITCHED_OFF_DETAIL, code=SWITCHED_OFF_CODE)
+
+
 # --- Checks ----------------------------------------------------------------------------------
 
 
@@ -120,6 +138,8 @@ def check_target(params: DiscoveryParams, caps: RunCaps) -> None:
 
 
 def check_watchlist(params: WatchlistParams, settings: Settings, caps: RunCaps) -> None:
+    if not WATCHLIST_RUNS_ON:
+        raise switched_off()
     if not settings.hubspot_names_to_claude_ok:
         raise not_approved()
 
@@ -393,7 +413,9 @@ async def estimate_watchlist(ctx: EstimateContext[WatchlistParams]) -> RunEstima
     async with ctx.session() as session:
         companies = len(await chosen_watchlist(session, options))
     blocked = (
-        None
+        Blocked(code=SWITCHED_OFF_CODE, message=SWITCHED_OFF_DETAIL)
+        if not WATCHLIST_RUNS_ON  # PLAN-V27 choice 2
+        else None
         if ctx.settings.hubspot_names_to_claude_ok
         else Blocked(code=NOT_APPROVED_CODE, message=NOT_APPROVED_DETAIL)
     )

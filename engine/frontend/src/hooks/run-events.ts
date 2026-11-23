@@ -127,6 +127,9 @@ export interface SweepState {
   target: number | null
 }
 
+/** The backend's reason for the companies a Find new leads run leaves out (`choose.py`). */
+export const IN_HUBSPOT_REASON = 'already in HubSpot'
+
 /** The companies the HubSpot watchlist added after the sweeps came up short (PLAN-V21 T1-6). */
 export interface ToppedUp {
   count: number
@@ -359,6 +362,13 @@ export function describeEvent(
     case 'company_skipped': {
       const count = whole(data.count)
       const reason = text(data.reason, 'no reason given')
+      // A Find new leads run says once what HubSpot already has (PLAN-V27 choice 7).
+      if (reason === IN_HUBSPOT_REASON && count > 0) {
+        return {
+          tone: 'info',
+          message: `Left out ${pluralise(count, 'company', 'companies')} already in HubSpot.`,
+        }
+      }
       return {
         tone: 'info',
         message:

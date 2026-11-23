@@ -1,5 +1,7 @@
 """HubSpot labels for saved leads after a sync (PLAN-V5 D2)."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,7 +28,12 @@ async def test_relabel_finds_what_the_copy_says_now_and_saves_only_when_asked(
                 CompanyRow(
                     hubspot_id="1", name="Acme Logistics", domain="acme.com.au", owner="Pat"
                 ),
-                CompanyRow(hubspot_id="2", name="Beta Law", domain="betalaw.com.au"),
+                CompanyRow(
+                    hubspot_id="2",
+                    name="Beta Law",
+                    domain="betalaw.com.au",
+                    last_activity=datetime.now(UTC) - timedelta(days=30),  # worked: not quiet
+                ),
                 CompanyRow(hubspot_id="4", name="Delta Group", domain="delta.com.au"),
             ],
             offices=[],
@@ -69,3 +76,43 @@ async def test_relabel_finds_what_the_copy_says_now_and_saves_only_when_asked(
     assert dissolved.hubspot_status == "dissolved_deal"
     assert sent.hubspot_status == "new" and sent.status == "sent"
     assert (await relabel(session, write=True)).changed == 0  # nothing left to change
+
+
+async def test_relabel_marks_a_hubspot_company_nobody_has_worked_as_quiet(
+    session: AsyncSession,
+) -> None:
+    """PLAN-V27 choice 3: as when it is researched, a company with no activity for 12 months (or
+    none at all) is `quiet`, with the day on the card."""
+    worked = make_lead("Northwind Freight", domain="northwind.example")
+    old = make_lead("Sample Logistics", domain="samplelogistics.example")
+    await add_all(session, worked, old)
+    await save_export(
+        session,
+        HubSpotExport(
+            companies=[
+                CompanyRow(
+                    hubspot_id="7",
+                    name="Northwind Freight",
+                    domain="northwind.example",
+                    last_activity=datetime.now(UTC) - timedelta(days=60),
+                ),
+                CompanyRow(
+                    hubspot_id="8",
+                    name="Sample Logistics",
+                    domain="samplelogistics.example",
+                    last_activity=datetime(2024, 3, 5, tzinfo=UTC),
+                ),
+            ],
+            offices=[],
+            deals=[],
+            skipped_sheets=[],
+            skipped_rows=0,
+        ),
+        source="api",
+    )
+    await relabel(session, write=True)
+    await session.refresh(worked)
+    await session.refresh(old)
+    assert worked.hubspot_status == "in_hubspot"
+    assert old.hubspot_status == "quiet"
+    assert old.card["hubspot"]["last_activity"] == "2024-03-05"

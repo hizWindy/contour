@@ -3594,7 +3594,8 @@
               "in_hubspot",
               "open_deal",
               "dissolved_deal",
-              "possible_match"
+              "possible_match",
+              "quiet"
             ],
             "title": "Hubspot Status",
             "type": "string"
@@ -7626,6 +7627,19 @@
             ],
             "title": "Hubspot Id"
           },
+          "last_activity": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When someone last worked the HubSpot company (a call, email, meeting, note or task), from our copy. Empty when it isn't in HubSpot or has no activity date (PLAN-V27).",
+            "title": "Last Activity"
+          },
           "last_dissolved": {
             "anyOf": [
               {
@@ -7647,7 +7661,8 @@
                   "hubspot_id",
                   "close_name",
                   "similar_profile",
-                  "name_in_deal"
+                  "name_in_deal",
+                  "same_name"
                 ],
                 "type": "string"
               },
@@ -7692,7 +7707,8 @@
               "in_hubspot",
               "open_deal",
               "dissolved_deal",
-              "possible_match"
+              "possible_match",
+              "quiet"
             ],
             "title": "Status",
             "type": "string"
@@ -7706,7 +7722,8 @@
           "matched_by",
           "open_deals",
           "last_dissolved",
-          "candidates"
+          "candidates",
+          "last_activity"
         ],
         "title": "HubSpotOut",
         "type": "object"
@@ -9447,8 +9464,8 @@
             "title": "Target Companies"
           },
           "top_up": {
-            "default": true,
-            "description": "Used by mode discovery only (PLAN-V21 T1-6). When the sweeps come up short of the target, add companies from the HubSpot watchlist in the run's places, most likely first. It needs the OK for HubSpot names to go to Claude (`top_up.allowed` in the run options); without it nothing is added.",
+            "default": false,
+            "description": "Used by mode discovery only, and no longer used (PLAN-V27 choice 5): a short run is not topped up from the HubSpot watchlist any more. It is still accepted so a saved run or schedule still loads.",
             "title": "Top Up",
             "type": "boolean"
           },
@@ -9938,7 +9955,8 @@
               "in_hubspot",
               "open_deal",
               "dissolved_deal",
-              "possible_match"
+              "possible_match",
+              "quiet"
             ],
             "title": "Hubspot Status",
             "type": "string"
@@ -10637,6 +10655,7 @@
           },
           "reason": {
             "enum": [
+              "same_name",
               "close_name",
               "similar_profile",
               "name_in_deal"
@@ -16089,10 +16108,6 @@
             "$ref": "#/components/schemas/TargetOption",
             "description": "How many companies a discovery run tries to research (PLAN-V21 T1-4)"
           },
-          "top_up": {
-            "$ref": "#/components/schemas/TopUpOption",
-            "description": "The top up from the HubSpot watchlist for a short run (PLAN-V21 T1-6)"
-          },
           "triggers": {
             "items": {
               "$ref": "#/components/schemas/TriggerOption"
@@ -16117,7 +16132,6 @@
           "companies_limit",
           "caps",
           "target_companies",
-          "top_up",
           "sources",
           "defaults"
         ],
@@ -21092,38 +21106,6 @@
           "last_problem"
         ],
         "title": "ToolOut",
-        "type": "object"
-      },
-      "TopUpOption": {
-        "description": "Whether a short discovery run is topped up from the HubSpot watchlist (PLAN-V21 T1-6).",
-        "properties": {
-          "allowed": {
-            "description": "False while HubSpot names may not go to Claude: then nothing is added",
-            "title": "Allowed",
-            "type": "boolean"
-          },
-          "default": {
-            "title": "Default",
-            "type": "boolean"
-          },
-          "message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Why it isn't allowed, in one plain sentence for Start. Empty when it is.",
-            "title": "Message"
-          }
-        },
-        "required": [
-          "default",
-          "allowed"
-        ],
-        "title": "TopUpOption",
         "type": "object"
       },
       "ToppedUpData": {
@@ -35933,7 +35915,8 @@
                       "in_hubspot",
                       "open_deal",
                       "dissolved_deal",
-                      "possible_match"
+                      "possible_match",
+                      "quiet"
                     ],
                     "type": "string"
                   },
@@ -36618,7 +36601,8 @@
                       "in_hubspot",
                       "open_deal",
                       "dissolved_deal",
-                      "possible_match"
+                      "possible_match",
+                      "quiet"
                     ],
                     "type": "string"
                   },
@@ -37271,7 +37255,8 @@
                       "in_hubspot",
                       "open_deal",
                       "dissolved_deal",
-                      "possible_match"
+                      "possible_match",
+                      "quiet"
                     ],
                     "type": "string"
                   },
@@ -37916,7 +37901,8 @@
                       "in_hubspot",
                       "open_deal",
                       "dissolved_deal",
-                      "possible_match"
+                      "possible_match",
+                      "quiet"
                     ],
                     "type": "string"
                   },

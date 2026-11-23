@@ -89,12 +89,10 @@ async def test_the_run_options_have_everything_the_start_page_draws(
     assert offered.isdisjoint({"rival_growth", "long_tenure"})
     # PLAN-V21 T1-2: 90 days and 6 months, with 90 first for a run a person starts
     assert body["since_days"] == {"choices": [7, 30, 90, 180], "default": 90}
-    # PLAN-V21 T1-4 and T1-6: how many companies, and the top up (no OK from Levi in the tests)
+    # PLAN-V21 T1-4: how many companies. PLAN-V27 choices 1 and 5: Find new leads only, no top up
     assert body["target_companies"] == {"default": 20, "min": 5, "max": 20, "presets": [20]}
-    assert body["top_up"]["default"] is True and body["top_up"]["allowed"] is False
-    modes = {mode["mode"]: mode for mode in body["modes"]}
-    assert modes["watchlist"]["needs_approval"] is True
-    assert modes["watchlist"]["approved"] is False  # no OK from Levi in the test settings
+    assert "top_up" not in body
+    assert [mode["mode"] for mode in body["modes"]] == ["discovery"]
     assert body["watchlist_cities"] == [  # PLAN-V11 C3, and Sydney and Brisbane since PLAN-V16
         "Melbourne",
         "Adelaide",
@@ -103,7 +101,7 @@ async def test_the_run_options_have_everything_the_start_page_draws(
         "Brisbane",
     ]
     assert body["defaults"]["watchlist"]["focus"] == "growth"
-    assert modes["discovery"]["approved"] is True
+    assert body["modes"][0]["approved"] is True
     assert body["companies_limit"] == {"min": 1, "max": 25}
     assert body["defaults"]["cities"] == ["Melbourne"]
     assert set(body["caps"]) == {
@@ -182,3 +180,19 @@ async def test_a_run_that_is_not_a_test_set_has_no_test_report(
     response = await client.get(f"{LF}/tests/{run.id}")
     assert response.status_code == 404
     assert await session.get(Lead, uuid.uuid4()) is None
+
+
+async def test_the_watchlist_and_old_offices_runs_are_switched_off(
+    client: httpx.AsyncClient,
+) -> None:
+    """PLAN-V27 choice 2: switched off, not deleted. Old offices is a watchlist run with the office
+    questions first, so both answer 409, and the estimate says why its Start button is off."""
+    for params in ({}, {"watchlist": {"focus": "tenure"}}):
+        body = {"app": "lead_finder", "mode": "watchlist", "params": params}
+        started = await client.post("/api/v1/runs", json=body)
+        assert started.status_code == 409, started.text
+        assert started.json()["code"] == "run_type_off"
+        assert started.json()["title"] == "This run type is switched off"
+        estimate = await client.post("/api/v1/runs/estimate", json=body)
+        assert estimate.status_code == 200, estimate.text
+        assert estimate.json()["blocked"]["code"] == "run_type_off"

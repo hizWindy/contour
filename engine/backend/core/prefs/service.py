@@ -330,6 +330,12 @@ TEXT: dict[str, tuple[str, str]] = {
         "Days a note stays fresh",
         "Notes and leads younger than this are reused instead of searched again.",
     ),
+    "hubspot_quiet_months": (
+        "Months before a HubSpot company counts as new",
+        "Find new leads leaves out a company already in HubSpot, unless nobody has worked it "
+        "(no call, email, meeting, note or task) for this many months. 0 leaves out every HubSpot "
+        "company. 12 to start, TBC with Levi.",
+    ),
     "match_fuzzy_min": (
         "Close-name score (0 to 100)",
         "How alike two company names must be to count as a possible match in HubSpot.",

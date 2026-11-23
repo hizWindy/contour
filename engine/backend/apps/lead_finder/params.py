@@ -361,12 +361,11 @@ class _Discovery(Strict):
         examples=[50],
     )
     top_up: bool = Field(
-        True,
+        False,
         description=(
-            "Used by mode discovery only (PLAN-V21 T1-6). When the sweeps come up short of the "
-            "target, add companies from the HubSpot watchlist in the run's places, most likely "
-            "first. It needs the OK for HubSpot names to go to Claude (`top_up.allowed` in the run "
-            "options); without it nothing is added."
+            "Used by mode discovery only, and no longer used (PLAN-V27 choice 5): a short run is "
+            "not topped up from the HubSpot watchlist any more. It is still accepted so a saved "
+            "run or schedule still loads."
         ),
     )
 

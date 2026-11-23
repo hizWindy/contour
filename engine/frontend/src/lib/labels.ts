@@ -122,6 +122,8 @@ export const HUBSPOT_STATUS_LABELS: Record<HubSpotStatus, string> = {
   open_deal: 'Open deal',
   dissolved_deal: 'Dissolved deal',
   possible_match: 'Possible match',
+  // In HubSpot, but nobody has worked it for a year: it counts as new (PLAN-V27 choice 3)
+  quiet: 'In HubSpot, quiet',
 }
 
 /**

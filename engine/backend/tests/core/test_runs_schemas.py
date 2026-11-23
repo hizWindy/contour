@@ -221,11 +221,11 @@ def test_a_model_that_is_not_an_event_has_no_type_and_neither_has_a_subclass() -
         event_type_of(RunCaps())  # a part of an event is not an event
 
 
-def test_the_hubspot_status_of_a_finished_company_is_one_of_the_five_words() -> None:
+def test_the_hubspot_status_of_a_finished_company_is_one_of_the_six_words() -> None:
     from core.hubspot.matching import Status
 
     words = set(get_args(Status))
-    assert words == {"new", "in_hubspot", "open_deal", "dissolved_deal", "possible_match"}
+    assert words == {"new", "in_hubspot", "open_deal", "dissolved_deal", "possible_match", "quiet"}
     for word in words:
         data = CompanyDoneData(
             name="Acme",

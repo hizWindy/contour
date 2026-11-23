@@ -479,6 +479,7 @@ def test_the_lead_filters_sort_and_paging_are_declared_on_the_list(schema: dict[
         "open_deal",
         "dissolved_deal",
         "possible_match",
+        "quiet",  # PLAN-V27 choice 3
     ]
 
 
@@ -719,6 +720,7 @@ def test_a_company_done_event_says_the_hubspot_status_in_words_the_website_can_s
         "open_deal",
         "dissolved_deal",
         "possible_match",
+        "quiet",  # PLAN-V27 choice 3
     ]
     assert done["result"]["type"] == "string"  # the result stays plain text
 

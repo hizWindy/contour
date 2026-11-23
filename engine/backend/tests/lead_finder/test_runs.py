@@ -236,7 +236,9 @@ async def test_the_choose_rules_skip_open_deals_and_fresh_leads(
         e["name"]: e["reason"]
         for e in of_type(await stored_json(session_factory, run_id), "company_skipped")
     }
-    assert skipped["Kent Town Legal"].startswith("Open deal in HubSpot")
+    # PLAN-V27 choice 7: the companies already in HubSpot are one line, not one each
+    assert "Kent Town Legal" not in skipped
+    assert skipped["1 company"] == "already in HubSpot"
     assert skipped["Boxhill Software"].startswith("researched 2 days ago")
     assert row.counts["researched"] == 3
 

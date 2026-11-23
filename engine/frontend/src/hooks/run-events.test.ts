@@ -459,6 +459,21 @@ describe('describeEvent', () => {
     expect(lines.run_finished).toEqual({ tone: 'success', message: 'The run finished.' })
   })
 
+  it('says in one line how many companies HubSpot already has (PLAN-V27 choice 7)', () => {
+    const many = describeEvent(
+      event(1, 'company_skipped', {
+        name: '12 companies',
+        reason: 'already in HubSpot',
+        count: 12,
+      }),
+    )
+    expect(many).toEqual({ tone: 'info', message: 'Left out 12 companies already in HubSpot.' })
+    const one = describeEvent(
+      event(2, 'company_skipped', { name: '1 company', reason: 'already in HubSpot', count: 1 }),
+    )
+    expect(one.message).toBe('Left out 1 company already in HubSpot.')
+  })
+
   it('says how many companies one skip line stands for', () => {
     const line = describeEvent(
       event(1, 'company_skipped', {

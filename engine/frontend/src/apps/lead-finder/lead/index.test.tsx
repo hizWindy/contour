@@ -806,6 +806,7 @@ describe('the lead page', () => {
           matched_by: 'close_name',
           open_deals: [],
           last_dissolved: null,
+          last_activity: null,
           candidates: [
             {
               hubspot_id: '501',

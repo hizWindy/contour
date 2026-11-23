@@ -65,14 +65,15 @@ def test_a_small_company_limit_pulls_the_target_and_its_presets_down() -> None:
     assert (tiny.target_companies.min, tiny.target_companies.max) == (3, 3)
 
 
-def test_the_top_up_waits_for_the_ok_on_hubspot_names() -> None:
-    off = options().top_up
-    assert (off.default, off.allowed) == (True, False)
-    assert off.message is not None and "Levi" in off.message
-    on = build_run_options(
+def test_the_start_page_offers_find_new_leads_only() -> None:
+    """PLAN-V27 choices 1 and 2: the run options list one run type, and no top up."""
+    found = options()
+    assert [mode.mode for mode in found.modes] == ["discovery"]
+    assert "top_up" not in found.model_dump()
+    approved = build_run_options(
         RULES, Settings(_env_file=None, hubspot_names_to_claude_ok=True), Decimal("50")
-    ).top_up
-    assert (on.allowed, on.message) == (True, None)
+    )
+    assert [mode.mode for mode in approved.modes] == ["discovery"]
 
 
 def test_how_far_back_offers_7_30_90_and_180_days_with_90_first() -> None:

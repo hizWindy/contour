@@ -437,8 +437,9 @@ def test_the_target_is_left_out_by_default_and_takes_5_to_100() -> None:
         )
 
 
-def test_the_top_up_is_on_by_default_and_belongs_to_discovery() -> None:
-    assert DiscoveryParams().top_up is True
+def test_the_top_up_is_off_by_default_and_belongs_to_discovery() -> None:
+    assert DiscoveryParams().top_up is False  # no longer used (PLAN-V27 choice 5)
+    assert DiscoveryParams(top_up=True).top_up is True  # an old saved run still loads
     assert DiscoveryParams(top_up=False).top_up is False
     assert first_error(CompanyParams, {"companies": [{"name": "Acme"}], "top_up": True})[
         "type"

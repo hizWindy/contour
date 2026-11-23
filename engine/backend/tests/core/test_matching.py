@@ -21,7 +21,7 @@ from core.hubspot.matching import (
     names_are_close,
     same_city,
 )
-from core.hubspot.models import HubSpotCompany, HubSpotDeal
+from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOffice
 
 # --- Names (fast, pure) -------------------------------------------------------------------------
 
@@ -397,3 +397,34 @@ async def test_a_name_in_a_deal_is_a_possible_match(session: AsyncSession) -> No
     # Words that are only about the deal never match.
     for asked in ("Office", "Lease Expiry", "New Office"):
         assert (await match_company(session, asked)).status == "new", asked
+
+
+@INTEGRATION
+async def test_the_same_name_in_another_city_is_a_maybe_for_the_lead_finder(
+    session: AsyncSession,
+) -> None:
+    """PLAN-V27 choice 26: with `name_needs_city`, the exact name is sure only in the same city.
+    Elsewhere it is a maybe, so a different company with the same name is never left out."""
+    await add(session, company("31", "Northwind Advisory"), company("32", "Southwind Advisory"))
+    await add(
+        session,
+        HubSpotOffice(hubspot_company_id="31", label="Perth"),
+        HubSpotOffice(hubspot_company_id="32", label="Melbourne"),
+    )
+    elsewhere = await match_company(
+        session, "Northwind Advisory", city="Melbourne", name_needs_city=True
+    )
+    assert (elsewhere.status, elsewhere.hubspot_id) == ("possible_match", None)
+    assert [(c.hubspot_id, c.reason) for c in elsewhere.candidates] == [("31", "same_name")]
+    here = await match_company(session, "Northwind Advisory", city="Perth", name_needs_city=True)
+    assert (here.matched_by, here.hubspot_id) == ("name", "31")
+    # An unknown city never says "elsewhere", and without the flag the name is sure as before
+    unknown = await match_company(session, "Northwind Advisory", name_needs_city=True)
+    assert unknown.hubspot_id == "31"
+    before = await match_company(session, "Northwind Advisory", city="Melbourne")
+    assert (before.matched_by, before.hubspot_id) == ("name", "31")
+    # A company with no office in a known city is never "elsewhere" either
+    await add(session, company("33", "Eastwind Partners"))
+    assert (
+        await match_company(session, "Eastwind Partners", city="Sydney", name_needs_city=True)
+    ).hubspot_id == "33"

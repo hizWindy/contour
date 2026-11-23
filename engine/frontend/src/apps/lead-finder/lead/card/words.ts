@@ -69,6 +69,7 @@ export const SOURCE_WORDS: Record<SourceName, string> = {
 }
 
 export const REASON_WORDS: Record<string, string> = {
+  same_name: 'same name, another city',
   close_name: 'close name',
   name_in_deal: 'name in a deal',
   similar_profile: 'similar profile',

@@ -4188,7 +4188,7 @@ export interface components {
              * @description Whether HubSpot already has this company
              * @enum {string}
              */
-            hubspot_status: "new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match";
+            hubspot_status: "new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match" | "quiet";
             /**
              * Lead Id
              * Format: uuid
@@ -5886,10 +5886,15 @@ export interface components {
             candidates: components["schemas"]["MatchCandidate"][];
             /** Hubspot Id */
             hubspot_id: string | null;
+            /**
+             * Last Activity
+             * @description When someone last worked the HubSpot company (a call, email, meeting, note or task), from our copy. Empty when it isn't in HubSpot or has no activity date (PLAN-V27).
+             */
+            last_activity: string | null;
             /** Last Dissolved */
             last_dissolved: string | null;
             /** Matched By */
-            matched_by: ("domain" | "name" | "hubspot_id" | "close_name" | "similar_profile" | "name_in_deal") | null;
+            matched_by: ("domain" | "name" | "hubspot_id" | "close_name" | "similar_profile" | "name_in_deal" | "same_name") | null;
             /** Name */
             name: string | null;
             /** Open Deals */
@@ -5900,7 +5905,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match";
+            status: "new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match" | "quiet";
         };
         /**
          * HubSpotOwnerChoice
@@ -6582,8 +6587,8 @@ export interface components {
             target_companies: number | null;
             /**
              * Top Up
-             * @description Used by mode discovery only (PLAN-V21 T1-6). When the sweeps come up short of the target, add companies from the HubSpot watchlist in the run's places, most likely first. It needs the OK for HubSpot names to go to Claude (`top_up.allowed` in the run options); without it nothing is added.
-             * @default true
+             * @description Used by mode discovery only, and no longer used (PLAN-V27 choice 5): a short run is not topped up from the HubSpot watchlist any more. It is still accepted so a saved run or schedule still loads.
+             * @default false
              */
             top_up: boolean;
             /**
@@ -6755,7 +6760,7 @@ export interface components {
              * Hubspot Status
              * @enum {string}
              */
-            hubspot_status: "new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match";
+            hubspot_status: "new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match" | "quiet";
             /**
              * Id
              * Format: uuid
@@ -7048,7 +7053,7 @@ export interface components {
              * Reason
              * @enum {string}
              */
-            reason: "close_name" | "similar_profile" | "name_in_deal";
+            reason: "same_name" | "close_name" | "similar_profile" | "name_in_deal";
             /** Score */
             score: number;
         };
@@ -9412,8 +9417,6 @@ export interface components {
             };
             /** @description How many companies a discovery run tries to research (PLAN-V21 T1-4) */
             target_companies: components["schemas"]["TargetOption"];
-            /** @description The top up from the HubSpot watchlist for a short run (PLAN-V21 T1-6) */
-            top_up: components["schemas"]["TopUpOption"];
             /** Triggers */
             triggers: components["schemas"]["TriggerOption"][];
             /**
@@ -11719,24 +11722,6 @@ export interface components {
              * @description Signed in now. None: not checked since the backend started
              */
             signed_in: boolean | null;
-        };
-        /**
-         * TopUpOption
-         * @description Whether a short discovery run is topped up from the HubSpot watchlist (PLAN-V21 T1-6).
-         */
-        TopUpOption: {
-            /**
-             * Allowed
-             * @description False while HubSpot names may not go to Claude: then nothing is added
-             */
-            allowed: boolean;
-            /** Default */
-            default: boolean;
-            /**
-             * Message
-             * @description Why it isn't allowed, in one plain sentence for Start. Empty when it is.
-             */
-            message?: string | null;
         };
         /**
          * ToppedUpData
@@ -22749,7 +22734,7 @@ export interface operations {
                 office_m2_min?: number | null;
                 office_m2_max?: number | null;
                 /** @description Repeat the key to match several values */
-                hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match")[] | null;
+                hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match" | "quiet")[] | null;
                 /** @description Repeat the key to match several values */
                 status?: ("new" | "watching" | "rejected" | "sent")[] | null;
                 /** @description Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values */
@@ -22917,7 +22902,7 @@ export interface operations {
                 office_m2_min?: number | null;
                 office_m2_max?: number | null;
                 /** @description Repeat the key to match several values */
-                hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match")[] | null;
+                hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match" | "quiet")[] | null;
                 /** @description Repeat the key to match several values */
                 status?: ("new" | "watching" | "rejected" | "sent")[] | null;
                 /** @description Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values */
@@ -23084,7 +23069,7 @@ export interface operations {
                 office_m2_min?: number | null;
                 office_m2_max?: number | null;
                 /** @description Repeat the key to match several values */
-                hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match")[] | null;
+                hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match" | "quiet")[] | null;
                 /** @description Repeat the key to match several values */
                 status?: ("new" | "watching" | "rejected" | "sent")[] | null;
                 /** @description Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values */
@@ -23249,7 +23234,7 @@ export interface operations {
                 office_m2_min?: number | null;
                 office_m2_max?: number | null;
                 /** @description Repeat the key to match several values */
-                hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match")[] | null;
+                hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match" | "quiet")[] | null;
                 /** @description Repeat the key to match several values */
                 status?: ("new" | "watching" | "rejected" | "sent")[] | null;
                 /** @description Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values */

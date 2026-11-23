@@ -104,6 +104,7 @@ from apps.lead_finder.property import (
     office_hint_lines,
     record_signs,
 )
+from apps.lead_finder.quiet import quiet_status
 from apps.lead_finder.rules import MAX_DAMPENER_SEARCHES, LeadFinderRules, Result
 from apps.lead_finder.sanitize import (
     clean_company_name,
@@ -248,6 +249,13 @@ class HubSpotOut(BaseModel):
     last_dissolved: date | None
     candidates: list[MatchCandidate] = Field(
         default_factory=list, description="Companies that might be the same one. A person decides."
+    )
+    last_activity: date | None = Field(
+        None,
+        description=(
+            "When someone last worked the HubSpot company (a call, email, meeting, note or task), "
+            "from our copy. Empty when it isn't in HubSpot or has no activity date (PLAN-V27)."
+        ),
     )
 
 
@@ -904,7 +912,11 @@ async def _judge_and_card(
         found_name=facts.name,
         fuzzy_min=settings.match_fuzzy_min,
         profile_min=settings.match_profile_min,
+        name_needs_city=True,  # the same name in another city is a maybe (PLAN-V27 choice 26)
     )
+    # A HubSpot company nobody has worked for a while is `quiet` on the card (PLAN-V27 choice 3).
+    # The rules below still judge the match itself.
+    quiet = await quiet_status(session, hubspot, settings.hubspot_quiet_months, job.today)
     # The office's size, lease end and move-in date: the first source in `data_sources` that has
     # one (the property tools, HubSpot, then the research), and the signs the records show
     # (PLAN-V16 T1-8). The others stay on the card.
@@ -942,7 +954,9 @@ async def _judge_and_card(
         contact_role=facts.contact_role,
         opening_line=facts.opening_line,
         facts=facts,
-        hubspot=HubSpotOut(**asdict(hubspot)),
+        hubspot=HubSpotOut(
+            **{**asdict(hubspot), "status": quiet.status}, last_activity=quiet.last_activity
+        ),
         notes=[
             NoteOut(
                 claim=note.claim,
@@ -1752,7 +1766,7 @@ def _lead_values(
         "staff_in_city": staff if isinstance(staff, int) and not isinstance(staff, bool) else None,
         **verdict_columns(card),
         "contact_role": clip(card.contact_role, LIMITS["lead.contact_role"]),
-        "hubspot_status": hubspot.status,
+        "hubspot_status": card.hubspot.status,  # `quiet` included (PLAN-V27)
         "hubspot_id": hubspot.hubspot_id,
         "cost_usd": card.research.cost_usd,
         "web_searches": card.research.web_searches,

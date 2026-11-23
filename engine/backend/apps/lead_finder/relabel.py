@@ -9,15 +9,19 @@ be in HubSpot already, 15 with an open deal. `relabel` matches each lead again a
 What it does not change: the lead's result and score (a person reads "Open deal" next to them),
 its status, and leads that were sent (their label came from the send). The look-alike check
 (`similar_profile`) is not run: it needs each lead's profile text, and the name and website
-checks find what a sync can change. Free: no Claude, no HubSpot call.
+checks find what a sync can change. Since PLAN-V27 the same name counts only in the same city
+(choice 26), and a HubSpot company nobody has worked for `hubspot_quiet_months` is `quiet`
+(choice 3), as when it is researched. Free: no Claude, no HubSpot call.
 """
 
 from collections import Counter
 from dataclasses import asdict, dataclass
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.lead_finder.quiet import quiet_status
 from apps.lead_finder.research import HubSpotOut
 from apps.lead_finder.tables import Lead
 from core.hubspot.matching import match_company
@@ -31,9 +35,10 @@ class Relabelled:
     moves: dict[tuple[str, str], int]  # (old label, new label) -> how many
 
 
-async def relabel(session: AsyncSession, *, write: bool) -> Relabelled:
+async def relabel(session: AsyncSession, *, write: bool, today: date | None = None) -> Relabelled:
     """Matches every lead that wasn't sent against our HubSpot copy. Saves only with `write`."""
     settings = await effective_settings(session)
+    day = today or date.today()
     leads = (
         await session.scalars(select(Lead).where(Lead.status != "sent").order_by(Lead.created_at))
     ).all()
@@ -48,16 +53,20 @@ async def relabel(session: AsyncSession, *, write: bool) -> Relabelled:
             hubspot_id=lead.hubspot_id if lead.origin == "hubspot" else None,
             fuzzy_min=settings.match_fuzzy_min,
             profile_min=settings.match_profile_min,
+            name_needs_city=True,
         )
-        moves[(lead.hubspot_status, match.status)] += 1
-        if match.status == lead.hubspot_status and match.hubspot_id == lead.hubspot_id:
+        quiet = await quiet_status(session, match, settings.hubspot_quiet_months, day)
+        moves[(lead.hubspot_status, quiet.status)] += 1
+        if quiet.status == lead.hubspot_status and match.hubspot_id == lead.hubspot_id:
             continue
         changed += 1
         if write:
             card = dict(lead.card or {})
-            card["hubspot"] = HubSpotOut(**asdict(match)).model_dump(mode="json")
+            card["hubspot"] = HubSpotOut(
+                **{**asdict(match), "status": quiet.status}, last_activity=quiet.last_activity
+            ).model_dump(mode="json")
             lead.card = card
-            lead.hubspot_status = match.status
+            lead.hubspot_status = quiet.status
             lead.hubspot_id = match.hubspot_id
     if write:
         await session.commit()

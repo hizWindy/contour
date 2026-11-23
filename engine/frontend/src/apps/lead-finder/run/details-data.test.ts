@@ -105,7 +105,7 @@ describe('what a run was asked to do', () => {
     expect(back(7)).toBe('Last 7 days')
   })
 
-  it('says how many companies a run aimed for and whether it topped up (PLAN-V21 T3-4)', () => {
+  it('says how many companies a run aimed for, and the top up only for an old run that asked (PLAN-V27)', () => {
     const asked = setupLines(run({ params: { target_companies: 50, top_up: true } }), {
       triggers: TRIGGERS,
     })
@@ -114,7 +114,7 @@ describe('what a run was asked to do', () => {
     const off = setupLines(run({ params: { target_companies: 25, top_up: false } }), {
       triggers: TRIGGERS,
     })
-    expect(value(off, 'Top up from HubSpot')).toBe('No')
+    expect(value(off, 'Top up from HubSpot')).toBeUndefined() // a run since PLAN-V27 never tops up
     // An automatic run has no target, so neither line shows.
     const automatic = setupLines(run({ params: {} }), { triggers: TRIGGERS })
     expect(value(automatic, 'How many companies')).toBeUndefined()
