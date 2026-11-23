@@ -396,7 +396,11 @@ async def places_of(session: AsyncSession) -> list[str]:
                 continue
             key = place.casefold()
             counts[key] = counts.get(key, 0) + count
-            shown.setdefault(key, place)
+            # The most common spelling, but a capitalised one over "prahran": rows with the
+            # same count come in any order, so the first seen alone isn't steady.
+            kept = shown.get(key)
+            if kept is None or (place[:1].isupper() and not kept[:1].isupper()):
+                shown[key] = place
     ranked = sorted(counts, key=lambda key: (-counts[key], key))
     return [shown[key] for key in ranked[:PLACES_MAX]]
 
