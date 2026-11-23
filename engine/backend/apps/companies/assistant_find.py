@@ -224,7 +224,7 @@ SAME_PERSON: Final = frozenset(
     {"her", "him", "them", "same person", "the same person", "that person", "same"}
 )
 # Words that add to the last turn ("and Jo too"): its company stays.
-TOO: Final = re.compile(r"\b(?:too|also|as well|same company|again)\b", re.IGNORECASE)
+TOO: Final = re.compile(r"\b(?:too|also|as well|same company)\b", re.IGNORECASE)
 
 
 async def last_company(session: AsyncSession, ctx: Context) -> CompanyHit | None:
@@ -579,11 +579,16 @@ async def find_company(
         heard=words, from_page=True, found=page, choices=[], level="sure", reason=ON_SCREEN
     )
     before = await last_company(session, ctx)
-    if before is not None and (
-        means_same(words, SAME_COMPANY) or (not words and (page is None or TOO.search(ctx.said)))
-    ):
+    # Said ("same company", "and Jo too"): sure. Not said, with nothing on screen: only a
+    # suggestion, so it never becomes a quick log to the last turn's company (M1 review).
+    said_same = means_same(words, SAME_COMPANY) or (not words and TOO.search(ctx.said) is not None)
+    if before is not None and (said_same or (not words and page is None)):
         same = AssistantCompany(
-            heard=words, from_page=False, found=before, choices=[], level="sure"
+            heard=words,
+            from_page=False,
+            found=before,
+            choices=[],
+            level="sure" if said_same else "likely",
         )
         return same.model_copy(update={"reason": SAME_AS_BEFORE}), None
     if not words:

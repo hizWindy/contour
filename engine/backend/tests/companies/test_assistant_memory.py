@@ -143,3 +143,28 @@ async def test_claude_gets_only_the_last_turns_names_as_heard(
     assert "the person 'Jo Sample'" in prompt
     assert "201" not in prompt and "c1" not in prompt  # no id ever
     assert "0412" not in prompt
+
+
+async def test_an_unsaid_company_from_the_last_turn_is_only_a_suggestion(
+    world: World, settings: dict[str, Any], claude: CommandClaude, meetings: FakeMeetings
+) -> None:
+    # M1 review: no company said and nothing on screen: the last turn's company is suggested,
+    # never sure, so "No answer, Jo" never becomes a quick log to it.
+    await a_copy(world)
+    claude.replies = [said("log_call", person="Jo")]
+    async with rep(world) as client:
+        found = await ask(client, "No answer, Jo", last_turn=LAST)
+    assert found["company"]["found"]["key"] == "201"
+    assert found["company"]["level"] == "likely"
+    assert found["quick"] is False
+
+
+async def test_a_follow_up_said_is_never_a_quick_log(
+    world: World, settings: dict[str, Any], claude: CommandClaude, meetings: FakeMeetings
+) -> None:
+    await a_copy(world)
+    claude.replies = [said("log_call", person="her", company="same company")]
+    async with rep(world) as client:
+        found = await ask(client, "No answer from her, follow up", last_turn=LAST)
+    assert found["company"]["level"] == "sure"
+    assert found["quick"] is False

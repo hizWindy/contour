@@ -84,6 +84,16 @@ async function sortedNote(start: CallNoteOut, every: number, wait: number): Prom
   return note
 }
 
+/** The sorted call holds only what the toast said: its outcome, and no task or field change. */
+export function onlyTheOutcome(note: CallNoteOut, draft: CallDraft): boolean {
+  if (draft.action !== 'log_call') return false
+  return (
+    note.tasks.length === 0 &&
+    note.changes.length === 0 &&
+    (note.call.outcome ?? null) === (draft.outcome ?? null)
+  )
+}
+
 /** The call kept in Call logs, with why it didn't go now. */
 function keptInCallLogs(go: (to: string) => void): void {
   toast(CALL_KEPT, {
@@ -129,6 +139,12 @@ async function sendQuick(
   client.setQueryData(queryKeys.companies.callNote(note.id), note)
   if (note.status === 'sorting') {
     keptInCallLogs(go)
+    return
+  }
+  if (!onlyTheOutcome(note, draft)) {
+    // The sort found more than the toast said (a task, a field change, another outcome): the
+    // card shows it all before anything goes (M1 review).
+    reopen(note)
     return
   }
   await sendDraft(

@@ -72,7 +72,8 @@ def test_the_outcome_said(words: str, outcome: str | None) -> None:
         "Called Jo Sample, didn't pick up",
         "Left Jo Sample a voicemail",
         "Jo Sample: wrong number",
-        "Tried Jo again, line busy",
+        "Tried Jo, line busy",
+        "Log a follow-up call with Jo Sample, no answer",  # a call type, not a follow-up
     ],
 )
 def test_only_an_outcome_is_a_quick_log(words: str) -> None:
@@ -83,6 +84,10 @@ def test_only_an_outcome_is_a_quick_log(words: str) -> None:
     "words",
     [
         "No answer from Jo Sample, follow up Friday",  # a follow-up opens the card
+        "No answer from Jo Sample, follow up",  # with no day too (M1 review)
+        "No answer, Jo Sample, try again",
+        "No answer Jo Sample, call again this afternoon",
+        "Tried Jo again, line busy",
         "Jo Sample didn't answer, she's moving in March",  # words open the card
         "Jo Sample is busy with a move",
         "Log a call with Jo Sample",  # no outcome

@@ -144,6 +144,19 @@ describe('the quick log (T3-3)', () => {
     expect(reads).toBeGreaterThanOrEqual(3)
   })
 
+  it('a call the sort found more in (a task, a field change) opens the card, and sends nothing', async () => {
+    // M1 review: the toast said only the outcome, so the card shows the rest first.
+    const more = note({
+      call: { in_hubspot: false, outcome: 'No answer', summary: '' },
+      text: 'No answer, Jo Sample.',
+    })
+    const { start, of } = setUp({ [API.notes]: more, [notePath()]: more })
+    start()
+    expect(await screen.findByRole('dialog', undefined, { timeout: 3000 })).toBeInTheDocument()
+    expect(of(API.confirm)).toHaveLength(0)
+    expect(of(API.notes)).toHaveLength(1)
+  })
+
   it('a call still sorting after the wait stays in Call logs, and says so', async () => {
     const sorting = { ...SAVED, status: 'sorting' } satisfies CallNoteOut
     const { start, of, user, go } = setUp({ [API.notes]: sorting, [notePath()]: sorting })

@@ -48,7 +48,9 @@ OUTCOME_WORDS: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     ("Busy", re.compile(r"\b(?:line\s+)?(?:was\s+)?(?:busy|engaged)\b")),
 )
 
-# Words a call command uses that say nothing about the call itself.
+# Words a call command uses that say nothing about the call itself. Never "follow up", "try"
+# or "again": they ask for a follow-up, so the card opens (M1 review). A call type ("a
+# follow-up call") is taken out before the words are checked.
 COMMAND_WORDS: Final = frozenset(
     {
         "a",
@@ -59,7 +61,6 @@ COMMAND_WORDS: Final = frozenset(
         "but",
         "so",
         "just",
-        "again",
         "also",
         "please",
         "ok",
@@ -80,7 +81,6 @@ COMMAND_WORDS: Final = frozenset(
         "phoned",
         "phoning",
         "tried",
-        "try",
         "trying",
         "gave",
         "give",
@@ -125,8 +125,6 @@ COMMAND_WORDS: Final = frozenset(
         "afternoon",
         "now",
         "prospecting",
-        "follow",
-        "up",
         "networking",
         "agent",
         "outcome",
@@ -176,7 +174,7 @@ def only_outcome(said: str, names: Sequence[str]) -> OutcomeName | None:
     if outcome is None:
         return None
     text = plain(said)
-    for _, pattern in OUTCOME_WORDS:
+    for _, pattern in (*OUTCOME_WORDS, *TYPE_WORDS):
         text = pattern.sub(" ", text)
     named = {word for name in names for word in WORD.findall(plain(name))}
     left = [w for w in WORD.findall(text) if w not in named and w not in COMMAND_WORDS]

@@ -688,18 +688,25 @@ function DraftCard({
       noteId: null,
       edited: true,
     })
-    if (!old) return
-    old.then(
-      (saved) => {
-        removeNote(saved.id).then(() => {
-          client.removeQueries({ queryKey: queryKeys.companies.callNote(saved.id) })
-          markCountsOld(client)
-          void refreshCallNoteLists(client)
-        }, toastProblem)
-      },
-      // Never saved: nothing to remove.
-      () => undefined,
-    )
+    const remove = (id: string): void => {
+      removeNote(id).then(() => {
+        client.removeQueries({ queryKey: queryKeys.companies.callNote(id) })
+        markCountsOld(client)
+        void refreshCallNoteLists(client)
+      }, toastProblem)
+    }
+    if (old) {
+      old.then(
+        (saved) => {
+          remove(saved.id)
+        },
+        // Never saved: nothing to remove.
+        () => undefined,
+      )
+    } else if (now.noteId) {
+      // Saved before the card opened (a quick log's Undo, M1 review): it goes too.
+      remove(now.noteId)
+    }
   }
 
   /** A change to a call by voice, on the server. The read-back follows it. */
