@@ -7,7 +7,7 @@ This plan stops Claude requests from blocking each other: a call prep never wait
 - **Status:** drafted on 22 Nov 2026 from Al-khair's chat of 21 and 22 Nov. Being built since 22 Nov on `plan-v26`, on his "implement v26" (A1). Not merged, pushed or deployed.
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
 - **Last updated:** 23 Nov 2026.
-- **Progress:** every step of Parts 1 to 5 is built and checked (23 Nov). T3-4 is switched off until Levi's OK. Open: A6 first (the shared e2e database), then Al-khair's looks, S3, the plan list line, S0, S2 (as M5), S4 and M1 to M4.
+- **Progress:** every step of Parts 1 to 5 is built and checked, and the full checks pass (23 Nov, `85875f9`). T3-4 is switched off until Levi's OK. Open: A6 first (the shared e2e database), then Al-khair's looks, S3, the plan list line, S0, S2 (as M5), S4 and M1 to M4.
 - **Sources:**
   - Al-khair's chat on 21 and 22 Nov 2026 (his 13 asks, then his answers);
   - the code on `master` (`ff0f658`). The files this plan changes are the same as on `b84c3cf`, read on 21 Nov;
@@ -338,6 +338,9 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
   - **Not run:** M1's fresh `review-agent`, the `merge-check` skill, a paid run, and anything against real HubSpot or Claude. The lanes are proven with a fake Claude only.
   - **Left on this laptop:** the databases `leadfinder_v26`, `leadfinder_test_v26` and `leadfinder_e2e_v26` (the rehearsal). Nothing is running. `plan-v26` is not pushed.
   - **The session stopped here** because every step that waits on nobody is built, at an estimated 76% of the 5-hour limit and 79% of the week. The percentages come from local token counters, not from `/usage`.
+- **23 Nov 2026, 07:06 to 08:00, the full checks on `ba46d8f`,** run again on Al-khair's word, and followed by a monitor so the session didn't go idle:
+  - ruff, mypy, lint, types and build pass; the contract gate passes alone (3 tests); 3,632 fast backend tests; 3,113 website tests; first visit 244 kB gzip JS and 25 kB CSS.
+  - 1,599 of 1,603 database tests passed. 3 failures were real: the schedule tests didn't know T3-4's new daily job. Fixed in `85875f9`, and all 72 schedule tests pass. The 4th, `test_browser.py`'s two callers at once, is the Property Daily browser, which V26 never touched. It passed 3 times out of 3 when run alone, so it fails only when the laptop is busy.
 - **23 Nov 2026, 07:07, A6 done** on Al-khair's "Please get this done", which answered "Reply `rerun checks` and `fix A6`". Before: `leadfinder_e2e` at `0029`, nobody connected, and the new columns and table empty. The rehearsed downgrade then took it to `0024`. After: every table has the same rows as before, and its columns are the same as the dev database's at `0024`. `master` and `contour-v25` know `0024`, so their fake backends start again and migrate it up themselves.
 - **23 Nov 2026, 03:54, "so its done right ?", and the answer was no.** A check against the code found three claims above that were wrong:
   - **The mask** let 14 of 17 common ways of writing a phone or email through, like `0412345678x12` and `jo%40northwind.com.au`. On the copy's 61,224 rows no known phone number showed. The copy holds no HubSpot contacts, so real contact emails are untested.
