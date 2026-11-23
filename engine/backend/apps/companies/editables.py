@@ -104,7 +104,8 @@ async def columns(db: AsyncSession, row: Row, values: Values, now: datetime) -> 
             "person_title": None,
         }
         if row["status"] == "needs_company":
-            card = NoteCard(call=CardCall(outcome=card.call.outcome))  # sorted by hand, free
+            # Sorted by hand, free. The rep's own picks stay, as note_company.py keeps them.
+            card = NoteCard(call=CardCall(outcome=card.call.outcome, call_type=card.call.call_type))
             changed |= {"status": "to_confirm", "sorted_by": "person", "sorted_at": now.isoformat()}
         else:
             card.changes, card.previewed = [], None

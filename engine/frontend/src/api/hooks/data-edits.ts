@@ -1,6 +1,7 @@
 /** The Data tab's edit screens (PLAN-V26 T4-3). They load with that tab. */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, unwrap, type ApiProblem } from '../client'
+import { markNotesOld } from './call-notes'
 import { refreshLeads } from './leads'
 import type { Schemas } from '../types'
 
@@ -40,6 +41,7 @@ function useRefresh() {
     void queryClient.invalidateQueries({ queryKey: ['data', 'edits'] })
     void queryClient.invalidateQueries({ queryKey: ['memory'] })
     refreshLeads(queryClient)
+    markNotesOld(queryClient) // Call logs and To confirm show the same notes
   }
 }
 

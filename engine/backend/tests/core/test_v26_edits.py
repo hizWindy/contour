@@ -205,6 +205,7 @@ async def test_a_call_that_needs_a_company_waits_to_be_confirmed_free(team: Team
         company_heard="North Wind",
         contact_id=None,
         person_name=None,
+        card={"call": {"outcome": "Connected", "call_type": "Follow Up Call"}},
     )
     call_id = call.id
     await team.save(company("101", "Northwind"), call)
@@ -217,6 +218,8 @@ async def test_a_call_that_needs_a_company_waits_to_be_confirmed_free(team: Team
         "person",
     )
     assert await all_rows(team.world, SearchLog) == []  # no Claude
+    call_picked = after.card["call"]  # the rep's own picks stay (PLAN-V25's call type)
+    assert (call_picked["outcome"], call_picked["call_type"]) == ("Connected", "Follow Up Call")
 
     assert (await team.undo(saved.json()["edit_id"])).status_code == 200
     back = await only(team.world, CallNote)
