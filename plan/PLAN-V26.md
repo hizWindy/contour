@@ -4,10 +4,10 @@ This plan stops Claude requests from blocking each other: a call prep never wait
 
 **TBC** means to be confirmed.
 
-- **Status:** drafted on 22 Nov 2026 from Al-khair's chat of 21 and 22 Nov. Being built since 22 Nov on `plan-v26`, on his "implement v26" (A1). Not merged, pushed or deployed.
+- **Status:** drafted on 22 Nov 2026 from Al-khair's chat of 21 and 22 Nov. Being built since 22 Nov on `plan-v26`, on his "implement v26" (A1). Joined into `master` on 23 Nov (M1). Not pushed or deployed.
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
 - **Last updated:** 23 Nov 2026.
-- **Progress:** every step of Parts 1 to 5 is built and checked, and the full checks pass (23 Nov, `85875f9`). T3-4 is switched off until Levi's OK. Open: A6 first (the shared e2e database), then Al-khair's looks, S3, the plan list line, S0, S2 (as M5), S4 and M1 to M4.
+- **Progress:** every step of Parts 1 to 5 is built and checked, and joined into `master` (23 Nov, M1). Not pushed or deployed. T3-4 is switched off until Levi's OK. Open: Al-khair's looks (T3-3, T4-3, T5-1, T5-2), S3 (with T3-4 and T4-1), the plan list line, S0, S2 (last, after M4), S4, and M2 to M4.
 - **Sources:**
   - Al-khair's chat on 21 and 22 Nov 2026 (his 13 asks, then his answers);
   - the code on `master` (`ff0f658`). The files this plan changes are the same as on `b84c3cf`, read on 21 Nov;
@@ -146,7 +146,7 @@ One session builds every step, in order: S0 to S3, then Parts 1 to 5. Parts 2 to
 
 - **Backend steps** are `backend-agent` work, with the `api-change` skill, and `db-migration` for the migration.
 - **Website steps** are `frontend-agent` work, with the `ui-build` and `design-review` skills.
-- **One migration,** `0029_v26_activity` (the number after PLAN-V25's `0028`, **TBC**): `searches.user_id`, `runs.started_by` and the `core.admin_edits` table.
+- **One migration,** `0029_v26_activity` (after `0027`: PLAN-V25 added no migration, so there is no `0028`): `searches.user_id`, `runs.started_by` and the `core.admin_edits` table.
 - **Contract changes:** the reset's switch, the username in Edit person, Unlock, the Activity routes, the Data routes and a prep's wait. Make the website's types again after each.
 - **M1's independent check** is a fresh `review-agent` with the `merge-check` skill.
 
@@ -243,7 +243,7 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
 
 ## Merge, checks and going live
 
-- [ ] **M1. Merge** (`merge v26`, on Al-khair's word). First: `plan-v26` takes `master` once PLAN-V25 is there; `0029`'s `down_revision` becomes PLAN-V25's `0028`; the contract and types are made again; and the main folder's untracked `plan/PLAN-V26.md` moves aside, or the fast-forward stops on it. Full checks, the `merge-check` skill and a fresh `review-agent`. Then `git merge --ff-only plan-v26` in the main folder.
+- [x] **M1. Merge** (`merge v26`, on Al-khair's word). Done 23 Nov (`8d173e9`, `a0e5086`, `9a80ae0`; the Log). First: `plan-v26` takes `master` once PLAN-V25 is there; `0029` stays after `0027`, because PLAN-V25 added no migration; the contract and types are made again; and the main folder's untracked `plan/PLAN-V26.md` moves aside, or the fast-forward stops on it. Full checks, the `merge-check` skill and a fresh `review-agent`. Then `git merge --ff-only plan-v26` in the main folder.
 - [ ] **M2. Deploy** (`deploy v26`), after S4. Push `master` and deploy. The migration runs on deploy.
 - [ ] **M3. The live check:**
   1. Start a small Lead Finder run, then open a call prep: the prep starts at once. This is paid (a small run plus one prep, capped at US$0.25), so on Al-khair's word.
@@ -356,3 +356,16 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
   - **The checks on `8253e76`:** ruff, mypy and 3,632 fast backend tests pass. The full run then stopped at 05:24: Claude Code ended it because the laptop was low on memory (286 MB free). By then 625 of 1,603 database tests had run: 624 passed. The 1 failure, `test_browser.py`'s sign-in page test (the Property Daily browser, unchanged since the last full pass), passes when run alone. **Not run again since:** the other 978 database tests, the website's whole test run, lint over every file and the bundle report. They need a quieter laptop, and the run is restarted only on Al-khair's word.
   - **The second read** (`ba46d8f`): sign-in itself also used the first sign-in check (now the same as `/me`), a `[redacted]` key could be saved over the real text, the edits list showed ids, and one mask pattern was slow on long spaces.
   - **Overlap with PLAN-V25** (`70f6e07`): a trial merge of the committed work is clean. Both change `apps/companies/schemas.py`, `test_assistant_api.py` and the two generated contract files.
+- **23 Nov 2026, M1,** on Al-khair's "please merge all of those properly in the main branch". PLAN-V25 was already on `master` (`470aa05`) and pushed.
+  - **The join** (`8d173e9`): `master` merged into `plan-v26` with no conflicts. One migration head, `0029_v26_activity`, after `0027`. A fresh contract and types change nothing, and the schema map matches.
+  - **The review** (a fresh `review-agent`, with the `merge-check`, `security-check` and `flow-trace` skills): Ready with notes, no blockers. Its two fixes (`a0e5086`):
+    - a Data-tab company fix on a "Needs a company" call dropped PLAN-V25's call type, so a "Follow Up Call" went back to the default; it now keeps it, and the edit test checks it;
+    - a Data-tab edit, delete or Undo didn't refresh Call logs and To confirm; now it does.
+  - **A PLAN-V25 bug the checks found** (`9a80ae0`): the word list kept whichever spelling of a place came first ("prahran" over "Prahran"), so PLAN-V25's places test failed on this database. A capitalised spelling now wins.
+  - **The checks on `9a80ae0`,** one part at a time (436 MB of memory free):
+    - backend: ruff and mypy pass (475 files); 3,672 fast tests pass (25 skipped); the contract gates alone, 3 pass; 1,638 database tests pass (Companies and e2e 484, Core 750, Lead Finder 404);
+    - website: lint, types, 3,190 tests and the build pass; first visit 244 kB gzip JS and 25 kB CSS, as before.
+  - **Left for M4:** `engine/AGENTS.md` doesn't yet cover the three lanes, the Data tab and its edit rules, `core.admin_edits`, or `SIGN_IN_RECORDS_OK` (beside `BROWSER_SPEECH_OK`). The plan list doesn't name PLAN-V25 or PLAN-V26.
+  - **For Levi (S3), from the review:** the 90-day keep time also deletes the record of which admin changed an account; `core.admin_edits` is kept for good, with the full text of a deleted call note; the public `/health` shows the keep days (empty while the switch is off).
+  - **Not run:** the `design-review` skill again (last at T5-3), a browser pass, and anything paid or against real HubSpot or Claude.
+  - **The main folder:** its untracked `plan/PLAN-V26.md` was the 22 Nov draft, with nothing the branch lacks. It moved out of the folder, then `master` moved to `plan-v26` by fast-forward. The dev database `leadfinder` is at `0024`, behind `master`: migrate it before the main folder's app starts.
