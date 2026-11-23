@@ -26,6 +26,7 @@ from apps.companies.api_meetings import SourceDep, WriterDep
 from apps.companies.assistant import Assistant, CommandLimit, check_on, read_command
 from apps.companies.assistant_add import CompanyAdds
 from apps.companies.assistant_names import HintCache
+from apps.companies.assistant_rank import Asker
 from apps.companies.assistant_schemas import (
     FIND_WORDS_MAX_CHARS,
     AssistantCommand,
@@ -43,6 +44,7 @@ from apps.companies.assistant_schemas import (
     Today,
 )
 from apps.companies.deps import LeadsDep
+from apps.companies.notes import MELBOURNE
 from apps.companies.team_email import TeamEmailBook
 from apps.companies.today import TaskCopy
 from core.api.access import SignedInDep, need
@@ -500,6 +502,9 @@ async def find_assistant_company(
     session: SessionDep,
     settings: SettingsDep,
     leads: LeadsDep,
+    auth: SignedInDep,
+    source: SourceDep,
+    now: NowDep,
     words: Annotated[
         SafeText,
         Query(
@@ -510,8 +515,15 @@ async def find_assistant_company(
         ),
     ],
 ) -> AssistantCompanyFind:
+    owner = await source.owner_of(session, auth.user.id) if auth is not None else None
+    asker = Asker(
+        owner_id=owner,
+        now=now,
+        today=now.astimezone(MELBOURNE).date(),
+        meetings=source,
+    )
     return await assistant_find.find_said(
-        session, words, settings=settings, leads=leads, app=request.app
+        session, words, settings=settings, leads=leads, app=request.app, asker=asker
     )
 
 

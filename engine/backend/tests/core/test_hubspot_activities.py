@@ -25,6 +25,7 @@ from core.api.app import create_app
 from core.auth import admin
 from core.db.engine import get_session
 from core.hubspot.activities import (
+    CALL_TYPES,
     FOUND_DETAIL,
     LANDED_DETAIL,
     LOOK_GAP_SECONDS,
@@ -1341,3 +1342,24 @@ async def test_only_an_admin_may_read_the_write_log_or_apply_a_write(
         log = await desk.get(WRITES)
     assert log.status_code == 200
     assert [entry["id"] for entry in log.json()] == [str(out.id)]
+
+
+# --- The call type (PLAN-V25 T3-1) ----------------------------------------------------------------
+
+
+@db
+async def test_the_call_carries_its_call_type(session: AsyncSession) -> None:
+    fake = contour()
+    await add_owners(session)
+    call = CallIn(at=AT, title="Call with Jo Sample", body="", call_type="Follow Up Call")
+    out = await preview_activity(session, fake, only(call=call))
+    await apply_activity(session, fake, out.id, pause=Waits(), clock=lambda: SENT)
+    (made,) = fake.call_log.values()
+    assert made.properties["hs_activity_type"] == "Follow Up Call"
+
+
+def test_a_call_type_hubspot_doesnt_list_is_refused() -> None:
+    for kind in CALL_TYPES:
+        assert CallIn(at=AT, title="Call", body="", call_type=kind).call_type == kind
+    with pytest.raises(ValueError, match="call_type must be one of"):
+        CallIn(at=AT, title="Call", body="", call_type="Sales Call")

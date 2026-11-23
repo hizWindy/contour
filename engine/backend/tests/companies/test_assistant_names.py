@@ -30,7 +30,7 @@ from apps.companies.tables import LearnedName
 from core.api.deps import settings_dependency
 from core.hubspot.meetings import Meeting, MeetingsStatus
 from core.hubspot.models import HubSpotCall, HubSpotContact, HubSpotDeal, HubSpotOwner
-from tests.companies.helpers import API, add, company
+from tests.companies.helpers import API, add, company, office
 from tests.companies.test_assistant_api import account
 from tests.companies.test_call_notes_api import notes_settings
 from tests.companies.test_call_notes_history import a_note
@@ -327,3 +327,29 @@ async def test_who_may_ask(world: World, settings: dict[str, Any], meetings: Mee
     assert (no_feature.status_code, no_feature.json()["code"]) == (403, "feature_not_allowed")
     assert allowed.status_code == 200 and texts(allowed.json()["names"]) == list(FIXED_WORDS)
     assert (signed_out.status_code, signed_out.json()["code"]) == (401, "auth_required")
+
+
+# --- The word list's places (PLAN-V25 T4-1) -------------------------------------------------------
+
+
+async def test_the_places_come_from_our_copy_the_most_common_first(
+    world: World, settings: dict[str, Any], meetings: Meetings
+) -> None:
+    await a_copy(world)
+    await add(
+        world,
+        company("401", "Sample Prahran One", city="Prahran"),
+        company("402", "Sample Prahran Two", city="prahran "),  # the same place, once
+        company("403", "Sample Odd", city="Level 3, 10 Sample St"),  # not a place: left out
+        company("404", "Sample Postcode", city="3181"),
+        office("401", "Head office", city="Parramatta"),
+    )
+    settings["name_hints_max"] = 5
+    async with signed_in(world, "mia", owner="o1") as (client, _):
+        response = await client.get(NAMES)
+    assert response.status_code == 200, response.text
+    places = response.json()["places"]
+    assert places.index("Prahran") < places.index("Parramatta")  # two companies, then one
+    assert len({place.casefold() for place in places}) == len(places)
+    assert not any(char.isdigit() for place in places for char in place)
+    assert len(response.json()["names"]) == 5  # the places don't take the names' room

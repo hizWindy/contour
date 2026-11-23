@@ -54,6 +54,12 @@
  *   second one" or a name from its list picks it, in the code, with no AI (`choose.ts`). A person's
  *   or a teammate's name that isn't there changes nothing, and the card says so.
  *
+ * - **Smart choices** (PLAN-V25 T1-2, T2-2): each unclear company, person, teammate or meeting
+ *   shows in the suggestion part (`suggest.tsx`). Enter takes a suggestion where a send waits on it
+ *   (`suggestionIn`), and the keys 1, 2 and 3 pick from the first open question (`pickByKey`). A
+ *   call saved with a sure company that the rep changes or undoes is removed and saved again with
+ *   the new one, since the server takes a call's company once (`changeCallCompany`, TBC).
+ *
  * Its code loads with the voice bar's, late, never in the first visit (`host.tsx`).
  */
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
@@ -74,7 +80,7 @@ import {
 } from 'react'
 import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
-import { isAbort, toApiProblem } from '@/api/client'
+import { isAbort, newIdempotencyKey, toApiProblem } from '@/api/client'
 import { readCommand } from '@/api/hooks/assistant'
 import type { SignIn } from '@/api/hooks/auth'
 import { useCallNoteOptions, voiceToolOf } from '@/api/hooks/call-note-counts'
@@ -96,7 +102,13 @@ import type {
   CallNoteOut,
   CallNotePatch,
 } from '@/api/types'
-import { needsCompanySendWords, NOT_CHANGED } from '@/apps/companies/call-logs/words'
+import {
+  callTypeOf,
+  DEFAULT_CALL_TYPE,
+  needsCompanySendWords,
+  NOT_CHANGED,
+  type CallType,
+} from '@/apps/companies/call-logs/words'
 import type { MicEnv } from '@/apps/companies/call-notes/mic/session'
 import {
   browserFacts,
@@ -146,6 +158,8 @@ import {
   draftOf,
   emailBodyOf,
   emptyDraftOf,
+  isPersonFirst,
+  isSuggested,
   missingOf,
   noteBodyOf,
   pickCompany,
@@ -154,15 +168,14 @@ import {
   type Box,
   type CallDraft,
   type CardDraft,
-  type Company,
   type CompanyFind,
 } from './draft'
-import { pickByVoice } from './choose'
-import type { CompanyVoice } from './company'
+import { pickByVoice, yesOrNo } from './choose'
+import type { CompanyVoice, ShownChoice } from './company'
 import { useCompanyFind } from './find'
 import { keepCardDraft } from './drafts'
 import { heldPatchOf, keepUntilSorted } from './held'
-import { inTextBox, typingKey } from './keys'
+import { inTextBox, pickByKey, suggestionIn, typingKey } from './keys'
 import { startHold } from './hold'
 import { CallLayout, EmailLayout, PreReadLayout, TaskLayout, type EditCall } from './layouts'
 import { cardLinesOf, unsureLeft } from './lines'
@@ -176,6 +189,7 @@ import {
   previewEmail,
   previewTask,
   readNote,
+  removeNote,
   saveNote,
   sendDraft,
   type SendTools,
@@ -196,6 +210,7 @@ import {
   PICK_ONE,
   SAY_COMPANY,
   SAY_SEND_IT,
+  SAY_YES,
   SEND,
   SEND_OR_KEEP,
   SENT,
@@ -321,6 +336,7 @@ function PreReadCard({
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
+  const root = useRef<HTMLDivElement>(null)
   const company =
     command.company?.found?.name ?? command.company?.heard ?? command.meeting?.heard ?? ''
   const go = (to: string): void => {
@@ -357,14 +373,26 @@ function PreReadCard({
       onOpenChange={(next) => {
         if (!next) onClose()
       }}
+      onKeyDown={(event) => {
+        // The keys 1, 2 and 3 pick a meeting (PLAN-V25 choice 6).
+        const plain = !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey
+        if (plain && pickByKey(root.current, event.key)) event.preventDefault()
+      }}
     >
-      <div data-slot="review-card" data-action="pre_read" className="flex flex-col gap-4 p-5">
+      <div
+        ref={root}
+        data-slot="review-card"
+        data-action="pre_read"
+        className="flex flex-col gap-4 p-5"
+      >
         <MicSheetTitle className="text-body">{command.read_back || WHICH_MEETING}</MicSheetTitle>
         {command.unsure ? (
           <p className="text-ui text-pretty text-muted-foreground">{command.unsure}</p>
         ) : null}
         <PreReadLayout
           meetings={command.meeting?.choices ?? []}
+          level={command.meeting?.level ?? null}
+          reason={command.meeting?.reason ?? null}
           company={company}
           onPick={pick}
           onNew={() => {
@@ -462,17 +490,17 @@ function DraftCard({
   // --- A call: saved at once, then read until sorted, then previewed -----------------------------
   // Its company found as the card opens: saved once its person is picked, as before. Not found,
   // or "Which Sample?": saved at once with the name as heard, as "Needs a company" (PLAN-V24 T3-2,
-  // choice 17), and the company picked later goes as a PATCH (below).
-  const [heardFirst] = useState(
-    () => first.action === 'log_call' && first.noteId === null && first.company.found === null,
-  )
+  // choice 17), and the company picked later goes as a PATCH (below). So is a call whose sure
+  // company the rep undid (PLAN-V25 T1-2): its first save went, and it waits for a company again.
   const noteBody =
     draft.action === 'log_call' && draft.noteId === null
-      ? heardFirst && draft.company.found === null
+      ? draft.company.found === null
         ? heardNoteBodyOf(draft)
         : noteBodyOf(draft)
       : null
-  const noteAsk = noteBody ? JSON.stringify(noteBody) : null
+  // The call type goes with the save as it is when the save starts (PLAN-V25 T3-1). A tap after
+  // that goes as a change (`changeCall`), so it never asks for a second save with the same key.
+  const noteAsk = noteBody ? JSON.stringify({ ...noteBody, call_type: undefined }) : null
   const { key } = draft
   /** The newest save, on its way or done: Later waits for it. */
   const saving = useRef<Promise<CallNoteOut> | null>(null)
@@ -486,7 +514,13 @@ function DraftCard({
     saving.current = saved
     return saved
   }
-  const startSave = useEffectEvent(saveCall)
+  const startSave = useEffectEvent((body: CallNoteIn) =>
+    saveCall(
+      draft.action === 'log_call'
+        ? { ...body, call_type: draft.callType ?? DEFAULT_CALL_TYPE }
+        : body,
+    ),
+  )
   useEffect(() => {
     if (noteAsk === null) return undefined
     let live = true
@@ -614,8 +648,8 @@ function DraftCard({
     pickedKey,
     draft.action === 'log_call',
   )
-  const shownCompanies = useRef<readonly Company[] | null>(null)
-  const onShown = useCallback((shown: readonly Company[] | null) => {
+  const shownCompanies = useRef<readonly ShownChoice[] | null>(null)
+  const onShown = useCallback((shown: readonly ShownChoice[] | null) => {
     shownCompanies.current = shown
   }, [])
   const companyVoice = useMemo<CompanyVoice>(
@@ -626,6 +660,54 @@ function DraftCard({
   const [pickProblem, setPickProblem] = useState<string | null>(null)
   /** Send was tried on a call that needs a company: the card says why (choice 18). */
   const [sendWhy, setSendWhy] = useState(false)
+
+  /**
+   * The company part changed by its level (PLAN-V25 T1-2): a suggestion turned down, or a sure
+   * company changed or undone. A call was saved with the company used at once, and the server
+   * takes a call's company once (409 `company_set`): so that call is removed, and saved again with
+   * the new company and a new key, as a new call (its sort runs again). Undone, it waits for a
+   * company; Later still keeps it, as "Needs a company". The person goes: they were found at the
+   * old company. TBC: a PATCH of the company would keep the call's edits (backend).
+   */
+  const changeCallCompany = (next: CompanyFind): void => {
+    const now = latest.current.draft
+    if (now.action !== 'log_call') return
+    const was = now.company.found
+    if (was === null || was.key === next.found?.key) {
+      setDraft({ ...now, company: next, edited: true })
+      return
+    }
+    const old = saving.current
+    saving.current = null
+    setSaveProblem(null)
+    setDraft({
+      ...now,
+      company: next,
+      person: { ...now.person, found: null, choices: [], level: null, reason: null },
+      key: newIdempotencyKey(),
+      noteId: null,
+      edited: true,
+    })
+    const remove = (id: string): void => {
+      removeNote(id).then(() => {
+        client.removeQueries({ queryKey: queryKeys.companies.callNote(id) })
+        markCountsOld(client)
+        void refreshCallNoteLists(client)
+      }, toastProblem)
+    }
+    if (old) {
+      old.then(
+        (saved) => {
+          remove(saved.id)
+        },
+        // Never saved: nothing to remove.
+        () => undefined,
+      )
+    } else if (now.noteId) {
+      // Saved before the card opened (a quick log's Undo, M1 review): it goes too.
+      remove(now.noteId)
+    }
+  }
 
   /** A change to a call by voice, on the server. The read-back follows it. */
   const sendCallPatch = (id: string, patch: CallNotePatch): void => {
@@ -854,6 +936,12 @@ function DraftCard({
     const box = missingOf(now, day) ?? (latest.current.teammate ? 'for-whom' : null)
     if (box) {
       setChecked(true)
+      // Enter with a suggestion where the send waits takes it (PLAN-V25 choice 6): "Use it (Enter)".
+      const use = how === 'key' ? suggestionIn(card.current, box) : null
+      if (use) {
+        use.click()
+        return false
+      }
       // A call saved before its company never goes to HubSpot: the card says why (choice 18).
       if (box === 'company' && latest.current.note?.status === 'needs_company') setSendWhy(true)
       focusBox(box)
@@ -942,6 +1030,19 @@ function DraftCard({
   }
 
   /**
+   * "Yes" or "no" to a question the card asks with both (PLAN-V25 T3-2): the follow-up nudge's
+   * "Add it" or "No", a subject's "Use it" or "Type it". Null: no such question, or other words.
+   */
+  const answerAsk = (words: string): CardTook | null => {
+    const ask = card.current?.querySelector('[data-slot=ask]')
+    const said = ask ? yesOrNo(words) : null
+    const button = said ? ask?.querySelector<HTMLButtonElement>(`[data-ask="${said}"]`) : null
+    if (!button) return null
+    button.click()
+    return { line: null }
+  }
+
+  /**
    * The card's question answered by voice, in the code, with no AI (T2-4): "the second one", or a
    * name from its list. While the card waits on its company, the list is the search list on
    * screen, and a name that isn't there is searched (PLAN-V24 choice 19). Null: none of these.
@@ -950,7 +1051,7 @@ function DraftCard({
     // The one company the find asks about takes "yes" too (the PLAN-V24 browser check).
     const asksOne = said?.find.kind === 'confirm'
     const pick = pickByVoice(latest.current.draft, words, shownCompanies.current, asksOne)
-    if (pick === null) return null
+    if (pick === null) return answerAsk(words)
     switch (pick.kind) {
       case 'picked': {
         // That one goes as the find's own pick, with its HubSpot line.
@@ -1058,10 +1159,17 @@ function DraftCard({
    */
   const changeCall = (change: AssistantChange): 'made' | 'waits' | null => {
     const { note: saved, outcomes } = latest.current
+    if (change.box === 'call_type') {
+      // The call type shows at once (PLAN-V25 T3-1), and goes to the server as any change does.
+      const type = callTypeOf(change.value)
+      if (type === null) return null
+      setDraft((now) => (now.action === 'log_call' ? { ...now, callType: type } : now))
+    }
     if (
       saved &&
       saved.status !== 'sorting' &&
-      (saved.status !== 'needs_company' || change.box === 'outcome')
+      // Before its company, a call takes its outcome and its call type only (PLAN-V24, V25).
+      (saved.status !== 'needs_company' || change.box === 'outcome' || change.box === 'call_type')
     ) {
       const patch = callPatchOf(saved, change, outcomes)
       if (!patch) return null
@@ -1101,6 +1209,11 @@ function DraftCard({
         })
         void refreshCallNoteLists(client)
       })
+  }
+
+  /** A call type tapped (PLAN-V25 T3-1): as "make it a follow-up call" said. */
+  const changeCallType = (type: CallType): void => {
+    changeCall({ box: 'call_type', value: type, day: null })
   }
 
   /** A call box's own Esc, where it is reached: the focus goes to Send. */
@@ -1269,6 +1382,17 @@ function DraftCard({
       return
     }
     const typing = typingKey(event.nativeEvent)
+    // The keys 1, 2 and 3 pick from the first question still open (PLAN-V25 choice 6).
+    if (
+      !typing &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      pickByKey(card.current, event.key)
+    ) {
+      event.preventDefault()
+      return
+    }
     if (event.key === 'Enter') {
       const withCtrl = event.ctrlKey || event.metaKey
       // In a box, Enter adds a line, or does the box's own job (Add someone).
@@ -1359,8 +1483,16 @@ function DraftCard({
   }
   // What to say to the card before any words: its company while it waits on one (PLAN-V24 T3-2),
   // else "send it".
-  const pillHint =
-    draft.action !== 'email' && draft.company.found === null ? SAY_COMPANY : SAY_SEND_IT
+  const suggested =
+    draft.action !== 'email' &&
+    draft.company.found === null &&
+    (isSuggested(draft.company) ||
+      (draft.action === 'log_call' && isPersonFirst(draft) && isSuggested(draft.person)))
+  const pillHint = suggested
+    ? SAY_YES
+    : draft.action !== 'email' && draft.company.found === null
+      ? SAY_COMPANY
+      : SAY_SEND_IT
 
   // A call is put off, not cancelled: it waits in Call logs (PLAN-V23 T4-2).
   const putOff = draft.action === 'log_call' ? LATER : CANCEL
@@ -1385,6 +1517,8 @@ function DraftCard({
           onLeaveBox={leaveBox}
           previewMs={t.preview}
           voice={companyVoice}
+          onCompany={changeCallCompany}
+          onCallType={changeCallType}
         />
       )
       break

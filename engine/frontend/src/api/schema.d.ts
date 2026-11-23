@@ -2748,6 +2748,35 @@ export interface components {
             value: string;
         };
         /**
+         * AssistantChoice
+         * @description One of several companies that match (PLAN-V25 T1-1).
+         */
+        AssistantChoice: {
+            /** City */
+            city: string | null;
+            /**
+             * Detail
+             * @description The one detail that tells it apart from the other choices: its city, its owner ('Owner: Sam Sample') or its last call ('Last call 12 Nov')
+             */
+            detail?: string | null;
+            /** Industry */
+            industry: string | null;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /**
+             * Reason
+             * @description Its strongest signal in plain words, like 'Yours.' or 'Open deal.' None: none
+             */
+            reason?: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "hubspot" | "lead";
+        };
+        /**
          * AssistantCommand
          * @description What a command would do. Nothing is written or sent: the review card does that.
          */
@@ -2757,10 +2786,20 @@ export interface components {
              * @enum {string}
              */
             action: "pre_read" | "log_call" | "task" | "email" | "open" | "change" | "send" | "cancel" | "unknown" | "unclear";
+            /**
+             * Call Type
+             * @description For a call: HubSpot's call type, Prospecting Call unless the command words said another, like 'log a follow-up call' (PLAN-V25 T3-1). None for other actions
+             */
+            call_type?: ("Prospecting Call" | "Follow Up Call" | "Agent/Networking Phone Call") | null;
             change: components["schemas"]["AssistantChange"] | null;
             /** @description For a pre-read, a call, a task, a company page, or an email that names one */
             company: components["schemas"]["AssistantCompany"] | null;
             email: components["schemas"]["AssistantEmail"] | null;
+            /**
+             * Follow Up Day
+             * @description For a call: the day a follow-up nudge suggests ('No follow-up yet. Add one for Monday?'), the next working day (PLAN-V25 choice 14, TBC). The card shows the nudge only for a Connected call with no follow-up
+             */
+            follow_up_day?: string | null;
             /** @description For a pre-read */
             meeting: components["schemas"]["AssistantMeeting"] | null;
             /**
@@ -2769,8 +2808,18 @@ export interface components {
              */
             note_text: string | null;
             open: components["schemas"]["AssistantOpen"] | null;
+            /**
+             * Outcome
+             * @description For a call that is only an outcome, like 'No answer, Jo Sample': that outcome. None when the words say more, or no outcome (the sort reads it from the note)
+             */
+            outcome?: ("Connected" | "No answer" | "Left voicemail" | "Left live message" | "Busy" | "Wrong number") | null;
             /** @description For a call */
             person: components["schemas"]["AssistantPerson"] | null;
+            /**
+             * Quick
+             * @description True for a quick log (PLAN-V25 T3-3): only No answer, Left voicemail, Busy or Wrong number, with a sure company and a sure person, and nothing unclear. The card may skip itself: the hold's toast says what goes, and Undo opens the card
+             */
+            quick?: boolean;
             /**
              * Read Back
              * @description The card's first line, like 'Log a call with James Sample at Sample Logistics. Follow-up task on Fri 21 Nov.' For `unclear`, the words as heard, for the bar's text line
@@ -2787,6 +2836,8 @@ export interface components {
         AssistantCommandIn: {
             /** @description The open review card, if any. Then the only actions are change, send and cancel, and anything else comes back as unknown */
             card?: components["schemas"]["AssistantCardIn"] | null;
+            /** @description The conversation's last turn, if any (PLAN-V25 T5-1): 'same company', 'her' and 'and Jo too' use it. Left out when the conversation is new */
+            last_turn?: components["schemas"]["AssistantLastTurn"] | null;
             /** @description What is on screen, if anything */
             on_page?: components["schemas"]["AssistantOnPage"] | null;
             /**
@@ -2811,10 +2862,10 @@ export interface components {
             can_add?: boolean;
             /**
              * Choices
-             * @description Two or more that match, best first
+             * @description Two or more that match, best first, at most 3. For likely, the first is the suggestion
              */
-            choices: components["schemas"]["CompanyHit"][];
-            /** @description The one company that matches */
+            choices: components["schemas"]["AssistantChoice"][];
+            /** @description The company to use: the one that matches, or the sure one of several */
             found: components["schemas"]["CompanyHit"] | null;
             /**
              * From Hubspot
@@ -2831,6 +2882,16 @@ export interface components {
              * @description The company as heard. Empty when the command named none
              */
             heard: string;
+            /**
+             * Level
+             * @description How sure code is (PLAN-V25): sure (used at once, with Change and Undo), likely (the first choice is suggested, with its reason) or unsure (choose). None when nothing was found
+             */
+            level?: ("sure" | "likely" | "unsure") | null;
+            /**
+             * Reason
+             * @description Why, in a few plain words, like 'You meet them at 2 pm.': for sure, the one found; for likely, the first choice. None when there is nothing to say
+             */
+            reason?: string | null;
         };
         /** AssistantCompanyAdded */
         AssistantCompanyAdded: {
@@ -2965,6 +3026,44 @@ export interface components {
              */
             subject: string;
         };
+        /**
+         * AssistantLastTurn
+         * @description The conversation's last turn (PLAN-V25 T5-1, choice 21), as the bar keeps it until the
+         *     conversation ends: its company and person, found and as heard. Code uses the found ones for
+         *     "same company", "her" or "and Jo too". Claude gets only the names as heard.
+         */
+        AssistantLastTurn: {
+            /**
+             * Action
+             * @description What the last card was for
+             */
+            action?: ("pre_read" | "log_call" | "task" | "email") | null;
+            /**
+             * Company Heard
+             * @description The company's name as heard last turn. Claude gets it, scrubbed
+             * @default
+             * @example Sample Logistics
+             */
+            company_heard: string;
+            /**
+             * Company Key
+             * @description The last turn's company: a HubSpot id, or lead:<id>. Used only when this person may still open it
+             * @example 201
+             */
+            company_key?: string | null;
+            /**
+             * Person Heard
+             * @description The person's name as heard last turn. Claude gets it, scrubbed
+             * @default
+             * @example Jo Sample
+             */
+            person_heard: string;
+            /**
+             * Person Id
+             * @description The last turn's client person: HubSpot's contact id
+             */
+            person_id?: string | null;
+        };
         /** AssistantMeeting */
         AssistantMeeting: {
             /**
@@ -2984,6 +3083,16 @@ export interface components {
              * @description The words that named the meeting, like Thursday's meeting. Empty if none
              */
             heard: string;
+            /**
+             * Level
+             * @description How sure code is (PLAN-V25): sure (used at once, with Change and Undo), likely (the first choice is suggested, with its reason) or unsure (choose). None when nothing was found
+             */
+            level?: ("sure" | "likely" | "unsure") | null;
+            /**
+             * Reason
+             * @description Why, in a few plain words, like 'You meet them at 2 pm.': for sure, the one found; for likely, the first choice. None when there is nothing to say
+             */
+            reason?: string | null;
         };
         /** AssistantMeetingHit */
         AssistantMeetingHit: {
@@ -3036,6 +3145,11 @@ export interface components {
              * @description At most the Settings page's number (50 to start), most likely first, each name once
              */
             names: components["schemas"]["AssistantName"][];
+            /**
+             * Places
+             * @description The word list's places (PLAN-V25 T4-1): the cities and suburbs of the companies and offices in our copy, the most common first, at most 200, each once. For the name fix, and Chrome's hints when they are on. The office words are the website's own
+             */
+            places?: string[];
         };
         /**
          * AssistantOnPage
@@ -3081,9 +3195,9 @@ export interface components {
         AssistantPerson: {
             /**
              * Choices
-             * @description Two or more at the company who match, best first, each with a job title
+             * @description Two or more at the company who match, best first, each with a job title, at most 3. Found without the company (PLAN-V25 T2-1), one or more, each with their company: taking one fills the company too
              */
-            choices: components["schemas"]["PrepPerson"][];
+            choices: components["schemas"]["AssistantPersonHit"][];
             /** @description The one person at the company who matches */
             found: components["schemas"]["PrepPerson"] | null;
             /**
@@ -3091,6 +3205,43 @@ export interface components {
              * @description The client person as heard, like James. Empty if none
              */
             heard: string;
+            /**
+             * Level
+             * @description How sure code is (PLAN-V25): sure (used at once, with Change and Undo), likely (the first choice is suggested, with its reason) or unsure (choose). None when nothing was found
+             */
+            level?: ("sure" | "likely" | "unsure") | null;
+            /**
+             * Reason
+             * @description Why, in a few plain words, like 'You meet them at 2 pm.': for sure, the one found; for likely, the first choice. None when there is nothing to say
+             */
+            reason?: string | null;
+        };
+        /**
+         * AssistantPersonHit
+         * @description A client person as a choice (PLAN-V25 T2-1). Found without the company, they bring it.
+         */
+        AssistantPersonHit: {
+            /**
+             * Company Key
+             * @description Their company (a HubSpot id) when they were found without it. None when the company was already found
+             */
+            company_key?: string | null;
+            /**
+             * Company Name
+             * @description That company's name
+             */
+            company_name?: string | null;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Reason
+             * @description Why they come first, like 'You called them on Tuesday.' None: nothing to say
+             */
+            reason?: string | null;
+            /** Title */
+            title: string | null;
         };
         /**
          * AssistantRecipient
@@ -3115,6 +3266,11 @@ export interface components {
              */
             heard: string;
             /**
+             * Level
+             * @description How sure code is (PLAN-V25): sure (used at once, with Change and Undo), likely (the first choice is suggested, with its reason) or unsure (choose). None when nothing was found
+             */
+            level?: ("sure" | "likely" | "unsure") | null;
+            /**
              * Problem
              * @description Why this one can't be sent to yet, in plain words: not on the team list, no Contour account, or not a Contour address. None when it can
              */
@@ -3128,6 +3284,17 @@ export interface components {
              * @description A Melbourne working day, today or later
              */
             due: string;
+            /**
+             * Due Choices
+             * @description For likely: the suggested day first, then 'In a week' (a working day). 'Pick a day' is the card's own. Empty for sure
+             */
+            due_choices?: string[];
+            /**
+             * Due Level
+             * @description sure when the day was said and read. likely when it wasn't said or couldn't be read: `due` is then a suggestion, the next working day (PLAN-V25 choice 13, TBC)
+             * @enum {string}
+             */
+            due_level?: "sure" | "likely" | "unsure";
             /**
              * Due Words
              * @description When, in the rep's own words. Empty when none was said
@@ -3147,9 +3314,14 @@ export interface components {
             owner_id: string | null;
             /**
              * Subject
-             * @description What to do, up to 200 characters. Empty when none was said
+             * @description What to do, up to 200 characters. When none was said, a suggestion (`subject_suggested`), like 'Follow up with Sample Logistics Pty Ltd'
              */
             subject: string;
+            /**
+             * Subject Suggested
+             * @description True when no subject was said and `subject` is a suggestion: the card asks 'Use it' or 'Type it'
+             */
+            subject_suggested?: boolean;
         };
         /**
          * AssistantTaskIn
@@ -3231,6 +3403,12 @@ export interface components {
         };
         /** CallNoteCall */
         CallNoteCall: {
+            /**
+             * Call Type
+             * @description HubSpot's call type it goes with (PLAN-V25): Prospecting Call unless the rep picked another
+             * @enum {string}
+             */
+            call_type?: "Prospecting Call" | "Follow Up Call" | "Agent/Networking Phone Call";
             /**
              * In Hubspot
              * @description True once it is in HubSpot: it can't change here any more
@@ -3351,6 +3529,11 @@ export interface components {
         /** CallNoteIn */
         CallNoteIn: {
             /**
+             * Call Type
+             * @description HubSpot's call type (PLAN-V25). Left out: Prospecting Call. Another value is refused (422)
+             */
+            call_type?: ("Prospecting Call" | "Follow Up Call" | "Agent/Networking Phone Call") | null;
+            /**
              * Called At
              * Format: date-time
              * @description When the call was, with its time zone
@@ -3400,6 +3583,11 @@ export interface components {
              * @description True when Claude sorts a note: its switch is on and Claude is set up. False: the rep picks the outcome and adds follow-ups by hand
              */
             ai_enabled: boolean;
+            /**
+             * Call Types
+             * @description HubSpot's call types, the default (Prospecting Call) first (PLAN-V25)
+             */
+            call_types?: ("Prospecting Call" | "Follow Up Call" | "Agent/Networking Phone Call")[];
             /**
              * Enabled
              * @description True when Log call and Call logs show
@@ -3545,11 +3733,16 @@ export interface components {
          *     a call that needs one (PLAN-V24), and `teach` says whether that pick teaches the mic.
          */
         CallNotePatch: {
+            /**
+             * Call Type
+             * @description HubSpot's call type (PLAN-V25). Sent as null: back to Prospecting Call. Another value is refused (422)
+             */
+            call_type?: ("Prospecting Call" | "Follow Up Call" | "Agent/Networking Phone Call") | null;
             /** Changes */
             changes?: components["schemas"]["CallNoteChangeIn"][] | null;
             /**
              * Company Key
-             * @description The company, for a call saved before it was found (`needs_company`): a HubSpot company id, or lead:<id>. Taken only then: 409 `company_set` for a call that has its company. Only `contact_id`, `outcome` and `teach` may come with it. Once it is set, the call is sorted as a new call is, then waits in To confirm. Left out or None: the company stays as it is
+             * @description The company, for a call saved before it was found (`needs_company`): a HubSpot company id, or lead:<id>. Taken only then: 409 `company_set` for a call that has its company. Only `contact_id`, `outcome`, `call_type` and `teach` may come with it. Once it is set, the call is sorted as a new call is, then waits in To confirm. Left out or None: the company stays as it is
              */
             company_key?: string | null;
             /**

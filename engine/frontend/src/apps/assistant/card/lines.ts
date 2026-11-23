@@ -5,12 +5,23 @@
  * HubSpot. Add it, or pick another company."), and each "Which Sample?". The paragraph leaves
  * those out. Plain code, so the tests prove each case.
  */
-import { isPending, type CardDraft, type CompanyFind } from './draft'
+import {
+  isPending,
+  isPersonFirst,
+  isPersonNowhere,
+  isSuggested,
+  type CardDraft,
+  type CompanyFind,
+  type PersonFind,
+} from './draft'
 import {
   ADDED_TO_HUBSPOT,
   isntInHubspotWords,
+  likelyWords,
   newInHubspotWords,
   noCompanyWords,
+  personAtWords,
+  personNowhereWords,
   WHICH_COMPANY,
   WHICH_PERSON,
   WHICH_TEAMMATE,
@@ -29,8 +40,23 @@ export function companyLinesOf(company: CompanyFind): string[] {
     const note = foundNote(company, company.found.name)
     return note ? [note] : []
   }
+  // A suggestion (PLAN-V25 T1-2): "Sample Logistics Pty Ltd? You meet them at 2 pm."
+  const [first] = company.choices
+  if (isSuggested(company) && first) return [likelyWords(first.name, company.reason)]
   if (isPending(company)) return [whichWords(company.heard, WHICH_COMPANY)]
   return [company.canAdd ? isntInHubspotWords(company.heard) : noCompanyWords(company.heard)]
+}
+
+/**
+ * The lines the person part says itself: the suggestion ("Jo Sample at Northwind Sample Pty Ltd?
+ * You called them on Monday.", PLAN-V25 T2-2), or "Which Jo Sample?".
+ */
+export function personLinesOf(person: PersonFind): string[] {
+  const [first] = person.choices
+  if (isSuggested(person) && first) {
+    return [likelyWords(personAtWords(first.name, first.company_name), person.reason)]
+  }
+  return isPending(person) ? [whichWords(person.heard, WHICH_PERSON)] : []
 }
 
 /** The lines the card's own parts say. */
@@ -40,10 +66,13 @@ export function cardLinesOf(draft: CardDraft): string[] {
       one.found === null && one.choices.length > 0 ? [whichWords(one.heard, WHICH_TEAMMATE)] : [],
     )
   }
-  const lines = companyLinesOf(draft.company)
-  if (draft.action === 'log_call' && isPending(draft.person)) {
-    lines.push(whichWords(draft.person.heard, WHICH_PERSON))
+  // A person named with no company: their part says it (PLAN-V25 T2-2, choice 11).
+  if (draft.action === 'log_call' && isPersonNowhere(draft)) {
+    return [personNowhereWords(draft.person.heard)]
   }
+  const lines =
+    draft.action === 'log_call' && isPersonFirst(draft) ? [] : companyLinesOf(draft.company)
+  if (draft.action === 'log_call') lines.push(...personLinesOf(draft.person))
   const forWhom = draft.action === 'task' ? draft.forWhom : null
   if (forWhom?.found === null && forWhom.choices.length > 0) {
     lines.push(whichWords(forWhom.heard, WHICH_TEAMMATE))

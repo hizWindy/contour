@@ -8,7 +8,9 @@ import { namesQueryOptions } from '@/api/hooks/assistant-names'
 import { queryKeys } from '@/api/query'
 import type { AssistantNames } from '@/api/types'
 import { createTestQueryClient } from '@/test/render'
-import { cachedNames, firstCompanyOf, fixNamesOf, hintsOf, namesOnPage } from './names'
+import { cachedNames, firstCompanyOf, fixNamesOf, HINT_PLACES, hintsOf, namesOnPage } from './names'
+
+const OFFICE_ONE_WORD = ['fitout', 'NLA', 'CBD', 'tenancy', 'sqm']
 
 describe('namesOnPage', () => {
   it('gives the company on screen and its people, as the page loaded them', () => {
@@ -47,13 +49,16 @@ const LIST: AssistantNames = {
 
 describe('the hint list (PLAN-V23 T1-5)', () => {
   it('the fix: the names on screen first, then the list’s names, each once, and no fixed word', () => {
+    // The list's own fixed words stay out; the word list's one-word office words come last
+    // (PLAN-V25 T4-1).
     expect(fixNamesOf(['Northwind Pty Ltd', 'jo sample'], LIST)).toEqual([
       'Northwind Pty Ltd',
       'jo sample',
       'Vitera',
       'Sam Sample',
+      ...OFFICE_ONE_WORD,
     ])
-    expect(fixNamesOf([], undefined)).toEqual([])
+    expect(fixNamesOf([], undefined)).toEqual(OFFICE_ONE_WORD)
   })
 
   it('the speech service: the names on screen, then the whole list, fixed words too', () => {
@@ -62,8 +67,25 @@ describe('the hint list (PLAN-V23 T1-5)', () => {
       'Vitera',
       'Jo Sample',
       'Sam Sample',
-      'fitout',
+      'fitout', // once, though the word list has it too
+      'NLA',
+      'CBD',
+      'tenancy',
+      'sqm',
+      'make good',
     ])
+  })
+
+  it('the word list: the places from our copy go to the fix, and the first 50 to the hints', () => {
+    const places = Array.from({ length: 60 }, (_, index) => `Sampleton ${index}`)
+    const list: AssistantNames = { ...LIST, places: ['Prahran', 'Parramatta', ...places] }
+    const fix = fixNamesOf([], list)
+    expect(fix).toContain('Prahran')
+    expect(fix).toContain('Sampleton 59')
+    expect(fix).not.toContain('make good') // two words: never a name to fix to
+    const hints = hintsOf([], list)
+    expect(hints).toContain('Prahran')
+    expect(hints.filter((hint) => hint.startsWith('Sampleton'))).toHaveLength(HINT_PLACES - 2)
   })
 
   it('"Try saying" names the list’s first company, or none', () => {

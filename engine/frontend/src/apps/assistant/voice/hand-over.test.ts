@@ -113,6 +113,40 @@ describe('handOver', () => {
     }
   })
 
+  it('a quick log skips the card: the bar’s quick log starts, and the bar closes (PLAN-V25 T3-3)', () => {
+    const quickLog = vi.fn(() => true)
+    const shown = command({ quick: true, outcome: 'No answer' })
+    const heard = {
+      kind: 'command',
+      command: shown,
+      words: 'no answer, Jo',
+      source: 'mic',
+    } as const
+    expect(handOver(heard, { go: vi.fn(), quickLog })).toEqual({ kind: 'close' })
+    expect(quickLog).toHaveBeenCalledWith(heard)
+    expect(openedCard()).toBeNull()
+  })
+
+  it('a quick log that didn’t start, or a call not judged quick, opens the card as before', () => {
+    const shown = command({ quick: true, outcome: 'No answer' })
+    const after = handOver(
+      { kind: 'command', command: shown, words: 'no answer, Jo', source: 'mic' },
+      { go: vi.fn(), quickLog: () => false },
+    )
+    expect(after).toEqual({ kind: 'close' })
+    expect(openedCard()).toMatchObject({ kind: 'command', command: shown })
+    closeCard()
+    const quickLog = vi.fn(() => true)
+    const card = handOver(
+      { kind: 'command', command: command({ quick: false }), words: 'log a call', source: 'mic' },
+      { go: vi.fn(), quickLog },
+    )
+    expect(card).toEqual({ kind: 'close' })
+    expect(quickLog).not.toHaveBeenCalled()
+    expect(openedCard()).toMatchObject({ kind: 'command' })
+    closeCard()
+  })
+
   it('a pre-read whose meeting has one opens its page, with no card (choice 24)', () => {
     const go = vi.fn<(to: string) => void>()
     const after = handOver(

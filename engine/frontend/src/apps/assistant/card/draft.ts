@@ -20,8 +20,10 @@
 import { newIdempotencyKey } from '@/api/client'
 import type {
   AssistantChange,
+  AssistantChoice,
   AssistantCommand,
   AssistantEmailIn,
+  AssistantPersonHit,
   AssistantRecipient,
   AssistantTaskIn,
   CallNoteIn,
@@ -33,6 +35,7 @@ import type {
   TaskKind,
   TeamMember,
 } from '@/api/types'
+import { callTypeOf, DEFAULT_CALL_TYPE, type CallType } from '@/apps/companies/call-logs/words'
 import { dueDateText, readDueDate, type DueDate } from '@/lib/due-date'
 
 /** The actions that open a review card. A pre-read's card is its own page (choice 24). */
@@ -43,15 +46,46 @@ export interface Company {
   name: string
 }
 
+/**
+ * How sure the command step is of what it found (PLAN-V25 choice 1): `sure` is used at once, with
+ * Change and Undo; `likely` suggests the first choice, with its reason; `unsure` asks. Null: nothing
+ * found, or a command from before PLAN-V25, which the card shows as it did.
+ */
+export type Level = NonNullable<NonNullable<AssistantCommand['company']>['level']>
+
+/** One of the companies that match (PLAN-V25 T1-1): its strongest signal, and what tells it apart. */
+export interface CompanyChoice extends Company {
+  /** "Yours.", "Open deal.": why it comes first. */
+  reason?: string | null
+  /** A city, "Owner: Sam Sample" or "Last call 12 Nov". */
+  detail?: string | null
+}
+
+/**
+ * A client person to pick (PLAN-V25 T2-1). Found before their company, they bring it: taking one
+ * fills the company and the person.
+ */
+export type PersonChoice = AssistantPersonHit
+
 /** What the command found: one, two or more to pick from, or none (the words as heard). */
 export interface Find<T> {
   found: T | null
   choices: readonly T[]
   heard: string
+  /** How sure (PLAN-V25). Left out or null: as before PLAN-V25. */
+  level?: Level | null
+  /** Why, in a few plain words: the sure one's, or the suggestion's (the first choice). */
+  reason?: string | null
+}
+
+/** The client person a call was with, as found. */
+export interface PersonFind extends Find<CallNotePerson> {
+  choices: readonly PersonChoice[]
 }
 
 /** The company a call or a task is for, and how it was found (PLAN-V23 T1-5, T1-6). */
 export interface CompanyFind extends Find<Company> {
+  choices: readonly CompanyChoice[]
   /** Our copy didn't have it, and HubSpot's own search found it: the card says so. */
   fromHubspot: boolean
   /** Neither our copy nor HubSpot has it: the card offers "Add to HubSpot". */
@@ -72,6 +106,8 @@ export interface Recipient {
   heard: string
   found: TeamMember | null
   choices: readonly TeamMember[]
+  /** How sure (PLAN-V25): sure, likely (the first choice suggested) or unsure. */
+  level?: Level | null
   address: string | null
   /** Why it can't be sent to yet, in the server's words, or null. */
   problem: string | null
@@ -95,14 +131,26 @@ interface Base {
 export interface CallDraft extends Base {
   action: 'log_call'
   company: CompanyFind
-  person: Find<CallNotePerson>
+  person: PersonFind
   /** The note, word for word as said (choice 16). */
   text: string
   source: CommandSource
   calledAt: string
   /** The note's id, once it is saved (`POST /call-notes`). */
   noteId: string | null
+  /**
+   * HubSpot's call type (PLAN-V25 T3-1, choice 12): the type heard, else Prospecting Call. Left out
+   * in a draft kept before PLAN-V25: Prospecting Call.
+   */
+  callType?: CallType
+  /** The outcome heard, for a call that is only an outcome (T3-3): saved as the rep's own pick. */
+  outcome?: CallOutcome | null
+  /** The day the follow-up nudge offers, the next working day (T3-2, choice 14). */
+  followUpDay?: string | null
 }
+
+/** How a call went, as HubSpot names it. */
+export type CallOutcome = NonNullable<CallNoteIn['outcome']>
 
 export interface TaskDraft extends Base {
   action: 'task'
@@ -117,6 +165,15 @@ export interface TaskDraft extends Base {
   /** For whom. Null: the rep. */
   forWhom: Recipient | null
   body: string
+  /**
+   * `likely`: no day was said, and `due` is a suggestion, the next working day (PLAN-V25 T3-2,
+   * choice 13). The card asks "Due Monday?" until the rep picks or types a day.
+   */
+  dueLevel?: 'sure' | 'likely' | 'unsure' | null
+  /** For likely: the suggested day, then a week after it. */
+  dueChoices?: readonly string[]
+  /** No subject was said: `subject` is a suggestion, and the card asks "Use it" or "Type it". */
+  subjectSuggested?: boolean
 }
 
 export interface EmailDraft extends Base {
@@ -131,7 +188,7 @@ export type CardDraft = CallDraft | TaskDraft | EmailDraft
 
 /** The boxes the card has, by name, as `card.boxes` sends them to the command step. */
 export const BOXES: Readonly<Record<CardAction, readonly string[]>> = {
-  log_call: ['follow-up', 'outcome', 'summary'],
+  log_call: ['follow-up', 'outcome', 'summary', 'call_type'],
   task: ['subject', 'due', 'kind', 'body'],
   email: ['subject', 'body'],
 }
@@ -145,13 +202,26 @@ export const MOST_PEOPLE = 20
 
 // --- From the command ------------------------------------------------------------------------------
 
+/** A choice's detail: the server's, else its industry and city, as the card showed before. */
+function choiceDetail(hit: AssistantChoice): string | null {
+  const detail = hit.detail?.trim()
+  if (detail) return detail
+  return [hit.industry, hit.city].filter(Boolean).join(' · ') || null
+}
+
 function companyOf(command: AssistantCommand): CompanyFind {
   const company = command.company
   const pick = (hit: { key: string; name: string }): Company => ({ key: hit.key, name: hit.name })
   return {
     found: company?.found ? pick(company.found) : null,
-    choices: (company?.choices ?? []).map(pick),
+    choices: (company?.choices ?? []).map((hit) => ({
+      ...pick(hit),
+      reason: hit.reason ?? null,
+      detail: choiceDetail(hit),
+    })),
     heard: company?.heard ?? '',
+    level: company?.level ?? null,
+    reason: company?.reason ?? null,
     fromHubspot: company?.from_hubspot === true,
     canAdd: company?.can_add === true,
     byHand: false,
@@ -164,6 +234,8 @@ export const NO_COMPANY: CompanyFind = {
   found: null,
   choices: [],
   heard: '',
+  level: null,
+  reason: null,
   fromHubspot: false,
   canAdd: false,
   byHand: false,
@@ -183,9 +255,136 @@ export function pickCompany(
     ...company,
     found: picked,
     choices: [],
+    level: null,
+    reason: null,
     byHand: how !== 'choice',
     added: how === 'added',
   }
+}
+
+// --- What the card does with a level (PLAN-V25 T1-2, choices 1 and 4 to 7) -----------------------
+
+/** A suggestion still open: likely, and nothing picked yet. */
+export function isSuggested<T>(find: Find<T>): boolean {
+  return find.found === null && find.choices.length > 0 && find.level === 'likely'
+}
+
+/**
+ * "Not this one": the suggestion is turned down, and the other choices show, with Search. Nothing
+ * is learned from it (PLAN-V25 "Learning", TBC).
+ */
+export function turnDown<F extends Find<unknown>>(find: F): F {
+  return { ...find, choices: find.choices.slice(1), level: 'unsure', reason: null }
+}
+
+/**
+ * A sure company changed for another (Change): used at once, and still sure, so Change and Undo
+ * stay. Picked from the command's own choices it teaches nothing (PLAN-V23).
+ */
+export function changeCompany(
+  company: CompanyFind,
+  picked: Company,
+  how: 'choice' | 'by_hand' | 'added',
+): CompanyFind {
+  return { ...pickCompany(company, picked, how), choices: company.choices, level: 'sure' }
+}
+
+/** Undo of a sure company used at once: the card asks again, with the choices (or Search). */
+export function undoCompany(company: CompanyFind): CompanyFind {
+  return { ...company, found: null, level: 'unsure', reason: null, byHand: false, added: false }
+}
+
+/** A sure company the card used at once: Change and Undo show beside it. */
+export function isSure(company: CompanyFind): boolean {
+  return company.found !== null && company.level === 'sure'
+}
+
+/**
+ * A person found before their company (PLAN-V25 T2-1): no company said or found, and each choice
+ * brings its own. Taking one fills both.
+ */
+export function isPersonFirst(draft: CallDraft): boolean {
+  return (
+    draft.company.found === null &&
+    draft.company.heard.trim() === '' &&
+    draft.person.found === null &&
+    draft.person.choices.some((one) => Boolean(one.company_key))
+  )
+}
+
+/**
+ * A person named with no company, found nowhere (PLAN-V25 choice 11): the card opens its search
+ * for people and companies, with the name heard.
+ */
+export function isPersonNowhere(draft: CallDraft): boolean {
+  return (
+    draft.company.found === null &&
+    draft.company.heard.trim() === '' &&
+    draft.company.choices.length === 0 &&
+    draft.person.heard.trim() !== '' &&
+    draft.person.found === null &&
+    draft.person.choices.length === 0
+  )
+}
+
+// --- The gaps the card fills (PLAN-V25 T3-2, choices 13 and 14; TBC with Levi) --------------------
+
+/** A task's day still a suggestion: none was said, and the box is as the server filled it. */
+export function isDueSuggested(draft: TaskDraft): boolean {
+  return (
+    draft.dueLevel === 'likely' &&
+    draft.due !== null &&
+    draft.when.trim() === draft.whenStart.trim()
+  )
+}
+
+/** A day picked for a task ("In a week", or Pick a day): sure from now, and shown as a date. */
+export function pickDue(draft: TaskDraft, date: string): TaskDraft {
+  const when = dueDateText(date)
+  return { ...draft, when, whenStart: when, due: date, dueLevel: 'sure', edited: true }
+}
+
+/**
+ * The day the follow-up nudge offers (choice 14): a call sorted as Connected, with no follow-up,
+ * once the server gave the day. Null: no nudge, as for No answer.
+ */
+export function nudgeDayOf(
+  draft: CallDraft,
+  note: Pick<CallNoteOut, 'status' | 'call' | 'tasks'> | undefined,
+): string | null {
+  const day = draft.followUpDay ?? null
+  if (day === null || note === undefined || note.status !== 'to_confirm') return null
+  return note.call.outcome === 'Connected' && note.tasks.length === 0 ? day : null
+}
+
+/** A client person, as the card keeps one found. */
+export function personOf(one: { id: string; name: string; title: string | null }): CallNotePerson {
+  return { id: one.id, name: one.name, title: one.title }
+}
+
+/**
+ * The person taken on a call, and their company with them when they were found before it (T2-2).
+ * From the command's own choices (`choice`), the words heard teach nothing.
+ */
+export function pickPerson(
+  draft: CallDraft,
+  picked: PersonChoice | CallNotePerson | null,
+  how: 'choice' | 'by_hand' = 'choice',
+): CallDraft {
+  const person: PersonFind = {
+    ...draft.person,
+    found: picked ? personOf(picked) : null,
+    choices: [],
+    level: null,
+    reason: null,
+  }
+  const key = picked && 'company_key' in picked ? picked.company_key : null
+  const name = picked && 'company_name' in picked ? picked.company_name : null
+  const company =
+    draft.company.found === null && key
+      ? pickCompany(draft.company, { key, name: name ?? '' }, how)
+      : draft.company
+  return { ...draft, company, person, edited: true }
 }
 
 let nextRecipient = 0
@@ -198,6 +397,7 @@ export function recipientOf(said: AssistantRecipient): Recipient {
     heard: said.heard,
     found: said.found,
     choices: said.choices,
+    level: said.level ?? null,
     address: said.address,
     problem: said.problem,
   }
@@ -234,12 +434,17 @@ export function draftOf(
           found: command.person?.found ?? null,
           choices: command.person?.choices ?? [],
           heard: command.person?.heard ?? '',
+          level: command.person?.level ?? null,
+          reason: command.person?.reason ?? null,
         },
         // The note as said; with none, the whole words (choice 16's fallback).
         text: command.note_text?.trim() ? command.note_text : words,
         source,
         calledAt: now.toISOString(),
         noteId: null,
+        callType: callTypeOf(command.call_type) ?? DEFAULT_CALL_TYPE,
+        outcome: command.outcome ?? null,
+        followUpDay: command.follow_up_day ?? null,
       }
     case 'task': {
       const task = command.task
@@ -257,6 +462,9 @@ export function draftOf(
         // A task for the rep themself is "You", not a teammate to check.
         forWhom: owner && !owner.found?.is_me ? recipientOf(owner) : null,
         body: '',
+        dueLevel: task?.due_level ?? null,
+        dueChoices: task?.due_choices ?? [],
+        subjectSuggested: task?.subject_suggested === true,
       }
     }
     case 'email':
@@ -377,6 +585,8 @@ export function noteBodyOf(draft: CallDraft): CallNoteIn | null {
     text: draft.text.trim(),
     source: draft.source,
     called_at: draft.calledAt,
+    call_type: draft.callType ?? DEFAULT_CALL_TYPE,
+    ...(draft.outcome ? { outcome: draft.outcome } : {}),
   }
 }
 
@@ -430,14 +640,26 @@ export function applyChange(draft: CardDraft, change: AssistantChange): CardDraf
   switch (change.box) {
     case 'subject':
       return value
-        ? { ...draft, subject: value.slice(0, SUBJECT_MAX[draft.action]), edited: true }
+        ? {
+            ...draft,
+            subject: value.slice(0, SUBJECT_MAX[draft.action]),
+            ...(draft.action === 'task' ? { subjectSuggested: false } : {}),
+            edited: true,
+          }
         : null
     case 'body':
       return value ? { ...draft, body: value.slice(0, BODY_MAX[draft.action]), edited: true } : null
     case 'due':
       if (draft.action !== 'task' || !value) return null
       // The server's day for these words, when it read one: the box shows the words.
-      return { ...draft, when: value, whenStart: value, due: change.day, edited: true }
+      return {
+        ...draft,
+        when: value,
+        whenStart: value,
+        due: change.day,
+        dueLevel: 'sure',
+        edited: true,
+      }
     case 'kind': {
       const kind = draft.action === 'task' ? kindOf(value) : null
       return draft.action === 'task' && kind ? { ...draft, kind, edited: true } : null
@@ -480,6 +702,11 @@ export function callPatchOf(
     }
     case 'summary':
       return value ? { summary: value } : null
+    case 'call_type': {
+      // "Make it a follow-up call" (PLAN-V25 T3-1): the server sends HubSpot's own name.
+      const type = callTypeOf(value)
+      return type ? { call_type: type } : null
+    }
     default:
       return null
   }

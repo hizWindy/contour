@@ -222,6 +222,82 @@
         "title": "AssistantChange",
         "type": "object"
       },
+      "AssistantChoice": {
+        "description": "One of several companies that match (PLAN-V25 T1-1).",
+        "properties": {
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one detail that tells it apart from the other choices: its city, its owner ('Owner: Sam Sample') or its last call ('Last call 12 Nov')",
+            "title": "Detail"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its strongest signal in plain words, like 'Yours.' or 'Open deal.' None: none",
+            "title": "Reason"
+          },
+          "source": {
+            "enum": [
+              "hubspot",
+              "lead"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "city",
+          "industry",
+          "source"
+        ],
+        "title": "AssistantChoice",
+        "type": "object"
+      },
       "AssistantCommand": {
         "description": "What a command would do. Nothing is written or sent: the review card does that.",
         "properties": {
@@ -240,6 +316,23 @@
             ],
             "title": "Action",
             "type": "string"
+          },
+          "call_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "Prospecting Call",
+                  "Follow Up Call",
+                  "Agent/Networking Phone Call"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a call: HubSpot's call type, Prospecting Call unless the command words said another, like 'log a follow-up call' (PLAN-V25 T3-1). None for other actions",
+            "title": "Call Type"
           },
           "change": {
             "anyOf": [
@@ -271,6 +364,19 @@
                 "type": "null"
               }
             ]
+          },
+          "follow_up_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a call: the day a follow-up nudge suggests ('No follow-up yet. Add one for Monday?'), the next working day (PLAN-V25 choice 14, TBC). The card shows the nudge only for a Connected call with no follow-up",
+            "title": "Follow Up Day"
           },
           "meeting": {
             "anyOf": [
@@ -305,6 +411,26 @@
               }
             ]
           },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "Connected",
+                  "No answer",
+                  "Left voicemail",
+                  "Left live message",
+                  "Busy",
+                  "Wrong number"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a call that is only an outcome, like 'No answer, Jo Sample': that outcome. None when the words say more, or no outcome (the sort reads it from the note)",
+            "title": "Outcome"
+          },
           "person": {
             "anyOf": [
               {
@@ -315,6 +441,11 @@
               }
             ],
             "description": "For a call"
+          },
+          "quick": {
+            "description": "True for a quick log (PLAN-V25 T3-3): only No answer, Left voicemail, Busy or Wrong number, with a sure company and a sure person, and nothing unclear. The card may skip itself: the hold's toast says what goes, and Undo opens the card",
+            "title": "Quick",
+            "type": "boolean"
           },
           "read_back": {
             "description": "The card's first line, like 'Log a call with James Sample at Sample Logistics. Follow-up task on Fri 21 Nov.' For `unclear`, the words as heard, for the bar's text line",
@@ -374,6 +505,17 @@
             ],
             "description": "The open review card, if any. Then the only actions are change, send and cancel, and anything else comes back as unknown"
           },
+          "last_turn": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistantLastTurn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The conversation's last turn, if any (PLAN-V25 T5-1): 'same company', 'her' and 'and Jo too' use it. Left out when the conversation is new"
+          },
           "on_page": {
             "anyOf": [
               {
@@ -420,9 +562,9 @@
             "type": "boolean"
           },
           "choices": {
-            "description": "Two or more that match, best first",
+            "description": "Two or more that match, best first, at most 3. For likely, the first is the suggestion",
             "items": {
-              "$ref": "#/components/schemas/CompanyHit"
+              "$ref": "#/components/schemas/AssistantChoice"
             },
             "title": "Choices",
             "type": "array"
@@ -436,7 +578,7 @@
                 "type": "null"
               }
             ],
-            "description": "The one company that matches"
+            "description": "The company to use: the one that matches, or the sure one of several"
           },
           "from_hubspot": {
             "description": "True when our copy didn't have it and HubSpot's own search found it (or the choices): it is in our copy now (PLAN-V23 T1-3)",
@@ -452,6 +594,35 @@
             "description": "The company as heard. Empty when the command named none",
             "title": "Heard",
             "type": "string"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sure",
+                  "likely",
+                  "unsure"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How sure code is (PLAN-V25): sure (used at once, with Change and Undo), likely (the first choice is suggested, with its reason) or unsure (choose). None when nothing was found",
+            "title": "Level"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why, in a few plain words, like 'You meet them at 2 pm.': for sure, the one found; for likely, the first choice. None when there is nothing to say",
+            "title": "Reason"
           }
         },
         "required": [
@@ -739,6 +910,85 @@
         "title": "AssistantEmailIn",
         "type": "object"
       },
+      "AssistantLastTurn": {
+        "additionalProperties": false,
+        "description": "The conversation's last turn (PLAN-V25 T5-1, choice 21), as the bar keeps it until the\nconversation ends: its company and person, found and as heard. Code uses the found ones for\n\"same company\", \"her\" or \"and Jo too\". Claude gets only the names as heard.",
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pre_read",
+                  "log_call",
+                  "task",
+                  "email"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the last card was for",
+            "title": "Action"
+          },
+          "company_heard": {
+            "default": "",
+            "description": "The company's name as heard last turn. Claude gets it, scrubbed",
+            "examples": [
+              "Sample Logistics"
+            ],
+            "maxLength": 120,
+            "pattern": "^[^\\x00]*$",
+            "title": "Company Heard",
+            "type": "string"
+          },
+          "company_key": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The last turn's company: a HubSpot id, or lead:<id>. Used only when this person may still open it",
+            "examples": [
+              "201"
+            ],
+            "title": "Company Key"
+          },
+          "person_heard": {
+            "default": "",
+            "description": "The person's name as heard last turn. Claude gets it, scrubbed",
+            "examples": [
+              "Jo Sample"
+            ],
+            "maxLength": 120,
+            "pattern": "^[^\\x00]*$",
+            "title": "Person Heard",
+            "type": "string"
+          },
+          "person_id": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The last turn's client person: HubSpot's contact id",
+            "title": "Person Id"
+          }
+        },
+        "title": "AssistantLastTurn",
+        "type": "object"
+      },
       "AssistantMeeting": {
         "properties": {
           "choices": {
@@ -769,6 +1019,35 @@
             "description": "The words that named the meeting, like Thursday's meeting. Empty if none",
             "title": "Heard",
             "type": "string"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sure",
+                  "likely",
+                  "unsure"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How sure code is (PLAN-V25): sure (used at once, with Change and Undo), likely (the first choice is suggested, with its reason) or unsure (choose). None when nothing was found",
+            "title": "Level"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why, in a few plain words, like 'You meet them at 2 pm.': for sure, the one found; for likely, the first choice. None when there is nothing to say",
+            "title": "Reason"
           }
         },
         "required": [
@@ -885,6 +1164,14 @@
             },
             "title": "Names",
             "type": "array"
+          },
+          "places": {
+            "description": "The word list's places (PLAN-V25 T4-1): the cities and suburbs of the companies and offices in our copy, the most common first, at most 200, each once. For the name fix, and Chrome's hints when they are on. The office words are the website's own",
+            "items": {
+              "type": "string"
+            },
+            "title": "Places",
+            "type": "array"
           }
         },
         "required": [
@@ -996,9 +1283,9 @@
       "AssistantPerson": {
         "properties": {
           "choices": {
-            "description": "Two or more at the company who match, best first, each with a job title",
+            "description": "Two or more at the company who match, best first, each with a job title, at most 3. Found without the company (PLAN-V25 T2-1), one or more, each with their company: taking one fills the company too",
             "items": {
-              "$ref": "#/components/schemas/PrepPerson"
+              "$ref": "#/components/schemas/AssistantPersonHit"
             },
             "title": "Choices",
             "type": "array"
@@ -1018,6 +1305,35 @@
             "description": "The client person as heard, like James. Empty if none",
             "title": "Heard",
             "type": "string"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sure",
+                  "likely",
+                  "unsure"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How sure code is (PLAN-V25): sure (used at once, with Change and Undo), likely (the first choice is suggested, with its reason) or unsure (choose). None when nothing was found",
+            "title": "Level"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why, in a few plain words, like 'You meet them at 2 pm.': for sure, the one found; for likely, the first choice. None when there is nothing to say",
+            "title": "Reason"
           }
         },
         "required": [
@@ -1026,6 +1342,73 @@
           "choices"
         ],
         "title": "AssistantPerson",
+        "type": "object"
+      },
+      "AssistantPersonHit": {
+        "description": "A client person as a choice (PLAN-V25 T2-1). Found without the company, they bring it.",
+        "properties": {
+          "company_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Their company (a HubSpot id) when they were found without it. None when the company was already found",
+            "title": "Company Key"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "That company's name",
+            "title": "Company Name"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why they come first, like 'You called them on Tuesday.' None: nothing to say",
+            "title": "Reason"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "title"
+        ],
+        "title": "AssistantPersonHit",
         "type": "object"
       },
       "AssistantRecipient": {
@@ -1067,6 +1450,23 @@
             "title": "Heard",
             "type": "string"
           },
+          "level": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sure",
+                  "likely",
+                  "unsure"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How sure code is (PLAN-V25): sure (used at once, with Change and Undo), likely (the first choice is suggested, with its reason) or unsure (choose). None when nothing was found",
+            "title": "Level"
+          },
           "problem": {
             "anyOf": [
               {
@@ -1096,6 +1496,25 @@
             "description": "A Melbourne working day, today or later",
             "format": "date",
             "title": "Due",
+            "type": "string"
+          },
+          "due_choices": {
+            "description": "For likely: the suggested day first, then 'In a week' (a working day). 'Pick a day' is the card's own. Empty for sure",
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Due Choices",
+            "type": "array"
+          },
+          "due_level": {
+            "description": "sure when the day was said and read. likely when it wasn't said or couldn't be read: `due` is then a suggestion, the next working day (PLAN-V25 choice 13, TBC)",
+            "enum": [
+              "sure",
+              "likely",
+              "unsure"
+            ],
+            "title": "Due Level",
             "type": "string"
           },
           "due_words": {
@@ -1136,9 +1555,14 @@
             "title": "Owner Id"
           },
           "subject": {
-            "description": "What to do, up to 200 characters. Empty when none was said",
+            "description": "What to do, up to 200 characters. When none was said, a suggestion (`subject_suggested`), like 'Follow up with Sample Logistics Pty Ltd'",
             "title": "Subject",
             "type": "string"
+          },
+          "subject_suggested": {
+            "description": "True when no subject was said and `subject` is a suggestion: the card asks 'Use it' or 'Type it'",
+            "title": "Subject Suggested",
+            "type": "boolean"
           }
         },
         "required": [
@@ -1286,6 +1710,16 @@
       },
       "CallNoteCall": {
         "properties": {
+          "call_type": {
+            "description": "HubSpot's call type it goes with (PLAN-V25): Prospecting Call unless the rep picked another",
+            "enum": [
+              "Prospecting Call",
+              "Follow Up Call",
+              "Agent/Networking Phone Call"
+            ],
+            "title": "Call Type",
+            "type": "string"
+          },
           "in_hubspot": {
             "default": false,
             "description": "True once it is in HubSpot: it can't change here any more",
@@ -1512,6 +1946,23 @@
       },
       "CallNoteIn": {
         "properties": {
+          "call_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "Prospecting Call",
+                  "Follow Up Call",
+                  "Agent/Networking Phone Call"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HubSpot's call type (PLAN-V25). Left out: Prospecting Call. Another value is refused (422)",
+            "title": "Call Type"
+          },
           "called_at": {
             "description": "When the call was, with its time zone",
             "format": "date-time",
@@ -1628,6 +2079,19 @@
             "description": "True when Claude sorts a note: its switch is on and Claude is set up. False: the rep picks the outcome and adds follow-ups by hand",
             "title": "Ai Enabled",
             "type": "boolean"
+          },
+          "call_types": {
+            "description": "HubSpot's call types, the default (Prospecting Call) first (PLAN-V25)",
+            "items": {
+              "enum": [
+                "Prospecting Call",
+                "Follow Up Call",
+                "Agent/Networking Phone Call"
+              ],
+              "type": "string"
+            },
+            "title": "Call Types",
+            "type": "array"
           },
           "enabled": {
             "description": "True when Log call and Call logs show",
@@ -1940,6 +2404,23 @@
       "CallNotePatch": {
         "description": "The rep's edits. Only the parts sent change: `outcome` or `contact_id` sent as null clears\nit, and `changes` or `tasks` replace the card's whole list. `company_key` picks the company of\na call that needs one (PLAN-V24), and `teach` says whether that pick teaches the mic.",
         "properties": {
+          "call_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "Prospecting Call",
+                  "Follow Up Call",
+                  "Agent/Networking Phone Call"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HubSpot's call type (PLAN-V25). Sent as null: back to Prospecting Call. Another value is refused (422)",
+            "title": "Call Type"
+          },
           "changes": {
             "anyOf": [
               {
@@ -1966,7 +2447,7 @@
                 "type": "null"
               }
             ],
-            "description": "The company, for a call saved before it was found (`needs_company`): a HubSpot company id, or lead:<id>. Taken only then: 409 `company_set` for a call that has its company. Only `contact_id`, `outcome` and `teach` may come with it. Once it is set, the call is sorted as a new call is, then waits in To confirm. Left out or None: the company stays as it is",
+            "description": "The company, for a call saved before it was found (`needs_company`): a HubSpot company id, or lead:<id>. Taken only then: 409 `company_set` for a call that has its company. Only `contact_id`, `outcome`, `call_type` and `teach` may come with it. Once it is set, the call is sorted as a new call is, then waits in To confirm. Left out or None: the company stays as it is",
             "title": "Company Key"
           },
           "contact_id": {

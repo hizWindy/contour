@@ -1668,6 +1668,35 @@ describe("a logged meeting's notes (T3-11)", () => {
     expect(within(card).queryByRole('checkbox', { name: 'Connected' })).toBeNull()
   })
 
+  it('a meeting has no call type; a call’s changes in Edit, and goes as a PATCH (PLAN-V25 T3-1)', async () => {
+    mockServer({ notes: [meetingNotes('m1')] })
+    const first = renderCallLogs()
+    await toConfirmList()
+    const meeting = screen.getByRole('article', { name: 'Sample Logistics Pty Ltd' })
+    await first.user.click(within(meeting).getByRole('button', { name: /^Edit/ }))
+    expect(within(meeting).queryByRole('radiogroup', { name: 'Call type' })).toBeNull()
+    first.unmount()
+
+    const server = mockServer({ notes: threeNotes() })
+    const { user } = renderCallLogs()
+    await toConfirmList()
+    const logistics = card('Sample Logistics Pty Ltd')
+    await user.click(within(logistics).getByRole('button', { name: /^Edit/ }))
+    const types = within(logistics).getByRole('radiogroup', { name: 'Call type' })
+    // Left out by the server: Prospecting Call, the default.
+    expect(within(types).getByRole('radio', { name: 'Prospecting' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+    await user.click(within(types).getByRole('radio', { name: 'Agent or networking' }))
+    await waitFor(() => {
+      expect(sent(server, 'PATCH', `${NOTES}/n1`)).toHaveLength(1)
+    })
+    expect(sent(server, 'PATCH', `${NOTES}/n1`)[0]?.body).toEqual({
+      call_type: 'Agent/Networking Phone Call',
+    })
+  })
+
   it('folds a long transcript on its card, with Show all and Show less, and leaves the note as it is', async () => {
     // The AI is off: no summary, so the card's text is the whole transcript.
     const words = Array.from(

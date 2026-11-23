@@ -24,7 +24,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from typing import Any, Final, get_args
+from typing import Any, Final, cast, get_args
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI
@@ -61,6 +61,7 @@ from apps.companies.notes import (
     NoteCard,
     NoteSorter,
     OfficeChoice,
+    call_type_of,
     check_change,
     field_value,
     is_stuck,
@@ -85,6 +86,7 @@ from apps.companies.schemas import (
     CallNoteSummary,
     CallNoteTask,
     CallNoteTaskIn,
+    CallType,
     MyLastNote,
     NoteFieldOption,
     NoteState,
@@ -121,10 +123,10 @@ REMOVABLE: Final = ("needs_company", "sorting", "to_confirm", "failed")
 # What a call that needs its company may change before it is picked: its outcome, which the sort
 # keeps as the rep's own pick. The sort makes the rest of the card anew (PLAN-V24). `teach` goes
 # with a pick only (note_company.py): on its own it changes nothing, so it isn't refused.
-BEFORE_COMPANY: Final = frozenset({"outcome", "teach"})
+BEFORE_COMPANY: Final = frozenset({"outcome", "call_type", "teach"})
 NOTE_START_CHARS: Final = 200  # a note with no summary shows its first 200 characters
 SEARCH_WORDS: Final = 12  # the most words of a search that count
-CARD_PARTS: Final = frozenset({"summary", "outcome", "changes", "tasks"})
+CARD_PARTS: Final = frozenset({"summary", "outcome", "call_type", "changes", "tasks"})
 SENT_FIELDS: Final[set[str]] = {"state", "step", "detail"}  # where a part is with HubSpot
 WAITING_FOR_HUBSPOT = "Waiting for HubSpot to be connected."
 WAITING_FOR_WRITES = "Waiting for HubSpot write access."
@@ -318,6 +320,7 @@ def note_out(
         call=CallNoteCall(
             summary=card.call.summary,
             outcome=outcome if outcome in OUTCOME_NAMES else None,
+            call_type=cast(CallType, call_type_of(card)),
             in_hubspot=card.call.state == "landed",
         ),
         changes=[
@@ -427,6 +430,7 @@ def options(app: FastAPI, settings: Settings) -> CallNoteOptions:
         sending_ready=sending.ready,
         waiting_for=sending.waiting_for,
         outcomes=list(get_args(OutcomeName)),
+        call_types=list(get_args(CallType)),
         fields=[
             NoteFieldOption(id=field.id, label=field.label, kind=field.kind)
             for field in note_fields()
@@ -503,6 +507,7 @@ class NewNote:
     outcome: str | None = None
     meeting_id: str | None = None  # the HubSpot meeting a transcript came from
     company_heard: str | None = None
+    call_type: str | None = None  # PLAN-V25: None is the default, Prospecting Call
 
 
 def as_heard(text: str | None) -> str:
@@ -550,6 +555,7 @@ async def save_note(
         prep_id=body.prep_id,
         outcome=body.outcome,
         company_heard=body.company_heard,
+        call_type=body.call_type,
     )
     return await store_note(
         session,
@@ -635,7 +641,7 @@ async def store_note(
         called_at=new.called_at.astimezone(UTC),
         status="needs_company" if new.company_key is None else "sorting",
         # The rep's own pick, kept on the card: it wins over the sorter's.
-        card={"call": {"summary": "", "outcome": new.outcome}},
+        card={"call": {"summary": "", "outcome": new.outcome, "call_type": new.call_type}},
         meeting_id=new.meeting_id,
     )
     await start_sort(session, note, settings=settings, now=now)
@@ -1029,9 +1035,12 @@ def _edit_before_company(note: CallNote, patch: CallNotePatch) -> None:
     given = patch.model_fields_set
     if given - BEFORE_COMPANY:
         raise company_first()
-    if "outcome" in given:
+    if given & {"outcome", "call_type"}:
         card = NoteCard.model_validate(note.card or {})
-        card.call.outcome = patch.outcome
+        if "outcome" in given:
+            card.call.outcome = patch.outcome
+        if "call_type" in given:
+            card.call.call_type = patch.call_type
         note.card = card.model_dump(mode="json")
 
 
@@ -1069,6 +1078,7 @@ async def edit_note(
     if card.call.state == "landed" and (
         (summary is not None and summary != card.call.summary)
         or ("outcome" in given and patch.outcome != card.call.outcome)
+        or ("call_type" in given and (patch.call_type or None) != card.call.call_type)
         or ("contact_id" in given and (patch.contact_id or None) != note.contact_id)
     ):
         raise part_sent("The call")
@@ -1076,6 +1086,8 @@ async def edit_note(
         card.call.summary = summary
     if "outcome" in given:
         card.call.outcome = patch.outcome
+    if "call_type" in given:
+        card.call.call_type = patch.call_type
     if "changes" in given:
         offices = await _offices(session, key)
         card.changes = _edited_changes(

@@ -289,6 +289,7 @@ def test_a_sorted_note_becomes_the_card() -> None:
             "detail": None,
             "summary": SUMMARY,
             "outcome": "Connected",
+            "call_type": None,
         },
         "changes": [
             {
@@ -539,7 +540,14 @@ def test_a_note_a_restart_cut_off_goes_to_the_rep() -> None:
     settle_stuck(note, NOW + timedelta(minutes=6))
     assert (note.status, note.sorted_by) == ("to_confirm", "person")
     assert note.card == {
-        "call": {"state": "new", "step": None, "detail": None, "summary": "", "outcome": "Busy"},
+        "call": {
+            "state": "new",
+            "step": None,
+            "detail": None,
+            "summary": "",
+            "outcome": "Busy",
+            "call_type": None,
+        },
         "changes": [],
         "tasks": [],
         "unsure": SORT_STOPPED,
@@ -707,6 +715,7 @@ async def test_with_the_ai_off_no_request_is_made_and_the_rep_sorts_it(
             "detail": None,
             "summary": "",
             "outcome": "Connected",
+            "call_type": None,
         },
         "changes": [],
         "tasks": [],

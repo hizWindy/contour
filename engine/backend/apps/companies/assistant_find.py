@@ -11,12 +11,16 @@ heard.
   Wind"). Then a word search: names with a word that starts with each word said ("Sample" finds
   Sample Logistics Pty Ltd). Then HubSpot's own search (assistant_live.py), which reads what it
   finds into our copy (`from_hubspot`); found nowhere, the card may offer to add it (`can_add`).
-  With no company named, the one on screen (`on_page`). Among several, the one on screen wins.
+  With no company named, the one on screen (`on_page`). Among several, the one on screen wins,
+  and the others are ranked by what's likely (PLAN-V25 T1-1, assistant_rank.py): each find comes
+  back with its level (sure, likely or unsure) and one reason.
   The card's own find (PLAN-V24 choice 19, `find_said`) runs the same steps from the learned
   names on, for a company said again, with no Claude request and no company on screen.
 - **The person:** among that company's people (`people_of`): the full name (`find_person`, the
   call note sorter's test), else every word said matching a word of their name. A word of 4
-  letters or more may be spelled slightly wrong ("Sampel").
+  letters or more may be spelled slightly wrong ("Sampel"). With no company named, or not at the
+  company on screen, among the people of every company in our copy (PLAN-V25 T2-1,
+  `find_person_anywhere`): each choice brings its company, ranked by `rank_people`.
 - **The meeting:** the one on screen, else the company's meetings in the next 60 days (with no
   company named, my own): on the day said ("Thursday's meeting"), else the next one. A cancelled
   one doesn't count.
@@ -41,14 +45,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies import learned_store
 from apps.companies.assistant_live import NOT_SEARCHED, live_search
+from apps.companies.assistant_rank import (
+    CHOICES_SHOWN,
+    LEARNED,
+    ON_SCREEN,
+    PEOPLE_POOL,
+    Asker,
+    rank_companies,
+    rank_people,
+)
 from apps.companies.assistant_schemas import (
     AssistantCardIn,
     AssistantCompany,
     AssistantCompanyFind,
+    AssistantLastTurn,
     AssistantMeeting,
     AssistantMeetingHit,
     AssistantOnPage,
     AssistantPerson,
+    AssistantPersonHit,
     AssistantRecipient,
 )
 from apps.companies.facts import EMAIL, scrub
@@ -85,10 +100,11 @@ from core.config import Settings
 from core.email.internal import only_internal
 from core.hubspot.matching import core_tokens, match_company, names_are_close
 from core.hubspot.meetings import DAYS_AHEAD, Meeting
-from core.hubspot.models import HubSpotCompany
+from core.hubspot.models import HubSpotCompany, HubSpotContact
 from core.hubspot.profiles import PLACEHOLDER_NAME
 
-MAX_CHOICES: Final = 5
+MAX_CHOICES: Final = CHOICES_SHOWN  # at most 3 choices, plus Search (PLAN-V25 choice 4)
+SEARCH_POOL: Final = 8  # the most companies the word search gives the ranking
 CLOSE_MIN: Final = 4  # a word this long or longer may be spelled slightly wrong
 CLOSE_SCORE: Final = 80  # how close, 0 to 100 (`fuzz.ratio`): "sampel" and "sample" score 83
 SEARCH_WORDS: Final = 6  # the most words of a name the word search uses
@@ -125,6 +141,11 @@ def isnt_in_hubspot(name: str) -> str:
 
 def which(heard: str) -> str:
     return f"Which {heard}?"
+
+
+def person_nowhere(heard: str) -> str:
+    """PLAN-V25 "Words on screen": a person named with no company, found nowhere."""
+    return f"There's no '{heard}' in HubSpot. Say the company, or pick the person."
 
 
 def not_at_company(heard: str, company: str) -> str:
@@ -179,6 +200,41 @@ class Context:
     app: FastAPI | None = (
         None  # for HubSpot's own search (PLAN-V23 T1-3); None asks HubSpot nothing
     )
+    last: AssistantLastTurn | None = None  # the conversation's last turn (PLAN-V25 T5-1)
+
+
+# --- The last turn (PLAN-V25 T5-1, choice 21) ----------------------------------------------------
+
+SAME_AS_BEFORE = "Same as before."
+# Words that mean the last turn's company, or its person, once tidied (`heard`) and lower case.
+SAME_COMPANY: Final = frozenset(
+    {
+        "same company",
+        "the same company",
+        "same one",
+        "the same one",
+        "that company",
+        "same place",
+        "them",
+        "there",
+        "same",
+    }
+)
+SAME_PERSON: Final = frozenset(
+    {"her", "him", "them", "same person", "the same person", "that person", "same"}
+)
+# Words that add to the last turn ("and Jo too"): its company stays.
+TOO: Final = re.compile(r"\b(?:too|also|as well|same company)\b", re.IGNORECASE)
+
+
+async def last_company(session: AsyncSession, ctx: Context) -> CompanyHit | None:
+    """The last turn's company, when there was one and this person may still open it."""
+    key = ctx.last.company_key if ctx.last is not None else None
+    return await company_hit(session, key, ctx.leads) if key else None
+
+
+def means_same(words: str, kinds: frozenset[str]) -> bool:
+    return " ".join(words.casefold().split()) in kinds
 
 
 # --- Words and names -----------------------------------------------------------------------------
@@ -393,7 +449,7 @@ async def word_search(session: AsyncSession, text: str) -> list[str]:
             func.lower(func.btrim(name)) != PLACEHOLDER_NAME,
         )
         .order_by(func.length(name), name, HubSpotCompany.hubspot_id)
-        .limit(MAX_CHOICES)
+        .limit(SEARCH_POOL)
     )
     return list(found)
 
@@ -426,26 +482,89 @@ async def learned_hits(
     return hits
 
 
-def picked(
-    words: str, hits: Sequence[CompanyHit], page: CompanyHit | None, *, from_hubspot: bool = False
+def chosen(hit: CompanyHit) -> CompanyHit:
+    """A ranked choice as the one company found: its reason goes on the company itself."""
+    return CompanyHit(
+        key=hit.key, name=hit.name, city=hit.city, industry=hit.industry, source=hit.source
+    )
+
+
+def likely_line(name: str, reason: str | None) -> str:
+    """'Sample Logistics? You meet them at 2 pm.' (PLAN-V25 "Words on screen")."""
+    return f"{name}? {reason}" if reason else f"{name}?"
+
+
+async def picked(
+    session: AsyncSession,
+    words: str,
+    hits: Sequence[CompanyHit],
+    page: CompanyHit | None,
+    asker: Asker,
+    *,
+    from_hubspot: bool = False,
+    learned: bool = False,
 ) -> tuple[AssistantCompany, str | None]:
-    """The one on screen when it is among the hits, else one hit, else the choices."""
+    """The one on screen when it is among the hits. Else one hit is sure. Else the hits ranked
+    by what's likely (PLAN-V25 T1-1): the sure one is used, the likely one suggested with its
+    reason, and unsure gives the choices."""
     if page is not None and any(hit.key == page.key for hit in hits):
-        return AssistantCompany(heard=words, from_page=True, found=page, choices=[]), None
-    if len(hits) == 1:
+        company = AssistantCompany(
+            heard=words, from_page=True, found=page, choices=[], level="sure", reason=ON_SCREEN
+        )
+        return company, None
+    ranked = await rank_companies(session, hits, asker)
+    top = ranked.choices[0] if ranked.choices else None
+    if len(hits) == 1 and top is not None:
         line = new_in_hubspot(hits[0].name) if from_hubspot else None
+        reason = top.reason or (LEARNED if learned else None)
         found = AssistantCompany(
-            heard=words, from_page=False, found=hits[0], choices=[], from_hubspot=from_hubspot
+            heard=words,
+            from_page=False,
+            found=hits[0],
+            choices=[],
+            from_hubspot=from_hubspot,
+            level="sure",
+            reason=reason,
         )
         return found, line
+    if ranked.level == "sure" and top is not None:  # the only one of the rep's own
+        company = AssistantCompany(
+            heard=words,
+            from_page=False,
+            found=chosen(top),
+            choices=ranked.choices,  # for Change
+            from_hubspot=from_hubspot,
+            level="sure",
+            reason=ranked.reason,
+        )
+        return company, None
+    if ranked.level == "likely" and top is not None:
+        company = AssistantCompany(
+            heard=words,
+            from_page=False,
+            found=None,
+            choices=ranked.choices,
+            from_hubspot=from_hubspot,
+            level="likely",
+            reason=ranked.reason,
+        )
+        return company, likely_line(top.name, ranked.reason)
     choices = AssistantCompany(
         heard=words,
         from_page=False,
         found=None,
-        choices=list(hits[:MAX_CHOICES]),
+        choices=ranked.choices,
         from_hubspot=from_hubspot,
+        level="unsure",
+        reason=None,
     )
     return choices, which(words)
+
+
+async def asker_of(session: AsyncSession, ctx: Context) -> Asker:
+    """Who asks, for the ranking: their HubSpot owner, now, and the meetings."""
+    owner = await ctx.meetings.owner_of(session, ctx.auth.user.id) if ctx.auth else None
+    return Asker(owner_id=owner, now=ctx.now, today=ctx.today, meetings=ctx.meetings)
 
 
 async def find_company(
@@ -456,13 +575,37 @@ async def find_company(
     HubSpot's own search (which reads what it finds into our copy). Found nowhere: the card may
     add it, when HubSpot was searched."""
     words = heard(said)
+    on_page = AssistantCompany(
+        heard=words, from_page=True, found=page, choices=[], level="sure", reason=ON_SCREEN
+    )
+    before = await last_company(session, ctx)
+    # Said ("same company", "and Jo too"): sure. Not said, with nothing on screen: only a
+    # suggestion, so it never becomes a quick log to the last turn's company (M1 review).
+    said_same = means_same(words, SAME_COMPANY) or (not words and TOO.search(ctx.said) is not None)
+    if before is not None and (said_same or (not words and page is None)):
+        same = AssistantCompany(
+            heard=words,
+            from_page=False,
+            found=before,
+            choices=[],
+            level="sure" if said_same else "likely",
+        )
+        return same.model_copy(update={"reason": SAME_AS_BEFORE}), None
     if not words:
-        return AssistantCompany(heard="", from_page=page is not None, found=page, choices=[]), None
+        if page is None:
+            return AssistantCompany(heard="", from_page=False, found=None, choices=[]), None
+        return on_page, None
     fuzzy_min = ctx.settings.match_fuzzy_min
     if page is not None and names_are_close(words, page.name, fuzzy_min):
-        return AssistantCompany(heard=words, from_page=True, found=page, choices=[]), None
+        return on_page, None
     return await company_for_words(
-        session, words, page, fuzzy_min=fuzzy_min, leads=ctx.leads, app=ctx.app
+        session,
+        words,
+        page,
+        fuzzy_min=fuzzy_min,
+        leads=ctx.leads,
+        app=ctx.app,
+        asker=await asker_of(session, ctx),
     )
 
 
@@ -474,6 +617,7 @@ async def company_for_words(
     fuzzy_min: int,
     leads: Sequence[CompanyLeads],
     app: FastAPI | None,
+    asker: Asker,
 ) -> tuple[AssistantCompany, str | None]:
     """The company these words (tidied by `heard`) name, and a line when it isn't clear: the
     learned names, then our copy, then HubSpot's own search (which reads what it finds into our
@@ -482,16 +626,16 @@ async def company_for_words(
     (`find_said`) both use it."""
     learned = await learned_hits(session, words, leads)
     if learned:
-        return picked(words, learned, page)
+        return await picked(session, words, learned, page, asker, learned=True)
     hits = await companies_named(session, words, fuzzy_min)
     if hits:
-        return picked(words, hits, page)
+        return await picked(session, words, hits, page, asker)
     live = NOT_SEARCHED
     if app is not None:
         live = await live_search(session, app, words, fuzzy_min=fuzzy_min)
     found = await hubspot_hits(session, live.keys)
     if found:
-        return picked(words, found, page, from_hubspot=True)
+        return await picked(session, words, found, page, asker, from_hubspot=True)
     line = isnt_in_hubspot(words) if live.searched else not_in_hubspot(words)
     company = AssistantCompany(
         heard=words, from_page=False, found=None, choices=[], can_add=live.searched
@@ -528,6 +672,7 @@ async def find_said(
     settings: Settings,
     leads: Sequence[CompanyLeads],
     app: FastAPI | None,
+    asker: Asker,
 ) -> AssistantCompanyFind:
     """The company a rep says (or types) again on the card, found as the command step finds it,
     with no Claude request and no company on screen: the learned names, our copy, then HubSpot's
@@ -540,7 +685,13 @@ async def find_said(
     if not tidied:
         raise words_empty()
     company, line = await company_for_words(
-        session, tidied, None, fuzzy_min=settings.match_fuzzy_min, leads=leads, app=app
+        session,
+        tidied,
+        None,
+        fuzzy_min=settings.match_fuzzy_min,
+        leads=leads,
+        app=app,
+        asker=asker,
     )
     return AssistantCompanyFind(company=company, line=line)
 
@@ -622,22 +773,120 @@ async def on_screen(session: AsyncSession, ctx: Context) -> OnScreen:
 
 
 async def find_person_at(
-    session: AsyncSession, said: str, company: AssistantCompany
+    session: AsyncSession,
+    said: str,
+    company: AssistantCompany,
+    last: AssistantLastTurn | None = None,
 ) -> tuple[AssistantPerson, str | None]:
-    """The person the words name, among the company's people, and a line when it isn't clear."""
+    """The person the words name, among the company's people, and a line when it isn't clear.
+    "Her" or "them" is the last turn's person, at the same company (PLAN-V25 T5-1)."""
     words = heard(said)
     hit = company.found
     if not words or hit is None:  # no company yet: the company's own line asks first
         return AssistantPerson(heard=words, found=None, choices=[]), None
     people = await people_of(session, hit.key) if hit.source == "hubspot" else []
+    same = last is not None and last.person_id and last.company_key == hit.key
+    if same and last is not None and means_same(words, SAME_PERSON):
+        for known in people:
+            if known.id == last.person_id:
+                again = PrepPerson(id=known.id, name=known.name, title=known.title)
+                kept = AssistantPerson(heard=words, found=again, choices=[], level="sure")
+                return kept.model_copy(update={"reason": SAME_AS_BEFORE}), None
     found = [
-        PrepPerson(id=person.id, name=person.name, title=person.title)
+        AssistantPersonHit(id=person.id, name=person.name, title=person.title)
         for person in people_named(words, people)
     ]
     if len(found) == 1:
-        return AssistantPerson(heard=words, found=found[0], choices=[]), None
+        one = PrepPerson(id=found[0].id, name=found[0].name, title=found[0].title)
+        return AssistantPerson(heard=words, found=one, choices=[], level="sure"), None
     line = which(words) if found else not_at_company(words, hit.name)
-    return AssistantPerson(heard=words, found=None, choices=found[:MAX_CHOICES]), line
+    person = AssistantPerson(
+        heard=words,
+        found=None,
+        choices=found[:MAX_CHOICES],
+        level="unsure" if found else None,
+    )
+    return person, line
+
+
+# --- The person, without the company (PLAN-V25 T2-1, choices 8 to 10) ---------------------------
+
+
+async def people_called(session: AsyncSession, words: str) -> list[AssistantPersonHit]:
+    """The people in our copy with a word of their name starting with each word said, at a
+    company in our copy (so one the rep can open), each with that company. Then the same test as
+    at one company (`people_named`), so a full name said finds that person only."""
+    said = [word for word in name_words(words) if LETTERS.fullmatch(word)]
+    if not said:
+        return []
+    contact = HubSpotContact
+    rows = await session.execute(
+        select(contact, HubSpotCompany.name)
+        .join(HubSpotCompany, HubSpotCompany.hubspot_id == contact.hubspot_company_id)
+        .where(
+            *(contact.name.regexp_match(rf"\m{re.escape(w)}", flags="i") for w in said[:4]),
+            func.lower(func.btrim(HubSpotCompany.name)) != PLACEHOLDER_NAME,
+        )
+        .order_by(contact.last_activity.desc().nulls_last(), contact.name, contact.hubspot_id)
+        .limit(PEOPLE_POOL)
+    )
+    found = rows.all()
+    people = [
+        CompanyPerson(
+            id=person.hubspot_id,
+            name=person.name,
+            title=person.job_title,
+            phone=None,
+            last_activity=person.last_activity,
+        )
+        for person, _ in found
+    ]
+    companies = {person.hubspot_id: (person.hubspot_company_id, name) for person, name in found}
+    hits: list[AssistantPersonHit] = []
+    for person in people_named(words, people):
+        key, name = companies[person.id]
+        hits.append(
+            AssistantPersonHit(
+                id=person.id,
+                name=person.name,
+                title=person.title,
+                company_key=key,
+                company_name=name,
+            )
+        )
+    return hits
+
+
+def person_at_line(person: AssistantPersonHit, reason: str | None) -> str:
+    """'Jo Sample at Northwind Pty Ltd? You called them on Tuesday.'"""
+    asked = f"{person.name} at {person.company_name}?"
+    return f"{asked} {reason}" if reason else asked
+
+
+async def find_person_anywhere(
+    session: AsyncSession, said: str, ctx: Context
+) -> tuple[AssistantPerson, str | None]:
+    """A person named with no company: among the people of every company in our copy, ranked
+    (choice 9). Each choice brings its company, and its open deal goes with the call as it does
+    now (choice 10). The top one is suggested when it stands out; found nowhere, the card's
+    people search opens (choice 11)."""
+    words = heard(said)
+    if not words:
+        return AssistantPerson(heard="", found=None, choices=[]), None
+    hits = await people_called(session, words)
+    if not hits:
+        return AssistantPerson(heard=words, found=None, choices=[]), person_nowhere(words)
+    ranked = await rank_people(session, hits, await asker_of(session, ctx))
+    person = AssistantPerson(
+        heard=words,
+        found=None,
+        choices=ranked.choices,
+        level=ranked.level,
+        reason=ranked.reason,
+    )
+    if ranked.level == "likely":
+        return person, person_at_line(ranked.choices[0], ranked.reason)
+    return person, which(words)
 
 
 # --- The meeting ---------------------------------------------------------------------------------
@@ -651,6 +900,24 @@ def ahead(meetings: Sequence[Meeting], now: datetime) -> list[Meeting]:
 
 
 async def find_meeting(
+    session: AsyncSession,
+    said: str,
+    when: str,
+    company: AssistantCompany,
+    screen: OnScreen,
+    ctx: Context,
+) -> tuple[AssistantMeeting, str | None]:
+    """`meeting_for`, with its level (PLAN-V25 choice 5): one meeting is sure, choices unsure."""
+    meeting, line = await meeting_for(session, said, when, company, screen, ctx)
+    if meeting.found is not None:
+        reason = ON_SCREEN if meeting.from_page else None
+        return meeting.model_copy(update={"level": "sure", "reason": reason}), line
+    if meeting.choices:
+        return meeting.model_copy(update={"level": "unsure"}), line
+    return meeting, line
+
+
+async def meeting_for(
     session: AsyncSession,
     said: str,
     when: str,
@@ -723,12 +990,12 @@ def recipient(said: str, team: Sequence[TeamMember] | None, *, email: bool) -> A
         member = found[0]
         problem = no_account(member.name) if email and not member.has_account else None
         return AssistantRecipient(
-            heard=words, found=member, address=None, choices=[], problem=problem
+            heard=words, found=member, address=None, choices=[], problem=problem, level="sure"
         )
     if found:
         choices = found[:MAX_CHOICES]
         return AssistantRecipient(
-            heard=words, found=None, address=None, choices=choices, problem=None
+            heard=words, found=None, address=None, choices=choices, problem=None, level="unsure"
         )
     me = " ".join(name_words(words)) in ME_WORDS
     problem = NOT_LINKED_ME if me else off_the_team(words, email=email)

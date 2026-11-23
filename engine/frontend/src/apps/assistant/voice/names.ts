@@ -8,11 +8,18 @@
  *   server, on every page. So "Vitara" becomes "Vitera" on Today too. The names on screen come
  *   first; the list's fixed words ("fitout", "follow up") are for the speech service only, never
  *   for the fix, which changes names, not words.
+ * - **The word list** (PLAN-V25 T4-1): the places in our copy (the hint list's `places`) and the
+ *   office words (`au-words.ts`). The fix gets the places and the one-word office words; the
+ *   speech service's hints get the office words and the first places (TBC at PLAN-V24's S1).
  */
 import type { QueryClient } from '@tanstack/react-query'
 import { namesQueryOptions } from '@/api/hooks/assistant-names'
 import { queryKeys } from '@/api/query'
 import type { AssistantNames, AssistantOnPage, CompanyDetail } from '@/api/types'
+import { OFFICE_WORDS } from '@/apps/companies/call-notes/mic/au-words'
+
+/** The most places the speech service's hints get (TBC at PLAN-V24's S1). */
+export const HINT_PLACES = 50
 
 export function namesOnPage(client: QueryClient, onPage: AssistantOnPage | null): string[] {
   const key = onPage?.company_key
@@ -33,15 +40,26 @@ function once(names: readonly string[]): string[] {
   })
 }
 
-/** The names the fix uses: the names on screen, then the hint list's names. */
+/** The office words the fix may put right: one word each, never two ("make good"). */
+const OFFICE_NAMES = OFFICE_WORDS.filter((word) => !word.includes(' '))
+
+/**
+ * The names the fix uses: the names on screen, then the hint list's names, then the word list's
+ * places and office words.
+ */
 export function fixNamesOf(onScreen: readonly string[], list?: AssistantNames | null): string[] {
   const listed = (list?.names ?? []).flatMap((name) => (name.kind === 'word' ? [] : [name.text]))
-  return once([...onScreen, ...listed])
+  return once([...onScreen, ...listed, ...(list?.places ?? []), ...OFFICE_NAMES])
 }
 
-/** The hints for the speech service: the names on screen, then the whole hint list. */
+/**
+ * The hints for the speech service: the names on screen, the whole hint list, the office words,
+ * then the first places.
+ */
 export function hintsOf(onScreen: readonly string[], list?: AssistantNames | null): string[] {
-  return once([...onScreen, ...(list?.names ?? []).map((name) => name.text)])
+  const listed = (list?.names ?? []).map((name) => name.text)
+  const places = (list?.places ?? []).slice(0, HINT_PLACES)
+  return once([...onScreen, ...listed, ...OFFICE_WORDS, ...places])
 }
 
 /** The first company of the hint list, for "Try saying" (PLAN-V23 T4-3), or null. */

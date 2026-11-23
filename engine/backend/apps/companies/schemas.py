@@ -554,6 +554,8 @@ OutcomeFilter = Literal[
     "Connected", "No answer", "Left voicemail", "Left live message", "Busy", "Wrong number", "none"
 ]
 NoteTaskKind = Literal["call", "email", "todo"]
+# HubSpot's call types (core.hubspot.activities.CALL_TYPES; a test checks), PLAN-V25 T3-1.
+CallType = Literal["Prospecting Call", "Follow Up Call", "Agent/Networking Phone Call"]
 NoteFieldKind = Literal["date", "number"]
 StepStatus = Literal["pending", "done", "failed", "uncertain", "skipped"]
 NOTE_MAX_CHARS = 60_000  # the most a note can ever hold; the setting notes_max_chars is less
@@ -581,7 +583,7 @@ WAITING_FOR = (
 
 class CallNoteOptions(Out):
     model_config = ConfigDict(
-        json_schema_extra=optional_in_types("transcript_max_chars", "voice_tool")
+        json_schema_extra=optional_in_types("transcript_max_chars", "voice_tool", "call_types")
     )
 
     enabled: bool = Field(description="True when Log call and Call logs show")
@@ -592,6 +594,9 @@ class CallNoteOptions(Out):
     sending_ready: bool = Field(description=SENDING_READY)
     waiting_for: str | None = Field(description=WAITING_FOR)
     outcomes: list[OutcomeName] = Field(description="HubSpot's call outcomes, for the chips")
+    call_types: list[CallType] = Field(
+        description="HubSpot's call types, the default (Prospecting Call) first (PLAN-V25)"
+    )
     fields: list[NoteFieldOption] = Field(description="The fields a call may change")
     soft_seconds: int = Field(description="When the timer turns Ochre (it never cuts the rep off)")
     max_chars: int = Field(description="The longest note, in characters")
@@ -641,13 +646,24 @@ class CallNoteIn(BaseModel):
     source: NoteSource
     called_at: AwareDatetime = Field(description="When the call was, with its time zone")
     outcome: OutcomeName | None = Field(None, description="How the call went, if the rep picked it")
+    call_type: CallType | None = Field(
+        None,
+        description="HubSpot's call type (PLAN-V25). Left out: Prospecting Call. Another value "
+        "is refused (422)",
+    )
 
 
 class CallNoteCall(Out):
-    model_config = ConfigDict(json_schema_extra=optional_in_types("in_hubspot"))
+    model_config = ConfigDict(json_schema_extra=optional_in_types("in_hubspot", "call_type"))
 
     summary: str = Field(description="Two short lines, or empty until sorted or written")
     outcome: OutcomeName | None
+    call_type: CallType = Field(
+        "Prospecting Call",
+        description="HubSpot's call type it goes with (PLAN-V25): Prospecting Call unless the rep "
+        "picked another",
+        json_schema_extra=no_default_in_types,
+    )
     in_hubspot: bool = Field(
         False, description="True once it is in HubSpot: it can't change here any more"
     )
@@ -797,9 +813,9 @@ class CallNotePatch(BaseModel):
         max_length=64,
         description="The company, for a call saved before it was found (`needs_company`): a "
         "HubSpot company id, or lead:<id>. Taken only then: 409 `company_set` for a call that "
-        "has its company. Only `contact_id`, `outcome` and `teach` may come with it. Once it is "
-        "set, the call is sorted as a new call is, then waits in To confirm. Left out or None: "
-        "the company stays as it is",
+        "has its company. Only `contact_id`, `outcome`, `call_type` and `teach` may come with "
+        "it. Once it is set, the call is sorted as a new call is, then waits in To confirm. Left "
+        "out or None: the company stays as it is",
     )
     # The default isn't written in the contract, so the website's types leave `teach` optional
     # and every other edit can leave it out.
@@ -814,6 +830,11 @@ class CallNotePatch(BaseModel):
     )
     summary: SafeText | None = Field(None, max_length=NOTE_SUMMARY_MAX_CHARS)
     outcome: OutcomeName | None = None
+    call_type: CallType | None = Field(
+        None,
+        description="HubSpot's call type (PLAN-V25). Sent as null: back to Prospecting Call. "
+        "Another value is refused (422)",
+    )
     contact_id: SafeText | None = Field(
         None, max_length=32, description="Who the call was with: one of the company's people"
     )

@@ -18,10 +18,12 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from apps.companies.schemas import (
     MAX_RECIPIENTS,
     Address,
+    CallType,
     CompanyHit,
     MeetingFormState,
     NoteTaskKind,
     Out,
+    OutcomeName,
     OwnerId,
     PrepPerson,
     TeamMember,
@@ -47,6 +49,10 @@ AssistantPageName = Literal[
     "home", "today", "meetings", "call_logs", "companies", "company", "lead_finder"
 ]
 CommandSource = Literal["mic", "typed"]
+# How sure code is of what it found (PLAN-V25 choice 1). sure: the card uses it at once, with
+# Change and Undo. likely: the card suggests the first choice, with its reason; Enter, "yes" or a
+# tap takes it. unsure: up to 3 choices, plus Search.
+Level = Literal["sure", "likely", "unsure"]
 CardAction = Literal["pre_read", "log_call", "task", "email"]
 
 COMMAND_MAX_CHARS = 2_000  # the longest command (choice 18): longer is 422 command_too_long
@@ -94,6 +100,44 @@ class AssistantCardIn(BaseModel):
     )
 
 
+LAST_HEARD_MAX_CHARS = 120
+
+
+class AssistantLastTurn(BaseModel):
+    """The conversation's last turn (PLAN-V25 T5-1, choice 21), as the bar keeps it until the
+    conversation ends: its company and person, found and as heard. Code uses the found ones for
+    "same company", "her" or "and Jo too". Claude gets only the names as heard."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: CardAction | None = Field(None, description="What the last card was for")
+    company_key: SafeText | None = Field(
+        None,
+        max_length=64,
+        description="The last turn's company: a HubSpot id, or lead:<id>. Used only when this "
+        "person may still open it",
+        examples=["201"],
+    )
+    company_heard: SafeText = Field(
+        "",
+        max_length=LAST_HEARD_MAX_CHARS,
+        description="The company's name as heard last turn. Claude gets it, scrubbed",
+        examples=["Sample Logistics"],
+    )
+    person_id: str | None = Field(
+        None,
+        max_length=32,
+        pattern=r"^[A-Za-z0-9_-]+$",
+        description="The last turn's client person: HubSpot's contact id",
+    )
+    person_heard: SafeText = Field(
+        "",
+        max_length=LAST_HEARD_MAX_CHARS,
+        description="The person's name as heard last turn. Claude gets it, scrubbed",
+        examples=["Jo Sample"],
+    )
+
+
 class AssistantCommandIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -110,22 +154,86 @@ class AssistantCommandIn(BaseModel):
         description="The open review card, if any. Then the only actions are change, send and "
         "cancel, and anything else comes back as unknown",
     )
+    last_turn: AssistantLastTurn | None = Field(
+        None,
+        description="The conversation's last turn, if any (PLAN-V25 T5-1): 'same company', "
+        "'her' and 'and Jo too' use it. Left out when the conversation is new",
+    )
 
 
 # --- Out ---------------------------------------------------------------------------------------
 
 
+LEVEL_WORDS = (
+    "How sure code is (PLAN-V25): sure (used at once, with Change and Undo), likely (the first "
+    "choice is suggested, with its reason) or unsure (choose). None when nothing was found"
+)
+REASON_WORDS = (
+    "Why, in a few plain words, like 'You meet them at 2 pm.': for sure, the one found; for "
+    "likely, the first choice. None when there is nothing to say"
+)
+
+
+class AssistantChoice(CompanyHit):
+    """One of several companies that match (PLAN-V25 T1-1)."""
+
+    model_config = ConfigDict(json_schema_extra=optional_in_types("reason", "detail"))
+
+    reason: str | None = Field(
+        None,
+        description="Its strongest signal in plain words, like 'Yours.' or 'Open deal.' None: none",
+        json_schema_extra=no_default_in_types,
+    )
+    detail: str | None = Field(
+        None,
+        description="The one detail that tells it apart from the other choices: its city, its "
+        "owner ('Owner: Sam Sample') or its last call ('Last call 12 Nov')",
+        json_schema_extra=no_default_in_types,
+    )
+
+
+class AssistantPersonHit(PrepPerson):
+    """A client person as a choice (PLAN-V25 T2-1). Found without the company, they bring it."""
+
+    model_config = ConfigDict(
+        json_schema_extra=optional_in_types("company_key", "company_name", "reason")
+    )
+
+    company_key: str | None = Field(
+        None,
+        description="Their company (a HubSpot id) when they were found without it. None when "
+        "the company was already found",
+        json_schema_extra=no_default_in_types,
+    )
+    company_name: str | None = Field(
+        None, description="That company's name", json_schema_extra=no_default_in_types
+    )
+    reason: str | None = Field(
+        None,
+        description="Why they come first, like 'You called them on Tuesday.' None: nothing to say",
+        json_schema_extra=no_default_in_types,
+    )
+
+
 class AssistantCompany(Out):
-    # Added in PLAN-V23: the API always sends them, and the website's types leave them optional.
-    model_config = ConfigDict(json_schema_extra=optional_in_types("from_hubspot", "can_add"))
+    # Added in PLAN-V23 and PLAN-V25: the API always sends them, and the website's types leave
+    # them optional.
+    model_config = ConfigDict(
+        json_schema_extra=optional_in_types("from_hubspot", "can_add", "level", "reason")
+    )
 
     heard: str = Field(description="The company as heard. Empty when the command named none")
     from_page: bool = Field(
         description="True when it is the company on screen: none was named, or the one named "
         "is close to it, or it is one of several that match"
     )
-    found: CompanyHit | None = Field(description="The one company that matches")
-    choices: list[CompanyHit] = Field(description="Two or more that match, best first")
+    found: CompanyHit | None = Field(
+        description="The company to use: the one that matches, or the sure one of several"
+    )
+    choices: list[AssistantChoice] = Field(
+        description="Two or more that match, best first, at most 3. For likely, the first is the "
+        "suggestion"
+    )
     from_hubspot: bool = Field(
         False,
         description="True when our copy didn't have it and HubSpot's own search found it (or "
@@ -139,13 +247,29 @@ class AssistantCompany(Out):
         "HubSpot couldn't be searched",
         json_schema_extra=no_default_in_types,
     )
+    level: Level | None = Field(
+        None, description=LEVEL_WORDS, json_schema_extra=no_default_in_types
+    )
+    reason: str | None = Field(
+        None, description=REASON_WORDS, json_schema_extra=no_default_in_types
+    )
 
 
 class AssistantPerson(Out):
+    model_config = ConfigDict(json_schema_extra=optional_in_types("level", "reason"))
+
     heard: str = Field(description="The client person as heard, like James. Empty if none")
     found: PrepPerson | None = Field(description="The one person at the company who matches")
-    choices: list[PrepPerson] = Field(
-        description="Two or more at the company who match, best first, each with a job title"
+    choices: list[AssistantPersonHit] = Field(
+        description="Two or more at the company who match, best first, each with a job title, "
+        "at most 3. Found without the company (PLAN-V25 T2-1), one or more, each with their "
+        "company: taking one fills the company too"
+    )
+    level: Level | None = Field(
+        None, description=LEVEL_WORDS, json_schema_extra=no_default_in_types
+    )
+    reason: str | None = Field(
+        None, description=REASON_WORDS, json_schema_extra=no_default_in_types
     )
 
 
@@ -159,6 +283,8 @@ class AssistantMeetingHit(Out):
 
 
 class AssistantMeeting(Out):
+    model_config = ConfigDict(json_schema_extra=optional_in_types("level", "reason"))
+
     heard: str = Field(
         description="The words that named the meeting, like Thursday's meeting. Empty if none"
     )
@@ -168,10 +294,18 @@ class AssistantMeeting(Out):
         description="Two or more that match, soonest first, or the company's next ones when "
         "none is on the day said"
     )
+    level: Level | None = Field(
+        None, description=LEVEL_WORDS, json_schema_extra=no_default_in_types
+    )
+    reason: str | None = Field(
+        None, description=REASON_WORDS, json_schema_extra=no_default_in_types
+    )
 
 
 class AssistantRecipient(Out):
     """A teammate or a Contour address, as a command named them."""
+
+    model_config = ConfigDict(json_schema_extra=optional_in_types("level"))
 
     heard: str = Field(description="The name or address as heard")
     found: TeamMember | None = Field(description="The one teammate on the team list who matches")
@@ -181,10 +315,20 @@ class AssistantRecipient(Out):
         description="Why this one can't be sent to yet, in plain words: not on the team list, "
         "no Contour account, or not a Contour address. None when it can"
     )
+    level: Level | None = Field(
+        None, description=LEVEL_WORDS, json_schema_extra=no_default_in_types
+    )
 
 
 class AssistantTask(Out):
-    subject: str = Field(description="What to do, up to 200 characters. Empty when none was said")
+    model_config = ConfigDict(
+        json_schema_extra=optional_in_types("due_level", "due_choices", "subject_suggested")
+    )
+
+    subject: str = Field(
+        description="What to do, up to 200 characters. When none was said, a suggestion "
+        "(`subject_suggested`), like 'Follow up with Sample Logistics Pty Ltd'"
+    )
     due: date = Field(description="A Melbourne working day, today or later")
     due_words: str = Field(description="When, in the rep's own words. Empty when none was said")
     kind: NoteTaskKind
@@ -194,6 +338,23 @@ class AssistantTask(Out):
     )
     owner: AssistantRecipient | None = Field(
         description="Who it is for, when the command named a teammate. None: the rep"
+    )
+    due_level: Level = Field(
+        "sure",
+        description="sure when the day was said and read. likely when it wasn't said or couldn't "
+        "be read: `due` is then a suggestion, the next working day (PLAN-V25 choice 13, TBC)",
+        json_schema_extra=no_default_in_types,
+    )
+    due_choices: list[date] = Field(
+        default_factory=list,
+        description="For likely: the suggested day first, then 'In a week' (a working day). "
+        "'Pick a day' is the card's own. Empty for sure",
+    )
+    subject_suggested: bool = Field(
+        False,
+        description="True when no subject was said and `subject` is a suggestion: the card asks "
+        "'Use it' or 'Type it'",
+        json_schema_extra=no_default_in_types,
     )
 
 
@@ -217,6 +378,11 @@ class AssistantChange(Out):
 class AssistantCommand(Out):
     """What a command would do. Nothing is written or sent: the review card does that."""
 
+    # Added in PLAN-V25: the API always sends them, and the website's types leave them optional.
+    model_config = ConfigDict(
+        json_schema_extra=optional_in_types("call_type", "outcome", "quick", "follow_up_day")
+    )
+
     action: AssistantAction
     read_back: str = Field(
         description="The card's first line, like 'Log a call with James Sample at Sample "
@@ -238,6 +404,32 @@ class AssistantCommand(Out):
     change: AssistantChange | None
     unsure: str | None = Field(
         description="A short line when something wasn't clear or wasn't found, or none"
+    )
+    call_type: CallType | None = Field(
+        None,
+        description="For a call: HubSpot's call type, Prospecting Call unless the command words "
+        "said another, like 'log a follow-up call' (PLAN-V25 T3-1). None for other actions",
+        json_schema_extra=no_default_in_types,
+    )
+    outcome: OutcomeName | None = Field(
+        None,
+        description="For a call that is only an outcome, like 'No answer, Jo Sample': that "
+        "outcome. None when the words say more, or no outcome (the sort reads it from the note)",
+        json_schema_extra=no_default_in_types,
+    )
+    quick: bool = Field(
+        False,
+        description="True for a quick log (PLAN-V25 T3-3): only No answer, Left voicemail, Busy "
+        "or Wrong number, with a sure company and a sure person, and nothing unclear. The card "
+        "may skip itself: the hold's toast says what goes, and Undo opens the card",
+        json_schema_extra=no_default_in_types,
+    )
+    follow_up_day: date | None = Field(
+        None,
+        description="For a call: the day a follow-up nudge suggests ('No follow-up yet. Add one "
+        "for Monday?'), the next working day (PLAN-V25 choice 14, TBC). The card shows the nudge "
+        "only for a Connected call with no follow-up",
+        json_schema_extra=no_default_in_types,
     )
 
 
@@ -496,9 +688,18 @@ class AssistantNames(Out):
     """The names this person is most likely to say, for the mic: the speech service's hints, and
     the list a misheard name is fixed against on every page. Free: no HubSpot request."""
 
+    # Added in PLAN-V25: the API always sends it, and the website's types leave it optional.
+    model_config = ConfigDict(json_schema_extra=optional_in_types("places"))
+
     names: list[AssistantName] = Field(
         description="At most the Settings page's number (50 to start), most likely first, each "
         "name once"
+    )
+    places: list[str] = Field(
+        default_factory=list,
+        description="The word list's places (PLAN-V25 T4-1): the cities and suburbs of the "
+        "companies and offices in our copy, the most common first, at most 200, each once. For "
+        "the name fix, and Chrome's hints when they are on. The office words are the website's own",
     )
 
 

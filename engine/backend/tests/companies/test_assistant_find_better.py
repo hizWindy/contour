@@ -249,6 +249,8 @@ async def test_nothing_anywhere_gives_can_add(
         "choices": [],
         "from_hubspot": False,
         "can_add": True,
+        "level": None,
+        "reason": None,
     }
     assert found["unsure"] == "Zebra Holdings isn't in HubSpot. Add it, or pick another company."
     assert hubspot.calls == ["search_companies"]  # "Zebra": one word once Holdings is left out

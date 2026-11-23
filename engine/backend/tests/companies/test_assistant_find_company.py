@@ -117,12 +117,15 @@ async def test_it_finds_by_our_copy_and_asks_hubspot_nothing(
             "choices": [],
             "from_hubspot": False,
             "can_add": False,
+            "level": "sure",
+            "reason": None,  # one match, with no signal
         },
         "line": None,
     }
     assert exact["company"]["found"]["key"] == "301" and exact["line"] is None
     assert several["company"]["found"] is None
-    assert set(keys(several)) == {"201", "202", "203", "301"}  # a word search, shortest first
+    # A word search, then the ranking: at most 3 of the 4 (PLAN-V25 choice 4).
+    assert len(keys(several)) == 3 and set(keys(several)) <= {"201", "202", "203", "301"}
     assert several["line"] == "Which Sample?"
     assert hubspot.calls == []  # our copy had them all
 
@@ -196,6 +199,8 @@ async def test_nothing_anywhere_gives_can_add_but_hubspot_not_answering_doesnt(
             "choices": [],
             "from_hubspot": False,
             "can_add": True,
+            "level": None,
+            "reason": None,
         },
         "line": "Zebra Holdings isn't in HubSpot. Add it, or pick another company.",
     }

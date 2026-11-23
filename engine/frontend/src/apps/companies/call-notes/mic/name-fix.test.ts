@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fixNames } from './name-fix'
+import { fixNames, soundKey } from './name-fix'
 
 /*
   The name fix for a voice tool that writes names in any case (PLAN-V24 choice 28): the model on
@@ -111,5 +111,54 @@ describe('the name fix, for a tool that writes names in any case', () => {
     expect(fixNames('Spoke to Jo at Vitara about the lease', NAMES, 'capitals').fixes).toEqual([
       { from: 'Vitara', to: 'Vitera' },
     ])
+  })
+})
+
+/*
+  Sounds like (PLAN-V25 T4-2, choice 17): a capitalised word that sounds like one name, as
+  Australians say it, and the "said like" list. Made-up names, and real Australian places.
+*/
+describe('sounds like, and said like', () => {
+  const PLACES = ['Prahran', 'Melbourne', 'Parramatta', 'Sample Logistics Pty Ltd', 'Shell']
+
+  it('fixes a place said the Australian way, by its sound', () => {
+    expect(fixNames('Meeting in Prarn on Friday', PLACES)).toEqual({
+      text: 'Meeting in Prahran on Friday',
+      fixes: [{ from: 'Prarn', to: 'Prahran' }],
+    })
+    expect(fixNames('Their office in Melbun', PLACES).text).toBe('Their office in Melbourne')
+    expect(fixNames('The Paramatta site', PLACES).text).toBe('The Parramatta site')
+  })
+
+  it('fixes a name on the said-like list, in any case, and shows the fix once', () => {
+    expect(fixNames('pran office, then Pran again', PLACES)).toEqual({
+      text: 'Prahran office, then Prahran again',
+      fixes: [
+        { from: 'pran', to: 'Prahran' },
+        { from: 'Pran', to: 'Prahran' },
+      ],
+    })
+    expect(fixNames('Pran and Pran', PLACES).fixes).toHaveLength(1)
+    expect(fixNames('pran', PLACES, 'any').text).toBe('Prahran')
+  })
+
+  it('never changes an everyday word, by spelling or by sound', () => {
+    for (const text of ['Shall we meet?', 'shall we meet', 'Sharp move.', 'Plan the fitout.']) {
+      expect(fixNames(text, PLACES)).toEqual({ text, fixes: [] })
+      expect(fixNames(text, PLACES, 'any')).toEqual({ text, fixes: [] })
+    }
+  })
+
+  it('leaves a word that sounds like two names as it was', () => {
+    expect(fixNames('Call Sean', ['Shaun', 'Shawn']).text).toBe('Call Sean')
+  })
+
+  it('makes the sound key as Australians say the word', () => {
+    expect(soundKey('Prahran')).toBe(soundKey('Pran'))
+    expect(soundKey('Prahran')).toBe(soundKey('Prarn'))
+    expect(soundKey('Phillip')).toBe(soundKey('Filip'))
+    // Simple and Sample sound alike to the key, so the everyday-word guard keeps "Simple".
+    expect(soundKey('Sample')).toBe(soundKey('Simple'))
+    expect(fixNames('Simple plan', ['Sample Logistics Pty Ltd']).text).toBe('Simple plan')
   })
 })

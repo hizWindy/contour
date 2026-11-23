@@ -939,7 +939,7 @@ describe('a change by voice (choice 19)', () => {
       })
     })
     expect(of(API.command)[0]?.body).toMatchObject({
-      card: { action: 'log_call', boxes: ['follow-up', 'outcome', 'summary'] },
+      card: { action: 'log_call', boxes: ['follow-up', 'outcome', 'summary', 'call_type'] },
     })
     // The read-back follows: the follow-up is on Monday now.
     await waitFor(() => {

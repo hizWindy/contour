@@ -1067,3 +1067,38 @@ async def test_a_logged_meeting_goes_as_a_note_not_a_call(
         "words": "Meeting notes added.",
     }
     assert fake.answers == [("note", True)]
+
+
+# --- The call type (PLAN-V25 T3-1) ----------------------------------------------------------------
+
+
+async def test_every_call_sent_carries_its_call_type(
+    world: World, fake: FakeWriter, sender: NoteSender
+) -> None:
+    await a_company(world)
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        plain = await log_call(client)
+        follow_up = await log_call(client, call_type="Follow Up Call")
+        networking = await log_call(client)
+        changed = await client.patch(
+            f"{NOTES}/{networking['id']}", json={"call_type": "Agent/Networking Phone Call"}
+        )
+        refused = await client.patch(f"{NOTES}/{plain['id']}", json={"call_type": "Sales Call"})
+        refused_new = await client.post(NOTES, json=note_body(call_type="Sales Call"))
+        options = await client.get(f"{NOTES}/options")
+        preview = await client.post(
+            f"{NOTES}/preview", json={"ids": [plain["id"], follow_up["id"], networking["id"]]}
+        )
+    assert plain["call"]["call_type"] == "Prospecting Call"  # the default
+    assert follow_up["call"]["call_type"] == "Follow Up Call"
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["call"]["call_type"] == "Agent/Networking Phone Call"
+    assert (refused.status_code, refused_new.status_code) == (422, 422)
+    assert options.json()["call_types"] == [
+        "Prospecting Call",
+        "Follow Up Call",
+        "Agent/Networking Phone Call",
+    ]
+    assert preview.status_code == 200, preview.text
+    sent = [request.call.call_type for request in fake.previews if request.call is not None]
+    assert sent == ["Prospecting Call", "Follow Up Call", "Agent/Networking Phone Call"]

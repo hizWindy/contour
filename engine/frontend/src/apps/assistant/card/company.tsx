@@ -38,6 +38,18 @@
  *   HubSpot's own search. One found is the card's company at once; two or more show as choices
  *   ("Which North Wind?"); none gives "Still no", with Add to HubSpot once HubSpot was searched.
  *   Keys typed in the box still filter our copy, as before.
+ *
+ * PLAN-V25 T1-2 and T2-2, **smart choices** (choices 1, 4 to 7 and 11), by the find's level:
+ *
+ * - **Sure:** used at once, "Sample Logistics Pty Ltd. On screen.", with Change (the choices and
+ *   Search, the pick kept until another is taken) and Undo (the card asks again).
+ * - **Likely:** the suggestion part (`suggest.tsx`): "Sample Logistics Pty Ltd? You meet them at 2
+ *   pm.", with Use it and Not this one.
+ * - **Unsure:** "Which Sample?", up to 3 choices, each with its one detail, and Search.
+ * - **No level** (nothing found, or a command from before PLAN-V25): as before.
+ * - **A person named with no company, found nowhere** (choice 11): the search list finds people
+ *   too, with the name heard, under "There's no 'Jo Sample' in HubSpot. Say the company, or pick
+ *   the person.". A person taken there brings their company (`onPickPerson`).
  */
 import { useQuery } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
@@ -46,15 +58,26 @@ import { newIdempotencyKey, toApiProblem } from '@/api/client'
 import { useCompanySearch } from '@/api/hooks'
 import { addCompany, previewCompany } from '@/api/hooks/assistant-names'
 import { queryKeys } from '@/api/query'
-import type { AssistantCompanyIn, CompanyHit } from '@/api/types'
+import type { AssistantCompanyIn, CallNotePerson, CompanyHit, PersonHit } from '@/api/types'
 import { FIND_COMPANY, LOOKING, NO_MATCH } from '@/apps/companies/words'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useDebounced } from '@/hooks/useDebounced'
-import { isPending, type Company, type CompanyFind } from './draft'
+import {
+  changeCompany,
+  isPending,
+  isSure,
+  personOf,
+  turnDown,
+  undoCompany,
+  type Company,
+  type CompanyFind,
+  type PersonChoice,
+} from './draft'
 import type { CompanySaid } from './find'
 import { foundNote } from './lines'
 import { CardLine, ChoiceList, PartProblem } from './parts'
+import { SuggestPart, SureLine, type SuggestChoice } from './suggest'
 import {
   ADD_ANYWAY,
   ADD_TO_HUBSPOT,
@@ -67,6 +90,7 @@ import {
   CITY_HINT,
   COMPANY,
   COMPANY_NAME,
+  FIND_PERSON_OR_COMPANY,
   isntInHubspotWords,
   likeItWords,
   noCompanyWords,
@@ -83,6 +107,14 @@ export type PickedHow = 'choice' | 'by_hand' | 'added'
 
 export type OnPick = (company: Company, how: PickedHow) => void
 
+/**
+ * One match the search list shows, for "the first one" (PLAN-V24 choice 19): a company, or a person
+ * with their company (PLAN-V25 choice 11), which a pick fills both of.
+ */
+export interface ShownChoice extends Company {
+  person?: CallNotePerson | null
+}
+
 /** What the card's voice gives its company part (PLAN-V24 T3-2). */
 export interface CompanyVoice {
   /**
@@ -90,8 +122,8 @@ export interface CompanyVoice {
    * fill the search box. Null: none yet.
    */
   said: CompanySaid | null
-  /** The companies the search list shows now, for "the first one". Null: no search list. */
-  onShown: (shown: readonly Company[] | null) => void
+  /** What the search list shows now, for "the first one". Null: no search list. */
+  onShown: (shown: readonly ShownChoice[] | null) => void
   /** A name typed in the box and entered: the card's find looks for it. */
   onSubmit?: (words: string) => void
   /**
@@ -132,6 +164,8 @@ export function CompanyPicker({
   onPick,
   voice = null,
   stillNo = null,
+  onPickPerson = null,
+  autoFocus = false,
 }: {
   heard: string
   line: ReactNode
@@ -139,6 +173,13 @@ export function CompanyPicker({
   onPick: (company: Company) => void
   voice?: CompanyVoice | null
   stillNo?: ((words: string) => string) | null
+  /**
+   * People too (PLAN-V25 choice 11): the people our copy's search finds come first, each with their
+   * company, and taking one fills both. Null: companies only.
+   */
+  onPickPerson?: ((person: PersonChoice) => void) | null
+  /** The box takes the focus as it shows (Search, or a suggestion turned down). */
+  autoFocus?: boolean
 }) {
   const said = voice?.said ?? null
   const [text, setText] = useState(said?.words ?? heard)
@@ -158,6 +199,15 @@ export function CompanyPicker({
     () => (asked ? (data?.companies ?? []) : []),
     [asked, data],
   )
+  // People our copy's search found, with a company to log the call on (choice 11).
+  const peopleOn = onPickPerson !== null
+  const people = useMemo<readonly PersonHit[]>(
+    () =>
+      peopleOn && asked && !find
+        ? (data?.people ?? []).filter((one) => Boolean(one.company_key))
+        : [],
+    [peopleOn, asked, find, data],
+  )
   // On screen: the find's choices, or the one it asks about; nothing while it looks or found
   // nowhere; else our copy's.
   const shown = useMemo<readonly CompanyHit[]>(() => {
@@ -166,15 +216,26 @@ export function CompanyPicker({
     if (find?.kind === 'looking' || find?.kind === 'nowhere') return []
     return hits.slice(0, 6)
   }, [find, hits])
-  // The card hears "the first one" from the list on screen.
+  // The card hears "the first one" from the list on screen: the people first, then the companies.
   const onShown = voice?.onShown ?? null
   useEffect(() => {
     if (!onShown) return undefined
-    onShown(shown.map((hit) => ({ key: hit.key, name: hit.name })))
+    onShown([
+      ...people.map((one) => ({
+        key: one.company_key ?? '',
+        name: one.company_name ?? '',
+        person: personOf(one),
+      })),
+      ...shown.map((hit) => ({ key: hit.key, name: hit.name })),
+    ])
     return () => {
       onShown(null)
     }
-  }, [onShown, shown])
+  }, [onShown, shown, people])
+  const box = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (autoFocus) box.current?.focus()
+  }, [autoFocus])
   // Found nowhere: by the find, or, with no find on the server, by our copy's search.
   const nowhere =
     stillNo !== null &&
@@ -184,10 +245,37 @@ export function CompanyPicker({
         asked &&
         search.isSuccess &&
         !search.isFetching &&
-        hits.length === 0))
+        hits.length === 0 &&
+        people.length === 0))
   const id = useId()
   const matches =
-    shown.length > 0 ? (
+    people.length > 0 ? (
+      <ChoiceList
+        label={WHICH_COMPANY}
+        box="company"
+        options={[
+          ...people.map((one) => ({
+            id: `person:${one.id}`,
+            title: one.name,
+            detail: [one.company_name, one.title].filter(Boolean).join(' · ') || null,
+          })),
+          ...shown.map((hit) => ({
+            id: hit.key,
+            title: hit.name,
+            detail: [hit.industry, hit.city].filter(Boolean).join(' · ') || null,
+          })),
+        ]}
+        onPick={(key) => {
+          const one = people.find((each) => `person:${each.id}` === key)
+          if (one) {
+            onPickPerson?.(one)
+            return
+          }
+          const hit = shown.find((each) => each.key === key)
+          if (hit) onPick({ key: hit.key, name: hit.name })
+        }}
+      />
+    ) : shown.length > 0 ? (
       <ChoiceList
         label={
           (find?.kind === 'choices' || find?.kind === 'confirm') && said
@@ -235,9 +323,10 @@ export function CompanyPicker({
           in it, and what the search found under it. */}
       <div className="flex flex-col gap-1.5">
         <label htmlFor={id} className="text-caption text-muted-foreground">
-          {FIND_COMPANY}
+          {peopleOn ? FIND_PERSON_OR_COMPANY : FIND_COMPANY}
         </label>
         <Input
+          ref={box}
           id={id}
           data-box="company"
           autoComplete="off"
@@ -513,6 +602,8 @@ function AddCompany({
   onPick,
   voice,
   stillNo,
+  onPickPerson = null,
+  autoFocus = false,
 }: {
   heard: string
   line: ReactNode
@@ -521,6 +612,8 @@ function AddCompany({
   onPick: OnPick
   voice: CompanyVoice | null
   stillNo: (words: string) => string
+  onPickPerson?: ((person: PersonChoice) => void) | null
+  autoFocus?: boolean
 }) {
   const [adding, setAdding] = useState(false)
   const addButton = useRef<HTMLButtonElement>(null)
@@ -575,6 +668,8 @@ function AddCompany({
       }
       voice={voice}
       stillNo={stillNo}
+      onPickPerson={onPickPerson}
+      autoFocus={autoFocus}
       onPick={(company) => {
         onPick(company, 'by_hand')
       }}
@@ -584,27 +679,152 @@ function AddCompany({
 
 // --- The company part --------------------------------------------------------------------------
 
+/** The company choices as the suggestion part shows them: each with its one detail. */
+function choicesOf(company: CompanyFind): SuggestChoice[] {
+  return company.choices.map((one) => ({
+    id: one.key,
+    title: one.name,
+    detail: one.detail ?? null,
+  }))
+}
+
+/**
+ * A sure company, used at once (PLAN-V25 choice 1): its name and reason, Change and Undo. Change
+ * shows the choices (the one in use lit) and Search, and the pick stays until another is taken.
+ * Undo gives it back: the card asks again.
+ */
+function SureCompany({
+  company,
+  note,
+  onCompany,
+  previewMs,
+}: {
+  company: CompanyFind
+  note: string | null
+  onCompany: (next: CompanyFind) => void
+  previewMs: number
+}) {
+  const [changing, setChanging] = useState(false)
+  const [searching, setSearching] = useState(false)
+  const changeButton = useRef<HTMLButtonElement>(null)
+  const found = company.found
+  if (!found) return null
+  const choices = choicesOf(company)
+  const change = (picked: Company, how: PickedHow): void => {
+    setChanging(false)
+    setSearching(false)
+    changeButton.current?.focus()
+    if (picked.key !== found.key) onCompany(changeCompany(company, picked, how))
+  }
+  return (
+    <div data-slot="company-sure">
+      <SureLine
+        label={COMPANY}
+        name={found.name}
+        reason={company.reason}
+        changeRef={changeButton}
+        note={
+          note ? (
+            <span data-slot="company-note" className="text-caption text-muted-foreground">
+              {note}
+            </span>
+          ) : null
+        }
+        changing={changing}
+        onChange={() => {
+          setChanging((now) => !now)
+          setSearching(false)
+        }}
+        onUndo={() => {
+          onCompany(undoCompany(company))
+        }}
+      >
+        {searching || choices.length === 0 ? (
+          <AddCompany
+            heard={company.heard}
+            line={null}
+            canAdd={false}
+            previewMs={previewMs}
+            voice={null}
+            stillNo={(said) => stillNoWords(said, false)}
+            autoFocus
+            onPick={(picked, how) => {
+              change(picked, how)
+            }}
+          />
+        ) : (
+          <SuggestPart
+            box="company"
+            label={COMPANY}
+            level="unsure"
+            question={whichWords(company.heard, WHICH_COMPANY)}
+            choices={choices}
+            current={found.key}
+            autoFocus
+            onPick={(key) => {
+              const picked = company.choices.find((one) => one.key === key)
+              if (picked) change({ key: picked.key, name: picked.name }, 'choice')
+            }}
+            onSearch={() => {
+              setSearching(true)
+            }}
+          />
+        )}
+      </SureLine>
+    </div>
+  )
+}
+
 /**
  * The company: as found, to pick from two or more, to find, or to add. `voice`: the words said
  * again (PLAN-V24 choice 19). `savedCall`: a call saved before its company, as "Needs a company"
- * (choice 17), whose lines say so.
+ * (choice 17), whose lines say so. `onCompany`: the company part as the rep changed it, by its
+ * level (PLAN-V25): a suggestion turned down, a sure pick changed or undone. `people`: a person
+ * named with no company and found nowhere (choice 11): the search list finds people too.
  */
 export function CompanyPart({
   company,
   onPick,
+  onCompany,
   previewMs,
   voice = null,
   savedCall = false,
+  people = null,
 }: {
   company: CompanyFind
   onPick: OnPick
+  onCompany?: ((next: CompanyFind) => void) | null
   /** How long the add's check waits after the last key. */
   previewMs: number
   voice?: CompanyVoice | null
   savedCall?: boolean
+  people?: {
+    /** The person's name as heard: the search box starts with it. */
+    heard: string
+    /** The line over the box, or null after the rep chose to search. */
+    line: string | null
+    onPick: (person: PersonChoice) => void
+  } | null
 }) {
+  // Search, or a suggestion turned down to no choice left: the search list, with the focus in it.
+  const [searching, setSearching] = useState(false)
+  const [focusNext, setFocusNext] = useState(false)
   if (company.found) {
     const note = foundNote(company, company.found.name)
+    if (isSure(company) && onCompany) {
+      return (
+        <SureCompany
+          company={company}
+          note={note}
+          previewMs={previewMs}
+          onCompany={(next) => {
+            // Undone: the card asks again, with the focus on its first choice.
+            if (next.found === null) setFocusNext(true)
+            onCompany(next)
+          }}
+        />
+      )
+    }
     return (
       <CardLine label={COMPANY}>
         {company.found.name}
@@ -621,7 +841,35 @@ export function CompanyPart({
   }
   // A name said that isn't in "Which Sample?" opens the search list with it (choice 19).
   const fromChoices = isPending(company)
-  if (fromChoices && !voice?.said) {
+  const level = company.level ?? null
+  if (fromChoices && !voice?.said && !searching && level !== null && level !== 'sure') {
+    const [first] = company.choices
+    return (
+      <SuggestPart
+        box="company"
+        label={COMPANY}
+        level={level}
+        suggestion={first?.name}
+        reason={company.reason}
+        question={whichWords(company.heard, WHICH_COMPANY)}
+        choices={choicesOf(company)}
+        autoFocus={focusNext}
+        onPick={(key) => {
+          const picked = company.choices.find((one) => one.key === key)
+          if (picked) onPick({ key: picked.key, name: picked.name }, 'choice')
+        }}
+        onTurnDown={() => {
+          setFocusNext(true)
+          onCompany?.(turnDown(company))
+        }}
+        onSearch={() => {
+          setFocusNext(true)
+          setSearching(true)
+        }}
+      />
+    )
+  }
+  if (fromChoices && !voice?.said && !searching) {
     return (
       <ChoiceList
         label={whichWords(company.heard, WHICH_COMPANY)}
@@ -634,13 +882,22 @@ export function CompanyPart({
       />
     )
   }
-  const { heard } = company
+  const heard = people ? people.heard : company.heard
   const words = savedCall
     ? callSavedWords(heard)
     : company.canAdd
       ? isntInHubspotWords(heard)
       : noCompanyWords(heard)
-  const line = fromChoices ? null : <Line>{words}</Line>
+  // Searching by choice, or the card asking again (a suggestion turned down, a sure pick undone):
+  // no line over the box, which says what it is for.
+  const asked = searching || level === 'unsure'
+  const line = people ? (
+    people.line === null ? null : (
+      <Line>{people.line}</Line>
+    )
+  ) : fromChoices || asked ? null : (
+    <Line>{words}</Line>
+  )
   const stillNo = (said: string): string => stillNoWords(said, savedCall)
   // Add to HubSpot: the command found it nowhere, or the card's find did, after HubSpot's search.
   const find = voice?.said?.find
@@ -655,6 +912,8 @@ export function CompanyPart({
         onPick={onPick}
         voice={voice}
         stillNo={stillNo}
+        onPickPerson={people?.onPick ?? null}
+        autoFocus={focusNext}
       />
     </div>
   )
