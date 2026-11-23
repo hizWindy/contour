@@ -7,7 +7,7 @@ This plan makes the Assistant and the mic guess better and ask less. When someth
 - **Status:** written on 22 Nov 2026 from Al-khair's chat, and checked against it the same day. Approved by Al-khair on 22 Nov (`implement v25`), and being built on `plan-v25` in `../contour-v25`.
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
 - **Last updated:** 23 Nov 2026.
-- **Progress:** every build step is done except T4-3, which waits on PLAN-V24's S1. The part checks (T1-3, T2-3, T3-4, T4-4, T5-2) run together before M1.
+- **Progress:** built, checked and joined into `master` (23 Nov 2026, M1), and pushed. Not deployed. Open: S1, S2, T4-3 (after PLAN-V24's S1), M2 (`deploy v25`, after HubSpot's call type values are checked), M3 and M4.
 - **Sources:**
   - Al-khair's chat on 22 Nov 2026, after the PLAN-V24 deploy;
   - the code on `master` (`1d7a5ce`), read on 22 Nov;
@@ -197,7 +197,7 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
   - **Done when:** tests with made-up companies pass: each signal puts its company first in the order of choice 2; each choice carries its level and one reason; the three levels come out as choice 1 says; a learned name stays sure; and nothing new is asked of Claude. The contract and the website's types are made again.
 - [x] **T1-2. The suggestion part.** Done 23 Nov 2026 (`9f4906c`). (`assistant/card/`). Choices 4 to 7.
   - **Done when:** tests at 1440 and 390 px pass: a likely pick shows one suggestion with its reason; Enter, "yes" or a tap takes it; "Not this one" shows up to 3 choices and Search; the keys 1 to 3 pick; a sure pick is used at once with Change and Undo; a screen reader hears the suggestion once; and the same part serves a company, a person, a teammate and a meeting.
-- [ ] **T1-3. Part 1 check.** Website: lint, types, tests, build, `node scripts/bundle-report.js`. Backend: ruff, mypy, the fast tests and the Companies tests. The `design-review` skill on the card.
+- [x] **T1-3. Part 1 check.** Done 23 Nov 2026, together before M1 (see the Log). Website: lint, types, tests, build, `node scripts/bundle-report.js`. Backend: ruff, mypy, the fast tests and the Companies tests. The `design-review` skill on the card.
   - **Done when:** all pass, the first visit grew by 1 kB at most, and the numbers are in the Log.
 
 ## Part 2: start from the person
@@ -206,7 +206,7 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
   - **Done when:** tests pass: "Log a call with Jo Sample" with no company finds her, her company and its open deal; two Jo Samples give choices with their companies; ranking follows choice 9; a person the rep can't see is never offered; and a company said with the person still wins.
 - [x] **T2-2. The card for a person found first.** Done 23 Nov 2026 (`9f4906c`). (`assistant/card/`). Choice 11.
   - **Done when:** tests pass: the suggestion reads "Jo Sample at Northwind?"; taking it fills the company and the person; a person found nowhere opens the people search; and "Needs a company" works as before.
-- [ ] **T2-3. Part 2 check.** As T1-3.
+- [x] **T2-3. Part 2 check.** Done 23 Nov 2026, together before M1 (see the Log). As T1-3.
   - **Done when:** all pass, and the numbers are in the Log.
 
 ## Part 3: fill the gaps
@@ -217,7 +217,7 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
   - **Done when:** tests pass: a task with no day suggests one, with two other choices; a task with no subject suggests one from the call; two teammates with the same name give choices; a connected call with no follow-up shows the nudge; "yes" adds it; and a no-answer gets no nudge.
 - [x] **T3-3. The quick log.** Done 23 Nov 2026 (`6f401c8`, `9f4906c`). (`assistant/card/`, `hold.tsx`). Choice 15, after Al-khair decides A2.
   - **Done when:** tests pass: "No answer, Jo Sample" with a sure person sends after the hold with no card; the toast names the outcome, person and company; Undo opens the card; and words, a follow-up or any doubt still open the card.
-- [ ] **T3-4. Part 3 check.** As T1-3, plus the contract gate (`RUN_GATES=1`) and the `security-check` skill on the HubSpot write.
+- [x] **T3-4. Part 3 check.** Done 23 Nov 2026, together before M1 (see the Log). As T1-3, plus the contract gate (`RUN_GATES=1`) and the `security-check` skill on the HubSpot write.
   - **Done when:** all pass, and the numbers are in the Log.
 
 ## Part 4: the Australian layer
@@ -230,19 +230,19 @@ Needs PLAN-V24's S1 and S2 first.
   - **Done when:** tests pass: "Pran" becomes Prahran; a name said the Australian way is fixed; no everyday word ever changes ("shall" never becomes "Shell"); and every fix still shows once on the card.
 - [ ] **T4-3. Hints on, and a language per person.** (`voice-tool.ts`, the profile menu). Choices 18 and 19.
   - **Done when:** tests pass: the hints go on only where S1 said yes; the language row lists the choices; English (Australia) is the default; and the choice stays after a reload.
-- [ ] **T4-4. Part 4 check.** As T1-3.
+- [x] **T4-4. Part 4 check.** Done 23 Nov 2026, together before M1 (see the Log). As T1-3.
   - **Done when:** all pass, and the numbers are in the Log.
 
 ## Part 5: a short memory
 
 - [x] **T5-1. The last turn.** Done 23 Nov 2026 (`6f401c8`, `01a1dce`). (the bar's session, the command route, `assistant.py`). Choice 21.
   - **Done when:** tests pass: "same company" uses the last turn's company; "and Jo too" adds a second call with the same company; the memory ends with the conversation; and Claude gets no more than the last turn's names.
-- [ ] **T5-2. Part 5 check.** As T1-3.
+- [x] **T5-2. Part 5 check.** Done 23 Nov 2026, together before M1 (see the Log). As T1-3.
   - **Done when:** all pass, and the numbers are in the Log.
 
 ## Merge, checks and going live
 
-- [ ] **M1. Merge** (`merge v25`, on Al-khair's word). Full checks, the `merge-check` skill and a fresh `review-agent`. Then `git merge --ff-only plan-v25` in the main folder.
+- [x] **M1. Merge** Done 23 Nov 2026: `master` moves to `plan-v25` (see the Log). (`merge v25`, on Al-khair's word). Full checks, the `merge-check` skill and a fresh `review-agent`. Then `git merge --ff-only plan-v25` in the main folder.
 - [ ] **M2. Deploy** (`deploy v25`). Push `master` and deploy. The migration runs on deploy.
 - [ ] **M3. The live test with Levi:**
   1. A company said loosely: the right one comes first, with its reason.
@@ -290,3 +290,6 @@ Needs PLAN-V24's S1 and S2 first.
 - 23 Nov 2026, T1-2, T2-2, T3-1 to T3-3 website (`9f4906c`): built by two frontend agents and reviewed here. The call type is a Segmented choice on the call card and in Call logs' edit form. The quick log saves the call at once, holds 5 seconds with "Logging No answer with Jo Sample, Northwind." and Undo, waits up to 60 seconds for the sort (TBC), then sends as the card's Send does. **TBC:** the three call types' labels; a suggested day or subject doesn't stop a send; the quick log keeps the words, so the sort still asks Claude (a few seconds). Not yet seen in a browser.
 - 23 Nov 2026, T5-1 website (`01a1dce`): the bar keeps the last turn until it closes and sends it with each command.
 - 23 Nov 2026, checks so far: website lint 0 problems, types 0 errors, the build passes, the first visit 243 kB of JavaScript (gzip) in 41 files (the same as PLAN-V24). The full website test run was stopped twice by Claude Code for low memory (1.3 GB free of 15.6 GB); 511 of 514 tests in the 17 files it reached passed, and the 3 that failed pass now (2 needed the new `last_turn`, 1 timed out under the memory pressure). The full run, `RUN_GATES=1` and the `security-check` are still to run, before M1.
+- 23 Nov 2026, the part checks (T1-3, T2-3, T3-4, T4-4, T5-2), run together on `8a21f23`: backend ruff and mypy clean (450 files); the Companies and HubSpot activity tests 781 passed; the fast tests passed in each commit's hook; `RUN_GATES=1` gates 3 passed; one migration head (0027), the schema map matches, and the generated files match a fresh run. Website: lint 0, types 0, the full run 3,117 of 3,118 (the one failure, the router's Admin tab, timed out at 5 seconds under low memory and passes alone, 50 of 50); the build passes; the first visit is 243 kB of JavaScript (gzip) in 41 files, the same as PLAN-V24. The `security-check` found no blocker: the call type rides the existing confirmed call write and a type HubSpot doesn't list is refused; Claude gets only the last turn's names as heard, scrubbed and fenced; a last company the rep can't open is dropped. The `design-review` and `flow-trace` skills weren't run (memory); the review below read `suggest.tsx` and `gaps.tsx` against DESIGN.md and found no break.
+- 23 Nov 2026, M1: a fresh `review-agent` said Not ready, for two reasons. (1) A quick log could send a task the toast never showed: "follow up", "try again" and "again" counted as filler. (2) The part checks weren't ticked. Fixed in `1d80d71`: those words now open the card (a call type like "a follow-up call" is taken out first); a quick log whose sort found a task, a field change or another outcome opens the card instead of sending; the last turn's company is sure only when said ("same company", "and Jo too"), and only a suggestion when nothing is said or on screen; and Change after a quick log's Undo removes the call it saved. 50 backend tests in the touched files and 326 card tests pass after the fix, and the hook's fast tests passed. Known limits, kept as notes: the memory reads the command, not a pick made on the card; a person's reason can name a weaker signal than the one that ranked them first; a meeting earlier today doesn't count as "soon"; the person search keeps the 25 newest before ranking; two quick logs' holds share one Esc.
+- 23 Nov 2026, M1: on Al-khair's word (`merge v25`, and push to GitHub), `master` moves to `plan-v25` with T4-3 not built: it waits on PLAN-V24's S1, as A3 says. **Before `deploy v25`:** check HubSpot's call type values with the app's key. Every call now sends `hs_activity_type`, and if HubSpot stores other values than these labels, every call send fails.
