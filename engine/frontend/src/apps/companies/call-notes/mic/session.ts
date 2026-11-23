@@ -275,6 +275,14 @@ export const SILENT_MS = 2000
 const HEAR_POLL_MS = 50
 /** The tool gets this long to start listening before it counts as not loaded. */
 export const TOOL_START_MS = 5000
+/**
+ * A service that listens but hears nothing (23 Nov 2026, Edge): after this much voice with no
+ * word back, the session moves to the model, as a service that didn't start does (choice 22).
+ * Counted only while the sound is over `DEAF_LEVEL`, so a quiet room never moves it.
+ */
+export const DEAF_VOICE_MS = 6000
+/** Twice the check's level: a clear voice, not a hum in the room. */
+export const DEAF_LEVEL = HEAR_LEVEL * 2
 /** Writing out may take this many times as long as the talk, and at least the floor. */
 export const TOO_SLOW_TIMES = 3
 export const TOO_SLOW_FLOOR_MS = 5000
@@ -417,6 +425,10 @@ export class MicSession {
   private toolReady = false
   private timers: number[] = []
   private hearTimer = 0
+  /** Watches for a service that hears nothing (`watchDeaf`). */
+  private deafTimer = 0
+  /** The browser's service gave a word in this opening: it works here. */
+  private serviceHeard = false
   /** The words still being heard as they were handed over, as letters: they count once. */
   private pending = ''
   /** The words still being heard now, as the tool gave them (before the name fix). */
@@ -500,6 +512,7 @@ export class MicSession {
     this.release()
     this.run += 1
     this.toolReady = false
+    this.serviceHeard = false
     this.pending = ''
     this.heardRaw = ''
     this.engine = engineFor(this.kind, hereOf(this.env))
@@ -858,6 +871,31 @@ export class MicSession {
       steps: this.step('ready', 'pass'),
       listeningSince: this.env.now(),
     })
+    this.watchDeaf(this.run)
+  }
+
+  /**
+   * A service that listens but hears nothing (23 Nov 2026, Edge): the mic hears a clear voice for
+   * `DEAF_VOICE_MS` and the service gives no word, so the session moves to the model and this
+   * device remembers it, as when the service doesn't start (choice 22). Once a word comes, the
+   * service works here and the watch ends.
+   */
+  private watchDeaf(run: number): void {
+    window.clearInterval(this.deafTimer)
+    const { analyser, wave } = this
+    if (this.engine !== 'service' || this.serviceHeard || !analyser || !wave) return
+    let voiceMs = 0
+    this.deafTimer = window.setInterval(() => {
+      if (this.stale(run) || this.serviceHeard || this.snapshot.phase !== 'listening') {
+        window.clearInterval(this.deafTimer)
+        return
+      }
+      if (levelOf(analyser, wave) >= DEAF_LEVEL) voiceMs += HEAR_POLL_MS
+      if (voiceMs < DEAF_VOICE_MS) return
+      window.clearInterval(this.deafTimer)
+      if (!this.mayMoveToModel()) return
+      this.moveToModel()
+    }, HEAR_POLL_MS)
   }
 
   private startTool(run: number, track: MediaStreamTrack | null): void {
@@ -878,6 +916,7 @@ export class MicSession {
       },
       onWords: (chunk) => {
         if (!current()) return
+        if (chunk.trim() !== '') this.serviceHeard = true
         // Words handed over before they were final count once (`handOver`).
         const { rest, left } = afterHanded(chunk, this.pending)
         this.pending = left
@@ -885,6 +924,7 @@ export class MicSession {
       },
       onHearing: (text) => {
         if (!current()) return
+        if (text.trim() !== '') this.serviceHeard = true
         // Nothing is still being heard: words handed over before they were final are all in.
         if (text.trim() === '') this.pending = ''
         this.heardRaw = afterHanded(text, this.pending).rest
@@ -911,6 +951,12 @@ export class MicSession {
           // only if nothing moved.
           this.toolLost = problem
           void this.follow(run)
+          return
+        }
+        if (problem === 'tool_failed' && !this.serviceHeard && this.mayMoveToModel()) {
+          // The service refused before any word (like Edge's or Brave's): the model, as when it
+          // doesn't start (choice 22).
+          this.moveToModel()
           return
         }
         this.toolFailed(run, problem === 'too_slow' ? this.slowProblem() : problem)
@@ -1129,6 +1175,7 @@ export class MicSession {
 
   private release(): void {
     window.clearInterval(this.hearTimer)
+    window.clearInterval(this.deafTimer)
     for (const timer of this.timers) window.clearTimeout(timer)
     this.timers = []
     this.tool?.abort()

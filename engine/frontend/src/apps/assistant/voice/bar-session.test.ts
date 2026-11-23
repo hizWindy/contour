@@ -529,7 +529,8 @@ describe('each state (T3-2)', () => {
   })
 
   it('the voice tool fails before any word: the text line, and Try again listens again', async () => {
-    const { mic, session, now } = await listening()
+    // Where the model can't run: elsewhere a refusal before any word moves to the model.
+    const { mic, session, now } = await listening({ mic: { browser: { model: false } } })
     mic.fail('tool_failed')
     expect(now()).toMatchObject({
       phase: 'typing',

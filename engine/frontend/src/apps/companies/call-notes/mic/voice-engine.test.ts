@@ -42,6 +42,10 @@ const UA = {
   firefoxMac:
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0',
   firefoxAndroid: 'Mozilla/5.0 (Android 15; Mobile; rv:145.0) Gecko/145.0 Firefox/145.0',
+  operaWindows:
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 OPR/127.0.0.0',
+  samsungAndroid:
+    'Mozilla/5.0 (Linux; Android 15; SM-S921B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/29.0 Chrome/138.0.0.0 Mobile Safari/537.36',
 }
 
 /** A browser: a laptop with a mouse, with the speech service, that can run the model. */
@@ -55,7 +59,6 @@ const IPAD_AS_MAC = here(UA.safariMac, { touchPoints: 5 })
 describe('with browser_service, the setting live now (choice 22)', () => {
   it.each<[string, Here]>([
     ['Chrome on a Windows laptop', here(UA.chromeWindows)],
-    ['Edge on a Windows laptop', here(UA.edgeWindows)],
     ['Chrome on a Mac', here(UA.chromeMac)],
     ['Chrome on an Android phone', here(UA.chromeAndroid, { touchPoints: 5 })],
   ])('%s gets the browser’s speech service', (_, browser) => {
@@ -71,6 +74,10 @@ describe('with browser_service, the setting live now (choice 22)', () => {
     ['Firefox on Windows', here(UA.firefoxWindows, { speech: false })],
     ['Firefox on a Mac', here(UA.firefoxMac, { speech: false })],
     ['Firefox on Android', here(UA.firefoxAndroid, { speech: false, touchPoints: 5 })],
+    // 23 Nov 2026: Edge's service listened and heard nothing. Only Google Chrome keeps its service.
+    ['Edge on a Windows laptop', here(UA.edgeWindows)],
+    ['Opera on a Windows laptop', here(UA.operaWindows)],
+    ['Samsung Internet on Android', here(UA.samsungAndroid, { touchPoints: 5 })],
   ])('%s gets the model on the device', (_, browser) => {
     expect(engineFor('browser_service', browser)).toBe('model')
   })

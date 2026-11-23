@@ -21,6 +21,8 @@ import {
 } from './fake-mic'
 import {
   afterHanded,
+  DEAF_LEVEL,
+  DEAF_VOICE_MS,
   lettersOf,
   MicSession,
   SOUND,
@@ -519,6 +521,69 @@ describe('a service that doesn’t start in 5 seconds (PLAN-V24 T4-3, choice 22)
     await tick(100 + TOOL_START_MS)
     expect(now()).toMatchObject({ phase: 'failed', problem: 'tool_failed' })
     expect(mic.tools.every((tool) => tool.nameCase === 'any')).toBe(true)
+  })
+})
+
+describe('a service that listens but hears nothing (23 Nov 2026, Edge)', () => {
+  it('moves to the model after 6 seconds of clear voice with no word, and remembers it', async () => {
+    const { mic, session, now } = await listening({ modelBytes: 83_000_000 })
+    await tick(DEAF_VOICE_MS - 200)
+    expect(mic.storage.has(ENGINE_KEY)).toBe(false)
+    await tick(400)
+    expect(mic.storage.get(ENGINE_KEY)).toBe('model')
+    expect(mic.tools[0]?.aborted).toBe(true)
+    // The model downloads, with no problem on screen, then listens.
+    expect(now()).toMatchObject({
+      phase: 'checking',
+      problem: null,
+      preparing: { total: 83_000_000 },
+    })
+    mic.model.done()
+    await tick(100)
+    expect(now().phase).toBe('listening')
+    expect(mic.tools.at(-1)?.nameCase).toBe('any')
+    session.close()
+  })
+
+  it('stays on the service once a word comes', async () => {
+    const { mic, now } = await listening()
+    mic.hear('log a')
+    await tick(DEAF_VOICE_MS * 3)
+    expect(mic.storage.has(ENGINE_KEY)).toBe(false)
+    expect(now().phase).toBe('listening')
+    expect(mic.tools).toHaveLength(1)
+  })
+
+  it('a quiet hum in the room never moves it', async () => {
+    const { mic, now } = await listening()
+    mic.level = DEAF_LEVEL / 2
+    await tick(DEAF_VOICE_MS * 3)
+    expect(mic.storage.has(ENGINE_KEY)).toBe(false)
+    expect(now().phase).toBe('listening')
+  })
+
+  it('where the model can’t run, it stays on the service', async () => {
+    const { mic, now } = await listening({ browser: { model: false } })
+    await tick(DEAF_VOICE_MS * 2)
+    expect(mic.storage.has(ENGINE_KEY)).toBe(false)
+    expect(now().phase).toBe('listening')
+  })
+
+  it('a service that refuses before any word moves to the model', async () => {
+    const { mic, now } = await listening()
+    mic.fail('tool_failed')
+    await tick(100)
+    expect(mic.storage.get(ENGINE_KEY)).toBe('model')
+    expect(now().problem).toBeNull()
+  })
+
+  it('after a word, a refusal shows as before, and nothing moves', async () => {
+    const { mic, now } = await listening()
+    mic.say('Log a call')
+    mic.fail('tool_failed')
+    await tick(100)
+    expect(now()).toMatchObject({ phase: 'failed', problem: 'tool_failed' })
+    expect(mic.storage.has(ENGINE_KEY)).toBe(false)
   })
 })
 

@@ -225,6 +225,7 @@ describe('a conversation (PLAN-V24 T2-1)', () => {
 describe('the quiet stop (choice 10)', () => {
   it('2 minutes with no words ends it with the quiet line, and the mic is let go', async () => {
     const { mic, now, sent } = await listening()
+    mic.level = 0 // a quiet room: a voice with no words would move a deaf service to the model
     // The 2 minutes count from the moment it listened, a moment after the bar opened.
     await tick(TIMES.quiet - 200)
     expect(now().phase).toBe('listening')
@@ -250,6 +251,7 @@ describe('the quiet stop (choice 10)', () => {
 
   it('Start again (or V) listens again, as a new conversation', async () => {
     const { mic, session, now } = await listening()
+    mic.level = 0 // a quiet room
     await tick(TIMES.quiet)
     expect(session.pressV()).toBe(true)
     await tick(100)
@@ -638,7 +640,8 @@ describe('phones and windows (PLAN-V24 T2-5)', () => {
     ],
     [
       'the quiet stop',
-      async () => {
+      async ({ mic }) => {
+        mic.level = 0 // a quiet room
         await tick(TIMES.quiet)
       },
     ],

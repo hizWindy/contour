@@ -359,7 +359,8 @@ describe('what can go wrong (the plan’s table, the mic)', () => {
   })
 
   it('the voice tool didn’t load: says so, with Try again and Type instead', async () => {
-    const { mic } = openCard({ toolNeverReady: true })
+    // Where the model can't run: elsewhere a refusal before any word moves to the model.
+    const { mic } = openCard({ toolNeverReady: true, browser: { model: false } })
     await screen.findByText('Getting voice to text ready')
     // That line shows from the start. The tool fails once the mic is heard: the hear check
     // passing clears a problem before it, which a busy run could let happen.

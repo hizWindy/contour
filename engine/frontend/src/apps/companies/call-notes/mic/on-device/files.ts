@@ -127,11 +127,14 @@ export function filesFor(model: ModelName, device: Device): VoiceFile[] {
 }
 
 /**
- * WebGPU first, as choice 23 says (TBC at S2). Measured on 21 Nov in Chrome on a laptop's Intel
- * graphics: Moonshine Base's 8-bit files took about 10 times longer on WebGPU than on the CPU
- * (2.5 s against 0.26 s for 2.3 s of sound). If S2 finds the same on an iPhone, make it false.
+ * WebGPU first: off since 23 Nov 2026, as PLAN-V24's A2 recommended. Measured on 21 Nov in Chrome
+ * on a laptop's Intel graphics: Moonshine Base's 8-bit files took about 10 times longer on WebGPU
+ * than on the CPU (2.5 s against 0.26 s for 2.3 s of sound). And on an iPhone the WebGPU path
+ * loads ONNX Runtime's asyncify build, which Safari 26.2 and later can run out of memory
+ * compiling (WebKit bug 304810, open): the likely cause of the iPhone's mic failing. So every
+ * device runs the model on the CPU, with the plain build. S2 can turn it on again.
  */
-export const WEBGPU_FIRST = true
+export const WEBGPU_FIRST = false
 
 /** WebGPU where the browser has a graphics adapter for it, else the CPU (choice 23). */
 export async function deviceHere(): Promise<Device> {

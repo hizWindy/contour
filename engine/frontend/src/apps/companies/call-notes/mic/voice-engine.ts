@@ -6,11 +6,16 @@
  *
  * - **`browser_service`** (live now): the browser's service where it is strong, and the model where
  *   it is weak or missing.
- *   - The service: Chrome or Edge on a laptop, and Chrome on Android.
- *   - The model: any browser on an iPhone or iPad (the installed app too), Safari on a Mac, and
- *     Firefox. An iPad can say it is a Mac, so its touch points tell it apart.
- *   - The model too, anywhere the service didn't start within 5 seconds once: the mic session
- *     remembers that on this device (`rememberModel`).
+ *   - The service: Google Chrome only, on a computer or Android. Its service (Google's) is the
+ *     one proven on the team's laptops.
+ *   - The model: every other browser (23 Nov 2026: Edge's service listened and heard nothing).
+ *     So Edge, Opera, Samsung Internet, Safari on a Mac, Firefox, and any browser on an iPhone
+ *     or iPad (the installed app too). An iPad can say it is a Mac, so its touch points tell it
+ *     apart.
+ *   - The model too, anywhere the service didn't start within 5 seconds, refused before a word,
+ *     or heard a clear voice for 6 seconds and gave no word: the mic session remembers that on
+ *     this device (`rememberModel`). That catches a Chromium browser that says it is Chrome,
+ *     like Brave.
  * - **`browser_model`:** the model on every device, for anyone who wants the voice never to leave
  *   it.
  * - **`typing`:** no mic, as before.
@@ -44,20 +49,25 @@ export type DeviceKind = 'phone' | 'tablet' | 'computer'
 
 const IOS = /\b(iPhone|iPad|iPod)\b/
 const MAC = /\bMacintosh\b/
-const FIREFOX = /\b(Firefox|FxiOS)\//
-/** Chrome, Edge, and the other browsers built on Chromium, on any system. */
-const CHROMIUM = /\b(Chrome|Chromium|CriOS|Edg|EdgA|EdgiOS)\//
+/** Chrome's own mark. Other browsers built on Chromium carry it too, so they are taken out below. */
+const CHROME = /\bChrome\//
+/** Browsers built on Chromium that say "Chrome" but have another speech service, or none. */
+const NOT_GOOGLE_CHROME =
+  /\b(Edg|EdgA|EdgiOS|OPR|Opera|SamsungBrowser|YaBrowser|Vivaldi|UCBrowser)\//
 
 /** An iPhone or an iPad, the installed app too. iPadOS can show a Mac's user agent. */
 export function isAppleMobile({ userAgent, touchPoints }: BrowserFacts): boolean {
   return IOS.test(userAgent) || (MAC.test(userAgent) && touchPoints > 1)
 }
 
+/** Google Chrome on a computer or Android: the one browser whose service is proven here. */
+export function isGoogleChrome({ userAgent }: BrowserFacts): boolean {
+  return CHROME.test(userAgent) && !NOT_GOOGLE_CHROME.test(userAgent)
+}
+
 /** The browser's service is weak or missing here (choice 22): the model does better. */
 export function serviceIsWeak(here: Here): boolean {
-  const { userAgent } = here
-  const safariOnMac = MAC.test(userAgent) && !CHROMIUM.test(userAgent) && !FIREFOX.test(userAgent)
-  return !here.speech || isAppleMobile(here) || FIREFOX.test(userAgent) || safariOnMac
+  return !here.speech || isAppleMobile(here) || !isGoogleChrome(here)
 }
 
 /**
