@@ -807,6 +807,7 @@ describe('the lead page', () => {
           open_deals: [],
           last_dissolved: null,
           last_activity: null,
+          confirmed_by: null,
           candidates: [
             {
               hubspot_id: '501',

@@ -13,11 +13,17 @@
  * tiers spelled out either way, so the list never depends on what the server does with no tier.
  * (Before PLAN-V21 the default was A and B, and "every tier" sent the four named tiers, so a lead
  * judged before tiers existed showed in no view.)
+ *
+ * New leads only (PLAN-V27 choice 6): by default the API is asked for new, quiet and possible-match
+ * leads, so the companies HubSpot has hide behind the "In HubSpot (8)" chip. The chip sets
+ * `show_in_hubspot=true`, which drops that filter. A person's own pick in the HubSpot filter wins:
+ * then it is sent as picked, and the chip doesn't apply.
  */
 import type {
   CityGroup,
   Confidence,
   HubSpotStatus,
+  LeadFacets,
   LeadOrigin,
   LeadResult,
   LeadStatus,
@@ -27,7 +33,9 @@ import {
   CITY_GROUP_LABELS,
   CONFIDENCE_LABELS,
   HUBSPOT_STATUS_LABELS,
+  IN_HUBSPOT_STATUSES,
   LEAD_STATUS_LABELS,
+  NEW_LEAD_STATUSES,
   ORIGIN_LABELS,
   RESULT_LABELS,
   TIER_LABELS,
@@ -121,6 +129,11 @@ export interface LeadFilters {
   include_tests: boolean
   /** Only leads whose facts are missing because Claude couldn't fill in the answer form. */
   facts_missing: boolean
+  /**
+   * Show the leads HubSpot has too (the "In HubSpot" chip is pressed). Off by default: Results shows
+   * new leads only. Ignored while `hubspot_status` has a pick.
+   */
+  show_in_hubspot: boolean
 }
 
 export interface ResultsState {
@@ -158,6 +171,7 @@ export const NO_FILTERS: LeadFilters = {
   q: '',
   include_tests: false,
   facts_missing: false,
+  show_in_hubspot: false,
 }
 
 export const DEFAULT_STATE: ResultsState = {
@@ -259,6 +273,7 @@ export function readResults(params: URLSearchParams): ResultsState {
     q: (params.get('q') ?? '').slice(0, MAX_TEXT),
     include_tests: params.get('include_tests') === 'true',
     facts_missing: params.get('facts_missing') === 'true',
+    show_in_hubspot: params.get('show_in_hubspot') === 'true',
   }
   for (const key of NUMBER_KEYS) {
     filters[key] = wholeNumber(params.get(key))
@@ -329,6 +344,9 @@ export function writeResults(state: ResultsState): URLSearchParams {
   if (filters.excluded) {
     params.set('excluded', 'true')
   }
+  if (filters.show_in_hubspot) {
+    params.set('show_in_hubspot', 'true')
+  }
   if (state.sort !== DEFAULT_STATE.sort || state.order !== DEFAULT_STATE.order) {
     params.set('sort', state.sort)
     params.set('order', state.order)
@@ -350,6 +368,32 @@ export function isDefaultTiers(tiers: readonly TierPick[]): boolean {
   return (
     tiers.length === DEFAULT_TIERS.length && DEFAULT_TIERS.every((tier) => tiers.includes(tier))
   )
+}
+
+/** True when the "In HubSpot" chip decides what shows: no HubSpot label is picked by hand. */
+export function hubspotChipApplies(filters: LeadFilters): boolean {
+  return filters.hubspot_status.length === 0
+}
+
+/** True when the leads HubSpot has are hidden: the default, until the chip is pressed. */
+export function hidesInHubSpot(filters: LeadFilters): boolean {
+  return hubspotChipApplies(filters) && !filters.show_in_hubspot
+}
+
+/**
+ * How many leads the chip hides, or shows when pressed: the facets' count of In HubSpot, Open deal
+ * and Dissolved deal. Those counts leave out the HubSpot filter itself, so the number is the same
+ * pressed or not, and follows every other filter. Undefined until the facets arrive.
+ */
+export function inHubSpotCount(facets: LeadFacets | undefined): number | undefined {
+  if (!facets) {
+    return undefined
+  }
+  // A partial answer (an older server, a test stand-in) may leave the list out: none hidden then.
+  const counts = (facets.hubspot_status as LeadFacets['hubspot_status'] | undefined) ?? []
+  return counts
+    .filter((item) => (IN_HUBSPOT_STATUSES as readonly string[]).includes(item.value))
+    .reduce((sum, item) => sum + item.count, 0)
 }
 
 /** How many filters are set (a list with values counts once). For "Clear filters". */
@@ -398,6 +442,7 @@ export function filterQuery(filters: LeadFilters): FilterQuery {
   if (filters.industry.length > 0) query.industry = [...filters.industry]
   if (filters.industry_group.length > 0) query.industry_group = [...filters.industry_group]
   if (filters.hubspot_status.length > 0) query.hubspot_status = [...filters.hubspot_status]
+  else if (!filters.show_in_hubspot) query.hubspot_status = [...NEW_LEAD_STATUSES]
   if (filters.status.length > 0) query.status = [...filters.status]
   if (filters.origin.length > 0) query.origin = [...filters.origin]
   for (const key of NUMBER_KEYS) {

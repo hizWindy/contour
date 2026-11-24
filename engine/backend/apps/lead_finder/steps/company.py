@@ -23,7 +23,8 @@ import uuid
 from decimal import Decimal
 from typing import Any
 
-from apps.lead_finder.context import ResearchContext, StepModels
+from apps.lead_finder.context import OnFinding, ResearchContext, StepModels
+from apps.lead_finder.params import CompanyParams
 from apps.lead_finder.research import (
     APP,
     LeadCard,
@@ -42,13 +43,18 @@ from apps.lead_finder.steps.state import CompanyTask, RunCtx, day_of, signals_of
 from apps.lead_finder.tables import company_key
 from core.claude.budget import Budget, BudgetSpent
 from core.claude.client import ClaudeUnavailable, Reply
+from core.config import Settings
+from core.hubspot.meetings import without_contact_details
 from core.logs import scrub
 from core.memory.service import Note, remember_many
 from core.runs.schemas import (
+    FINDING_QUESTION_MAX,
+    FINDING_TEXT_MAX,
     CompanyDoneData,
     CompanyFailedData,
     CompanySkippedData,
     CompanyStartedData,
+    FindingData,
 )
 from core.searches.service import log_reply
 
@@ -173,6 +179,42 @@ async def _rivals(
     return saved
 
 
+def deep_research(run: RunCtx, settings: Settings) -> bool:
+    """The Assistant's research searches with Quick Deep Research's loop while
+    `assistant_research_style` is `deep` (PLAN-V27 choice 25). Every other run keeps the angles."""
+    params = run.run.params
+    return (
+        isinstance(params, CompanyParams)
+        and params.from_assistant
+        and settings.assistant_research_style == "deep"
+    )
+
+
+def findings_of(run: RunCtx, name: str) -> OnFinding | None:
+    """A run the Assistant started sends each finding as it arrives (PLAN-V27 choice 19), for
+    its progress. Other runs send none, so their feed stays as it is."""
+    params = run.run.params
+    if not isinstance(params, CompanyParams) or not params.from_assistant:
+        return None
+
+    async def found(text: str, url: str, next_question: str | None) -> None:
+        # One plain line each, never an email address or a phone number, whoever sends it
+        line = one_line(without_contact_details(text), FINDING_TEXT_MAX)
+        question = one_line(without_contact_details(next_question or ""), FINDING_QUESTION_MAX)
+        if not line:
+            return
+        await run.run.emit_event(
+            FindingData(
+                company=name,
+                text=line,
+                source_url=url if safe_http_url(url) else None,
+                next_question=question or None,
+            )
+        )
+
+    return found
+
+
 async def research_one(run: RunCtx, task: CompanyTask) -> dict[str, Any]:
     """Research one company of the run (the module text has the steps)."""
     ctx = run.run
@@ -226,6 +268,8 @@ async def research_one(run: RunCtx, task: CompanyTask) -> dict[str, Any]:
                 company_cap_usd=ctx.caps.company_cap_usd,
                 signalhire_credits=run.signalhire_credits,
                 focus=task.get("focus", "growth"),  # tenure: the lease and tenure run (C2)
+                on_finding=findings_of(run, name),
+                deep=deep_research(run, settings),
             )
             request = ResearchRequest(
                 company=name,
@@ -298,6 +342,7 @@ async def research_one(run: RunCtx, task: CompanyTask) -> dict[str, Any]:
                 cost_usd=card.research.cost_usd,
                 hubspot_status=card.hubspot.status,
                 origin=task["origin"],
+                tier=card.tier,
             )
         )
         return outcome(task, "done", lead_id=str(card.id), result=card.result)

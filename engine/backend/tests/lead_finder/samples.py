@@ -40,6 +40,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from apps.lead_finder.deep import DeepAnswer
 from apps.lead_finder.fields import (
     AngleNotes,
     BoosterFound,
@@ -519,6 +520,8 @@ class FakeClaude:
             parsed, sources, queries, usage, cost = self._rivals(company)
         elif form is AngleNotes:
             parsed, sources, queries, usage, cost = self._angle(prompt, company, web)
+        elif form is DeepAnswer:
+            parsed, sources, queries, usage, cost = self._deep(company, web)
         elif form is WhyNowAnswer:
             parsed = self.why_answer or sample_why(company)
             sources, queries = (), ()
@@ -554,6 +557,8 @@ class FakeClaude:
             return "rivals"
         if form is AngleNotes:
             return f"search:{FakeClaude._angle_name(prompt)}"
+        if form is DeepAnswer:  # Quick Deep Research's loop (PLAN-V27 Part 5)
+            return "search:deep"
         if form is WhyNowAnswer:
             return "why"
         if form is CompanyExtrasForm:
@@ -582,6 +587,21 @@ class FakeClaude:
         )
         cost = self.search_cost + searches * WEB_SEARCH_COST  # 20k x $4/M + 1k x $20/M
         return AngleNotes(notes=notes), sources, (f"acme {angle}",), usage, cost
+
+    def _deep(
+        self, company: str | None, web: WebTools | None
+    ) -> tuple[Any, tuple[Source, ...], tuple[str, ...], Usage, Decimal]:
+        """A question of the deep loop: the four angles' notes at once, and no follow-up, so
+        the answer form finds the same sources as after the angles."""
+        notes = [n for a in ("property", "people", "money", "dampeners") for n in ANGLE_NOTES[a]]
+        if company is not None and "acme" not in company.casefold():
+            notes = [_for_company(note, company) for note in notes]
+        sources = tuple(Source(n.url, "A page") for n in notes)
+        searches = min(2, web.max_searches) if web else 0
+        usage = Usage(input_tokens=10_000, output_tokens=800, web_searches=searches, web_fetches=1)
+        cost = self.search_cost + searches * WEB_SEARCH_COST
+        answer = DeepAnswer(notes=notes, learned="Found the office and staff.", next_questions=[])
+        return answer, sources, ("acme deep",), usage, cost
 
     def _extract(
         self, company: str | None, form: type[BaseModel]

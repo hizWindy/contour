@@ -10,8 +10,13 @@
  *   above the list). Pins are coloured by result and sit at an approximate place.
  * - A click on a row or a pin opens the lead card in a side panel. J and K move through the rows,
  *   Enter opens the active one and Esc closes the panel.
+ * - New leads only (PLAN-V27 choice 6): the leads HubSpot has hide behind the "In HubSpot (8)"
+ *   chip under the filter bar, which shows them too (`params.ts`).
  * - For one run (`?run_id=...`, the link in the run email) it is the review page (PLAN-V9 C3):
  *   tick boxes, and a bar to approve leads for HubSpot, reject them or watch them.
+ * - Elsewhere, people who may send a lead to HubSpot get tick boxes too (PLAN-V27 T3-2), with
+ *   "Select all on this page" in the Company header, and a bar to add the ticked leads to HubSpot
+ *   in one batch (`send-bar.tsx`). The ticks stay while you page or filter, until cleared or sent.
  */
 import type { OnChangeFn, SortingState } from '@tanstack/react-table'
 import { Download, Map as MapIcon, Table2 } from 'lucide-react'
@@ -43,15 +48,19 @@ import { useIsMobile } from '@/lib/use-mobile'
 import { formatNumber, pluralise } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
 import { sparing } from '@/shell/preload'
-import { listColumns, tableColumns, type Tick } from './columns'
+import { listColumns, tableColumns, type Tick, type TickMode } from './columns'
 import { FilterBar } from './filter-bar'
 import { LeadPanel } from './lead-panel'
 import { ReviewBar } from './review-bar'
+import { SendBar } from './send-bar'
+import { TickContext } from './tick-context'
 import { loadCalendar, loadMapSplit } from './lazy-parts'
 import {
   activeFilterCount,
   exportQuery,
   filterQuery,
+  hidesInHubSpot,
+  inHubSpotCount,
   FIRST_ORDER,
   listQuery,
   NO_FILTERS,
@@ -82,8 +91,30 @@ function saveCompact(compact: boolean): void {
   }
 }
 
-function Empty({ filtered, onClear }: { filtered: boolean; onClear: () => void }) {
+interface EmptyProps {
+  filtered: boolean
+  onClear: () => void
+  /** How many leads HubSpot has that the "In HubSpot" chip hides now. 0 when none are hidden. */
+  hidden: number
+  onShowHidden: () => void
+}
+
+function Empty({ filtered, onClear, hidden, onShowHidden }: EmptyProps) {
   const canStart = useCanWrite('lead_finder.start_run')
+  if (!filtered && hidden > 0) {
+    return (
+      <EmptyState
+        title="No new leads yet."
+        description={`${pluralise(hidden, 'lead')} already in HubSpot ${hidden === 1 ? 'is' : 'are'} hidden.`}
+        headingLevel={3}
+        action={
+          <Button type="button" variant="outline" onClick={onShowHidden}>
+            Show them
+          </Button>
+        }
+      />
+    )
+  }
   return filtered ? (
     <EmptyState
       title="No leads match these filters."
@@ -138,6 +169,7 @@ function ResultsContent() {
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
   const canReviewWrite = useCanWrite('lead_finder.results')
+  const canSendHubSpot = useCanWrite('lead_finder.send_to_hubspot')
   const state = readResults(params)
   const [compact, setCompact] = useState(savedCompact)
   const [active, setActive] = useState<string | null>(null)
@@ -201,6 +233,7 @@ function ResultsContent() {
   })
   useEffect(() => (sparing() ? undefined : whenIdle(startParts)), [])
   const filtered = activeFilterCount(state.filters) > 0
+  const hiddenInHubSpot = hidesInHubSpot(state.filters) ? (inHubSpotCount(facets.data) ?? 0) : 0
   const activeRow = state.lead ?? active
 
   const sorting: SortingState = [{ id: state.sort, desc: state.order === 'desc' }]
@@ -268,6 +301,51 @@ function ResultsContent() {
     for (const id of ids) next.delete(id)
     setTicked({ run: reviewRun, ids: next })
   }
+  // The bulk add to HubSpot (PLAN-V27 T3-2): every page but the review page, for people who may
+  // send. A lead already sent can't be ticked, so "Select all on this page" leaves it out.
+  const [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set())
+  const sendableIds = useMemo(
+    () => (page?.items ?? []).filter((row) => row.status !== 'sent').map((row) => row.id),
+    [page],
+  )
+  const sendTick: Tick | undefined = useMemo(
+    () =>
+      canSendHubSpot && !reviewRun
+        ? {
+            selected: chosen,
+            pageIds: sendableIds,
+            forSending: true,
+            onToggle: (id, on) => {
+              setChosen((now) => {
+                const next = new Set(now)
+                if (on) next.add(id)
+                else next.delete(id)
+                return next
+              })
+            },
+            onTogglePage: (on) => {
+              setChosen((now) => {
+                const next = new Set(now)
+                for (const id of sendableIds) {
+                  if (on) next.add(id)
+                  else next.delete(id)
+                }
+                return next
+              })
+            },
+          }
+        : undefined,
+    [canSendHubSpot, reviewRun, chosen, sendableIds],
+  )
+  const unchoose = (ids: string[]): void => {
+    setChosen((now) => {
+      const next = new Set(now)
+      for (const id of ids) next.delete(id)
+      return next
+    })
+  }
+  const rowTick = reviewRun ? (canReviewWrite ? tick : undefined) : sendTick
+  const tickMode: TickMode = rowTick ? (rowTick.forSending ? 'send' : 'review') : 'none'
   const mapPart = (
     <div className="flex flex-col gap-2">
       {map.error ? (
@@ -288,26 +366,37 @@ function ResultsContent() {
     </div>
   )
   const table = (columns: ReturnType<typeof tableColumns>, label: string, dense: boolean) => (
-    <DataTable
-      label={label}
-      columns={columns}
-      data={page?.items ?? []}
-      getRowId={(row) => row.id}
-      sorting={sorting}
-      onSortingChange={onSortingChange}
-      page={{ pageIndex: state.page, pageSize: PAGE_SIZE, total: page?.total ?? 0 }}
-      onPageChange={(pageIndex) => {
-        go({ ...state, page: pageIndex })
-      }}
-      compact={dense}
-      activeRowId={activeRow}
-      onActiveRowChange={setActive}
-      onOpenRow={openLead}
-      onRowIntent={startLead}
-      onEscape={closeLead}
-      loading={leads.isFetching}
-      empty={<Empty filtered={filtered} onClear={clearFilters} />}
-    />
+    <TickContext value={rowTick}>
+      <DataTable
+        label={label}
+        columns={columns}
+        data={page?.items ?? []}
+        getRowId={(row) => row.id}
+        sorting={sorting}
+        onSortingChange={onSortingChange}
+        page={{ pageIndex: state.page, pageSize: PAGE_SIZE, total: page?.total ?? 0 }}
+        onPageChange={(pageIndex) => {
+          go({ ...state, page: pageIndex })
+        }}
+        compact={dense}
+        activeRowId={activeRow}
+        onActiveRowChange={setActive}
+        onOpenRow={openLead}
+        onRowIntent={startLead}
+        onEscape={closeLead}
+        loading={leads.isFetching}
+        empty={
+          <Empty
+            filtered={filtered}
+            onClear={clearFilters}
+            hidden={hiddenInHubSpot}
+            onShowHidden={() => {
+              changeFilters({ show_in_hubspot: true })
+            }}
+          />
+        }
+      />
+    </TickContext>
   )
 
   return (
@@ -351,6 +440,15 @@ function ResultsContent() {
         }
       />
       {reviewRun && tick ? <ReviewBar runId={reviewRun} tick={tick} onDone={untick} /> : null}
+      {sendTick ? (
+        <SendBar
+          selected={chosen}
+          onClear={() => {
+            setChosen(new Set())
+          }}
+          onDone={unchoose}
+        />
+      ) : null}
       <FilterBar
         filters={state.filters}
         facets={facets.data}
@@ -380,23 +478,21 @@ function ResultsContent() {
           // A phone has no room for two columns: the map comes first, then the list.
           <div className="flex flex-col gap-4">
             {mapPart}
-            {table(listColumns(canReviewWrite ? tick : undefined), 'Leads beside the map', true)}
+            {table(listColumns(tickMode), 'Leads beside the map', true)}
           </div>
         ) : (
           <Suspense fallback={<MapSplitPending />}>
             <MapSplit
-              list={table(
-                listColumns(canReviewWrite ? tick : undefined),
-                'Leads beside the map',
-                true,
-              )}
+              list={table(listColumns(tickMode), 'Leads beside the map', true)}
               map={mapPart}
             />
           </Suspense>
         )
       ) : (
-        table(tableColumns(canReviewWrite ? tick : undefined), 'Leads', compact)
+        table(tableColumns(tickMode), 'Leads', compact)
       )}
+      {/* On a phone the bulk add's bar is fixed at the bottom: room for it under the page. */}
+      {sendTick && isMobile && chosen.size > 0 ? <div aria-hidden="true" className="h-32" /> : null}
       <LeadPanel
         leadId={state.lead}
         onClose={closeLead}

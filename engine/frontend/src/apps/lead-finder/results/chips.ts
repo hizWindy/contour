@@ -218,7 +218,8 @@ export function panelFilterCount(filters: LeadFilters, inBar: boolean): number {
   const barKeys: readonly (keyof LeadFilters)[] = inBar ? ['tier', 'result', 'city', 'origin'] : []
   let count = 0
   for (const key of Object.keys(NO_FILTERS) as (keyof LeadFilters)[]) {
-    if (key === 'q' || barKeys.includes(key)) continue
+    // The search and the "In HubSpot" chip sit outside the panel.
+    if (key === 'q' || key === 'show_in_hubspot' || barKeys.includes(key)) continue
     if (key === 'tier') {
       // The tier counts when it isn't the default view (A, B, C and no tier yet).
       if (!isDefaultTiers(filters.tier)) count += 1

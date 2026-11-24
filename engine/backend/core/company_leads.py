@@ -13,6 +13,10 @@ A hook gives three things:
 - `by_hubspot()`: a SELECT of the project's newest finding for each HubSpot company, with the
   columns in `BY_HUBSPOT_COLUMNS`. The Companies page joins it on `hubspot_id`.
 - `detail(session, hubspot_id, lead_id)`: the project's section on one company's panel, or None.
+- `research` (optional, PLAN-V27 Part 4): how the Assistant researches one company with this
+  project. `recent(session, hubspot_id, name, lead_id, since)` gives its newest card of the company
+  since a time (free), and `mode` and `params(name, city)` say which run of one company to start
+  through the run manager, so the run's caps, the run cap and the daily limit apply as to any run.
 
 The SELECTs are SQLAlchemy Core statements, so the Companies page can join, filter, sort and page
 them in the database. Nothing is read twice.
@@ -71,6 +75,34 @@ class CompanyLeadInfo:
 
 
 @dataclass(frozen=True)
+class RecentCard:
+    """A project's newest card of one company (PLAN-V27 Part 4): the Assistant opens it instead
+    of researching again."""
+
+    lead_id: uuid.UUID
+    company: str  # the name on the card
+    found_at: datetime
+    result: str  # like pass or director_review
+    tier: str | None  # Levi's tier (A, B, C or discard), or None for a card made before tiers
+    link: str  # the page with the full card, like /leads/<id>
+
+
+@dataclass(frozen=True)
+class CompanyResearch:
+    """How the Assistant researches one company with a project (see the module text)."""
+
+    mode: str  # the run kind, like "company"
+    # The run's params for one company the Assistant researches: (name, city) to a JSON object.
+    # The run manager checks them as it checks any run's.
+    params: Callable[[str, str | None], dict[str, Any]]
+    # (session, HubSpot id, name, lead id, since): the newest card of the company since then.
+    recent: Callable[
+        [AsyncSession, str | None, str, uuid.UUID | None, datetime],
+        Awaitable[RecentCard | None],
+    ]
+
+
+@dataclass(frozen=True)
 class CompanyLeads:
     """The hook (see the module text). `app` is the project whose tick opens these rows."""
 
@@ -81,3 +113,4 @@ class CompanyLeads:
     detail: Callable[
         [AsyncSession, str | None, uuid.UUID | None], Awaitable[CompanyLeadInfo | None]
     ]
+    research: CompanyResearch | None = None

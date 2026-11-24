@@ -14,7 +14,7 @@ import type {
   RunStatus,
   Tier,
 } from '@/api/types'
-import { humanise, pluralise } from './format'
+import { formatMonthYear, humanise, pluralise } from './format'
 
 /**
  * A lead's tier (PLAN-V16 T1-6, Levi's section 6), best first. The tier is the headline; the four
@@ -124,6 +124,29 @@ export const HUBSPOT_STATUS_LABELS: Record<HubSpotStatus, string> = {
   possible_match: 'Possible match',
   // In HubSpot, but nobody has worked it for a year: it counts as new (PLAN-V27 choice 3)
   quiet: 'In HubSpot, quiet',
+}
+
+/**
+ * The HubSpot labels Results hides by default, behind its "In HubSpot (8)" chip (PLAN-V27 choice
+ * 6): the companies HubSpot has and someone works. The rest are new leads and always show.
+ */
+export const IN_HUBSPOT_STATUSES: readonly HubSpotStatus[] = [
+  'in_hubspot',
+  'open_deal',
+  'dissolved_deal',
+]
+
+/** New leads: not in HubSpot, quiet there for a year, or a maybe a person hasn't settled yet. */
+export const NEW_LEAD_STATUSES: readonly HubSpotStatus[] = ['new', 'quiet', 'possible_match']
+
+/**
+ * A quiet company's label with the month it was last worked (PLAN-V27 choice 3): "In HubSpot,
+ * quiet since March 2025", or "In HubSpot, never worked" when HubSpot has no activity for it.
+ */
+export function quietLabel(lastActivity: string | null): string {
+  return lastActivity
+    ? `${HUBSPOT_STATUS_LABELS.quiet} since ${formatMonthYear(lastActivity)}`
+    : 'In HubSpot, never worked'
 }
 
 /**

@@ -2,7 +2,7 @@
  * The review card's waits (PLAN-V22 choices 19, 22 and 23), in one place, so a test can shorten
  * them.
  */
-import { HOLD_MS } from './hold'
+import { HOLD_MS } from '@/lib/hold'
 import { LISTEN_MS } from './listen'
 
 export const CARD_TIMES = {

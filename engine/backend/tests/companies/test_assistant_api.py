@@ -656,8 +656,8 @@ async def test_on_a_card_only_change_send_and_cancel(
     assert "Its boxes: subject, due, follow_up." in claude.asked[0]["prompt"]
     assert no_card["action"] == "unknown"  # nothing to send without a card
     assert no_card["read_back"] == (
-        "The Assistant can make a pre-read, log a call, add a task, email teammates or open a "
-        "page. Try saying it as one of those."
+        "The Assistant can make a pre-read, log a call, add a task, email teammates, research a "
+        "company or open a page. Try saying it as one of those."
     )
 
 
@@ -723,7 +723,7 @@ async def test_no_command_writes_to_hubspot_sends_an_email_or_keeps_the_words(
     assert {row.user_id for row in logged} == {mia}  # who asked (PLAN-V26 T3-1)
     for row in logged:
         assert (row.app, row.step) == ("companies", "assistant:command")
-        assert row.prompt_version == "assistant-3"
+        assert row.prompt_version == "assistant-4"
         no_words = (row.queries, row.sources, row.subject, row.note, row.job_id)
         assert no_words == ([], [], None, None, None)
         assert row.cost_usd == Decimal("0.0001") and row.answer_ok
@@ -816,8 +816,8 @@ async def test_the_call_logs_tick_alone_can_t_make_a_pre_read_and_meetings_off_n
         "You don't have access to Meetings. Ask the Platform admin to turn it on."
     )
     assert no_tick["read_back"] == (
-        "The Assistant can log a call, add a task, email teammates or open a page. Try saying it "
-        "as one of those."
+        "The Assistant can log a call, add a task, email teammates, research a company or open a "
+        "page. Try saying it as one of those."
     )
     assert meetings_off["unsure"] == (
         "Meetings and pre-reads are switched off. An admin can switch them on in Settings."

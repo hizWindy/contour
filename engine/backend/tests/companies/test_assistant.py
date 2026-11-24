@@ -338,8 +338,8 @@ def test_the_plans_words_are_the_ones_sent() -> None:
         today=WEDNESDAY,
     )
     assert can_do(context) == (
-        "The Assistant can make a pre-read, log a call, add a task, email teammates or open a "
-        "page. Try saying it as one of those."
+        "The Assistant can make a pre-read, log a call, add a task, email teammates, research a "
+        "company or open a page. Try saying it as one of those."
     )
     assert "make a pre-read" not in can_do(
         Context(**{**vars(context), "settings": settings(meeting_forms_enabled=False)})

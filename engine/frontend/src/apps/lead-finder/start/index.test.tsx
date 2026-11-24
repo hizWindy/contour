@@ -5,7 +5,7 @@ import type { RunEstimate, RunOptions } from '@/api/types'
 import { renderWithProviders } from '@/test/render'
 import { asPhone } from '@/test/screen'
 import StartPage from './index'
-import { OPTIONS, PROPERTY_DAILY_OFF } from './test-options'
+import { OPTIONS } from './test-options'
 
 const RUN_ID = '0f3c9a2e-1111-2222-3333-444444444444'
 
@@ -129,7 +129,7 @@ describe('the Start page', () => {
         'Find new leads: search the news for companies with a sign of an office change. Companies already in HubSpot are left out.',
       ),
     ).toBeInTheDocument()
-    expect(await screen.findByRole('group', { name: 'Where to look' })).toBeInTheDocument()
+    expect(await screen.findByLabelText('Companies to research')).toBeInTheDocument()
     expect(screen.queryByRole('radiogroup', { name: 'Kind of run' })).toBeNull()
     expect(screen.queryByText('Old offices (lease and tenure)')).toBeNull()
     expect(screen.queryByText('HubSpot watchlist')).toBeNull()
@@ -260,7 +260,7 @@ describe('Find new leads across Australia (PLAN-V16 T3-2)', () => {
     const seen = mockApi(() => estimate())
     renderStart()
 
-    await screen.findByRole('group', { name: 'Where to look' })
+    await screen.findByLabelText('Companies to research')
     expect(screen.queryByLabelText('How many leads')).toBeNull()
     expect(screen.queryByText(/Tier A or B\. The run stops/)).toBeNull()
     await waitFor(() => {
@@ -270,26 +270,16 @@ describe('Find new leads across Australia (PLAN-V16 T3-2)', () => {
     expect(sent.params).not.toHaveProperty('goal_leads')
   })
 
-  it('greys out a tool that is not ready and says why', async () => {
+  it('has no "where to look": the run searches the web only (PLAN-V27 choice 8)', async () => {
     const seen = mockApi(() => estimate())
-    const { user } = renderStart()
-    const look = await screen.findByRole('group', { name: 'Where to look' })
-
-    const daily = within(look).getByRole('checkbox', { name: 'Property Daily' })
-    expect(daily).toBeDisabled()
-    expect(daily).not.toBeChecked()
-    expect(daily).toHaveAccessibleDescription(PROPERTY_DAILY_OFF)
-    expect(within(look).getByRole('checkbox', { name: 'The web' })).toBeChecked()
-    expect(within(look).getByRole('checkbox', { name: 'Arealytics' })).toBeChecked()
-
-    // The ready ones are the server's default, so they stay out of the body until changed.
+    renderStart()
+    await screen.findByLabelText('Companies to research')
+    expect(screen.queryByRole('group', { name: 'Where to look' })).toBeNull()
+    expect(screen.queryByRole('checkbox', { name: 'Property Daily' })).toBeNull()
     await waitFor(() => {
-      expect(seen.estimates.at(-1)).not.toHaveProperty('params.sources')
+      expect(seen.estimates.length).toBeGreaterThan(0)
     })
-    await user.click(within(look).getByRole('checkbox', { name: 'Arealytics' }))
-    await waitFor(() => {
-      expect(seen.estimates.at(-1)).toMatchObject({ params: { sources: ['web'] } })
-    })
+    expect(seen.estimates.at(-1)).not.toHaveProperty('params.sources')
   })
 })
 
@@ -323,9 +313,8 @@ describe('How many companies (PLAN-V21 T3-3)', () => {
     ).toBeInTheDocument()
     const signs = screen.getByText('Signs of an office change')
     const many = screen.getByText('How many companies')
-    const sources = screen.getByText('Sources')
     expect(signs.compareDocumentPosition(many) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(many.compareDocumentPosition(sources) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.queryByText('Sources')).toBeNull() // PLAN-V27 choice 8
 
     await user.click(within(presets).getByRole('radio', { name: '25' }))
     expect(field).toHaveValue('25')

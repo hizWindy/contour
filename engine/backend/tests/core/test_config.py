@@ -72,6 +72,8 @@ CHOICE_KEYS = {
     "claude_effort_discover",  # PLAN-V21 T1-1
     "claude_effort_research",
     "voice_tool",  # PLAN-V18
+    "assistant_research_style",  # PLAN-V27 Part 5
+    "model_deep",
 }
 BOOL_KEYS = {  # a switch has no min or max
     "prep_enabled",
@@ -81,6 +83,7 @@ BOOL_KEYS = {  # a switch has no min or max
     "call_notes_ai_enabled",
     "meeting_forms_enabled",
     "notify_owner_calls",  # PLAN-V23 T2-2
+    "tool_feeds_find_companies",  # PLAN-V27 choice 8
 }
 NOT_NUMBERS = CHOICE_KEYS | BOOL_KEYS
 

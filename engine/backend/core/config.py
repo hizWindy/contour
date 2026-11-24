@@ -92,8 +92,12 @@ EDITABLE_KEYS: Final[list[str]] = [
     "target_companies_default",
     "discovery_max_sweeps",
     "memory_fresh_days",
-    # New leads only (PLAN-V27 choice 3)
+    # New leads only (PLAN-V27 choices 3 and 8)
     "hubspot_quiet_months",
+    "tool_feeds_find_companies",
+    # Quick Deep Research, a test (PLAN-V27 Part 5)
+    "assistant_research_style",
+    "model_deep",
     "match_fuzzy_min",
     "match_profile_min",
     # Call prep (PLAN-V10 D3, D5)
@@ -482,6 +486,17 @@ class Settings(BaseSettings):
     # A HubSpot company nobody has worked for this many months counts as new (PLAN-V27 choice 3,
     # TBC with Levi). 0: every HubSpot company is left out of a Find new leads run.
     hubspot_quiet_months: int = Field(12, ge=0, le=60)
+    # Property Daily and Arealytics are triggers, not sources of leads (PLAN-V27 choice 8): a run
+    # finds companies on the web only, and the research still reads the tools for each one. On:
+    # their new items come in as companies found again, as before PLAN-V27 (A6, if S2 shows they
+    # alone found new companies).
+    tool_feeds_find_companies: StrictBool = False
+    # Quick Deep Research (PLAN-V27 Part 5, a test): `deep` makes the Assistant's research search
+    # with the loop of questions (apps/lead_finder/deep.py) in place of the four angles. It stays
+    # `standard` until the paid comparison (T5-2) passes the keep rule and Al-khair says so (T5-3).
+    # The loop's questions use `model_deep`; the facts step keeps the research's own model.
+    assistant_research_style: Literal["standard", "deep"] = "standard"
+    model_deep: ClaudeModel = "claude-sonnet-5-5"
     match_fuzzy_min: int = Field(90, ge=70, le=100)  # close-name score, 0 to 100
     match_profile_min: float = Field(0.90, ge=0.70, le=1.0)  # look-alike similarity
 

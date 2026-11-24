@@ -33,6 +33,8 @@ export const RUN_EVENT_TYPES: readonly RunEventType[] = [
   'topped_up',
   'company_skipped',
   'company_started',
+  // PLAN-V27 T4-2: a research the Assistant started sends each finding as it arrives
+  'finding',
   'company_done',
   'company_failed',
   'progress',
@@ -297,6 +299,26 @@ function fromTopUp(data: Record<string, unknown>, context: FeedContext): boolean
   )
 }
 
+/** The site a finding comes from, like news.example.com. Empty when there's no good link. */
+export function siteOf(url: unknown): string {
+  if (typeof url !== 'string') return ''
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return ''
+  }
+}
+
+/** "Found: Northwind hired 40 staff this year (news.example.com). Now checking: a second
+ * office?" (PLAN-V27 words on screen) */
+export function findingLine(data: Record<string, unknown>): string {
+  const site = siteOf(data.source_url)
+  const found = text(data.text).replace(/[.\s]+$/, '')
+  const next = text(data.next_question)
+  const line = `Found: ${found}${site ? ` (${site})` : ''}.`
+  return next ? `${line} Now checking: ${next}` : line
+}
+
 /** One plain line for an event, and how it should look (info, success, warning, error). */
 export function describeEvent(
   event: RunEvent,
@@ -394,6 +416,8 @@ export function describeEvent(
         tone: 'warning',
         message: `Could not research ${text(data.name)}: ${text(data.reason, 'no reason given')}`,
       }
+    case 'finding':
+      return { tone: 'info', message: findingLine(data) }
     case 'progress':
       return { tone: 'info', message: 'Progress updated.' }
     case 'problem':

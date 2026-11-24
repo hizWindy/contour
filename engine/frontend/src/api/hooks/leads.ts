@@ -9,7 +9,7 @@ import {
 import { melbourneDate } from '@/lib/format'
 import { api, isMissing, unwrap, type ApiProblem } from '../client'
 import { CACHE_TIMES, queryKeys } from '../query'
-import type { LeadDetail, LeadPatch, QueryOf, Run } from '../types'
+import type { HubSpotPick, LeadDetail, LeadPatch, QueryOf, Run } from '../types'
 
 /** A page of leads for the results table. */
 export function leadsQueryOptions(query: QueryOf<'list_leads'> = {}) {
@@ -181,6 +181,43 @@ export function useOverrideExclusion() {
     onSuccess: (lead) => {
       queryClient.setQueryData(queryKeys.leads.detail(lead.id), lead)
       refreshLeads(queryClient)
+    },
+  })
+}
+
+export interface PickHubSpotMatchVariables {
+  leadId: string
+  /** `{ pick: 'same', hubspot_id }` for one of the lead's candidates, or `{ pick: 'new' }`. */
+  pick: HubSpotPick
+}
+
+/**
+ * Settles a possible HubSpot match (PLAN-V27 T1-3): "Same company" links the lead to one of its
+ * candidates, and "It's new" says HubSpot doesn't have it. Free: the backend judges the card again
+ * with its saved facts and records who settled it. It returns the lead and puts it in the cache,
+ * and the lists read again, since a linked lead may now hide behind Results' "In HubSpot" chip.
+ *
+ * A 409 `not_a_maybe` means someone settled it first: the card reads again to show what they chose.
+ */
+export function usePickHubSpotMatch() {
+  const queryClient = useQueryClient()
+  return useMutation<LeadDetail, ApiProblem, PickHubSpotMatchVariables>({
+    mutationFn: async ({ leadId, pick }) =>
+      unwrap(
+        await api.POST('/lead-finder/leads/{lead_id}/hubspot-match', {
+          params: { path: { lead_id: leadId } },
+          body: pick,
+        }),
+      ),
+    onSuccess: (lead) => {
+      queryClient.setQueryData(queryKeys.leads.detail(lead.id), lead)
+      refreshLeads(queryClient)
+    },
+    onError: (problem, { leadId }) => {
+      if (problem.code === 'not_a_maybe') {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.leads.detail(leadId) })
+        refreshLeads(queryClient)
+      }
     },
   })
 }

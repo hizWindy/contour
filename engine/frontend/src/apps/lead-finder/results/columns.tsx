@@ -10,9 +10,11 @@
  *
  * The company name is a button: a click or Enter opens the lead card, through the row's own click.
  *
- * On the review page (Results for one run, PLAN-V9 C3) the Company column also has a tick box for
- * each lead (`tableColumns(tick)`). The box for the whole page is in the review bar, because the
- * Company header is a sort button.
+ * On the review page (Results for one run, PLAN-V9 C3) and for the bulk add to HubSpot (PLAN-V27
+ * T3-2) the Company column also has a tick box for each lead (`tableColumns(mode)`). The boxes
+ * read the ticks from `TickContext`, so these columns stay the same objects as leads are ticked.
+ * The review page's box for the whole page is in its bar. The bulk add's sits in the Company
+ * header, beside (never inside) the sort button.
  */
 import { createColumnHelper } from '@tanstack/react-table'
 import type { LeadRow } from '@/api/types'
@@ -21,25 +23,40 @@ import { ResultBadge } from '@/components/result-badge'
 import { TierMark } from '@/components/tier-mark'
 import { formatDate, formatScore, UNKNOWN } from '@/lib/format'
 import { isTier } from '@/lib/labels'
-import { CompanyName, RowTick, type Tick } from './company-cell'
+import { CompanyName, HeaderTick, RowTick, type Tick } from './company-cell'
 
 export type { Tick }
 
+/** Which tick boxes the Company column has: none, the review page's, or the bulk add's. */
+export type TickMode = 'none' | 'review' | 'send'
+
 const help = createColumnHelper<LeadRow>()
 
-function companyColumn(tick?: Tick) {
+function companyColumn(mode: TickMode) {
   return help.accessor('company', {
     header: 'Company',
     // The name stays in view while the other columns scroll sideways. On a phone it gives up some
     // width, so a long result like "Director review" fits beside it (PLAN-V21 T3-6).
-    meta: { sticky: true, className: 'max-w-52 sm:max-w-64 sm:min-w-44' },
+    meta: {
+      sticky: true,
+      className: 'max-w-52 sm:max-w-64 sm:min-w-44',
+      headStart: mode === 'send' ? <HeaderTick /> : undefined,
+    },
     cell: (info) => {
-      const { id, score, score_checked: checked, city, is_test: isTest, origin } = info.row.original
+      const {
+        id,
+        score,
+        score_checked: checked,
+        city,
+        is_test: isTest,
+        origin,
+        status,
+      } = info.row.original
       const points = formatScore(score, checked)
       const name = info.getValue()
       return (
         <span className="flex min-w-0 items-start gap-3">
-          {tick ? <RowTick tick={tick} id={id} name={name} /> : null}
+          {mode === 'none' ? null : <RowTick id={id} name={name} sent={status === 'sent'} />}
           <CompanyName name={name} points={points} city={city} isTest={isTest} origin={origin} />
         </span>
       )
@@ -47,7 +64,9 @@ function companyColumn(tick?: Tick) {
   })
 }
 
-const company = companyColumn()
+const company = companyColumn('none')
+const reviewCompany = companyColumn('review')
+const sendCompany = companyColumn('send')
 
 /**
  * The tier, in words: the headline since PLAN-V16. The list is sorted by tier, then score. A lead
@@ -147,14 +166,21 @@ export const TABLE_COLUMNS = [company, tier, result, score, sign, city, hubspot,
 /** The list beside the map: enough to tell the leads apart. */
 export const LIST_COLUMNS = [company, tier, result, score, city]
 
-/** The full table, with tick boxes on the review page. */
-export function tableColumns(tick?: Tick) {
-  return tick
-    ? [companyColumn(tick), tier, result, score, sign, city, hubspot, researched]
-    : TABLE_COLUMNS
+const TICKED_TABLE = {
+  review: [reviewCompany, tier, result, score, sign, city, hubspot, researched],
+  send: [sendCompany, tier, result, score, sign, city, hubspot, researched],
+}
+const TICKED_LIST = {
+  review: [reviewCompany, tier, result, score, city],
+  send: [sendCompany, tier, result, score, city],
 }
 
-/** The list beside the map, with tick boxes on the review page. */
-export function listColumns(tick?: Tick) {
-  return tick ? [companyColumn(tick), tier, result, score, city] : LIST_COLUMNS
+/** The full table, with tick boxes on the review page or for the bulk add. */
+export function tableColumns(mode: TickMode = 'none') {
+  return mode === 'none' ? TABLE_COLUMNS : TICKED_TABLE[mode]
+}
+
+/** The list beside the map, with tick boxes on the review page or for the bulk add. */
+export function listColumns(mode: TickMode = 'none') {
+  return mode === 'none' ? LIST_COLUMNS : TICKED_LIST[mode]
 }

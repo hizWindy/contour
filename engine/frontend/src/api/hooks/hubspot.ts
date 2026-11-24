@@ -1,7 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, unwrap, uploadHubspotExport, type ApiProblem } from '../client'
 import { queryKeys } from '../query'
-import type { HubSpotConnection, HubSpotSync, HubSpotWrite, ImportResult, Schemas } from '../types'
+import type {
+  HubSpotBatchPair,
+  HubSpotBatchPreview,
+  HubSpotBatchSent,
+  HubSpotConnection,
+  HubSpotSync,
+  HubSpotWrite,
+  ImportResult,
+  Schemas,
+} from '../types'
 
 const SYNC_POLL_MS = 3000
 
@@ -132,6 +141,42 @@ export function useSendLeadHubSpot(leadId: string) {
       ),
     onSuccess: (write) => {
       queryClient.setQueryData(queryKeys.hubspot.lead(leadId), write)
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.leads.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.hubspot.writes() })
+    },
+  })
+}
+
+/**
+ * Works out what adding up to 25 leads would write, one preview for the batch (PLAN-V27 T3-2,
+ * `preview-many`): each lead's write, or `already_sent`, or its `problem`, with the owner and
+ * whether writing is on. It reads HubSpot and writes nothing.
+ */
+export function usePreviewManyHubSpot() {
+  return useMutation<HubSpotBatchPreview, ApiProblem, string[]>({
+    mutationFn: async (leadIds) =>
+      unwrap(
+        await api.POST('/lead-finder/leads/hubspot/preview-many', { body: { lead_ids: leadIds } }),
+      ),
+  })
+}
+
+/**
+ * Sends the previewed leads, each once, one at a time (`send-many`). Each has its own result:
+ * `sent`, `already_sent` or `failed` with plain words. Writing switched off refuses the whole
+ * batch (409 `hubspot_write_off`) and nothing is written. The leads are read again after.
+ */
+export function useSendManyHubSpot() {
+  const queryClient = useQueryClient()
+  return useMutation<HubSpotBatchSent, ApiProblem, HubSpotBatchPair[]>({
+    mutationFn: async (items) =>
+      unwrap(await api.POST('/lead-finder/leads/hubspot/send-many', { body: { items } })),
+    onSuccess: (out) => {
+      for (const item of out.items) {
+        if (item.write) queryClient.setQueryData(queryKeys.hubspot.lead(item.lead_id), item.write)
+      }
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.leads.all })

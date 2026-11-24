@@ -43,6 +43,7 @@ from apps.companies.assistant_find import (
     which,
 )
 from apps.companies.assistant_form import CommandAnswer
+from apps.companies.assistant_research import research_command
 from apps.companies.assistant_schemas import (
     AssistantAction,
     AssistantChange,
@@ -165,7 +166,7 @@ def can_do(ctx: Context) -> str:
     """What the Assistant can do for this person, as choice 14 says it."""
     things = ["make a pre-read"] if may_pre_read(ctx) else []
     things += ["log a call"] if may_log_call(ctx) else []
-    things += ["add a task", "email teammates", "open a page"]
+    things += ["add a task", "email teammates", "research a company", "open a page"]
     return f"The Assistant can {join_words(things, 'or')}. Try saying it as one of those."
 
 
@@ -207,6 +208,8 @@ async def settle(session: AsyncSession, answer: CommandAnswer, ctx: Context) -> 
         return await add_task(session, answer, ctx, claude)
     if action == "email":
         return await write_email(session, answer, ctx, claude)
+    if action == "research":  # PLAN-V27 T4-1: free, from what we know
+        return await research_command(session, answer, ctx)
     return await open_page(session, answer, ctx, claude)
 
 

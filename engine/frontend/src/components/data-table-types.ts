@@ -1,5 +1,6 @@
 import '@tanstack/react-table'
 import type { RowData } from '@tanstack/react-table'
+import type { ReactNode } from 'react'
 
 declare module '@tanstack/react-table' {
   // The names must match TanStack's own declaration, so the unused type parameters stay.
@@ -17,5 +18,10 @@ declare module '@tanstack/react-table' {
      * details are one tap away (the side panel).
      */
     hideBelow?: 'sm' | 'md' | 'lg' | 'xl'
+    /**
+     * A control drawn in the header cell before its title (or its sort button), like Results'
+     * "Select all on this page" tick box (PLAN-V27 T3-2). Never inside the sort button.
+     */
+    headStart?: ReactNode
   }
 }

@@ -13,6 +13,7 @@ other modes hand the graph the companies they already know. Nothing here calls C
 anything outside the run context, so a run is testable with a fake Claude.
 """
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import ROUND_DOWN, ROUND_UP, Decimal
 from typing import Any
@@ -36,6 +37,7 @@ from apps.lead_finder.run_sources import (
     check_sources,
     feed_candidates,
     picked_tools,
+    web_only,
 )
 from apps.lead_finder.schemas import WatchItem
 from apps.lead_finder.steps.discover import MAX_CANDIDATES
@@ -244,6 +246,7 @@ def testset_tasks(today: str) -> list[CompanyTask]:
 async def run_discovery(ctx: RunContext[DiscoveryParams]) -> RunOutcome:
     from apps.lead_finder.steps.graph import run_graph
 
+    ctx.params = web_only(ctx.params, ctx.settings)  # PLAN-V27 choice 8, also on a resume
     return await run_graph(ctx, [])
 
 
@@ -329,6 +332,7 @@ def target_cost(
 
 
 async def estimate_discovery(ctx: EstimateContext[DiscoveryParams]) -> RunEstimate:
+    ctx = replace(ctx, params=web_only(ctx.params, ctx.settings))  # PLAN-V27 choice 8
     rules = load_rules()
     slices = len(make_slices(ctx.params, rules))
     # The property tools' new items are in our copy, so they are counted now, free (PLAN-V16
@@ -474,6 +478,9 @@ RUN_KINDS: tuple[RunKind[Any], ...] = (
         # Research again on a lead card: one company, searched again. Someone waits for it, so it
         # asks Claude in the People lane (PLAN-V26 choice 1).
         person_waits=lambda params: params.recheck and len(params.companies) == 1,
+        # A research the Assistant started: nobody sits and waits, so it asks Claude behind
+        # people's own requests, with at most 2 places (PLAN-V27 choice 20).
+        in_background=lambda params: params.from_assistant,
     ),
     RunKind(
         mode="testset",

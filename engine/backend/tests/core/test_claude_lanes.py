@@ -202,6 +202,58 @@ def test_research_again_on_a_lead_is_people_and_other_runs_are_runs() -> None:
     assert on_time == Work("runs", None, key)  # a schedule started it: nobody waits
 
 
+def test_the_assistants_research_is_people_behind_the_rest_with_two_places() -> None:
+    """PLAN-V27 T4-3: a run the Assistant started is People work that waits behind the lane's
+    other requests and holds at most 2 places (`BACKGROUND_PLACES`)."""
+    key = run_key(uuid.UUID(int=1))
+    one = [object()]
+    found = run_work("company", companies=one, recheck=False, from_assistant=True)
+    assert found == Work("people", SOMEONE, key, behind=True, most=2)
+    assert run_work("company", companies=one, recheck=False, from_assistant=False).lane == "runs"
+
+
+async def test_while_a_research_runs_another_persons_command_starts_at_once() -> None:
+    """PLAN-V27 T4-3 at the lane: the Assistant's research asks 4 questions at once in the People
+    lane (4 places); it gets 2. Another person's command starts at once, and a command that waits
+    goes ahead of the research's waiting questions."""
+    lanes = ClaudeLanes(people=3)
+    research = run_work("company", companies=[object()], recheck=False, from_assistant=True)
+    entered: list[str] = []
+    leave: dict[str, asyncio.Event] = {}
+
+    def ask(name: str, who: Work) -> "asyncio.Task[None]":
+        leave[name] = asyncio.Event()
+
+        async def request() -> None:
+            async with lanes.acquire():
+                entered.append(name)
+                await leave[name].wait()
+
+        with work.doing(who):
+            return asyncio.create_task(request())
+
+    async def settle() -> None:
+        for _ in range(10):
+            await asyncio.sleep(0)
+
+    tasks = [ask(f"q{n}", research) for n in range(4)]
+    await settle()
+    assert entered == ["q0", "q1"]  # 2 places, though 3 are free
+    tasks.append(ask("command", Work("people", uuid.UUID(int=8), "cmd:1")))
+    await settle()
+    assert entered == ["q0", "q1", "command"]  # someone else's command starts at once
+    tasks.append(ask("later", Work("people", uuid.UUID(int=9), "cmd:2")))  # the lane is full
+    await settle()
+    leave["q0"].set()  # one place frees: q2 and q3 waited longer, the later command goes first
+    await settle()
+    assert entered == ["q0", "q1", "command", "later"]
+    for event in leave.values():
+        event.set()
+    async with asyncio.timeout(5):
+        await asyncio.gather(*tasks)
+    assert sorted(entered[-2:]) == ["q2", "q3"]
+
+
 @pytest.mark.parametrize("person", [None, SOMEONE])
 async def test_a_scheduled_job_is_jobs_also_from_run_now(
     monkeypatch: pytest.MonkeyPatch, person: uuid.UUID | None

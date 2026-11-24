@@ -345,6 +345,35 @@ class CompanyDoneData(BaseModel):
     cost_usd: Decimal
     hubspot_status: HubSpotStatus = Field(description="Whether HubSpot already has this company")
     origin: str | None = Field(None, description="As in company_started")
+    tier: str | None = Field(
+        None,
+        description="Levi's tier: A, B, C or discard (PLAN-V27 T4-2: 'Done: Northwind is a B "
+        "lead.'). Empty in a run from before it, and for a card with no tier.",
+    )
+
+
+FINDING_TEXT_MAX = 300
+FINDING_QUESTION_MAX = 200
+
+
+class FindingData(BaseModel):
+    """One thing the research found, as it arrives (PLAN-V27 choice 19), for the Assistant's
+    progress: 'Found: Northwind hired 40 staff this year (news.example.com).' Plain words, with no
+    email address or phone number. Only a run the Assistant started sends them for now; Part 5's
+    loop sends the same event with the question it asks next."""
+
+    company: str = Field(description="The company being researched, as the run names it")
+    text: str = Field(
+        max_length=FINDING_TEXT_MAX,
+        description="One short plain sentence, without 'Found:'",
+        examples=["Northwind hired 40 staff this year."],
+    )
+    source_url: str | None = Field(description="The page it comes from. None: none")
+    next_question: str | None = Field(
+        None,
+        max_length=FINDING_QUESTION_MAX,
+        description="What the research checks next, like 'A second office?' None: nothing said",
+    )
 
 
 class CompanyFailedData(BaseModel):
@@ -450,6 +479,11 @@ class CompanyFailedEvent(_EventBase):
     data: CompanyFailedData
 
 
+class FindingEvent(_EventBase):
+    type: Literal["finding"]
+    data: FindingData
+
+
 class ProgressEvent(_EventBase):
     type: Literal["progress"]
     data: ProgressData
@@ -486,6 +520,7 @@ EVENT_DATA_MODELS: dict[str, type[BaseModel]] = {
     "company_started": CompanyStartedData,
     "company_done": CompanyDoneData,
     "company_failed": CompanyFailedData,
+    "finding": FindingData,  # PLAN-V27 T4-2
     "progress": ProgressData,
     "problem": RunProblemData,
     "cap_reached": CapReachedData,
@@ -516,6 +551,7 @@ type RunEvent = Annotated[
     | CompanyStartedEvent
     | CompanyDoneEvent
     | CompanyFailedEvent
+    | FindingEvent
     | ProgressEvent
     | RunProblemEvent
     | CapReachedEvent

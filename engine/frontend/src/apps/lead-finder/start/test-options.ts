@@ -107,5 +107,6 @@ export const OPTIONS: RunOptions = {
     recheck: false,
     target_companies: null,
     top_up: false,
+    from_assistant: false,
   },
 }

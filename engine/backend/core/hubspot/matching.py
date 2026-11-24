@@ -200,7 +200,7 @@ MAX_CANDIDATES = 3
 PROFILE_POOL = 25  # profiles read from memory before the second sign is checked
 
 # `quiet` is never a match's answer: a lead's status gets it when its HubSpot company is in our copy
-# but nobody has worked it for a while (PLAN-V27 choice 3, `apps/lead_finder/quiet.py`).
+# but nobody has worked it for a while (PLAN-V27 choice 3, `core/hubspot/quiet.py`).
 Status = Literal["new", "in_hubspot", "open_deal", "dissolved_deal", "possible_match", "quiet"]
 MatchedBy = Literal[
     "domain", "name", "hubspot_id", "close_name", "similar_profile", "name_in_deal", "same_name"

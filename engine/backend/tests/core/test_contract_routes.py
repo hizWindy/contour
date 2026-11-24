@@ -113,6 +113,8 @@ ROUTES = [
     ("POST", f"{API}/companies/assistant/companies/preview"),  # PLAN-V23 T1-4
     ("POST", f"{API}/companies/assistant/companies"),
     ("GET", f"{API}/companies/assistant/companies/find"),  # PLAN-V24 T3-2
+    ("GET", f"{API}/companies/assistant/research"),  # PLAN-V27 T4-1
+    ("POST", f"{API}/companies/assistant/research"),  # PLAN-V27 T4-2
     ("POST", f"{API}/auth/login"),
     ("POST", f"{API}/auth/logout"),
     ("POST", f"{API}/auth/logout-everywhere"),
@@ -331,11 +333,11 @@ def test_the_health_check_keeps_its_own_503_text_and_gets_the_problem_body(
     assert response["content"]["application/json"]["schema"]["$ref"].endswith("/ProblemDetails")
 
 
-def test_the_event_union_is_in_the_file_with_all_eighteen_types(schema: dict[str, Any]) -> None:
+def test_the_event_union_is_in_the_file_with_all_nineteen_types(schema: dict[str, Any]) -> None:
     components = schema["components"]["schemas"]
     union = components["RunEvent"]
     assert union["discriminator"]["propertyName"] == "type"
-    assert len(union["oneOf"]) == 18
+    assert len(union["oneOf"]) == 19
     assert set(union["discriminator"]["mapping"]) == {
         "run_started",
         "run_resumed",
@@ -351,6 +353,7 @@ def test_the_event_union_is_in_the_file_with_all_eighteen_types(schema: dict[str
         "company_started",
         "company_done",
         "company_failed",
+        "finding",  # PLAN-V27 T4-2
         "progress",
         "problem",
         "cap_reached",
@@ -679,6 +682,7 @@ def test_every_part_of_the_run_params_says_which_mode_uses_it(schema: dict[str, 
         "watchlist",
         "companies",
         "recheck",
+        "from_assistant",  # PLAN-V27 T4-2
     }
     expected = {
         "cities": "discovery",
@@ -692,6 +696,7 @@ def test_every_part_of_the_run_params_says_which_mode_uses_it(schema: dict[str, 
         "watchlist": "watchlist",
         "companies": "company",
         "recheck": "company",
+        "from_assistant": "company",
     }
     for name, mode in expected.items():
         assert f"mode {mode}" in parts[name]["description"], name

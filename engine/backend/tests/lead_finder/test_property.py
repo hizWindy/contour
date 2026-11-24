@@ -57,6 +57,7 @@ READY = {
     "property_daily_enabled": True,
     "property_daily_username": "someone",
     "property_daily_password": "something",
+    "tool_feeds_find_companies": True,  # the feed as before PLAN-V27 (its A6 switch)
 }
 
 
@@ -454,7 +455,7 @@ def test_all_of_australia_takes_any_of_our_places() -> None:
 def test_a_tool_the_run_names_must_be_ready() -> None:
     params = DiscoveryParams(sources=["web", "property_daily"])
     with pytest.raises(Problem) as refused:
-        check_sources(params, lf_settings())
+        check_sources(params, lf_settings(tool_feeds_find_companies=True))
     assert refused.value.status == 422
     assert refused.value.code == "source_not_ready"
     assert "Property Daily is switched off. An Admin can switch it on." in str(refused.value.detail)
@@ -464,7 +465,7 @@ def test_a_tool_the_run_names_must_be_ready() -> None:
 
 
 def test_left_out_the_run_reads_every_ready_tool() -> None:
-    assert picked_tools(DiscoveryParams(), lf_settings()) == []
+    assert picked_tools(DiscoveryParams(), lf_settings(tool_feeds_find_companies=True)) == []
     assert picked_tools(DiscoveryParams(), lf_settings(**READY)) == ["property_daily"]
     assert picked_tools(DiscoveryParams(sources=["web"]), lf_settings(**READY)) == []
 

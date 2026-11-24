@@ -344,6 +344,7 @@ export function makeLead(changes: Partial<LeadDetail> = {}): LeadDetail {
       last_dissolved: null,
       candidates: [],
       last_activity: null,
+      confirmed_by: null,
     },
     notes: [
       {

@@ -336,6 +336,23 @@ TEXT: dict[str, tuple[str, str]] = {
         "(no call, email, meeting, note or task) for this many months. 0 leaves out every HubSpot "
         "company. 12 to start, TBC with Levi.",
     ),
+    "tool_feeds_find_companies": (
+        "Property Daily's new items become companies found",
+        "Off: Find new leads finds companies on the web only, and the research still reads "
+        "Property Daily for each one, for its lease end, size and signs. On: the property tools' "
+        "new items also come into a run as companies found, as before. Off to start (PLAN-V27).",
+    ),
+    "assistant_research_style": (
+        "How the Assistant researches a new company",
+        "Standard: the four searches a run uses. Deep: a short loop of questions, each "
+        "follow-up asked as soon as its answer arrives (a test, PLAN-V27). Keep standard until "
+        "the comparison says deep is better.",
+    ),
+    "model_deep": (
+        "Model for the deep research's questions",
+        "The Claude model that asks the deep research's questions. The facts step keeps the "
+        "research's own model.",
+    ),
     "match_fuzzy_min": (
         "Close-name score (0 to 100)",
         "How alike two company names must be to count as a possible match in HubSpot.",

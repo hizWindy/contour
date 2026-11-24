@@ -308,6 +308,7 @@
               "task",
               "email",
               "open",
+              "research",
               "change",
               "send",
               "cancel",
@@ -451,6 +452,17 @@
             "description": "The card's first line, like 'Log a call with James Sample at Sample Logistics. Follow-up task on Fri 21 Nov.' For `unclear`, the words as heard, for the bar's text line",
             "title": "Read Back",
             "type": "string"
+          },
+          "research": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistantResearch"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For research (PLAN-V27 T4-1): what we know and what happens next. None for other actions"
           },
           "task": {
             "anyOf": [
@@ -1490,6 +1502,271 @@
         "title": "AssistantRecipient",
         "type": "object"
       },
+      "AssistantResearch": {
+        "description": "A research command, settled from what we already know: free, with no Claude request\n(PLAN-V27 choice 17). Nothing is started: the card's Enter, 'yes' or tap does that, through\nPOST /assistant/research.",
+        "properties": {
+          "area_m2": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its office size in square metres, from the same copy",
+            "title": "Area M2"
+          },
+          "blocked": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why they can't, for ask: 'Researching a new company needs the Lead Finder. Ask your Platform admin.' None when they can",
+            "title": "Blocked"
+          },
+          "can_start": {
+            "description": "This person may start a research: the Lead Finder's Start a run tick, and not a Viewer",
+            "title": "Can Start",
+            "type": "boolean"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its city in our copy, when known",
+            "title": "City"
+          },
+          "company": {
+            "description": "The name to research, as the card sends it to POST /assistant/research. Empty for needs_name and choose",
+            "title": "Company",
+            "type": "string"
+          },
+          "company_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The company, when found: a HubSpot id, or lead:<id>. None when it is new",
+            "title": "Company Key"
+          },
+          "cost_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For ask: about what one company's research costs (from past research, else US$0.40). None otherwise",
+            "title": "Cost Usd"
+          },
+          "hubspot": {
+            "anyOf": [
+              {
+                "enum": [
+                  "new",
+                  "in_hubspot",
+                  "open_deal",
+                  "dissolved_deal",
+                  "quiet",
+                  "possible_match"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HubSpot's view of it. None for needs_name",
+            "title": "Hubspot"
+          },
+          "known": {
+            "description": "What we know, as the card's lines, in order: HubSpot, the lead card, the lease end, the size",
+            "items": {
+              "$ref": "#/components/schemas/ResearchFact"
+            },
+            "title": "Known",
+            "type": "array"
+          },
+          "last_activity": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The last day anyone worked it in HubSpot (its last activity, or the day its last deal dissolved). None: never, or not in HubSpot",
+            "title": "Last Activity"
+          },
+          "lead": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResearchCard"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its lead card from the last 30 days. Only for people with a Lead Finder tick"
+          },
+          "lease_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When its lease ends, from Property Daily or Arealytics in our copy. Only for people with a Lead Finder tick",
+            "title": "Lease End"
+          },
+          "next": {
+            "enum": [
+              "open_lead",
+              "open_prep",
+              "ask",
+              "choose",
+              "needs_name"
+            ],
+            "title": "Next",
+            "type": "string"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For ask, when it can start: 'Research Northwind? About US$0.40.' None otherwise",
+            "title": "Question"
+          }
+        },
+        "required": [
+          "company",
+          "company_key",
+          "city",
+          "hubspot",
+          "last_activity",
+          "lead",
+          "lease_end",
+          "area_m2",
+          "known",
+          "next",
+          "question",
+          "cost_usd",
+          "can_start",
+          "blocked"
+        ],
+        "title": "AssistantResearch",
+        "type": "object"
+      },
+      "AssistantResearchIn": {
+        "additionalProperties": false,
+        "description": "A research to start, as the card has it.",
+        "properties": {
+          "city": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its city, when known, like Perth (422 `research_name` when it isn't a place name)",
+            "examples": [
+              "Perth"
+            ],
+            "title": "City"
+          },
+          "company": {
+            "description": "The name to research: the command's `research.company`, or the choice picked. 2 to 80 characters and at most 8 words: letters, digits, spaces and & ' . , - ( ) / (422 `research_name` otherwise)",
+            "examples": [
+              "Northwind"
+            ],
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[^\\x00]*$",
+            "title": "Company",
+            "type": "string"
+          },
+          "company_key": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The company, when found: a HubSpot id, or lead:<id>. Empty: a new company",
+            "examples": [
+              "201"
+            ],
+            "title": "Company Key"
+          }
+        },
+        "required": [
+          "company"
+        ],
+        "title": "AssistantResearchIn",
+        "type": "object"
+      },
+      "AssistantResearchStarted": {
+        "description": "A research of one company, started in the background.",
+        "properties": {
+          "company": {
+            "description": "The name being researched",
+            "title": "Company",
+            "type": "string"
+          },
+          "run_id": {
+            "description": "The run: follow it with GET /runs/{run_id}/events (finding, company_done with the tier, then run_finished)",
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "status": {
+            "description": "The run's status now: queued or running",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "company",
+          "status"
+        ],
+        "title": "AssistantResearchStarted",
+        "type": "object"
+      },
       "AssistantTask": {
         "properties": {
           "due": {
@@ -1646,6 +1923,252 @@
           "due"
         ],
         "title": "AssistantTaskIn",
+        "type": "object"
+      },
+      "BatchPreview": {
+        "properties": {
+          "can_write": {
+            "description": "Whether writing is switched on (HUBSPOT_WRITE_ENABLED)",
+            "title": "Can Write",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BatchPreviewItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/SendOwner"
+          },
+          "waiting_for": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why writing can't happen yet, if it can't",
+            "title": "Waiting For"
+          }
+        },
+        "required": [
+          "items",
+          "owner",
+          "can_write"
+        ],
+        "title": "BatchPreview",
+        "type": "object"
+      },
+      "BatchPreviewBody": {
+        "properties": {
+          "lead_ids": {
+            "description": "1 to 25 leads, each once",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 25,
+            "minItems": 1,
+            "title": "Lead Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lead_ids"
+        ],
+        "title": "BatchPreviewBody",
+        "type": "object"
+      },
+      "BatchPreviewItem": {
+        "properties": {
+          "already_sent": {
+            "description": "It was sent before: Send leaves it as it is",
+            "title": "Already Sent",
+            "type": "boolean"
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The lead's company. null when the lead is gone",
+            "title": "Company"
+          },
+          "lead_id": {
+            "format": "uuid",
+            "title": "Lead Id",
+            "type": "string"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it couldn't be previewed, in plain words",
+            "title": "Problem"
+          },
+          "write": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WriteOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its preview, or its earlier send. null on failure"
+          }
+        },
+        "required": [
+          "lead_id",
+          "company",
+          "write",
+          "already_sent",
+          "problem"
+        ],
+        "title": "BatchPreviewItem",
+        "type": "object"
+      },
+      "BatchSendBody": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BatchSendPair"
+            },
+            "maxItems": 25,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "BatchSendBody",
+        "type": "object"
+      },
+      "BatchSendItem": {
+        "properties": {
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "lead_id": {
+            "format": "uuid",
+            "title": "Lead Id",
+            "type": "string"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it failed, in plain words",
+            "title": "Problem"
+          },
+          "result": {
+            "enum": [
+              "sent",
+              "failed",
+              "already_sent"
+            ],
+            "title": "Result",
+            "type": "string"
+          },
+          "write": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WriteOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "lead_id",
+          "company",
+          "result",
+          "write",
+          "problem"
+        ],
+        "title": "BatchSendItem",
+        "type": "object"
+      },
+      "BatchSendOut": {
+        "properties": {
+          "already_sent": {
+            "title": "Already Sent",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BatchSendItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "sent": {
+            "title": "Sent",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "sent",
+          "failed",
+          "already_sent"
+        ],
+        "title": "BatchSendOut",
+        "type": "object"
+      },
+      "BatchSendPair": {
+        "properties": {
+          "lead_id": {
+            "format": "uuid",
+            "title": "Lead Id",
+            "type": "string"
+          },
+          "write_id": {
+            "description": "The write id the batch preview gave this lead",
+            "format": "uuid",
+            "title": "Write Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lead_id",
+          "write_id"
+        ],
+        "title": "BatchSendPair",
         "type": "object"
       },
       "Blocked": {
@@ -3629,6 +4152,18 @@
           "score": {
             "title": "Score",
             "type": "integer"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Levi's tier: A, B, C or discard (PLAN-V27 T4-2: 'Done: Northwind is a B lead.'). Empty in a run from before it, and for a card with no tier.",
+            "title": "Tier"
           }
         },
         "required": [
@@ -6750,6 +7285,88 @@
         "title": "FilterResult",
         "type": "object"
       },
+      "FindingData": {
+        "description": "One thing the research found, as it arrives (PLAN-V27 choice 19), for the Assistant's\nprogress: 'Found: Northwind hired 40 staff this year (news.example.com).' Plain words, with no\nemail address or phone number. Only a run the Assistant started sends them for now; Part 5's\nloop sends the same event with the question it asks next.",
+        "properties": {
+          "company": {
+            "description": "The company being researched, as the run names it",
+            "title": "Company",
+            "type": "string"
+          },
+          "next_question": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the research checks next, like 'A second office?' None: nothing said",
+            "title": "Next Question"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The page it comes from. None: none",
+            "title": "Source Url"
+          },
+          "text": {
+            "description": "One short plain sentence, without 'Found:'",
+            "examples": [
+              "Northwind hired 40 staff this year."
+            ],
+            "maxLength": 300,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "company",
+          "text",
+          "source_url"
+        ],
+        "title": "FindingData",
+        "type": "object"
+      },
+      "FindingEvent": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/FindingData"
+          },
+          "seq": {
+            "description": "1, 2, 3 ... in the order the events happened",
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "type": {
+            "const": "finding",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seq",
+          "created_at",
+          "type",
+          "data"
+        ],
+        "title": "FindingEvent",
+        "type": "object"
+      },
       "Fit": {
         "additionalProperties": false,
         "properties": {
@@ -7616,6 +8233,18 @@
             "title": "Candidates",
             "type": "array"
           },
+          "confirmed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who settled a possible match by hand: 'Same company' or 'It's new' on the lead card (PLAN-V27 T1-3). A HubSpot sync's relabel leaves a settled lead as it is.",
+            "title": "Confirmed By"
+          },
           "hubspot_id": {
             "anyOf": [
               {
@@ -7723,7 +8352,8 @@
           "open_deals",
           "last_dissolved",
           "candidates",
-          "last_activity"
+          "last_activity",
+          "confirmed_by"
         ],
         "title": "HubSpotOut",
         "type": "object"
@@ -7851,6 +8481,39 @@
           "owners"
         ],
         "title": "HubSpotOwnerList",
+        "type": "object"
+      },
+      "HubSpotPick": {
+        "additionalProperties": false,
+        "description": "Settle a possible HubSpot match (PLAN-V27 T1-3): `same` with one candidate's\n`hubspot_id`, or `new`.",
+        "properties": {
+          "hubspot_id": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With `same`: the HubSpot id of one of the lead's candidates.",
+            "title": "Hubspot Id"
+          },
+          "pick": {
+            "description": "same: it is that HubSpot company. new: it isn't in HubSpot.",
+            "enum": [
+              "same",
+              "new"
+            ],
+            "title": "Pick",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pick"
+        ],
+        "title": "HubSpotPick",
         "type": "object"
       },
       "HubSpotStatus": {
@@ -9334,7 +9997,7 @@
       },
       "LeadFinderRunParams": {
         "additionalProperties": false,
-        "description": "Every part with its default. The Start page shows these as the starting values.\n\nA real run uses the model of its mode (above), which refuses the parts it doesn't use. So\nsend only the parts of your mode: `cities`, `area`, `triggers`, `since_days`, `sources`,\n`target_companies`, `top_up` and `goal_leads` for discovery, `watchlist` for watchlist,\n`companies` and `recheck` for company, and `caps` for every mode (testset has nothing else).",
+        "description": "Every part with its default. The Start page shows these as the starting values.\n\nA real run uses the model of its mode (above), which refuses the parts it doesn't use. So\nsend only the parts of your mode: `cities`, `area`, `triggers`, `since_days`, `sources`,\n`target_companies`, `top_up` and `goal_leads` for discovery, `watchlist` for watchlist,\n`companies`, `recheck` and `from_assistant` for company, and `caps` for every mode (testset has\nnothing else).",
         "properties": {
           "area": {
             "additionalProperties": {
@@ -9383,6 +10046,12 @@
             "maxItems": 25,
             "title": "Companies",
             "type": "array"
+          },
+          "from_assistant": {
+            "default": false,
+            "description": "Used by mode company only. The Assistant started it, for one company (PLAN-V27 choice 19): it runs in the background, with at most 2 Claude requests at once.",
+            "title": "From Assistant",
+            "type": "boolean"
           },
           "goal_leads": {
             "anyOf": [
@@ -9496,7 +10165,8 @@
           "top_up",
           "watchlist",
           "companies",
-          "recheck"
+          "recheck",
+          "from_assistant"
         ],
         "title": "LeadFinderRunParams",
         "type": "object"
@@ -14458,6 +15128,53 @@
         "title": "Relationship",
         "type": "object"
       },
+      "ResearchCard": {
+        "description": "The company's newest lead card from the last 30 days.",
+        "properties": {
+          "found_on": {
+            "description": "The day it was made, Melbourne time",
+            "format": "date",
+            "title": "Found On",
+            "type": "string"
+          },
+          "lead_id": {
+            "format": "uuid",
+            "title": "Lead Id",
+            "type": "string"
+          },
+          "link": {
+            "description": "The card's page, like /leads/<id>",
+            "title": "Link",
+            "type": "string"
+          },
+          "result": {
+            "description": "Like pass, director_review, watch or drop",
+            "title": "Result",
+            "type": "string"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Levi's tier: A, B, C or discard. None: no tier yet",
+            "title": "Tier"
+          }
+        },
+        "required": [
+          "lead_id",
+          "found_on",
+          "result",
+          "tier",
+          "link"
+        ],
+        "title": "ResearchCard",
+        "type": "object"
+      },
       "ResearchCost": {
         "properties": {
           "angles_from_memory": {
@@ -14492,6 +15209,65 @@
           "angles_from_memory"
         ],
         "title": "ResearchCost",
+        "type": "object"
+      },
+      "ResearchFact": {
+        "description": "One thing we already know, as the card's line, with its date and source.",
+        "properties": {
+          "day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The day it is from. None: no day (like not in HubSpot)",
+            "title": "Day"
+          },
+          "kind": {
+            "enum": [
+              "hubspot",
+              "lead",
+              "lease_end",
+              "size"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "description": "Where it is from: HubSpot, Lead Finder, Property Daily or Arealytics",
+            "title": "Source",
+            "type": "string"
+          },
+          "text": {
+            "description": "The card's line, like 'Northwind: not in HubSpot.' or 'Property Daily, 3 Oct: lease ends March 2028.'",
+            "title": "Text",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The page it came from, for a property tool's fact",
+            "title": "Url"
+          }
+        },
+        "required": [
+          "kind",
+          "text",
+          "day",
+          "source",
+          "url"
+        ],
+        "title": "ResearchFact",
         "type": "object"
       },
       "ResearchRequest": {
@@ -15838,6 +16614,7 @@
             "company_failed": "#/components/schemas/CompanyFailedEvent",
             "company_skipped": "#/components/schemas/CompanySkippedEvent",
             "company_started": "#/components/schemas/CompanyStartedEvent",
+            "finding": "#/components/schemas/FindingEvent",
             "merged": "#/components/schemas/MergedEvent",
             "plan_ready": "#/components/schemas/PlanReadyEvent",
             "problem": "#/components/schemas/RunProblemEvent",
@@ -15896,6 +16673,9 @@
           },
           {
             "$ref": "#/components/schemas/CompanyFailedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/FindingEvent"
           },
           {
             "$ref": "#/components/schemas/ProgressEvent"
@@ -17771,6 +18551,33 @@
           "write_id"
         ],
         "title": "SendBody",
+        "type": "object"
+      },
+      "SendOwner": {
+        "properties": {
+          "hubspot_owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Their HubSpot owner id. null: the companies get no owner (choice 15, TBC)",
+            "title": "Hubspot Owner Id"
+          },
+          "name": {
+            "description": "The person who presses Send",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "hubspot_owner_id"
+        ],
+        "title": "SendOwner",
         "type": "object"
       },
       "SessionOut": {
@@ -23835,7 +24642,7 @@
     },
     "/companies/assistant/command": {
       "post": {
-        "description": "Turns one thing a rep said or typed into one action for the review card: `pre_read`, `log_call`, `task`, `email` or `open`, or on an open card (`card`) `change`, `send` or `cancel`. Anything else is `unknown`, and `read_back` lists what the Assistant can do. Words too unclear to make a command are `unclear` (PLAN-V23): `read_back` holds the words as heard and `unsure` the stop line; words too short to be a command (like 'um') are `unclear` with no Claude request. One small Claude request, on the call notes' model and within their cap for one note; a card's plain 'send it' or 'cancel' needs none. Claude gets only the words (emails and phone numbers blanked), today's date and an open card's box names. Code finds the company, the person, the meeting and the teammates in our HubSpot copy: each comes back as `heard`, then `found` (one match) or `choices` (two or more, best first). With no company named, the one on screen (`on_page`). A company is found in this order: the one on screen when the words are close to it, the team's learned names, our copy, then HubSpot's own search (one free request), which reads what it finds into our copy (`from_hubspot`). Found nowhere after HubSpot was searched: `can_add`, so the card may offer to add it. With no HubSpot connection it isn't searched, and `can_add` is false. It writes nothing to HubSpot, sends nothing and keeps no copy of the words; its cost goes to the search log. Behind the Call logs or the Meetings tick; a Viewer gets 403 `viewer_read_only`. 409 `assistant_off` while call notes or their AI sort are off, or Claude isn't set up. 422 `command_empty`, or `command_too_long` over 2,000 characters. 429 `too_many_commands` over 20 in a minute for one person, with `Retry-After`. 503 `claude_unavailable` when Claude takes over 15 seconds, is down, or today's limit is reached, with `Retry-After`.",
+        "description": "Turns one thing a rep said or typed into one action for the review card: `pre_read`, `log_call`, `task`, `email`, `open` or `research`, or on an open card (`card`) `change`, `send` or `cancel`. `research` (PLAN-V27 T4-1, 'Research Northwind') comes with `research`: what we know and what happens next, settled from our copies with no Claude request (see GET /assistant/research); plainly 'research' and a name, or 'research' alone, needs no Claude request at all. Anything else is `unknown`, and `read_back` lists what the Assistant can do. Words too unclear to make a command are `unclear` (PLAN-V23): `read_back` holds the words as heard and `unsure` the stop line; words too short to be a command (like 'um') are `unclear` with no Claude request. One small Claude request, on the call notes' model and within their cap for one note; a card's plain 'send it' or 'cancel' needs none. Claude gets only the words (emails and phone numbers blanked), today's date and an open card's box names. Code finds the company, the person, the meeting and the teammates in our HubSpot copy: each comes back as `heard`, then `found` (one match) or `choices` (two or more, best first). With no company named, the one on screen (`on_page`). A company is found in this order: the one on screen when the words are close to it, the team's learned names, our copy, then HubSpot's own search (one free request), which reads what it finds into our copy (`from_hubspot`). Found nowhere after HubSpot was searched: `can_add`, so the card may offer to add it. With no HubSpot connection it isn't searched, and `can_add` is false. It writes nothing to HubSpot, sends nothing and keeps no copy of the words; its cost goes to the search log. Behind the Call logs or the Meetings tick; a Viewer gets 403 `viewer_read_only`. 409 `assistant_off` while call notes or their AI sort are off, or Claude isn't set up. 422 `command_empty`, or `command_too_long` over 2,000 characters. 429 `too_many_commands` over 20 in a minute for one person, with `Retry-After`. 503 `claude_unavailable` when Claude takes over 15 seconds, is down, or today's limit is reached, with `Retry-After`.",
         "operationId": "read_assistant_command",
         "requestBody": {
           "content": {
@@ -25375,6 +26182,350 @@
           }
         ],
         "summary": "The names the mic listens for",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/assistant/research": {
+      "get": {
+        "description": "The research card's block for one company the card has settled (PLAN-V27 T4-1): the choice picked (`company_key`), or a new company by its `name`. It is the command's `research` again, free, with no Claude request: HubSpot's view from our copy (`new`, `in_hubspot`, `open_deal`, `dissolved_deal` or `quiet`, with `last_activity`); for people with a Lead Finder tick, its lead card from the last 30 days and Property Daily's lease end and size from our copy, each with its day and source (`known`). `next`: `open_lead` (open the card, no cost), `open_prep` (in HubSpot and not quiet: open its call prep), `ask` (new or quiet: `question` like 'Research Northwind? About US$0.40.', with `cost_usd` from past research or US$0.40) or `needs_name`. `can_start` false: `blocked` has the words ('Researching a new company needs the Lead Finder. Ask your Platform admin.'). 404 `company_not_found` when `company_key` isn't open to this person. Behind the Call logs or the Meetings tick; a Viewer gets 403 `viewer_read_only`.",
+        "operationId": "read_assistant_research",
+        "parameters": [
+          {
+            "description": "The company's name: the choice's, or the words for a new company",
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "The company's name: the choice's, or the words for a new company",
+              "examples": [
+                "Northwind"
+              ],
+              "maxLength": 120,
+              "pattern": "^[^\\x00]*$",
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The choice picked: a HubSpot id, or lead:<id>",
+            "in": "query",
+            "name": "company_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "pattern": "^[^\\x00]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The choice picked: a HubSpot id, or lead:<id>",
+              "title": "Company Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantResearch"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "What we know about a company, before researching it",
+        "tags": [
+          "Companies"
+        ]
+      },
+      "post": {
+        "description": "Starts a Lead Finder run of one company in the background, after the card's Enter, 'yes' or tap (PLAN-V27 choices 18 to 20), and answers its `run_id` at once: follow it with GET /runs/{run_id}/events. Each `finding` event is one line with its source, as it arrives; `company_done` has the lead and its `tier`; `run_finished` ends it. It is a run like any other: the company cap, the run cap and the daily limit stop it as they stop a run, and it shows on the Runs page. It asks Claude behind people's own requests, with at most 2 at once, so nobody else waits. About US$0.34 to 0.42 a company (TBC). Send the card's `Idempotency-Key`: the same key and body give back the first run, so a double press starts one. Needs the Lead Finder's Start a run tick: 403 `feature_not_allowed` otherwise ('Researching a new company needs the Lead Finder. Ask your Platform admin.'), and a Viewer gets 403 `viewer_read_only`. 409 `run_already_active` while the run limit is full, `idempotency_key_reused` for a key sent with another body. 422 `research_name` for a name or city that can't be researched. 503 `runs_not_ready` while the run engine isn't running.",
+        "operationId": "start_assistant_research",
+        "parameters": [
+          {
+            "description": "Any unique text (a UUID is fine), made when the card asks. The same key and body give back the first run",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9._:-]+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Any unique text (a UUID is fine), made when the card asks. The same key and body give back the first run",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantResearchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantResearchStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Research a company",
         "tags": [
           "Companies"
         ]
@@ -37713,6 +38864,302 @@
         ]
       }
     },
+    "/lead-finder/leads/hubspot/preview-many": {
+      "post": {
+        "description": "Up to 25 leads (PLAN-V27 T3-1). Each is previewed as a single send is, one at a time, in the order given: a new company or the empty fields of one HubSpot has, the note and the list. A lead sent before gets its send back with `already_sent`. A lead that can't be previewed has its `problem`, and the others go on. The owner is the person asking, when they have a HubSpot user; otherwise none (TBC with Levi). Writes nothing, and works while writing is switched off.",
+        "operationId": "preview_many",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchPreviewBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Preview adding many leads to HubSpot",
+        "tags": [
+          "Lead Finder",
+          "leads"
+        ]
+      }
+    },
+    "/lead-finder/leads/hubspot/send-many": {
+      "post": {
+        "description": "Up to 25 (lead, write) pairs from `preview-many` (PLAN-V27 T3-1). Each is sent as a single send is, one at a time, once only: `sent`, `already_sent` (a second call sends nothing twice), or `failed` with plain words, and one failure never stops the rest. A sent lead's status is `sent`. Needs HUBSPOT_WRITE_ENABLED=true; until then the whole batch answers 409 hubspot_write_off and nothing is written.",
+        "operationId": "send_many",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchSendBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchSendOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Send many previewed leads to HubSpot",
+        "tags": [
+          "Lead Finder",
+          "leads"
+        ]
+      }
+    },
     "/lead-finder/leads/map": {
       "get": {
         "description": "Up to 2000 leads that match the filters. The places are approximate: the centre of the suburb (or the city), moved a little so pins don't sit on top of each other.",
@@ -38972,6 +40419,166 @@
           }
         ],
         "summary": "This lead's HubSpot send, if there is one",
+        "tags": [
+          "Lead Finder",
+          "leads"
+        ]
+      }
+    },
+    "/lead-finder/leads/{lead_id}/hubspot-match": {
+      "post": {
+        "description": "For a lead whose HubSpot status is `possible_match` (PLAN-V27 T1-3). `pick: same` with the `hubspot_id` of one of its candidates links the lead to that company: its status becomes the company's own, or `quiet` when nobody has worked it for `hubspot_quiet_months`. `pick: new` says it isn't in HubSpot. The card is judged again with its saved facts, and says who settled it. Free: our HubSpot copy only. Answers 404 for an unknown lead, 409 `not_a_maybe` when it isn't a possible match (already settled), 422 `not_a_candidate` for another company, and 409 `hubspot_company_gone` when that company left our copy.",
+        "operationId": "settle_hubspot_match",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lead_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lead Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HubSpotPick"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Settle a possible HubSpot match: the same company, or new",
         "tags": [
           "Lead Finder",
           "leads"

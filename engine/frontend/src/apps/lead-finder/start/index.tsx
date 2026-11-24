@@ -8,9 +8,10 @@
  *   what is left of today's limit. A choice the server refuses is shown beside its field.
  * - Start is safe to double-click: the same choices send the same Idempotency-Key, so a second
  *   click returns the first run instead of starting another.
- * - Finding new leads (PLAN-V16 T3-2) searches all of Australia or cities in four groups, and where
- *   to look (the web and the two property tools). Those parts are in `discovery.tsx`. How many
- *   companies to research (PLAN-V21 T3-3) is in `target.tsx`.
+ * - Finding new leads (PLAN-V16 T3-2) searches all of Australia or cities in four groups, in
+ *   `discovery.tsx`. It searches the web only: Property Daily is a trigger the research reads for
+ *   each company, not a place to find companies, so there is no "where to look" (PLAN-V27 choice
+ *   8). How many companies to research (PLAN-V21 T3-3) is in `target.tsx`.
  */
 import { CircleAlert, MapPinned, Play } from 'lucide-react'
 import { useMemo, useRef, useState, type ReactNode } from 'react'
@@ -36,7 +37,7 @@ import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from '@/componen
 import { Input } from '@/components/ui/input'
 import { Segmented } from '@/components/motion'
 import { useDebounced } from '@/hooks/useDebounced'
-import { SourceChoices, WhereChoices } from './discovery'
+import { WhereChoices } from './discovery'
 import {
   bodyOf,
   errorFor,
@@ -220,10 +221,6 @@ function StartFormView({ options }: { options: RunOptions }) {
               errors={errors}
               estimate={result}
             />
-          </Section>
-
-          <Section title="Sources">
-            <SourceChoices options={options} form={form} update={update} errors={errors} />
           </Section>
         </>
 
