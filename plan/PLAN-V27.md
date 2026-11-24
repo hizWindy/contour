@@ -7,7 +7,7 @@ This plan makes the Lead Finder about new companies only. The Run tab keeps one 
 - **Status:** drafted on 23 Nov 2026 from Al-khair's chat. Approved by Al-khair on 24 Nov (`implement v27`), and being built on `plan-v27` in `../contour-v27`.
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
 - **Last updated:** 25 Nov 2026.
-- **Progress:** S0, T1-1, T1-2, T1-4, T2-2, T2-3, T3-1, T4-1, T4-3 and T5-1 done (24 Nov), and Built and waiting: T1-3, T3-2 and T4-2 (Al-khair's look), T2-1 (S2's numbers). T3-3, T4-4 and T5-4 done (25 Nov). T5-2 (paid) and T5-3 wait for Al-khair.
+- **Progress:** S0, T1-1, T1-2, T1-4, T2-2, T2-3, T3-1, T4-1, T4-3 and T5-1 done (24 Nov), and T3-3, T4-4 and T5-4 (25 Nov). Built and waiting: T1-3, T3-2 and T4-2 (Al-khair's look), T2-1 (S2's numbers). T5-2 (paid) and T5-3 wait for Al-khair.
 - **Sources:**
   - Al-khair's chat on 23 Nov 2026: his six asks, then his note that Property Daily is one of the triggers, not a source of leads;
   - the code on `master` (`ff0f658`), read on 23 Nov;
