@@ -111,12 +111,16 @@ async def preview_many(
         "batch answers 409 hubspot_write_off and nothing is written."
     ),
 )
-async def send_many(request: Request, body: BatchSendBody, session: SessionDep) -> BatchSendOut:
+async def send_many(
+    request: Request, body: BatchSendBody, session: SessionDep, auth: SignedInDep
+) -> BatchSendOut:
     try:
         async with open_hubspot(request.app) as client:
             if client is None:
                 raise KEY_MISSING
-            return await send_batch(session, client, body.items)
+            return await send_batch(
+                session, client, body.items, owner=_owner(auth).hubspot_owner_id
+            )
     except HubSpotError as error:
         raise write_problem(error) from error
 

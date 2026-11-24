@@ -303,11 +303,20 @@ export function HintBar({
 // --- The strips at the card's foot --------------------------------------------------------------
 
 /** While the card listens for "send it" (choice 23): the words, and a bar that empties once. */
-export function ListenStrip({ id, ms }: { id: string; ms: number }) {
+export function ListenStrip({
+  id,
+  ms,
+  words = SAY_SEND_IT,
+}: {
+  id: string
+  ms: number
+  /** What to say: "send it" on the review card, "yes" on the research card (PLAN-V27 T4-2). */
+  words?: string
+}) {
   return (
     <div data-slot="card-listen" className="flex flex-col gap-2">
       <p id={id} className="text-ui text-muted-foreground">
-        {SAY_SEND_IT}
+        {words}
       </p>
       <CountdownBar ms={ms} />
     </div>

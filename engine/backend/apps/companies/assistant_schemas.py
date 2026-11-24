@@ -477,9 +477,10 @@ class AssistantResearchIn(BaseModel):
     company: SafeText = Field(
         min_length=1,
         max_length=RESEARCH_NAME_MAX_CHARS,
-        description="The name to research: the command's `research.company`, or the choice "
-        "picked. 2 to 80 characters and at most 8 words: letters, digits, spaces and & ' . , - "
-        "( ) / (422 `research_name` otherwise)",
+        description="The name to research: the block's `research.company`, as it came. 2 to 80 "
+        "characters and at most 8 words: letters, digits, spaces and & ' . , - ( ) / (422 "
+        "`research_name` otherwise). For a company in our HubSpot copy while HubSpot names may "
+        "not go to Claude, the server uses `said` instead",
         examples=["Northwind"],
     )
     company_key: SafeText | None = Field(
@@ -487,6 +488,15 @@ class AssistantResearchIn(BaseModel):
         max_length=64,
         description="The company, when found: a HubSpot id, or lead:<id>. Empty: a new company",
         examples=["201"],
+    )
+    said: SafeText | None = Field(
+        None,
+        max_length=RESEARCH_NAME_MAX_CHARS,
+        description="The rep's words for the company, as heard (the command's `company.heard`). "
+        "A HubSpot company is researched under these words while HubSpot names may not go to "
+        "Claude; without them it is refused (422 `research_name`, \"Say the company's name to "
+        'research it.")',
+        examples=["North Wind"],
     )
     city: SafeText | None = Field(
         None,

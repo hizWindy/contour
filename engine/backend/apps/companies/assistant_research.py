@@ -113,6 +113,11 @@ def bad_name() -> Problem:
     )
 
 
+def say_the_name() -> Problem:
+    """A HubSpot company with no words of the rep's while HubSpot names may not go to Claude."""
+    return Problem(422, "Say the company's name", SAY_THE_NAME, code="research_name")
+
+
 def day_words(day: date, today: date) -> str:
     """'3 Oct', or '3 Oct 2025' in another year. Words, so a date never looks like a number."""
     return f"{day.day} {day:%b}" if day.year == today.year else f"{day.day} {day:%b %Y}"
@@ -540,6 +545,7 @@ async def start_research(
     auth: AuthContext | None,
     leads: Sequence[CompanyLeads],
     key: str | None,
+    settings: Settings,
 ) -> AssistantResearchStarted:
     """A run of one company, in the background (choices 19 and 20). The run manager checks its
     params and limits as for any run: 409 `run_already_active` while the run limit is full, and
@@ -551,6 +557,12 @@ async def start_research(
         raise bad_name()
     project, research = hook
     name = " ".join(body.company.split())
+    if body.company_key:  # the server, not the card, says which name goes to Claude
+        hit = await company_hit(session, body.company_key, leads)
+        if hit is not None and hit.source == "hubspot":
+            name = " ".join(run_name(hit, heard(body.said or ""), settings).split())
+            if not name:
+                raise say_the_name()
     city = " ".join(body.city.split()) if body.city else None
     if session.in_transaction():
         await session.rollback()  # no connection waits on the run's start

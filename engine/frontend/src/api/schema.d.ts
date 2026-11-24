@@ -3450,7 +3450,7 @@ export interface components {
             city?: string | null;
             /**
              * Company
-             * @description The name to research: the command's `research.company`, or the choice picked. 2 to 80 characters and at most 8 words: letters, digits, spaces and & ' . , - ( ) / (422 `research_name` otherwise)
+             * @description The name to research: the block's `research.company`, as it came. 2 to 80 characters and at most 8 words: letters, digits, spaces and & ' . , - ( ) / (422 `research_name` otherwise). For a company in our HubSpot copy while HubSpot names may not go to Claude, the server uses `said` instead
              * @example Northwind
              */
             company: string;
@@ -3460,6 +3460,12 @@ export interface components {
              * @example 201
              */
             company_key?: string | null;
+            /**
+             * Said
+             * @description The rep's words for the company, as heard (the command's `company.heard`). A HubSpot company is researched under these words while HubSpot names may not go to Claude; without them it is refused (422 `research_name`, "Say the company's name to research it.")
+             * @example North Wind
+             */
+            said?: string | null;
         };
         /**
          * AssistantResearchStarted
@@ -15082,7 +15088,7 @@ export interface operations {
     read_assistant_research: {
         parameters: {
             query?: {
-                /** @description The company's name: the choice's, or the words for a new company */
+                /** @description The rep's words for the company, as heard (never a choice's HubSpot name): the block's `company` comes from them */
                 name?: string;
                 /** @description The choice picked: a HubSpot id, or lead:<id> */
                 company_key?: string | null;

@@ -241,6 +241,14 @@ export type AssistantTaskIn = Schemas['AssistantTaskIn']
 export type AssistantEmailIn = Schemas['AssistantEmailIn']
 export type TeamEmail = Schemas['TeamEmail']
 
+// PLAN-V27 T4-2: research in the Assistant. What we know of a company, free, and a research
+// started. Its `said` is the rep's words as heard: the server works out the run's name from them,
+// so a HubSpot name never reaches Claude while that is off.
+export type AssistantResearch = Schemas['AssistantResearch']
+export type ResearchFact = Schemas['ResearchFact']
+export type AssistantResearchIn = Schemas['AssistantResearchIn']
+export type AssistantResearchStarted = Schemas['AssistantResearchStarted']
+
 // The Assistant's names (PLAN-V23 Part 1): the hint list, learned names and adding a company
 export type AssistantName = Schemas['AssistantName']
 export type AssistantNames = Schemas['AssistantNames']

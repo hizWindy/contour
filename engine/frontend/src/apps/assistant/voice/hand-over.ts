@@ -11,6 +11,10 @@
  * - `pre_read`: its card is the pre-read's own page (choice 24). With the meeting found, the page
  *   opens, after the pre-read starts if it has none yet ("Working it out" stays on meanwhile).
  *   With two or more meetings, or none ahead, the card asks.
+ * - `research` (PLAN-V27 T4-2, choice 18): a lead card from the last 30 days opens at once, and a
+ *   HubSpot company that isn't quiet opens its call prep, each with its line in a toast. A new or
+ *   quiet company, or a maybe, opens the research card, which asks once with the cost. With no
+ *   name, the bar asks for one.
  * - `unknown` shows its read-back (what the Assistant can do), with Try again.
  * - `unclear` (PLAN-V23 T1-6) stops before any card: the words wait in the bar's text line, with
  *   the stop line ("We didn't catch that clearly...") and "Say it again".
@@ -26,6 +30,9 @@ import type {
   AssistantOpen,
   CommandSource,
 } from '@/api/types'
+import { toast } from 'sonner'
+import { placeOf } from '../card/research-flow'
+import { NO_NAME } from '../card/research-words'
 import { openCard } from '../card/store'
 import { CALL_LOGS_PATH, MEETINGS_PATH, TODAY_PATH } from '../paths'
 import { isVoiceBarOpen } from './store'
@@ -78,6 +85,13 @@ export interface HandOverTools {
    * skips the card. True: it started. Left out, or false: the card opens, as before.
    */
   quickLog?: (heard: Extract<Heard, { kind: 'command' }>) => boolean
+  /**
+   * The rep may use call prep (PLAN-V27 T4-2): a HubSpot company's research opens its call prep,
+   * else its page. Left out: they may.
+   */
+  canPrep?: () => boolean
+  /** Says a line as a page opens (a toast). For tests. */
+  tell?: (line: string) => void
 }
 
 /** The actions whose card is the review card. */
@@ -149,9 +163,45 @@ export function openMeeting(
   )
 }
 
+/** A research command (PLAN-V27 T4-2): a page, the research card, or a line asking for a name. */
+function researchAnswer(
+  heard: Extract<Heard, { kind: 'command' }>,
+  go: (to: string) => void,
+  canPrep: boolean,
+  tell: (line: string) => void,
+): AfterAnswer {
+  const { command } = heard
+  const research = command.research
+  if (!research) {
+    return { kind: 'show', line: command.read_back, unsure: command.unsure, again: true }
+  }
+  if (research.next === 'needs_name') {
+    return { kind: 'show', line: command.read_back || NO_NAME, unsure: null, again: true }
+  }
+  const name = command.company?.found?.name ?? (command.company?.heard || research.company)
+  const place = placeOf(research, name, canPrep)
+  if (place) {
+    go(place.to)
+    // The server's line says it for a lead card and for call prep; without call prep, ours.
+    tell(canPrep && command.read_back ? command.read_back : place.line)
+    return CLOSE
+  }
+  openCard({ kind: 'command', command, words: heard.words, source: heard.source })
+  return CLOSE
+}
+
 export function handOver(
   heard: Heard,
-  { go, dictate = () => false, start = startPreRead, quickLog = () => false }: HandOverTools,
+  {
+    go,
+    dictate = () => false,
+    start = startPreRead,
+    quickLog = () => false,
+    canPrep = () => true,
+    tell = (line) => {
+      toast(line)
+    },
+  }: HandOverTools,
 ): AfterAnswer | Promise<AfterAnswer> {
   if (heard.kind === 'dictation') {
     // V still works as dictation: the words go in a new call note (choice 17).
@@ -164,6 +214,7 @@ export function handOver(
     go(pageFor(command.open))
     return CLOSE
   }
+  if (command.action === 'research') return researchAnswer(heard, go, canPrep(), tell)
   if (command.action === 'pre_read' && command.meeting?.found) {
     return openMeeting(command.meeting.found, go, start)
   }

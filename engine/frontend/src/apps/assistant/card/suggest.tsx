@@ -62,6 +62,11 @@ export interface SuggestPartProps {
   choices: readonly SuggestChoice[]
   /** After the choices, not numbered: "No one in particular". */
   extra?: SuggestChoice | null
+  /**
+   * With a likely suggestion, `extra` shows too, as a quiet button beside "Not this one" (the
+   * research card's "It's new", PLAN-V27 T4-2). Left out: it shows only with the choices.
+   */
+  extraBeside?: boolean
   /** The choice that is the card's now (Change on a sure pick): the highlight starts there. */
   current?: string | null
   onPick: (id: string) => void
@@ -245,6 +250,7 @@ export function SuggestPart({
   question,
   choices,
   extra = null,
+  extraBeside = false,
   current = null,
   onPick,
   onTurnDown,
@@ -314,6 +320,22 @@ export function SuggestPart({
               onClick={onTurnDown}
             >
               {NOT_THIS_ONE}
+            </Button>
+          ) : null}
+          {/* The research card's "It's new" sits beside the suggestion too (PLAN-V27 T4-2). */}
+          {extra && extraBeside ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              data-slot="suggest-extra"
+              data-choice={extra.id}
+              className="touch:h-11"
+              onClick={() => {
+                onPick(extra.id)
+              }}
+            >
+              {extra.title}
             </Button>
           ) : null}
         </div>

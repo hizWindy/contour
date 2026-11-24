@@ -11,7 +11,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder.api_hubspot import _owner
-from apps.lead_finder.hubspot_batch import OWNER_FIELD, SendOwner, preview_batch
+from apps.lead_finder.hubspot_batch import (
+    OWNER_CHANGED,
+    OWNER_FIELD,
+    BatchSendPair,
+    SendOwner,
+    preview_batch,
+    send_batch,
+)
 from apps.lead_finder.rules import load_rules
 from apps.lead_finder.tables import Lead
 from core.api.app import create_app
@@ -174,3 +181,33 @@ async def test_twenty_six_leads_are_refused(client: httpx.AsyncClient) -> None:
     pairs = [{"lead_id": i, "write_id": i} for i in many]
     assert (await client.post(f"{MANY}/send-many", json={"items": pairs})).status_code == 422
     assert (await client.post(f"{MANY}/preview-many", json={"lead_ids": []})).status_code == 422
+
+
+@pytest.mark.integration
+async def test_a_plan_with_another_owner_fails_that_lead_and_writes_nothing(
+    session: AsyncSession, fake: FakeHubSpot
+) -> None:
+    """The review's note: a lead has one open plan, so another rep's later preview can plan
+    their owner. The send then fails that lead, "Preview the batch again.", and writes nothing."""
+    one = lead("Northwind Freight", "northwind.example")
+    await add_all(session, one)
+    planned = await preview_batch(
+        session,
+        fake,
+        [one.id],
+        RULES,
+        owner=SendOwner(name="Sam Sample", hubspot_owner_id="88"),
+        card_url_of=lambda _: None,
+    )
+    write = planned.items[0].write
+    assert write is not None
+    fake.grant_writes()
+    pair = BatchSendPair(lead_id=one.id, write_id=write.id)
+
+    result = await send_batch(session, fake, [pair], owner="77")
+
+    assert (result.sent, result.failed) == (0, 1)
+    assert result.items[0].problem == OWNER_CHANGED
+    assert fake.companies == {}
+    again = await send_batch(session, fake, [pair], owner="88")  # the planner's own send goes
+    assert again.sent == 1

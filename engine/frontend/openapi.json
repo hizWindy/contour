@@ -1705,7 +1705,7 @@
             "title": "City"
           },
           "company": {
-            "description": "The name to research: the command's `research.company`, or the choice picked. 2 to 80 characters and at most 8 words: letters, digits, spaces and & ' . , - ( ) / (422 `research_name` otherwise)",
+            "description": "The name to research: the block's `research.company`, as it came. 2 to 80 characters and at most 8 words: letters, digits, spaces and & ' . , - ( ) / (422 `research_name` otherwise). For a company in our HubSpot copy while HubSpot names may not go to Claude, the server uses `said` instead",
             "examples": [
               "Northwind"
             ],
@@ -1731,6 +1731,23 @@
               "201"
             ],
             "title": "Company Key"
+          },
+          "said": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The rep's words for the company, as heard (the command's `company.heard`). A HubSpot company is researched under these words while HubSpot names may not go to Claude; without them it is refused (422 `research_name`, \"Say the company's name to research it.\")",
+            "examples": [
+              "North Wind"
+            ],
+            "title": "Said"
           }
         },
         "required": [
@@ -26193,13 +26210,13 @@
         "operationId": "read_assistant_research",
         "parameters": [
           {
-            "description": "The company's name: the choice's, or the words for a new company",
+            "description": "The rep's words for the company, as heard (never a choice's HubSpot name): the block's `company` comes from them",
             "in": "query",
             "name": "name",
             "required": false,
             "schema": {
               "default": "",
-              "description": "The company's name: the choice's, or the words for a new company",
+              "description": "The rep's words for the company, as heard (never a choice's HubSpot name): the block's `company` comes from them",
               "examples": [
                 "Northwind"
               ],

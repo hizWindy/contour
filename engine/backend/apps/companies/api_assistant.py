@@ -361,7 +361,8 @@ async def read_assistant_research(
         SafeText,
         Query(
             max_length=RESEARCH_NAME_MAX_CHARS,
-            description="The company's name: the choice's, or the words for a new company",
+            description="The rep's words for the company, as heard (never a choice's HubSpot "
+            "name): the block's `company` comes from them",
             examples=["Northwind"],
         ),
     ] = "",
@@ -413,6 +414,7 @@ async def start_assistant_research(
     body: AssistantResearchIn,
     request: Request,
     session: SessionDep,
+    settings: SettingsDep,
     auth: SignedInDep,
     leads: LeadsDep,
     idempotency_key: Annotated[
@@ -435,6 +437,7 @@ async def start_assistant_research(
         auth=auth,
         leads=leads,
         key=idempotency_key,
+        settings=settings,
     )
 
 

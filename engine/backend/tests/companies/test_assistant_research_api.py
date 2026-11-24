@@ -458,6 +458,47 @@ async def test_the_start_hands_the_run_engine_one_company_from_the_assistant(
     assert claude.asked == []  # starting asks the command step nothing
 
 
+async def test_a_hubspot_company_starts_under_the_reps_words_never_hubspots_name(
+    world: World,
+    settings: dict[str, Any],
+    claude: CommandClaude,
+    meetings: FakeMeetings,
+    runs: FakeRuns,
+) -> None:
+    """The review's blocker: whatever name the card sends for a HubSpot company, the run gets
+    the rep's own words while hubspot_names_to_claude_ok is off, and nothing without them."""
+    await a_copy(world)
+    await add(world, company("302", "Northwind Logistics Pty Ltd", city="Melbourne"))
+    picked = {"company": "Northwind Logistics Pty Ltd", "company_key": "302"}
+    async with rep(world, features=WITH_LEAD_FINDER) as client:
+        with_words = await client.post(RESEARCH, json={**picked, "said": "Northwind"})
+        without = await client.post(RESEARCH, json=picked)
+
+    assert with_words.status_code == 201, with_words.text
+    assert runs.started[0][2]["companies"][0]["name"] == "Northwind"
+    assert without.status_code == 422
+    assert without.json()["detail"] == SAY_THE_NAME
+    assert len(runs.started) == 1  # the refused one started nothing
+
+
+async def test_with_levis_ok_a_hubspot_company_starts_under_its_hubspot_name(
+    world: World,
+    settings: dict[str, Any],
+    claude: CommandClaude,
+    meetings: FakeMeetings,
+    runs: FakeRuns,
+) -> None:
+    settings["hubspot_names_to_claude_ok"] = True
+    await a_copy(world)
+    await add(world, company("302", "Northwind Logistics Pty Ltd", city="Melbourne"))
+    body = {"company": "Northwind", "company_key": "302", "said": "Northwind"}
+    async with rep(world, features=WITH_LEAD_FINDER) as client:
+        started = await client.post(RESEARCH, json=body)
+
+    assert started.status_code == 201, started.text
+    assert runs.started[0][2]["companies"][0]["name"] == "Northwind Logistics Pty Ltd"
+
+
 async def test_the_run_engines_refusals_come_back_in_plain_words(
     world: World,
     settings: dict[str, Any],

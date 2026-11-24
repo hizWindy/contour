@@ -19,7 +19,7 @@ Free of AI: HubSpot calls only. Writing needs HUBSPOT_WRITE_ENABLED, as a single
 
 import uuid
 from collections.abc import Callable, Sequence
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -44,6 +44,8 @@ OWNER_FIELD = "hubspot_owner_id"
 OWNER_LABEL = "Owner"
 GONE = "This lead was removed. Go back to the results."
 WRONG_WRITE = "This preview is for another lead. Preview the batch again."
+# A lead has one open plan: a later preview (another rep's batch) can plan another owner
+OWNER_CHANGED = "The owner changed since the preview. Preview the batch again."
 
 ItemResult = Literal["sent", "failed", "already_sent"]
 # The lead card's address, as the single send gives it (`api_hubspot.card_url`)
@@ -180,9 +182,13 @@ async def send_batch(
     session: AsyncSession,
     hubspot: HubSpot,
     pairs: Sequence[BatchSendPair],
+    *,
+    owner: str | None = None,
 ) -> BatchSendOut:
     """Sends each previewed lead, one at a time, in the order asked. Writing switched off refuses
-    the whole batch before anything is written (409 `hubspot_write_off`, raised)."""
+    the whole batch before anything is written (409 `hubspot_write_off`, raised). `owner`: the
+    sender's HubSpot owner id; a plan that would write another owner fails that lead (a later
+    preview by someone else planned it again)."""
     if not getattr(hubspot, "writes_allowed", False):
         raise HubSpotWritesOff
     wanted = _unique([(pair.lead_id, pair.write_id) for pair in pairs])
@@ -198,6 +204,9 @@ async def send_batch(
             row = await get_write(session, write_id)
             if row.app != APP or row.subject != subject_of(lead_id):
                 items.append(_failed(lead_id, company, WRONG_WRITE))
+                continue
+            if planned_owner(row.plan) not in (None, owner):
+                items.append(_failed(lead_id, company, OWNER_CHANGED))
                 continue
             before = row.status
             write = await apply_write(session, hubspot, write_id, on_written=mark_sent)
@@ -224,6 +233,15 @@ async def send_batch(
         failed=sum(1 for item in items if item.result == "failed"),
         already_sent=sum(1 for item in items if item.result == "already_sent"),
     )
+
+
+def planned_owner(plan: dict[str, Any] | None) -> str | None:
+    """The owner a saved plan would write, if any."""
+    for change in (plan or {}).get("fields", []):
+        if change.get("property") == OWNER_FIELD and change.get("write"):
+            value = change.get("value")
+            return str(value) if value else None
+    return None
 
 
 def _failed(lead_id: uuid.UUID, company: str | None, problem: str) -> BatchSendItem:

@@ -60,6 +60,9 @@
  *   call saved with a sure company that the rep changes or undoes is removed and saved again with
  *   the new one, since the server takes a call's company once (`changeCallCompany`, TBC).
  *
+ * - **Research** (PLAN-V27 T4-2): a research command opens its own card (`research.tsx`), which
+ *   asks once, with the cost, and starts the run in the background.
+ *
  * Its code loads with the voice bar's, late, never in the first visit (`host.tsx`).
  */
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
@@ -180,6 +183,7 @@ import { startHold } from './hold'
 import { CallLayout, EmailLayout, PreReadLayout, TaskLayout, type EditCall } from './layouts'
 import { cardLinesOf, unsureLeft } from './lines'
 import { listenForSendIt } from './listen'
+import { ResearchCard } from './research'
 import { CARD_TIMES, type CardTimes } from './times'
 import { HintBar, ListenStrip, PartProblem, VoiceStrip } from './parts'
 import {
@@ -1723,11 +1727,28 @@ export default function ReviewCard(props: ReviewCardProps) {
           : null,
   )
   const preRead = request.kind === 'command' && request.command.action === 'pre_read'
+  // PLAN-V27 T4-2: a research to ask about, or a maybe to settle first.
+  const research = request.kind === 'command' && request.command.action === 'research'
   useEffect(() => {
-    if (!preRead && first === null) onClose()
-  }, [preRead, first, onClose])
+    if (!preRead && !research && first === null) onClose()
+  }, [preRead, research, first, onClose])
   if (request.kind === 'command' && preRead) {
     return <PreReadCard command={request.command} open={props.open} onClose={onClose} />
+  }
+  if (request.kind === 'command' && research) {
+    return (
+      <ResearchCard
+        command={request.command}
+        source={request.source === 'mic' ? 'mic' : 'typed'}
+        open={props.open}
+        onClose={onClose}
+        env={props.env}
+        makeTool={props.makeTool}
+        times={props.times}
+        conversation={props.conversation ?? null}
+        pill={props.pill ?? null}
+      />
+    )
   }
   if (first === null) return null
   return <DraftCard {...props} first={first} />
