@@ -19,7 +19,7 @@ the contract part 2).
   and by the web one candidate.
 
 **Web only (PLAN-V27 choice 8).** Property Daily and Arealytics are triggers, not sources of leads:
-while `tool_feeds_find_companies` is off (the default), a run reads no tool's feed and no new
+while `tool_feeds_find_companies` is off (on until S2 and A6), a run reads no tool's feed and no new
 emails, and a saved `sources` is ignored (`web_only`), so it finds companies on the web only. The
 research still looks each company up in the tools (`property.py`), and their lease ends, sizes and
 signs count as before. Switched on, the feed works as described above.

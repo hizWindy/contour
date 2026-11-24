@@ -17,7 +17,7 @@ import { PendingText } from '@/components/skeletons'
 import { InHubSpotBadge } from '@/components/hubspot'
 import { ResultBadge } from '@/components/result-badge'
 import { Button } from '@/components/ui/button'
-import { formatDate, formatPercent } from '@/lib/format'
+import { formatDate, formatMonthYear, formatPercent } from '@/lib/format'
 import { IN_HUBSPOT_STATUSES } from '@/lib/labels'
 import { Section, ShowFirst } from './parts'
 import { REASON_WORDS } from './words'
@@ -30,7 +30,11 @@ function settledWords(lead: LeadDetail): string {
   }
   const linked = `${lead.company} is linked to ${hubspot.name ?? 'its HubSpot company'}.`
   if (hubspot.status === 'quiet') {
-    return `${linked} Nobody has worked it for a year, so it stays a new lead.`
+    // The months are a setting, so the words give the month, not "a year" (the review, M1).
+    const since = hubspot.last_activity
+      ? `It's quiet since ${formatMonthYear(hubspot.last_activity)}`
+      : 'Nobody has worked it in HubSpot'
+    return `${linked} ${since}, so it stays a new lead.`
   }
   return IN_HUBSPOT_STATUSES.includes(hubspot.status)
     ? `${linked} Results now keeps it under "In HubSpot".`

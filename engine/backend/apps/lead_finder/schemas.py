@@ -150,6 +150,15 @@ class SourceOption(BaseModel):
     )
 
 
+class TopUpOption(BaseModel):
+    """Kept for a Start page opened before PLAN-V27, which reads it (the review, M1): the top up
+    from the HubSpot watchlist is gone (choice 5), so it is always off. Goes in a later release."""
+
+    default: bool = False
+    allowed: bool = False
+    message: str | None = None
+
+
 class RunOptions(BaseModel):
     """Everything the Start page needs to draw itself."""
 
@@ -168,6 +177,11 @@ class RunOptions(BaseModel):
     caps: OptionCaps
     target_companies: TargetOption = Field(
         description="How many companies a discovery run tries to research (PLAN-V21 T1-4)"
+    )
+    top_up: TopUpOption = Field(
+        default_factory=TopUpOption,
+        description="Always off: the top up is gone (PLAN-V27 choice 5). Kept only so a page "
+        "opened before the change still draws",
     )
     sources: dict[RunSource, SourceOption] = Field(
         description=(

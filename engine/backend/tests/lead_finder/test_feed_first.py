@@ -210,7 +210,7 @@ async def test_a_run_with_no_web_search_is_never_topped_up(
 
 # --- Property Daily is a trigger, not a source of leads (PLAN-V27 T2-1, choice 8) ---------------
 
-WEB_ONLY = {key: value for key, value in READY.items() if key != "tool_feeds_find_companies"}
+WEB_ONLY = {**READY, "tool_feeds_find_companies": False}  # choice 8, once S2 and A6 allow
 
 
 async def test_a_run_finds_companies_on_the_web_only_and_reads_no_new_email(
@@ -218,7 +218,7 @@ async def test_a_run_finds_companies_on_the_web_only_and_reads_no_new_email(
     session_factory: async_sessionmaker[AsyncSession],
     reader: EmailReader,
 ) -> None:
-    """Property Daily is ready and the run names it, but the feed's switch is off (the default):
+    """Property Daily is ready and the run names it, but the feed's switch is off:
     no email is read, no item becomes a company found, and the saved `sources` is ignored."""
     manager = make_lf_manager(FakeClaude(), settings=lf_settings(**WEB_ONLY))
     row = await run(manager, session_factory, BOTH)
@@ -240,9 +240,9 @@ async def test_an_old_saved_choice_without_the_web_is_ignored(
     session_factory: async_sessionmaker[AsyncSession],
     reader: EmailReader,
 ) -> None:
-    """A run saved with Property Daily alone, and Property Daily not ready: no refusal, and the
-    run searches the web."""
-    manager = make_lf_manager(FakeClaude(), settings=lf_settings())
+    """A run saved with Property Daily alone, and Property Daily not ready, while the feeds don't
+    find companies: no refusal, and the run searches the web."""
+    manager = make_lf_manager(FakeClaude(), settings=lf_settings(tool_feeds_find_companies=False))
     row = await run(manager, session_factory, {**BOTH, "sources": ["property_daily"]})
     assert row.status == "done"
     plan = next(

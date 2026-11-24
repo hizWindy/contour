@@ -16905,6 +16905,10 @@
             "$ref": "#/components/schemas/TargetOption",
             "description": "How many companies a discovery run tries to research (PLAN-V21 T1-4)"
           },
+          "top_up": {
+            "$ref": "#/components/schemas/TopUpOption",
+            "description": "Always off: the top up is gone (PLAN-V27 choice 5). Kept only so a page opened before the change still draws"
+          },
           "triggers": {
             "items": {
               "$ref": "#/components/schemas/TriggerOption"
@@ -21930,6 +21934,34 @@
           "last_problem"
         ],
         "title": "ToolOut",
+        "type": "object"
+      },
+      "TopUpOption": {
+        "description": "Kept for a Start page opened before PLAN-V27, which reads it (the review, M1): the top up\nfrom the HubSpot watchlist is gone (choice 5), so it is always off. Goes in a later release.",
+        "properties": {
+          "allowed": {
+            "default": false,
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "default": {
+            "default": false,
+            "title": "Default",
+            "type": "boolean"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "title": "TopUpOption",
         "type": "object"
       },
       "ToppedUpData": {

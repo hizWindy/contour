@@ -340,12 +340,13 @@ TEXT: dict[str, tuple[str, str]] = {
         "Property Daily's new items become companies found",
         "Off: Find new leads finds companies on the web only, and the research still reads "
         "Property Daily for each one, for its lease end, size and signs. On: the property tools' "
-        "new items also come into a run as companies found, as before. Off to start (PLAN-V27).",
+        "new items also come into a run as companies found, as before. On until the live numbers "
+        "show they find no company the web misses.",
     ),
     "assistant_research_style": (
         "How the Assistant researches a new company",
         "Standard: the four searches a run uses. Deep: a short loop of questions, each "
-        "follow-up asked as soon as its answer arrives (a test, PLAN-V27). Keep standard until "
+        "follow-up asked as soon as its answer arrives (a test). Keep standard until "
         "the comparison says deep is better.",
     ),
     "model_deep": (

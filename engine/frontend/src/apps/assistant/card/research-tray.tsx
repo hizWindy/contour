@@ -264,7 +264,7 @@ export default function ResearchTray({ researches }: { researches: readonly Rese
       role="region"
       aria-label={RESEARCH_NAME}
       data-slot="research-tray"
-      className="fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 flex max-h-[calc(100dvh-6rem)] w-[min(24rem,calc(100vw-2rem))] flex-col gap-2 overflow-y-auto max-sm:right-2 max-sm:left-2 max-sm:w-auto"
+      className="fixed right-4 bottom-[calc(var(--bottom-bar,0px)+max(1rem,env(safe-area-inset-bottom)))] z-40 flex max-h-[calc(100dvh-6rem-var(--bottom-bar,0px))] w-[min(24rem,calc(100vw-2rem))] flex-col gap-2 overflow-y-auto max-sm:right-2 max-sm:left-2 max-sm:w-auto"
     >
       {researches.map((research) => (
         <ResearchItem key={research.id} research={research} />

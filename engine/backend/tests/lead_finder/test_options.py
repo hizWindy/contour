@@ -69,7 +69,8 @@ def test_the_start_page_offers_find_new_leads_only() -> None:
     """PLAN-V27 choices 1 and 2: the run options list one run type, and no top up."""
     found = options()
     assert [mode.mode for mode in found.modes] == ["discovery"]
-    assert "top_up" not in found.model_dump()
+    # The top up is gone (choice 5): always off, kept only so a page opened before still draws
+    assert found.top_up.model_dump() == {"default": False, "allowed": False, "message": None}
     approved = build_run_options(
         RULES, Settings(_env_file=None, hubspot_names_to_claude_ok=True), Decimal("50")
     )

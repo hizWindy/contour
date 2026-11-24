@@ -247,7 +247,7 @@ describe('settling a maybe', () => {
     ).toBeInTheDocument()
     expect(
       await screen.findAllByText(
-        'Northwind is linked to Northwind Group. Nobody has worked it for a year, so it stays a new lead.',
+        "Northwind is linked to Northwind Group. It's quiet since March 2025, so it stays a new lead.",
       ),
     ).not.toHaveLength(0)
   })

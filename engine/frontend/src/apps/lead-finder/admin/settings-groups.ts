@@ -37,6 +37,8 @@ const GROUP_OF: Record<string, GroupId> = {
   claude_people_concurrency: 'claude', // PLAN-V26 T1-1: the three lanes
   claude_runs_concurrency: 'claude',
   claude_jobs_concurrency: 'claude',
+  model_deep: 'claude', // PLAN-V27 Part 5: Quick Deep Research's questions
+  assistant_research_style: 'claude',
   run_max_companies: 'runs',
   target_companies_default: 'runs', // PLAN-V21 T1-4: the target and the sweeps
   discovery_max_sweeps: 'runs',
@@ -51,6 +53,7 @@ const GROUP_OF: Record<string, GroupId> = {
   memory_fresh_days: 'runs',
   match_fuzzy_min: 'runs',
   match_profile_min: 'runs',
+  hubspot_quiet_months: 'runs', // PLAN-V27 choice 3: a quiet HubSpot company counts as new
   why_now_enabled: 'why',
   model_why: 'why',
   prep_enabled: 'prep',
@@ -68,6 +71,7 @@ const GROUP_OF: Record<string, GroupId> = {
   property_lookup_days: 'sources',
   property_daily_to_claude_ok: 'sources',
   arealytics_to_claude_ok: 'sources',
+  tool_feeds_find_companies: 'sources', // PLAN-V27 choice 8: the tools' items as companies found
   call_notes_enabled: 'notes',
   call_notes_ai_enabled: 'notes',
   meeting_forms_enabled: 'notes',
@@ -87,6 +91,11 @@ const CHOICE_WORDS: Readonly<Record<string, Readonly<Record<string, string>>>> =
     browser_model: 'A free model on the device: the voice never leaves the device',
     browser_service: "The browser's speech service: the voice goes to Google or Microsoft",
     typing: 'Typing only: no mic button',
+  },
+  // PLAN-V27 Part 5: how the Assistant researches a new company.
+  assistant_research_style: {
+    standard: 'Standard: the four searches a run uses',
+    deep: 'Deep: a short loop of questions (a test)',
   },
 }
 

@@ -9877,6 +9877,8 @@ export interface components {
             };
             /** @description How many companies a discovery run tries to research (PLAN-V21 T1-4) */
             target_companies: components["schemas"]["TargetOption"];
+            /** @description Always off: the top up is gone (PLAN-V27 choice 5). Kept only so a page opened before the change still draws */
+            top_up?: components["schemas"]["TopUpOption"];
             /** Triggers */
             triggers: components["schemas"]["TriggerOption"][];
             /**
@@ -12195,6 +12197,25 @@ export interface components {
              * @description Signed in now. None: not checked since the backend started
              */
             signed_in: boolean | null;
+        };
+        /**
+         * TopUpOption
+         * @description Kept for a Start page opened before PLAN-V27, which reads it (the review, M1): the top up
+         *     from the HubSpot watchlist is gone (choice 5), so it is always off. Goes in a later release.
+         */
+        TopUpOption: {
+            /**
+             * Allowed
+             * @default false
+             */
+            allowed: boolean;
+            /**
+             * Default
+             * @default false
+             */
+            default: boolean;
+            /** Message */
+            message?: string | null;
         };
         /**
          * ToppedUpData

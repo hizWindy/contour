@@ -463,7 +463,7 @@ def test_run_options_can_be_built_and_carry_the_defaults() -> None:
     dumped = options.model_dump(mode="json")
     assert dumped["caps"]["daily_left_usd"] == "38.10"
     assert dumped["target_companies"]["max"] == 20  # the run's company limit (PLAN-V21)
-    assert "top_up" not in dumped  # PLAN-V27 choice 5: a short run is no longer topped up
+    assert dumped["top_up"]["allowed"] is False  # PLAN-V27 choice 5: always off, for old pages
     assert "goal_leads" not in dumped  # PLAN-V20: the Start page no longer asks how many leads
     assert dumped["defaults"]["cities"] == ["Melbourne"]  # one city at a time (PLAN-V9 C4)
     assert dumped["cities"][0]["areas"][0]["id"] == "cbd"

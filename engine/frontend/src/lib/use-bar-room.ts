@@ -10,6 +10,9 @@
  *
  * The height is measured, and measured again when the bar changes size (a reason line coming or
  * going). A bar that can't be measured, as in tests with no layout, gets 7rem.
+ *
+ * The bar's own height is also `--bottom-bar` on the page, so something else fixed at the bottom
+ * (the Assistant's research tray, PLAN-V27) sits above the bar instead of over it.
  */
 import { useEffect, useState } from 'react'
 
@@ -26,12 +29,17 @@ function applyRoom(): void {
   const root = document.documentElement
   if (bars.size === 0) {
     root.style.removeProperty('scroll-padding-bottom')
+    root.style.removeProperty('--bottom-bar')
     return
   }
   const tallest = Math.max(...bars.values())
   root.style.setProperty(
     'scroll-padding-bottom',
     tallest > 0 ? `${String(Math.ceil(tallest) + ROOM_PX)}px` : UNMEASURED,
+  )
+  root.style.setProperty(
+    '--bottom-bar',
+    tallest > 0 ? `${String(Math.ceil(tallest))}px` : UNMEASURED,
   )
 }
 

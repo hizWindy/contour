@@ -26,8 +26,13 @@ function padding(): string {
   return document.documentElement.style.getPropertyValue('scroll-padding-bottom')
 }
 
+function barHeight(): string {
+  return document.documentElement.style.getPropertyValue('--bottom-bar')
+}
+
 afterEach(() => {
   document.documentElement.style.removeProperty('scroll-padding-bottom')
+  document.documentElement.style.removeProperty('--bottom-bar')
 })
 
 describe('the room above a bar at the bottom', () => {
@@ -46,6 +51,13 @@ describe('the room above a bar at the bottom', () => {
   it("is the bar's own height and 16px more, when it can be measured", () => {
     render(<Bar height={92.5} />)
     expect(padding()).toBe('109px')
+  })
+
+  it('gives the bar its height as --bottom-bar, so the research tray sits above it', () => {
+    const { unmount } = render(<Bar height={92.5} />)
+    expect(barHeight()).toBe('93px')
+    unmount()
+    expect(barHeight()).toBe('')
   })
 
   it('makes room for the tallest bar while two show, and for the other once one goes', () => {

@@ -486,11 +486,11 @@ class Settings(BaseSettings):
     # A HubSpot company nobody has worked for this many months counts as new (PLAN-V27 choice 3,
     # TBC with Levi). 0: every HubSpot company is left out of a Find new leads run.
     hubspot_quiet_months: int = Field(12, ge=0, le=60)
-    # Property Daily and Arealytics are triggers, not sources of leads (PLAN-V27 choice 8): a run
-    # finds companies on the web only, and the research still reads the tools for each one. On:
-    # their new items come in as companies found again, as before PLAN-V27 (A6, if S2 shows they
-    # alone found new companies).
-    tool_feeds_find_companies: StrictBool = False
+    # Property Daily and Arealytics are triggers, not sources of leads (PLAN-V27 choice 8). Off: a
+    # run finds companies on the web only, and the research still reads the tools for each one.
+    # On (the default until S2 and A6, so no new lead is lost on deploy, decision 7): their new
+    # items come in as companies found too, as before PLAN-V27.
+    tool_feeds_find_companies: StrictBool = True
     # Quick Deep Research (PLAN-V27 Part 5, a test): `deep` makes the Assistant's research search
     # with the loop of questions (apps/lead_finder/deep.py) in place of the four angles. It stays
     # `standard` until the paid comparison (T5-2) passes the keep rule and Al-khair says so (T5-3).
