@@ -4,8 +4,8 @@
  * - **Where:** "All of Australia" first (one national search for each sign; picking it clears the
  *   cities), then the cities in their four groups, as chips. The map shows what is picked, and
  *   each picked city can narrow to its CBD or its inner suburbs.
- * - **Where to look:** the web, Property Daily and Arealytics. A tool that isn't ready is greyed
- *   out, with the backend's one sentence on why.
+ * - "Where to look" (the web and the two property tools) was here too. PLAN-V27 took it out: a run
+ *   finds companies on the web only, and the research reads the tools for each one.
  *
  * "How many leads" was here too (PLAN-V16 T3-2). PLAN-V20 took it out: a run researches every
  * company it chooses, and no goal of good leads stops it.
@@ -13,22 +13,8 @@
 import type { CityOption, RunOptions } from '@/api/types'
 import { CityMap } from '@/components/city-map'
 import { ChipGroup, Segmented } from '@/components/motion'
-import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-  FieldLegend,
-  FieldSet,
-} from '@/components/ui/field'
-import {
-  CITY_GROUP_LABELS,
-  CITY_GROUP_ORDER,
-  RUN_SOURCE_LABELS,
-  RUN_SOURCE_ORDER,
-} from '@/lib/labels'
+import { FieldError } from '@/components/ui/field'
+import { CITY_GROUP_LABELS, CITY_GROUP_ORDER } from '@/lib/labels'
 import { AUSTRALIA, errorFor, pickPlaces, type StartForm } from './form'
 
 type Update = (changes: Partial<StartForm>) => void
@@ -123,52 +109,5 @@ export function WhereChoices({ options, form, update, errors }: PartProps) {
         ))}
       {errorFor(errors, 'area') ? <FieldError>{errorFor(errors, 'area')}</FieldError> : null}
     </>
-  )
-}
-
-function toggle<T>(list: readonly T[], value: T): T[] {
-  return list.includes(value) ? list.filter((item) => item !== value) : [...list, value]
-}
-
-/** The web, Property Daily and Arealytics. A tool that isn't ready can't be ticked, and says why. */
-export function SourceChoices({ options, form, update, errors }: PartProps) {
-  const error = errorFor(errors, 'sources')
-  return (
-    <FieldSet>
-      <FieldLegend variant="label">Where to look</FieldLegend>
-      <div className="flex flex-col gap-3">
-        {RUN_SOURCE_ORDER.map((id) => {
-          const source = options.sources[id]
-          const inputId = `source-${id}`
-          const whyId = `${inputId}-why`
-          return (
-            <Field
-              key={id}
-              orientation="horizontal"
-              data-disabled={source.ready ? undefined : 'true'}
-            >
-              <Checkbox
-                id={inputId}
-                checked={source.ready && form.sources.includes(id)}
-                disabled={!source.ready}
-                onCheckedChange={() => {
-                  update({ sources: toggle(form.sources, id) })
-                }}
-                aria-describedby={source.message ? whyId : undefined}
-              />
-              <FieldContent>
-                <FieldLabel htmlFor={inputId} className="font-normal">
-                  {RUN_SOURCE_LABELS[id]}
-                </FieldLabel>
-                {source.message ? (
-                  <FieldDescription id={whyId}>{source.message}</FieldDescription>
-                ) : null}
-              </FieldContent>
-            </Field>
-          )
-        })}
-      </div>
-      {error ? <FieldError>{error}</FieldError> : null}
-    </FieldSet>
   )
 }

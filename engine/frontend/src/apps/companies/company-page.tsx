@@ -4,10 +4,14 @@
  * the prep panel on the right. On a phone (PLAN-V10 G1) "Prep a call" is a full-width button that
  * stays at the bottom of the screen. With call notes on (PLAN-V17 T3-5), "Log call" sits beside
  * it, and opens Log call's note view in the panel, which asks who the call was with.
+ *
+ * `?prep=1` opens the prep panel as the page opens (PLAN-V27 T4-2: the Assistant's "Research
+ * Northwind" on a HubSpot company that isn't quiet opens its call prep). The address then drops
+ * it, so Back and a reload don't open the panel again. Without call prep, it is ignored.
  */
 import { Building2, NotebookPen, PhoneCall } from 'lucide-react'
-import { useState } from 'react'
-import { useParams } from 'react-router'
+import { useEffect, useState } from 'react'
+import { useParams, useSearchParams } from 'react-router'
 import { useCompany } from '@/api/hooks'
 import { useCallNoteOptions } from '@/api/hooks/call-notes'
 import type { CompanyDetail, CompanyPerson } from '@/api/types'
@@ -35,6 +39,27 @@ function CompanyPageContent() {
   const canLogNotes = useCanWrite('companies.call_logs')
   // The bar at the bottom of a phone: what the keyboard lands on scrolls above it.
   const barRoom = useBarRoom()
+  // `?prep=1`: the prep panel opens once the company is in (set while drawing, once a company),
+  // and the address drops it.
+  const [params, setParams] = useSearchParams()
+  const askedPrep = params.get('prep') === '1'
+  const detail = company.data
+  const [prepOpened, setPrepOpened] = useState<string | null>(null)
+  if (askedPrep && detail && prepOpened !== detail.key) {
+    setPrepOpened(detail.key)
+    if (canPrep) setPrep({ companyKey: detail.key, companyName: detail.name, person: null })
+  }
+  useEffect(() => {
+    if (!askedPrep || !detail) return
+    setParams(
+      (now) => {
+        const next = new URLSearchParams(now)
+        next.delete('prep')
+        return next
+      },
+      { replace: true, preventScrollReset: true },
+    )
+  }, [askedPrep, detail, setParams])
   const prepCall = (detail: CompanyDetail, person: CompanyPerson | null): void => {
     setPrep({
       companyKey: detail.key,

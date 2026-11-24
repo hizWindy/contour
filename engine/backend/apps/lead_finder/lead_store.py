@@ -90,7 +90,14 @@ OUTCOME_KIND: Final = "lead_outcome"
 
 # The order a person reads these in. A value that isn't listed goes last.
 RESULT_ORDER: Final = ("pass", "director_review", "watch", "drop")
-HUBSPOT_ORDER: Final = ("new", "in_hubspot", "open_deal", "dissolved_deal", "possible_match")
+HUBSPOT_ORDER: Final = (
+    "new",
+    "quiet",
+    "in_hubspot",
+    "open_deal",
+    "dissolved_deal",
+    "possible_match",
+)
 STATUS_ORDER: Final = ("new", "watching", "rejected", "sent")
 # Where the company came from: the HubSpot watchlist, found on the web, or typed by a person.
 ORIGIN_ORDER: Final = ("hubspot", "web", "typed")

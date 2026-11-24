@@ -4,6 +4,9 @@ The core does the work (core/hubspot/writer.py): this file only finds the lead, 
 (hubspot_send.py) and marks the lead as sent when the write is done. A send needs the write
 scopes and HUBSPOT_WRITE_ENABLED=true; until then the preview works and sending answers 409
 `hubspot_write_off` ("Waiting for write access").
+
+Many leads at once (PLAN-V27 Part 3): `preview-many` and `send-many`, up to 25 leads, each through
+the same writer, one at a time, with its own result (`hubspot_batch.py`).
 """
 
 import uuid
@@ -12,10 +15,19 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
+from apps.lead_finder.hubspot_batch import (
+    BatchPreview,
+    BatchPreviewBody,
+    BatchSendBody,
+    BatchSendOut,
+    SendOwner,
+    preview_batch,
+    send_batch,
+)
 from apps.lead_finder.hubspot_send import APP, mark_sent, send_request, subject_of
 from apps.lead_finder.rules import load_rules
 from apps.lead_finder.tables import Lead
-from core.api.access import need
+from core.api.access import SignedInDep, need
 from core.api.deps import SessionDep
 from core.api.errors import Problem
 from core.api.hubspot import KEY_MISSING, write_problem
@@ -51,6 +63,75 @@ def card_url(lead_id: uuid.UUID) -> str | None:
     """The lead card's address on the website (this computer only until hosting, TBC)."""
     origins = get_settings().cors_origins
     return f"{origins[0]}/leads/{lead_id}" if origins else None
+
+
+@router.post(
+    "/hubspot/preview-many",
+    response_model=BatchPreview,
+    dependencies=[Depends(need("lead_finder.send_to_hubspot", write=True))],
+    summary="Preview adding many leads to HubSpot",
+    description=(
+        "Up to 25 leads (PLAN-V27 T3-1). Each is previewed as a single send is, one at a time, "
+        "in the order given: a new company or the empty fields of one HubSpot has, the note and "
+        "the list. A lead sent before gets its send back with `already_sent`. A lead that can't "
+        "be previewed has its `problem`, and the others go on. The owner is the person asking, "
+        "when they have a HubSpot user; otherwise none (TBC with Levi). Writes nothing, and works "
+        "while writing is switched off."
+    ),
+)
+async def preview_many(
+    request: Request, body: BatchPreviewBody, session: SessionDep, auth: SignedInDep
+) -> BatchPreview:
+    try:
+        async with open_hubspot(request.app) as client:
+            if client is None:
+                raise KEY_MISSING
+            return await preview_batch(
+                session,
+                client,
+                body.lead_ids,
+                load_rules(),
+                owner=_owner(auth),
+                card_url_of=card_url,
+            )
+    except HubSpotError as error:
+        raise write_problem(error) from error
+
+
+@router.post(
+    "/hubspot/send-many",
+    response_model=BatchSendOut,
+    dependencies=[Depends(need("lead_finder.send_to_hubspot", write=True))],
+    summary="Send many previewed leads to HubSpot",
+    description=(
+        "Up to 25 (lead, write) pairs from `preview-many` (PLAN-V27 T3-1). Each is sent as a "
+        "single send is, one at a time, once only: `sent`, `already_sent` (a second call sends "
+        "nothing twice), or `failed` with plain words, and one failure never stops the rest. A "
+        "sent lead's status is `sent`. Needs HUBSPOT_WRITE_ENABLED=true; until then the whole "
+        "batch answers 409 hubspot_write_off and nothing is written."
+    ),
+)
+async def send_many(
+    request: Request, body: BatchSendBody, session: SessionDep, auth: SignedInDep
+) -> BatchSendOut:
+    try:
+        async with open_hubspot(request.app) as client:
+            if client is None:
+                raise KEY_MISSING
+            return await send_batch(
+                session, client, body.items, owner=_owner(auth).hubspot_owner_id
+            )
+    except HubSpotError as error:
+        raise write_problem(error) from error
+
+
+def _owner(auth: object) -> SendOwner:
+    """The person asking, and their HubSpot owner id when they have one (choice 15)."""
+    user = getattr(auth, "user", None)
+    if user is None:
+        return SendOwner(name="A person on this computer", hubspot_owner_id=None)
+    owner_id = None if getattr(user, "no_hubspot_user", False) else user.hubspot_owner_id
+    return SendOwner(name=user.name or user.email, hubspot_owner_id=owner_id)
 
 
 @router.get(

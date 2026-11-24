@@ -26,6 +26,7 @@ import {
   Handshake,
   Inbox,
   Keyboard,
+  Moon,
   Send,
   TriangleAlert,
   UserCheck,
@@ -73,6 +74,7 @@ export const HUBSPOT_STATUS_META: Record<HubSpotStatus, BadgeMeta> = {
   open_deal: { icon: Handshake, variant: 'outline' },
   dissolved_deal: { icon: CircleSlash, variant: 'outline' },
   possible_match: { icon: CircleQuestionMark, variant: 'outline' },
+  quiet: { icon: Moon, variant: 'outline' },
 }
 
 /**

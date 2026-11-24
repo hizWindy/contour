@@ -58,6 +58,7 @@ TIER_CHECK = "Tier"
 VERIFY_CHECK = "Verify before outreach"
 STRENGTH_RANK: dict[str, int] = {"very_high": 4, "high": 3, "medium": 2, "low": 1}
 REASON_WORDS: dict[CandidateReason, str] = {
+    "same_name": "same name, another city",
     "close_name": "close name",
     "name_in_deal": "name in a deal",
     "similar_profile": "similar profile",

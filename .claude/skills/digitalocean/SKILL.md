@@ -26,14 +26,15 @@ The run book is [engine/deploy/README.md](../../../engine/deploy/README.md) ("On
 - **Don't switch the current context** (`doctl auth switch`). It changes it for Al-khair's other projects too.
 - **Never read, print or store a token or password.** If sign-in is needed, Al-khair does it himself: `! doctl auth init --context contour`.
 - **The claude.ai DigitalOcean connector:** which account it is signed into is **TBC**. Use doctl instead.
+- **Since 25 Nov 2026, Windows App Control blocks `doctl.exe`** ("An Application Control policy has blocked this file"). Look through the connector instead: `apps/apps-get-deployment-status` with the app ID sees `contour-hq`, so for apps it reaches this account. It has no deploy action, so Al-khair presses Actions, Deploy in the dashboard.
 
 ## What is live (20 Nov 2026)
 
 - **The app:** `contour-hq`, ID `ee6c11e8-3b86-4755-8aa6-4c35ae7c48fe`, region `syd`. It has `backend` (apps-s-1vcpu-2gb, one copy), `web` (a static site) and `migrate` (a pre-deploy job, apps-s-1vcpu-1gb).
-- **The address:** https://contour-hq-mxeqw.ondigitalocean.app. It is the only one.
-- **The domain:** none. No custom domain, and DigitalOcean's DNS holds no domains. See DOMAINS.md.
+- **The address:** https://contourhq.online, since 20 Nov 2026 (PLAN-V24's Log). The old `contour-hq-mxeqw.ondigitalocean.app` still serves the website, but the backend answers it with 400 `host_not_allowed`.
+- **The domain:** `contourhq.online` (20 Nov 2026). DOMAINS.md was written before it, so its DNS set-up is **TBC** there.
 - **The database:** `contour-db`, PostgreSQL 18, 1 node, `db-s-1vcpu-1gb`, 10 GiB disk, `syd1`. See DATABASE.md.
-- **Deploys:** by hand only (`deploy_on_push` is false). The last four were all manual, 17 to 19 Nov. The active one is from 19 Nov 2026, 11:48 UTC.
+- **Deploys:** by hand only (`deploy_on_push` is false). The last four were all manual, 17 to 19 Nov. The active one is from 24 Nov 2026, 22:09 UTC (PLAN-V27, `b52190b`).
 - **The project** "Contour HQ" holds the app and the database. The account's default project is "first-project".
 
 These facts change. Check them live before you state one (DOCTL.md, "Look").

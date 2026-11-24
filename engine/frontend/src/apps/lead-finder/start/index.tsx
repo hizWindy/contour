@@ -1,17 +1,17 @@
 /**
  * Start a run: pick what to look for, see what it would cost, then start.
  *
- * - Four kinds of run, as cards with a line each (PLAN-V21 T3-1): find new leads on the web
- *   (discovery), old offices, research the HubSpot watchlist, or research companies by name. The
- *   watchlist waits for Levi's OK to send HubSpot names to Claude; until then its Start button
- *   says so.
+ * - One kind of run, Find new leads (PLAN-V27 choice 1): the page opens on its form. Old offices
+ *   and the HubSpot watchlist are switched off, and researching one company by name is the
+ *   Assistant's ("Research Northwind"). Companies already in HubSpot are left out of the run.
  * - The estimate updates as you choose (300 ms after the last change), with the run's cap and
  *   what is left of today's limit. A choice the server refuses is shown beside its field.
  * - Start is safe to double-click: the same choices send the same Idempotency-Key, so a second
  *   click returns the first run instead of starting another.
- * - Finding new leads (PLAN-V16 T3-2) searches all of Australia or cities in four groups, and where
- *   to look (the web and the two property tools). Those parts are in `discovery.tsx`. How many
- *   companies to research and the HubSpot top up (PLAN-V21 T3-3) are in `target.tsx`.
+ * - Finding new leads (PLAN-V16 T3-2) searches all of Australia or cities in four groups, in
+ *   `discovery.tsx`. It searches the web only: Property Daily is a trigger the research reads for
+ *   each company, not a place to find companies, so there is no "where to look" (PLAN-V27 choice
+ *   8). How many companies to research (PLAN-V21 T3-3) is in `target.tsx`.
  */
 import { CircleAlert, MapPinned, Play } from 'lucide-react'
 import { useMemo, useRef, useState, type ReactNode } from 'react'
@@ -21,16 +21,6 @@ import { useCreateRun, useEstimateRun, useRunOptions } from '@/api/hooks'
 import type { RunCreate, RunOptions } from '@/api/types'
 import { useCanWrite, usePlatformAdminName, viewerReadOnlyWords } from '@/auth/can'
 import { FeatureGuard } from '@/auth/guard'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { PendingForm } from '@/components/skeletons'
 import { ErrorState } from '@/components/error-state'
 import { Money } from '@/components/money'
@@ -43,50 +33,25 @@ import { useBarRoom } from '@/lib/use-bar-room'
 import { useMediaQuery } from '@/lib/use-media-query'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-  FieldLegend,
-  FieldSet,
-} from '@/components/ui/field'
+import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { OptionCards, Segmented } from '@/components/motion'
+import { Segmented } from '@/components/motion'
 import { useDebounced } from '@/hooks/useDebounced'
-import { SourceChoices, WhereChoices } from './discovery'
+import { WhereChoices } from './discovery'
 import {
   bodyOf,
-  EMPTY_ROW,
   errorFor,
   estimateErrors,
   initialForm,
   serverMode,
   targetChoice,
-  tenureSummary,
-  type CompanyRow,
-  type Mode,
   type StartForm,
 } from './form'
 import { TargetChoices } from './target'
-import { TenureChoices } from './tenure'
 
-const MODE_WORDS: Record<Mode, { title: string; about: string }> = {
-  discovery: {
-    title: 'Find new leads',
-    about: 'Search the news for companies with a sign of an office change.',
-  },
-  tenure: {
-    title: 'Old offices (lease and tenure)',
-    about:
-      'Research HubSpot companies in one city for how long they have been at their address. 8 or more years with no office project since is a sign of its own.',
-  },
-  watchlist: {
-    title: 'HubSpot watchlist',
-    about: 'Research the HubSpot companies most likely to move.',
-  },
-  company: { title: 'Companies by name', about: 'Research the companies you type in.' },
-}
+/** What the run does, in one line under the page's title (PLAN-V27 "Words on screen"). */
+export const FIND_NEW_LEADS =
+  'Find new leads: search the news for companies with a sign of an office change. Companies already in HubSpot are left out.'
 
 /**
  * The signs' groups, in this order. PLAN-V16 T1-4 gives each sign a strength (very high to low);
@@ -148,13 +113,11 @@ function StartFormView({ options }: { options: RunOptions }) {
   const result = estimate.data
   const fromServer = createRun.error ? fieldErrorMap(toApiProblem(createRun.error)) : {}
   // A target the page can't read never reaches the server: it says why, beside the field.
-  const targetError = form.mode === 'discovery' ? targetChoice(form, options).error : null
+  const targetError = targetChoice(form, options).error
   const fromPage: Record<string, string> = targetError ? { target_companies: targetError } : {}
   const errors = { ...estimateErrors(result), ...fromServer, ...fromPage }
   const mode = options.modes.find((item) => item.mode === serverMode(form.mode))
   const settling = canWrite && (settledKey !== bodyKey || estimate.isFetching)
-  // An old offices run asks once more before it spends (PLAN-V11 C3).
-  const [confirming, setConfirming] = useState(false)
 
   const reason: string | null = !canWrite
     ? null
@@ -174,14 +137,6 @@ function StartFormView({ options }: { options: RunOptions }) {
   // A field the keyboard lands on scrolls above that bar, never under it.
   const barRoom = useBarRoom()
 
-  const askThenStart = (): void => {
-    if (form.mode === 'tenure') {
-      setConfirming(true)
-      return
-    }
-    start()
-  }
-
   const start = (): void => {
     if (lastStart.current?.body !== bodyKey) {
       lastStart.current = { body: bodyKey, key: newIdempotencyKey() }
@@ -199,235 +154,75 @@ function StartFormView({ options }: { options: RunOptions }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="flex min-w-0 flex-col gap-6">
-        <Section title="What to do">
-          {/* Four cards, each with its line (PLAN-V21 T3-1): a sliding row cut the long names. */}
-          <OptionCards
-            value={form.mode}
-            options={(Object.keys(MODE_WORDS) as Mode[]).map((value) => ({
-              value,
-              title: MODE_WORDS[value].title,
-              description: MODE_WORDS[value].about,
-            }))}
-            onChange={(value) => {
-              update({ mode: value })
-            }}
-            aria-label="Kind of run"
-          />
-        </Section>
-
-        {form.mode === 'discovery' ? (
-          <>
-            <Section title="Where">
-              <WhereChoices options={options} form={form} update={update} errors={errors} />
-            </Section>
-
-            <Section title="Signs of an office change">
-              {signGroups(options).map((group) => {
-                const items = options.triggers.filter((trigger) => trigger.group === group)
-                if (items.length === 0) return null
-                return (
-                  <FieldSet key={group}>
-                    <FieldLegend variant="label">{GROUP_WORDS[group] ?? group}</FieldLegend>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {items.map((trigger) => {
-                        const id = `trigger-${trigger.id}`
-                        return (
-                          <Field key={trigger.id} orientation="horizontal">
-                            <Checkbox
-                              id={id}
-                              checked={form.triggers.includes(trigger.id)}
-                              onCheckedChange={() => {
-                                update({ triggers: toggle(form.triggers, trigger.id) })
-                              }}
-                            />
-                            <FieldLabel htmlFor={id} className="font-normal">
-                              {trigger.label}
-                            </FieldLabel>
-                          </Field>
-                        )
-                      })}
-                    </div>
-                  </FieldSet>
-                )
-              })}
-              {errorFor(errors, 'triggers') ? (
-                <FieldError>{errorFor(errors, 'triggers')}</FieldError>
-              ) : null}
-              <Field>
-                <FieldLabel id="since-label">How far back</FieldLabel>
-                {/* The vertical Field stretches each direct child (`*:w-full`), which beat the
-                    control's own `w-fit` and spread its track across the card. The wrapper takes
-                    the stretch, and the control hugs its labels (PLAN-V21 T3-2). */}
-                <div data-slot="since-days">
-                  <Segmented
-                    size="sm"
-                    value={String(form.sinceDays)}
-                    options={options.since_days.choices.map((days) => ({
-                      value: String(days),
-                      label: sinceDaysLabel(days),
-                    }))}
-                    onChange={(value) => {
-                      update({ sinceDays: Number(value) })
-                    }}
-                    aria-labelledby="since-label"
-                  />
-                </div>
-              </Field>
-            </Section>
-
-            <Section title="How many companies">
-              <TargetChoices
-                options={options}
-                form={form}
-                update={update}
-                errors={errors}
-                estimate={result}
-              />
-            </Section>
-
-            <Section title="Sources">
-              <SourceChoices options={options} form={form} update={update} errors={errors} />
-            </Section>
-          </>
-        ) : null}
-
-        {form.mode === 'tenure' ? (
-          <Section title="Which old offices">
-            <TenureChoices options={options} form={form} update={update} errors={errors} />
+        <>
+          <Section title="Where">
+            <WhereChoices options={options} form={form} update={update} errors={errors} />
           </Section>
-        ) : null}
 
-        {form.mode === 'watchlist' ? (
-          <Section title="Which HubSpot companies">
-            <Field orientation="horizontal">
-              <Checkbox
-                id="include-unlikely"
-                checked={form.includeUnlikely}
-                onCheckedChange={(checked) => {
-                  update({ includeUnlikely: checked === true })
-                }}
-              />
-              <FieldLabel htmlFor="include-unlikely" className="font-normal">
-                Include industries that rarely work in an office
-              </FieldLabel>
-            </Field>
-            <Field orientation="horizontal">
-              <Checkbox
-                id="include-director"
-                checked={form.includeDirector}
-                onCheckedChange={(checked) => {
-                  update({ includeDirector: checked === true })
-                }}
-              />
-              <FieldLabel htmlFor="include-director" className="font-normal">
-                Also research the Director review list
-              </FieldLabel>
-            </Field>
-            <Field className="max-w-48">
-              <FieldLabel htmlFor="watch-limit">Only the first</FieldLabel>
-              <Input
-                id="watch-limit"
-                inputMode="numeric"
-                placeholder="All"
-                value={form.watchLimit}
-                onChange={(event) => {
-                  update({ watchLimit: event.target.value })
-                }}
-                aria-invalid={errorFor(errors, 'watchlist') ? true : undefined}
-              />
-              <FieldDescription>Leave empty for as many as the run limit allows.</FieldDescription>
-              {errorFor(errors, 'watchlist') ? (
-                <FieldError>{errorFor(errors, 'watchlist')}</FieldError>
-              ) : null}
-            </Field>
-          </Section>
-        ) : null}
-
-        {form.mode === 'company' ? (
-          <Section title="Companies">
-            {form.companies.map((row, index) => {
-              const label = `Company ${index + 1}`
-              const nameError = errorFor(errors, `companies.${index}.name`)
-              const change = (changes: Partial<CompanyRow>): void => {
-                update({
-                  companies: form.companies.map((item, at) =>
-                    at === index ? { ...item, ...changes } : item,
-                  ),
-                })
-              }
+          <Section title="Signs of an office change">
+            {signGroups(options).map((group) => {
+              const items = options.triggers.filter((trigger) => trigger.group === group)
+              if (items.length === 0) return null
               return (
-                <FieldSet key={index} className="grid gap-3 sm:grid-cols-[2fr_1fr_1.5fr_auto]">
-                  <FieldLegend className="sr-only">{label}</FieldLegend>
-                  <Field>
-                    <FieldLabel htmlFor={`company-${index}-name`}>Name</FieldLabel>
-                    <Input
-                      id={`company-${index}-name`}
-                      value={row.name}
-                      placeholder="Culture Amp"
-                      onChange={(event) => {
-                        change({ name: event.target.value })
-                      }}
-                      aria-invalid={nameError ? true : undefined}
-                    />
-                    {nameError ? <FieldError>{nameError}</FieldError> : null}
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor={`company-${index}-city`}>City</FieldLabel>
-                    <Input
-                      id={`company-${index}-city`}
-                      value={row.city}
-                      placeholder="Melbourne"
-                      onChange={(event) => {
-                        change({ city: event.target.value })
-                      }}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor={`company-${index}-website`}>Website</FieldLabel>
-                    <Input
-                      id={`company-${index}-website`}
-                      value={row.website}
-                      placeholder="cultureamp.com"
-                      onChange={(event) => {
-                        change({ website: event.target.value })
-                      }}
-                    />
-                  </Field>
-                  <div className="flex items-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={form.companies.length === 1}
-                      onClick={() => {
-                        update({ companies: form.companies.filter((_, at) => at !== index) })
-                      }}
-                      aria-label={`Remove company ${index + 1}`}
-                    >
-                      Remove
-                    </Button>
+                <FieldSet key={group}>
+                  <FieldLegend variant="label">{GROUP_WORDS[group] ?? group}</FieldLegend>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {items.map((trigger) => {
+                      const id = `trigger-${trigger.id}`
+                      return (
+                        <Field key={trigger.id} orientation="horizontal">
+                          <Checkbox
+                            id={id}
+                            checked={form.triggers.includes(trigger.id)}
+                            onCheckedChange={() => {
+                              update({ triggers: toggle(form.triggers, trigger.id) })
+                            }}
+                          />
+                          <FieldLabel htmlFor={id} className="font-normal">
+                            {trigger.label}
+                          </FieldLabel>
+                        </Field>
+                      )
+                    })}
                   </div>
                 </FieldSet>
               )
             })}
-            <div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={form.companies.length >= options.companies_limit.max}
-                onClick={() => {
-                  update({ companies: [...form.companies, { ...EMPTY_ROW }] })
-                }}
-              >
-                Add a company
-              </Button>
-            </div>
-            {errorFor(errors, 'companies') && !errorFor(errors, 'companies.0') ? (
-              <FieldError>{errorFor(errors, 'companies')}</FieldError>
+            {errorFor(errors, 'triggers') ? (
+              <FieldError>{errorFor(errors, 'triggers')}</FieldError>
             ) : null}
+            <Field>
+              <FieldLabel id="since-label">How far back</FieldLabel>
+              {/* The vertical Field stretches each direct child (`*:w-full`), which beat the
+                    control's own `w-fit` and spread its track across the card. The wrapper takes
+                    the stretch, and the control hugs its labels (PLAN-V21 T3-2). */}
+              <div data-slot="since-days">
+                <Segmented
+                  size="sm"
+                  value={String(form.sinceDays)}
+                  options={options.since_days.choices.map((days) => ({
+                    value: String(days),
+                    label: sinceDaysLabel(days),
+                  }))}
+                  onChange={(value) => {
+                    update({ sinceDays: Number(value) })
+                  }}
+                  aria-labelledby="since-label"
+                />
+              </div>
+            </Field>
           </Section>
-        ) : null}
+
+          <Section title="How many companies">
+            <TargetChoices
+              options={options}
+              form={form}
+              update={update}
+              errors={errors}
+              estimate={result}
+            />
+          </Section>
+        </>
 
         <Collapsible>
           <CollapsibleTrigger asChild>
@@ -525,7 +320,7 @@ function StartFormView({ options }: { options: RunOptions }) {
                 type="button"
                 size="lg"
                 disabled={reason !== null || settling || createRun.isPending}
-                onClick={askThenStart}
+                onClick={start}
               >
                 <Play aria-hidden="true" />
                 {createRun.isPending ? 'Starting.' : 'Start run'}
@@ -581,7 +376,7 @@ function StartFormView({ options }: { options: RunOptions }) {
               type="button"
               size="lg"
               disabled={reason !== null || settling || createRun.isPending}
-              onClick={askThenStart}
+              onClick={start}
             >
               <Play aria-hidden="true" />
               {createRun.isPending ? 'Starting.' : 'Start run'}
@@ -589,37 +384,6 @@ function StartFormView({ options }: { options: RunOptions }) {
           ) : null}
         </div>
       ) : null}
-
-      <AlertDialog open={confirming} onOpenChange={setConfirming}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Start the old offices run?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {result?.valid ? (
-                <>
-                  {tenureSummary(form, result.companies_expected)} It costs about{' '}
-                  {formatMoney(result.cost_usd_low)}, and at most{' '}
-                  {formatMoney(result.cost_usd_high)}. It stops at the run limit of{' '}
-                  {formatMoney(result.cap_usd)}.
-                </>
-              ) : (
-                'Working out what it would cost.'
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={!result?.valid}
-              onClick={() => {
-                start()
-              }}
-            >
-              Start run
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }
@@ -628,12 +392,7 @@ function StartContent() {
   const options = useRunOptions()
   return (
     <>
-      <PageHeader
-        icon={MapPinned}
-        tone="lead"
-        title="Start a run"
-        description="Choose what to look for, check the cost, then start. You can stop a run at any time."
-      />
+      <PageHeader icon={MapPinned} tone="lead" title="Start a run" description={FIND_NEW_LEADS} />
       {options.error ? (
         <ErrorState
           error={options.error}

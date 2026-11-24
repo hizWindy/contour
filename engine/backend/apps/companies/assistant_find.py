@@ -33,7 +33,7 @@ heard.
 
 import re
 import uuid
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Final
@@ -102,6 +102,7 @@ from core.hubspot.matching import core_tokens, match_company, names_are_close
 from core.hubspot.meetings import DAYS_AHEAD, Meeting
 from core.hubspot.models import HubSpotCompany, HubSpotContact
 from core.hubspot.profiles import PLACEHOLDER_NAME
+from core.runs.schemas import RunCreate, RunEstimate
 
 MAX_CHOICES: Final = CHOICES_SHOWN  # at most 3 choices, plus Search (PLAN-V25 choice 4)
 SEARCH_POOL: Final = 8  # the most companies the word search gives the ranking
@@ -182,6 +183,9 @@ def no_meeting_on(whose: str, day: str) -> str:
 
 # --- One command's surroundings ------------------------------------------------------------------
 
+# A run's estimate, from the run manager (PLAN-V27 T4-1: what a research costs). None: no estimate.
+type EstimateFn = Callable[[RunCreate], Awaitable[RunEstimate]]
+
 
 @dataclass(frozen=True)
 class Context:
@@ -201,6 +205,7 @@ class Context:
         None  # for HubSpot's own search (PLAN-V23 T1-3); None asks HubSpot nothing
     )
     last: AssistantLastTurn | None = None  # the conversation's last turn (PLAN-V25 T5-1)
+    estimate: EstimateFn | None = None  # what a research would cost (PLAN-V27 T4-1)
 
 
 # --- The last turn (PLAN-V25 T5-1, choice 21) ----------------------------------------------------

@@ -35,6 +35,8 @@ export type LeadDetail = Schemas['LeadDetail']
 export type LeadPage = Schemas['LeadPage']
 export type LeadFacets = Schemas['LeadFacets']
 export type LeadPatch = Schemas['LeadPatch']
+/** Settles a possible HubSpot match: the same company as one candidate, or new (PLAN-V27 T1-3). */
+export type HubSpotPick = Schemas['HubSpotPick']
 export type MapPoint = Schemas['MapPoint']
 export type MapOut = Schemas['MapOut']
 export type LeadResult = LeadRow['result']
@@ -82,6 +84,12 @@ export type HubSpotWrite = Schemas['WriteOut']
 export type HubSpotWritePlan = Schemas['WritePlan']
 export type HubSpotFieldChange = Schemas['FieldChange']
 export type HubSpotStep = Schemas['StepResult']
+/** Many leads to HubSpot at once (PLAN-V27 T3-1, T3-2): the batch preview and the send's results. */
+export type HubSpotBatchPreview = Schemas['BatchPreview']
+export type HubSpotBatchPreviewItem = Schemas['BatchPreviewItem']
+export type HubSpotBatchPair = Schemas['BatchSendPair']
+export type HubSpotBatchSent = Schemas['BatchSendOut']
+export type HubSpotBatchSentItem = Schemas['BatchSendItem']
 export type ImportResult = Schemas['ImportResult']
 export type WatchlistOut = Schemas['WatchlistOut']
 export type TestPage = Schemas['TestPage']
@@ -232,6 +240,14 @@ export type AssistantPersonHit = Schemas['AssistantPersonHit']
 export type AssistantTaskIn = Schemas['AssistantTaskIn']
 export type AssistantEmailIn = Schemas['AssistantEmailIn']
 export type TeamEmail = Schemas['TeamEmail']
+
+// PLAN-V27 T4-2: research in the Assistant. What we know of a company, free, and a research
+// started. Its `said` is the rep's words as heard: the server works out the run's name from them,
+// so a HubSpot name never reaches Claude while that is off.
+export type AssistantResearch = Schemas['AssistantResearch']
+export type ResearchFact = Schemas['ResearchFact']
+export type AssistantResearchIn = Schemas['AssistantResearchIn']
+export type AssistantResearchStarted = Schemas['AssistantResearchStarted']
 
 // The Assistant's names (PLAN-V23 Part 1): the hint list, learned names and adding a company
 export type AssistantName = Schemas['AssistantName']

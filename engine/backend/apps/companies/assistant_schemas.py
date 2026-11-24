@@ -11,6 +11,7 @@ or more, best first), or neither (no match: the card asks the rep to pick).
 
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
@@ -31,13 +32,14 @@ from apps.companies.schemas import (
 from core.api.models import SafeText, no_default_in_types, optional_in_types
 
 # unclear (PLAN-V23 choice 4): the words are too unclear to make a command. The bar stops before
-# the card, with the words in `read_back`.
+# the card, with the words in `read_back`. research (PLAN-V27 T4-1): "Research Northwind".
 AssistantAction = Literal[
     "pre_read",
     "log_call",
     "task",
     "email",
     "open",
+    "research",
     "change",
     "send",
     "cancel",
@@ -56,6 +58,8 @@ Level = Literal["sure", "likely", "unsure"]
 CardAction = Literal["pre_read", "log_call", "task", "email"]
 
 COMMAND_MAX_CHARS = 2_000  # the longest command (choice 18): longer is 422 command_too_long
+RESEARCH_NAME_MAX_CHARS = 120  # a research's name at the edge; the run allows 80 once cleaned
+RESEARCH_CITY_MAX_CHARS = 120
 # What a request may carry at all. More is refused at the edge, before any check reads it.
 COMMAND_EDGE_CHARS = 20_000
 BOX_PATTERN = r"^[A-Za-z][A-Za-z0-9 _-]{0,39}$"  # a card's box name: plain words only
@@ -375,12 +379,154 @@ class AssistantChange(Out):
     day: date | None = Field(description="The value as a day, when it reads as one")
 
 
+# --- Research (PLAN-V27 Part 4, choices 17 to 20) ------------------------------------------------
+
+# open_lead: a lead card from the last 30 days, opened at once, with no cost. open_prep: in HubSpot
+# and not quiet, its call prep opens as Companies opens it. ask: new or quiet, so the card asks
+# before spending ("Research Northwind? About US$0.40."). choose: more than one company may be
+# meant, best guess first (PLAN-V25's suggestion form, in `company`). needs_name: no company named.
+ResearchNext = Literal["open_lead", "open_prep", "ask", "choose", "needs_name"]
+# HubSpot's view of the company, from our copy: new (not there), in_hubspot, open_deal,
+# dissolved_deal, quiet (nobody has worked it for `hubspot_quiet_months`) or possible_match.
+ResearchHubSpot = Literal[
+    "new", "in_hubspot", "open_deal", "dissolved_deal", "quiet", "possible_match"
+]
+# What a known line is about: HubSpot, the last lead card, or a property tool's lease end or size.
+ResearchFactKind = Literal["hubspot", "lead", "lease_end", "size"]
+
+
+class ResearchFact(Out):
+    """One thing we already know, as the card's line, with its date and source."""
+
+    kind: ResearchFactKind
+    text: str = Field(
+        description="The card's line, like 'Northwind: not in HubSpot.' or 'Property Daily, "
+        "3 Oct: lease ends March 2028.'"
+    )
+    day: date | None = Field(description="The day it is from. None: no day (like not in HubSpot)")
+    source: str = Field(
+        description="Where it is from: HubSpot, Lead Finder, Property Daily or Arealytics"
+    )
+    url: str | None = Field(description="The page it came from, for a property tool's fact")
+
+
+class ResearchCard(Out):
+    """The company's newest lead card from the last 30 days."""
+
+    lead_id: uuid.UUID
+    found_on: date = Field(description="The day it was made, Melbourne time")
+    result: str = Field(description="Like pass, director_review, watch or drop")
+    tier: str | None = Field(description="Levi's tier: A, B, C or discard. None: no tier yet")
+    link: str = Field(description="The card's page, like /leads/<id>")
+
+
+class AssistantResearch(Out):
+    """A research command, settled from what we already know: free, with no Claude request
+    (PLAN-V27 choice 17). Nothing is started: the card's Enter, 'yes' or tap does that, through
+    POST /assistant/research."""
+
+    company: str = Field(
+        description="The name to research, as the card sends it to POST /assistant/research. "
+        "Empty for needs_name and choose"
+    )
+    company_key: str | None = Field(
+        description="The company, when found: a HubSpot id, or lead:<id>. None when it is new"
+    )
+    city: str | None = Field(description="Its city in our copy, when known")
+    hubspot: ResearchHubSpot | None = Field(description="HubSpot's view of it. None for needs_name")
+    last_activity: date | None = Field(
+        description="The last day anyone worked it in HubSpot (its last activity, or the day its "
+        "last deal dissolved). None: never, or not in HubSpot"
+    )
+    lead: ResearchCard | None = Field(
+        description="Its lead card from the last 30 days. Only for people with a Lead Finder tick"
+    )
+    lease_end: date | None = Field(
+        description="When its lease ends, from Property Daily or Arealytics in our copy. Only for "
+        "people with a Lead Finder tick"
+    )
+    area_m2: int | None = Field(description="Its office size in square metres, from the same copy")
+    known: list[ResearchFact] = Field(
+        description="What we know, as the card's lines, in order: HubSpot, the lead card, the "
+        "lease end, the size"
+    )
+    next: ResearchNext
+    question: str | None = Field(
+        description="For ask, when it can start: 'Research Northwind? About US$0.40.' None "
+        "otherwise"
+    )
+    cost_usd: Decimal | None = Field(
+        description="For ask: about what one company's research costs (from past research, else "
+        "US$0.40). None otherwise"
+    )
+    can_start: bool = Field(
+        description="This person may start a research: the Lead Finder's Start a run tick, and "
+        "not a Viewer"
+    )
+    blocked: str | None = Field(
+        description="Why they can't, for ask: 'Researching a new company needs the Lead "
+        "Finder. Ask your Platform admin.' None when they can"
+    )
+
+
+class AssistantResearchIn(BaseModel):
+    """A research to start, as the card has it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    company: SafeText = Field(
+        min_length=1,
+        max_length=RESEARCH_NAME_MAX_CHARS,
+        description="The name to research: the block's `research.company`, as it came. 2 to 80 "
+        "characters and at most 8 words: letters, digits, spaces and & ' . , - ( ) / (422 "
+        "`research_name` otherwise). For a company in our HubSpot copy while HubSpot names may "
+        "not go to Claude, the server uses `said` instead",
+        examples=["Northwind"],
+    )
+    company_key: SafeText | None = Field(
+        None,
+        max_length=64,
+        description="The company, when found: a HubSpot id, or lead:<id>. Empty: a new company",
+        examples=["201"],
+    )
+    said: SafeText | None = Field(
+        None,
+        max_length=RESEARCH_NAME_MAX_CHARS,
+        description="The rep's words for the company, as heard (the command's `company.heard`). "
+        "A HubSpot company is researched under these words while HubSpot names may not go to "
+        "Claude; without them it is refused (422 `research_name`, \"Say the company's name to "
+        'research it.")',
+        examples=["North Wind"],
+    )
+    city: SafeText | None = Field(
+        None,
+        max_length=RESEARCH_CITY_MAX_CHARS,
+        description="Its city, when known, like Perth (422 `research_name` when it isn't a "
+        "place name)",
+        examples=["Perth"],
+    )
+
+
+class AssistantResearchStarted(Out):
+    """A research of one company, started in the background."""
+
+    run_id: uuid.UUID = Field(
+        description="The run: follow it with GET /runs/{run_id}/events (finding, company_done "
+        "with the tier, then run_finished)"
+    )
+    company: str = Field(description="The name being researched")
+    status: str = Field(description="The run's status now: queued or running")
+
+
 class AssistantCommand(Out):
     """What a command would do. Nothing is written or sent: the review card does that."""
 
-    # Added in PLAN-V25: the API always sends them, and the website's types leave them optional.
+    # Added in PLAN-V25 and PLAN-V27: the API always sends them, and the website's types leave
+    # them optional.
     model_config = ConfigDict(
-        json_schema_extra=optional_in_types("call_type", "outcome", "quick", "follow_up_day")
+        json_schema_extra=optional_in_types(
+            "call_type", "outcome", "quick", "follow_up_day", "research"
+        )
     )
 
     action: AssistantAction
@@ -429,6 +575,12 @@ class AssistantCommand(Out):
         description="For a call: the day a follow-up nudge suggests ('No follow-up yet. Add one "
         "for Monday?'), the next working day (PLAN-V25 choice 14, TBC). The card shows the nudge "
         "only for a Connected call with no follow-up",
+        json_schema_extra=no_default_in_types,
+    )
+    research: AssistantResearch | None = Field(
+        None,
+        description="For research (PLAN-V27 T4-1): what we know and what happens next. None for "
+        "other actions",
         json_schema_extra=no_default_in_types,
     )
 

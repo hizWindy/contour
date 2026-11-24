@@ -112,7 +112,7 @@ import {
   VOICE_DOWNLOAD,
   type MicAction,
 } from '@/apps/companies/call-notes/mic/words'
-import { canWrite, useIsViewer } from '@/auth/can'
+import { canUse, canWrite, useIsViewer } from '@/auth/can'
 import { FrequencyBars } from '@/components/motion/frequency-bars'
 import { INSTANT, springs } from '@/components/motion/springs'
 import { useStill } from '@/components/motion/use-still'
@@ -496,6 +496,9 @@ export default function VoiceBar({
                 openCard({ kind: 'dictation', words, source })
                 return true
               },
+              // A HubSpot company's research opens its call prep, for a rep who may (PLAN-V27).
+              canPrep: () =>
+                canUse(client.getQueryData<SignIn>(queryKeys.auth.me()), 'companies.call_prep'),
               // A quick log skips the card (PLAN-V25 T3-3): its hold's toast says what goes.
               quickLog: (heard) =>
                 startQuickLog(heard, {

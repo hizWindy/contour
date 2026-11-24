@@ -63,8 +63,8 @@ describe('parseRunEvent', () => {
     for (const type of RUN_EVENT_TYPES) {
       expect(parseRunEvent(JSON.stringify(event(1, type))), type).not.toBeNull()
     }
-    // The contract's 18 (PLAN-V21 added the two sweep events and the top up).
-    expect(RUN_EVENT_TYPES).toHaveLength(18)
+    // The contract's 19 (PLAN-V21 added the two sweep events and the top up, PLAN-V27 a finding).
+    expect(RUN_EVENT_TYPES).toHaveLength(19)
   })
 
   it.each([
@@ -459,6 +459,21 @@ describe('describeEvent', () => {
     expect(lines.run_finished).toEqual({ tone: 'success', message: 'The run finished.' })
   })
 
+  it('says in one line how many companies HubSpot already has (PLAN-V27 choice 7)', () => {
+    const many = describeEvent(
+      event(1, 'company_skipped', {
+        name: '12 companies',
+        reason: 'already in HubSpot',
+        count: 12,
+      }),
+    )
+    expect(many).toEqual({ tone: 'info', message: 'Left out 12 companies already in HubSpot.' })
+    const one = describeEvent(
+      event(2, 'company_skipped', { name: '1 company', reason: 'already in HubSpot', count: 1 }),
+    )
+    expect(one.message).toBe('Left out 1 company already in HubSpot.')
+  })
+
   it('says how many companies one skip line stands for', () => {
     const line = describeEvent(
       event(1, 'company_skipped', {
@@ -612,5 +627,32 @@ describe('the sweeps and the top up (PLAN-V21 T3-4)', () => {
       event(2, 'company_started', { name: 'ABC Logistics', origin: 'hubspot' }),
     ])
     expect(watchlist.feed.at(-1)?.message).toBe('Researching ABC Logistics')
+  })
+})
+
+describe('a finding (PLAN-V27 T4-2)', () => {
+  it('says what was found, the site, and what is checked next', () => {
+    const found = describeEvent(
+      event(1, 'finding', {
+        company: 'Northwind',
+        text: 'Northwind hired 40 staff this year.',
+        source_url: 'https://www.news.example.com/story',
+        next_question: 'a second office?',
+      }),
+    )
+    expect(found).toEqual({
+      tone: 'info',
+      message:
+        'Found: Northwind hired 40 staff this year (news.example.com). Now checking: a second office?',
+    })
+    const plain = describeEvent(
+      event(2, 'finding', {
+        company: 'Northwind',
+        text: 'Northwind leases 1,400 m²',
+        source_url: null,
+        next_question: null,
+      }),
+    )
+    expect(plain.message).toBe('Found: Northwind leases 1,400 m².')
   })
 })

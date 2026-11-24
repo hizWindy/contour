@@ -11,20 +11,30 @@
 
 The Companies page asks for these only for people with the Lead Finder tick. Test-set leads never
 show.
+
+- **The Assistant's research** (PLAN-V27 Part 4, `RESEARCH`): the newest card of a company since a
+  day (by its HubSpot id, its key or the lead asked for), and the params of a `company` run of one
+  company marked `from_assistant`, so it runs in the background in the People lane.
 """
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Text, cast, func, select
+from sqlalchemy import Text, cast, func, or_, select
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder.property import hidden_link, hidden_sources
 from apps.lead_finder.rules import LeadFinderRules, load_rules
-from apps.lead_finder.tables import Lead
-from core.company_leads import AnySelect, CompanyLeadInfo, CompanyLeads
+from apps.lead_finder.tables import Lead, company_key
+from core.company_leads import (
+    AnySelect,
+    CompanyLeadInfo,
+    CompanyLeads,
+    CompanyResearch,
+    RecentCard,
+)
 from core.prefs.service import effective_settings
 
 GOOD = ("pass", "director_review")
@@ -160,10 +170,53 @@ async def detail(
     )
 
 
+async def recent_card(
+    session: AsyncSession,
+    hubspot_id: str | None,
+    name: str,
+    lead_id: uuid.UUID | None,
+    since: datetime,
+) -> RecentCard | None:
+    """The newest card of the company made since `since`, whatever its result: the lead asked
+    for, the HubSpot company's, or the name's (its company key). Test-set leads never count."""
+    same = [Lead.company_key == company_key(name)]
+    if hubspot_id is not None:
+        same.append(Lead.hubspot_id == hubspot_id)
+    if lead_id is not None:
+        same.append(Lead.id == lead_id)
+    lead = await session.scalar(
+        select(Lead)
+        .where(Lead.is_test.is_(False), Lead.created_at >= since, or_(*same))
+        .order_by(Lead.created_at.desc(), Lead.id)
+        .limit(1)
+    )
+    if lead is None:
+        return None
+    return RecentCard(
+        lead_id=lead.id,
+        company=lead.company,
+        found_at=lead.created_at,
+        result=lead.result,
+        tier=lead.tier,
+        link=f"/leads/{lead.id}",
+    )
+
+
+def research_params(name: str, city: str | None) -> dict[str, Any]:
+    """A `company` run of one company, from the Assistant (PLAN-V27 choice 19)."""
+    company: dict[str, Any] = {"name": name}
+    if city:
+        company["city"] = city
+    return {"companies": [company], "from_assistant": True}
+
+
+RESEARCH = CompanyResearch(mode="company", params=research_params, recent=recent_card)
+
 COMPANY_LEADS = CompanyLeads(
     app="lead_finder",
     title="Lead Finder",
     lead_only=lead_only,
     by_hubspot=by_hubspot,
     detail=detail,
+    research=RESEARCH,
 )

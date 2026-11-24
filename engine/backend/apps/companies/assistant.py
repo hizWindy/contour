@@ -12,6 +12,8 @@ words. The route is in api_assistant.py.
   (PLAN-V23 T1-3, assistant_live.py).
 - **Unclear words stop before the card** (PLAN-V23 choice 4): Claude answers `unclear`, or code
   does with no request when the words are too short to be a command ("um", "a").
+- **"Research Northwind"** (PLAN-V27 T4-1) needs no request when the words are plainly research
+  and a name, or research alone: code settles it from what we know (assistant_research.py).
 - **Limits:** 2,000 characters a command; 20 commands a minute a person (kept in memory, so they
   start again when the backend restarts, TBC); and 15 seconds for Claude's answer (TBC: M2
   measures it). On an open card, a plain "send it" or "cancel" needs no request.
@@ -32,13 +34,14 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies.assistant_card import settle
-from apps.companies.assistant_find import Context
+from apps.companies.assistant_find import Context, EstimateFn
 from apps.companies.assistant_form import (
     SYSTEM,
     CommandAnswer,
     blank_answer,
     card_shortcut,
     command_prompt,
+    research_shortcut,
     unclear_shortcut,
 )
 from apps.companies.assistant_schemas import (
@@ -62,7 +65,7 @@ log = logging.getLogger(__name__)
 
 APP = "companies"
 STEP = "assistant:command"
-PROMPT_VERSION = "assistant-3"  # PLAN-V25 T5-1: the last turn's names
+PROMPT_VERSION = "assistant-4"  # PLAN-V27 T4-1: research
 # A short sort into one of a few actions, so the lowest effort: quick and cheap. M2 checks it gets
 # at least 18 of 20 right; if not, medium is next (TBC).
 EFFORT = "low"
@@ -231,6 +234,7 @@ async def read_command(
     leads: list[CompanyLeads],
     now: datetime,
     app: FastAPI | None = None,
+    estimate: EstimateFn | None = None,
 ) -> AssistantCommand:
     """One command, read and settled. It writes nothing to HubSpot: only its cost to the search
     log, and a company HubSpot's own search found, read into our copy (`app`: the HubSpot
@@ -245,7 +249,11 @@ async def read_command(
         raise too_many_commands(wait)
     said = scrub(text)  # no email address or phone number reaches Claude
     today = now.astimezone(MELBOURNE).date()
-    answer = card_shortcut(said, body.card) or unclear_shortcut(said)
+    answer = (
+        card_shortcut(said, body.card)
+        or research_shortcut(said, body.card)
+        or unclear_shortcut(said)
+    )
     if answer is None:
         prompt = command_prompt(
             said, source=body.source, today=today, card=body.card, last=body.last_turn
@@ -264,6 +272,7 @@ async def read_command(
         today=today,
         app=app,
         last=body.last_turn,
+        estimate=estimate,
     )
     command = await settle(session, answer, context)
     log.info(

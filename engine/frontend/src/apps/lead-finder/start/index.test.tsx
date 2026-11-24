@@ -5,7 +5,7 @@ import type { RunEstimate, RunOptions } from '@/api/types'
 import { renderWithProviders } from '@/test/render'
 import { asPhone } from '@/test/screen'
 import StartPage from './index'
-import { OPTIONS, PROPERTY_DAILY_OFF } from './test-options'
+import { OPTIONS } from './test-options'
 
 const RUN_ID = '0f3c9a2e-1111-2222-3333-444444444444'
 
@@ -93,7 +93,6 @@ describe('the Start page', () => {
           since_days: 90,
           area: {},
           target_companies: 50,
-          top_up: true,
         },
       },
     ])
@@ -122,32 +121,21 @@ describe('the Start page', () => {
     })
   })
 
-  it('shows "What to do" as four cards, each with its line, and the arrows only move the focus (PLAN-V21 T3-1)', async () => {
+  it('opens on Find new leads, with no kind of run to pick (PLAN-V27 choice 1)', async () => {
     const seen = mockApi(() => estimate())
-    const { user } = renderStart()
-    const kinds = await screen.findByRole('radiogroup', { name: 'Kind of run' })
-    const cards = within(kinds).getAllByRole('radio')
-    expect(cards).toHaveLength(4)
+    renderStart()
     expect(
-      within(kinds).getByRole('radio', { name: 'Find new leads' }),
-    ).toHaveAccessibleDescription('Search the news for companies with a sign of an office change.')
-    expect(
-      within(kinds).getByRole('radio', { name: 'Companies by name' }),
-    ).toHaveAccessibleDescription('Research the companies you type in.')
-    // Two columns from 640px, as long as the cards' own box has room for two.
-    expect(kinds).toHaveClass('sm:@min-[30rem]:grid-cols-2')
-
-    await screen.findByRole('group', { name: 'Where to look' })
-    cards[0]?.focus()
-    await user.keyboard('{ArrowRight}')
-    expect(cards[1]).toHaveFocus()
-    // The arrow moved the focus only: the form is still "Find new leads".
-    expect(screen.getByRole('group', { name: 'Where to look' })).toBeInTheDocument()
-    await user.keyboard(' ')
-    expect(await screen.findByText('Which old offices')).toBeInTheDocument()
-    expect(screen.queryByRole('group', { name: 'Where to look' })).toBeNull()
+      await screen.findByText(
+        'Find new leads: search the news for companies with a sign of an office change. Companies already in HubSpot are left out.',
+      ),
+    ).toBeInTheDocument()
+    expect(await screen.findByLabelText('Companies to research')).toBeInTheDocument()
+    expect(screen.queryByRole('radiogroup', { name: 'Kind of run' })).toBeNull()
+    expect(screen.queryByText('Old offices (lease and tenure)')).toBeNull()
+    expect(screen.queryByText('HubSpot watchlist')).toBeNull()
+    expect(screen.queryByText('Companies by name')).toBeNull()
     await waitFor(() => {
-      expect(seen.estimates.length).toBeGreaterThan(0)
+      expect(seen.estimates.at(-1)).toMatchObject({ mode: 'discovery' })
     })
   })
 
@@ -163,37 +151,6 @@ describe('the Start page', () => {
     await waitFor(() => {
       expect(seen.estimates.at(-1)).toMatchObject({ params: { area: { Melbourne: 'cbd' } } })
     })
-  })
-
-  it('keeps the watchlist off until Levi says yes, and says why', async () => {
-    const blocked = { code: 'hubspot_names_not_approved', message: "Waits for Levi's OK." }
-    mockApi((body) => (body.mode === 'watchlist' ? estimate({ blocked }) : estimate()))
-    const { user } = renderStart()
-    await screen.findByRole('button', { name: 'Start run' })
-
-    await user.click(screen.getByRole('radio', { name: 'HubSpot watchlist' }))
-
-    expect(await screen.findByText("Waits for Levi's OK.")).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Start run' })).toBeDisabled()
-  })
-
-  it('shows a refused name beside its field and keeps Start off', async () => {
-    mockApi((body) =>
-      body.mode === 'company'
-        ? estimate({
-            valid: false,
-            errors: [{ field: 'body.params.companies.0.name', message: 'Use 2 to 80 characters' }],
-          })
-        : estimate(),
-    )
-    const { user } = renderStart()
-    await screen.findByRole('button', { name: 'Start run' })
-    await user.click(screen.getByRole('radio', { name: 'Companies by name' }))
-    await user.type(screen.getByLabelText('Name'), 'X')
-
-    expect(await screen.findByText('Use 2 to 80 characters')).toBeInTheDocument()
-    expect(screen.getByLabelText('Name')).toHaveAttribute('aria-invalid', 'true')
-    expect(screen.getByRole('button', { name: 'Start run' })).toBeDisabled()
   })
 
   it('keeps the cost and the Start button in a bar at the bottom of a phone screen', async () => {
@@ -245,146 +202,6 @@ describe('the Start page', () => {
     expect(await screen.findByText('The run page')).toBeInTheDocument()
     expect(seen.starts).toHaveLength(1)
     expect(seen.starts[0]?.headers.get('idempotency-key')).toMatch(/^[0-9a-f-]{36}$/)
-  })
-})
-
-describe('Old offices (lease and tenure), PLAN-V11 C3', () => {
-  const INDUSTRIES = [
-    { value: 'Information Technology & Services', count: 25 },
-    { value: 'Construction', count: 21 },
-  ]
-
-  /** Like `mockApi`, with Levi's OK on and the free watchlist preview answering. */
-  function mockTenureApi() {
-    const seen = {
-      estimates: [] as { mode: string; params: Record<string, unknown> }[],
-      starts: [] as { mode: string; params: Record<string, unknown> }[],
-      previews: [] as URLSearchParams[],
-    }
-    const options = {
-      ...OPTIONS,
-      modes: OPTIONS.modes.map((mode) =>
-        mode.mode === 'watchlist' ? { ...mode, approved: true } : mode,
-      ),
-    }
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (request: Request) => {
-        const url = new URL(request.url)
-        if (url.pathname === '/api/v1/lead-finder/run-options') {
-          return Response.json(options)
-        }
-        if (url.pathname === '/api/v1/lead-finder/watchlist') {
-          seen.previews.push(url.searchParams)
-          const picked = url.searchParams.getAll('industry').length > 0
-          return Response.json({
-            total: picked ? 25 : 333,
-            items: [],
-            director: [],
-            staff_unknown: [],
-            counts: {},
-            industries: INDUSTRIES,
-          })
-        }
-        if (url.pathname === '/api/v1/runs/estimate') {
-          seen.estimates.push((await request.json()) as never)
-          return Response.json(estimate())
-        }
-        if (url.pathname === '/api/v1/runs' && request.method === 'POST') {
-          seen.starts.push((await request.json()) as never)
-          return Response.json({ id: RUN_ID, status: 'queued' }, { status: 201 })
-        }
-        return Response.json({ title: 'Not found', status: 404 }, { status: 404 })
-      }),
-    )
-    return seen
-  }
-
-  it('is the second choice, next to Find new leads', async () => {
-    mockTenureApi()
-    renderStart()
-    const kinds = await screen.findByRole('radiogroup', { name: 'Kind of run' })
-    const cards = within(kinds).getAllByRole('radio')
-    expect(cards.map((card) => card.getAttribute('aria-labelledby'))).not.toContain(null)
-    cards.forEach((card, index) => {
-      expect(card).toHaveAccessibleName(
-        [
-          'Find new leads',
-          'Old offices (lease and tenure)',
-          'HubSpot watchlist',
-          'Companies by name',
-        ][index],
-      )
-    })
-  })
-
-  it('picks a city and industries, with the free count of its watchlist companies', async () => {
-    const seen = mockTenureApi()
-    const { user } = renderStart()
-    await user.click(await screen.findByRole('radio', { name: 'Old offices (lease and tenure)' }))
-
-    const city = await screen.findByRole('radiogroup', { name: 'City' })
-    expect(within(city).getByRole('radio', { name: 'Melbourne' })).toBeChecked()
-    await user.click(within(city).getByRole('radio', { name: 'Adelaide' }))
-    expect(
-      await screen.findByText(
-        '333 watchlist companies in Adelaide. Counting them is free: nothing goes to Claude.',
-      ),
-    ).toBeInTheDocument()
-    expect(seen.previews.some((query) => query.get('city') === 'Adelaide')).toBe(true)
-
-    await user.click(screen.getByRole('button', { name: /Industries/ }))
-    await user.click(await screen.findByRole('option', { name: /Information Technology/ }))
-    expect(
-      await screen.findByText(
-        '25 watchlist companies in Adelaide in these industries. Counting them is free: nothing goes to Claude.',
-      ),
-    ).toBeInTheDocument()
-    expect(screen.getByLabelText('How many companies')).toHaveValue('10')
-    await waitFor(() => {
-      expect(seen.estimates.at(-1)).toEqual({
-        app: 'lead_finder',
-        mode: 'watchlist',
-        params: {
-          watchlist: {
-            focus: 'tenure',
-            city: 'Adelaide',
-            industries: ['Information Technology & Services'],
-            limit: 10,
-          },
-        },
-      })
-    })
-  })
-
-  it('asks before it spends, then starts the watchlist run that asks the office questions', async () => {
-    const seen = mockTenureApi()
-    const { user } = renderStart()
-    await user.click(await screen.findByRole('radio', { name: 'Old offices (lease and tenure)' }))
-    await screen.findByText(/333 watchlist companies in Melbourne/)
-    const start = screen.getByRole('button', { name: 'Start run' })
-    await waitFor(() => {
-      expect(start).toBeEnabled()
-    })
-
-    await user.click(start)
-    const confirm = await screen.findByRole('alertdialog', { name: 'Start the old offices run?' })
-    expect(
-      within(confirm).getByText(
-        'It researches 10 companies in Melbourne, the most staff first, and sends their names to Claude. It costs about US$4.40, and at most US$25.60. It stops at the run limit of US$20.00.',
-      ),
-    ).toBeInTheDocument()
-    expect(seen.starts).toHaveLength(0) // nothing is spent until the second yes
-
-    await user.click(within(confirm).getByRole('button', { name: 'Start run' }))
-    expect(await screen.findByText('The run page')).toBeInTheDocument()
-    expect(seen.starts).toEqual([
-      {
-        app: 'lead_finder',
-        mode: 'watchlist',
-        params: { watchlist: { focus: 'tenure', city: 'Melbourne', limit: 10 } },
-      },
-    ])
   })
 })
 
@@ -443,7 +260,7 @@ describe('Find new leads across Australia (PLAN-V16 T3-2)', () => {
     const seen = mockApi(() => estimate())
     renderStart()
 
-    await screen.findByRole('group', { name: 'Where to look' })
+    await screen.findByLabelText('Companies to research')
     expect(screen.queryByLabelText('How many leads')).toBeNull()
     expect(screen.queryByText(/Tier A or B\. The run stops/)).toBeNull()
     await waitFor(() => {
@@ -453,30 +270,20 @@ describe('Find new leads across Australia (PLAN-V16 T3-2)', () => {
     expect(sent.params).not.toHaveProperty('goal_leads')
   })
 
-  it('greys out a tool that is not ready and says why', async () => {
+  it('has no "where to look": the run searches the web only (PLAN-V27 choice 8)', async () => {
     const seen = mockApi(() => estimate())
-    const { user } = renderStart()
-    const look = await screen.findByRole('group', { name: 'Where to look' })
-
-    const daily = within(look).getByRole('checkbox', { name: 'Property Daily' })
-    expect(daily).toBeDisabled()
-    expect(daily).not.toBeChecked()
-    expect(daily).toHaveAccessibleDescription(PROPERTY_DAILY_OFF)
-    expect(within(look).getByRole('checkbox', { name: 'The web' })).toBeChecked()
-    expect(within(look).getByRole('checkbox', { name: 'Arealytics' })).toBeChecked()
-
-    // The ready ones are the server's default, so they stay out of the body until changed.
+    renderStart()
+    await screen.findByLabelText('Companies to research')
+    expect(screen.queryByRole('group', { name: 'Where to look' })).toBeNull()
+    expect(screen.queryByRole('checkbox', { name: 'Property Daily' })).toBeNull()
     await waitFor(() => {
-      expect(seen.estimates.at(-1)).not.toHaveProperty('params.sources')
+      expect(seen.estimates.length).toBeGreaterThan(0)
     })
-    await user.click(within(look).getByRole('checkbox', { name: 'Arealytics' }))
-    await waitFor(() => {
-      expect(seen.estimates.at(-1)).toMatchObject({ params: { sources: ['web'] } })
-    })
+    expect(seen.estimates.at(-1)).not.toHaveProperty('params.sources')
   })
 })
 
-describe('How many companies and the top up (PLAN-V21 T3-3)', () => {
+describe('How many companies (PLAN-V21 T3-3)', () => {
   /** A discovery estimate with the cost of its target, as the backend gives it. */
   function withTarget(body: { params: Record<string, unknown> }): RunEstimate {
     const target =
@@ -506,9 +313,8 @@ describe('How many companies and the top up (PLAN-V21 T3-3)', () => {
     ).toBeInTheDocument()
     const signs = screen.getByText('Signs of an office change')
     const many = screen.getByText('How many companies')
-    const sources = screen.getByText('Sources')
     expect(signs.compareDocumentPosition(many) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(many.compareDocumentPosition(sources) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.queryByText('Sources')).toBeNull() // PLAN-V27 choice 8
 
     await user.click(within(presets).getByRole('radio', { name: '25' }))
     expect(field).toHaveValue('25')
@@ -531,59 +337,23 @@ describe('How many companies and the top up (PLAN-V21 T3-3)', () => {
     expect(await screen.findByText(note)).toBeInTheDocument()
   })
 
-  it('starts the run with the target and the top up', async () => {
+  it('starts the run with the target, and offers no top up (PLAN-V27 choice 5)', async () => {
     const seen = mockApi(withTarget)
     const { user } = renderStart()
     const presets = await screen.findByRole('radiogroup', { name: 'Suggested numbers' })
     await user.click(within(presets).getByRole('radio', { name: '70' }))
-    const topUp = screen.getByRole('switch', { name: 'Top up from the HubSpot watchlist' })
-    expect(topUp).toBeChecked()
-    expect(topUp).toHaveAccessibleDescription(
-      'If the searches come up short of the number, the run adds companies from the HubSpot watchlist in the same places, most likely first.',
-    )
-    await user.click(topUp)
-    expect(topUp).not.toBeChecked()
+    expect(screen.queryByRole('switch', { name: 'Top up from the HubSpot watchlist' })).toBeNull()
 
     const start = screen.getByRole('button', { name: 'Start run' })
     await waitFor(() => {
-      expect(seen.estimates.at(-1)).toMatchObject({
-        params: { target_companies: 70, top_up: false },
-      })
+      expect(seen.estimates.at(-1)).toMatchObject({ params: { target_companies: 70 } })
       expect(start).toBeEnabled()
     })
     await user.click(start)
     expect(await screen.findByText('The run page')).toBeInTheDocument()
     const sent = (await seen.starts[0]?.json()) as { params: Record<string, unknown> }
-    expect(sent.params).toMatchObject({ target_companies: 70, top_up: false })
-  })
-
-  it('greys the top up with the reason while HubSpot names may not go to Claude', async () => {
-    const message = "Waits for Levi's OK to send HubSpot names to Claude."
-    const seen = mockApi(withTarget, {
-      ...OPTIONS,
-      top_up: { default: true, allowed: false, message },
-    })
-    renderStart()
-    const topUp = await screen.findByRole('switch', { name: 'Top up from the HubSpot watchlist' })
-    expect(topUp).toBeDisabled()
-    expect(topUp).not.toBeChecked()
-    expect(topUp).toHaveAccessibleDescription(message)
-    await waitFor(() => {
-      expect(seen.estimates.at(-1)).toMatchObject({ params: { top_up: false } })
-    })
-  })
-
-  it('greys the top up and sends none when the run makes no web search', async () => {
-    const seen = mockApi(withTarget, { ...OPTIONS, top_up: { default: true, allowed: true } })
-    const { user } = renderStart()
-    const look = await screen.findByRole('group', { name: 'Where to look' })
-    await user.click(within(look).getByRole('checkbox', { name: 'The web' }))
-    const topUp = screen.getByRole('switch', { name: 'Top up from the HubSpot watchlist' })
-    expect(topUp).toBeDisabled()
-    expect(topUp).toHaveAccessibleDescription(/Only with the web search/)
-    await waitFor(() => {
-      expect(seen.estimates.at(-1)).toMatchObject({ params: { top_up: false } })
-    })
+    expect(sent.params).toMatchObject({ target_companies: 70 })
+    expect(sent.params).not.toHaveProperty('top_up')
   })
 
   it('aims for a lower "Most companies to research" and says so, keeping the form valid', async () => {
@@ -631,24 +401,5 @@ describe('a company limit that leaves one preset (PLAN-V21 T3-3)', () => {
     expect(field).toHaveValue('20')
     expect(screen.queryByRole('radiogroup', { name: 'Suggested numbers' })).toBeNull()
     expect(screen.getByText(/From 5 to 20\./)).toBeInTheDocument()
-  })
-})
-
-describe('the top up on a phone (PLAN-V21 T3-6)', () => {
-  it('toggles from anywhere on its row, which is its label, and keeps the title as its name', async () => {
-    asPhone()
-    const seen = mockApi(() => estimate())
-    const { user } = renderStart()
-    const topUp = await screen.findByRole('switch', { name: 'Top up from the HubSpot watchlist' })
-    const row = topUp.closest('[data-slot=top-up]') as HTMLElement
-    expect(row.tagName).toBe('LABEL')
-    expect(row).toHaveClass('min-h-11')
-    expect(topUp).toBeChecked()
-    // A tap on the line under the title turns it off.
-    await user.click(within(row).getByText(/If the searches come up short/))
-    expect(topUp).not.toBeChecked()
-    await waitFor(() => {
-      expect(seen.estimates.at(-1)).toMatchObject({ params: { top_up: false } })
-    })
   })
 })

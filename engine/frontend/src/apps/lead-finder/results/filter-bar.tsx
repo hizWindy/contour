@@ -6,6 +6,8 @@
  *   label, status, run, dates, score, office size, test leads). On a phone, every filter but the
  *   search sits in that panel, which rises from the bottom.
  * - Under the bar, the filters in use show as chips, each with an x, and "Clear all".
+ * - Then the "In HubSpot (8)" chip (PLAN-V27 choice 6): Results shows new leads only, and the
+ *   chip shows the leads HubSpot has too. It goes while a HubSpot label is picked in the panel.
  * - A pick list is a Popover with Command, with the number of leads each choice would show. A date
  *   is a Popover with Calendar.
  *
@@ -23,6 +25,7 @@ import {
   type ReactNode,
 } from 'react'
 import type { LeadFacets } from '@/api/types'
+import { ChipGroup } from '@/components/motion'
 import { PickList, type PickOption } from '@/components/pick-list'
 import { Pending } from '@/components/skeletons'
 import { Badge } from '@/components/ui/badge'
@@ -66,6 +69,8 @@ import { loadCalendar } from './lazy-parts'
 import {
   dateOf,
   dayOf,
+  hubspotChipApplies,
+  inHubSpotCount,
   isDefaultTiers,
   oneOf,
   TIER_PICK_LABELS,
@@ -599,6 +604,42 @@ function TierNote({ filters, onChange }: Pick<ControlsProps, 'filters' | 'onChan
   )
 }
 
+/**
+ * The "In HubSpot (8)" chip (PLAN-V27 choice 6): Results shows new leads (new, quiet, possible
+ * match), and the leads HubSpot has hide behind it. A press shows them too, and the chip reads as
+ * pressed; a second press hides them. The number is how many it hides under the other filters.
+ * Nothing while a HubSpot label is picked in the panel: that pick decides.
+ */
+function HubSpotChip({ filters, facets, onChange }: ControlsProps) {
+  if (!hubspotChipApplies(filters)) {
+    return null
+  }
+  const count = inHubSpotCount(facets)
+  const shown = filters.show_in_hubspot
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <ChipGroup
+        aria-label="Leads already in HubSpot"
+        options={[
+          {
+            value: 'show',
+            label: count === undefined ? 'In HubSpot' : `In HubSpot (${formatNumber(count)})`,
+          },
+        ]}
+        value={shown ? ['show'] : []}
+        onChange={(value) => {
+          onChange({ show_in_hubspot: value.includes('show') })
+        }}
+      />
+      <p className="text-caption text-muted-foreground">
+        {shown
+          ? 'Showing leads already in HubSpot too.'
+          : 'New leads only. Leads already in HubSpot are hidden.'}
+      </p>
+    </div>
+  )
+}
+
 /** The filters in use, as chips with an x each, and "Clear all". Nothing when none is in use. */
 function FilterChips({
   filters,
@@ -747,6 +788,7 @@ export function FilterBar({ filters, facets, onChange, onClear, total, trailing 
         ) : null}
       </div>
       <FilterChips {...controls} onClear={onClear} />
+      <HubSpotChip {...controls} />
       <TierNote filters={filters} onChange={onChange} />
     </div>
   )

@@ -6,8 +6,8 @@
  *   field, so it shows only when there are two or more.
  * - The estimate's cost for that many companies ("about US$X to US$Y"), and its one sentence when
  *   the target doesn't fit the money limits.
- * - "Top up from the HubSpot watchlist": the sliding switch, with one line on what it does. While
- *   HubSpot names may not go to Claude, it is off and greyed, with the backend's reason.
+ * - A short run is no longer topped up from the HubSpot watchlist (PLAN-V27 choice 5): it says it
+ *   came up short in its feed.
  *
  * "Most companies to research" (in the Limits fold) stays the ceiling. A person who lowers it
  * under the target gets a run that aims for the lower number, and the line under the field says
@@ -19,10 +19,8 @@ import type { RunEstimate, RunOptions } from '@/api/types'
 import { Segmented } from '@/components/motion'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Switch } from '@/components/ui/switch'
 import { pluralise } from '@/lib/format'
 import { formatMoney } from '@/lib/money'
-import { cn } from '@/lib/utils'
 import { errorFor, targetChoice, wholeNumberOf, type StartForm } from './form'
 
 interface TargetProps {
@@ -34,11 +32,6 @@ interface TargetProps {
   estimate: RunEstimate | undefined
 }
 
-/** When the backend gives no reason, which it always should. */
-const TOP_UP_OFF = 'Not available for this run yet.'
-const NO_WEB_SEARCH =
-  'Only with the web search: without it, the run researches only the new items it reads.'
-
 export function TargetChoices({ options, form, update, errors, estimate }: TargetProps) {
   const limits = options.target_companies
   const choice = targetChoice(form, options)
@@ -49,10 +42,6 @@ export function TargetChoices({ options, form, update, errors, estimate }: Targe
   const low = valid ? estimate.target_cost_usd_low : null
   const high = valid ? estimate.target_cost_usd_high : null
   const aimed = valid ? estimate.target_companies : null
-  // With no web search the run researches only the tools' new items, and its estimate counts
-  // only those, so it isn't topped up (PLAN-V21 review, M1)
-  const searches = form.sources.includes('web')
-  const allowed = options.top_up.allowed && searches
 
   return (
     <>
@@ -105,42 +94,6 @@ export function TargetChoices({ options, form, update, errors, estimate }: Targe
           {estimate.target_note}
         </p>
       ) : null}
-      {/* The whole row is the switch's label, so a finger can tap anywhere on it: the switch
-          itself is 24px tall, like every switch in the app. Its name is the title alone. */}
-      <label
-        htmlFor="top-up"
-        data-slot="top-up"
-        className={cn(
-          'flex min-h-11 items-start justify-between gap-3 border-t pt-4',
-          allowed ? 'cursor-pointer' : 'cursor-not-allowed',
-        )}
-      >
-        <span className="flex min-w-0 flex-col gap-1">
-          <span
-            id="top-up-title"
-            className={cn('text-caption leading-snug text-foreground', !allowed && 'opacity-50')}
-          >
-            Top up from the HubSpot watchlist
-          </span>
-          <span id="top-up-about" className="text-caption text-pretty text-muted-foreground">
-            {allowed
-              ? 'If the searches come up short of the number, the run adds companies from the HubSpot watchlist in the same places, most likely first.'
-              : !searches
-                ? NO_WEB_SEARCH
-                : (options.top_up.message ?? TOP_UP_OFF)}
-          </span>
-        </span>
-        <Switch
-          id="top-up"
-          checked={allowed && form.topUp}
-          disabled={!allowed}
-          onCheckedChange={(on) => {
-            update({ topUp: on })
-          }}
-          aria-labelledby="top-up-title"
-          aria-describedby="top-up-about"
-        />
-      </label>
     </>
   )
 }

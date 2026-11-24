@@ -6,7 +6,7 @@ Integration tests: they need the database.
 import dataclasses
 import uuid
 from collections.abc import AsyncIterator
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -330,7 +330,11 @@ async def test_hubspot_staff_fills_a_gap_the_research_left(session: AsyncSession
     link = "https://app.hubspot.com/contacts/1/company/102"
     session.add(
         HubSpotCompany(
-            hubspot_id="102", name="Acme Software Pty Ltd", hubspot_url=link, source="export"
+            hubspot_id="102",
+            name="Acme Software Pty Ltd",
+            hubspot_url=link,
+            source="export",
+            last_activity=datetime.now(UTC) - timedelta(days=20),  # worked: not quiet (PLAN-V27)
         )
     )
     await session.flush()

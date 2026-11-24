@@ -92,7 +92,6 @@ describe('the Start form', () => {
         since_days: 90,
         area: { Melbourne: 'cbd' },
         target_companies: 50,
-        top_up: true,
       },
     })
   })
@@ -198,15 +197,14 @@ describe('where to look (PLAN-V16 T3-2)', () => {
   })
 })
 
-describe('how many companies and the top up (PLAN-V21 T3-3)', () => {
+describe('how many companies (PLAN-V21 T3-3), and no top up (PLAN-V27 choice 5)', () => {
   const form = (changes: Partial<StartForm> = {}): StartForm => ({
     ...initialForm(OPTIONS),
     ...changes,
   })
 
-  it('starts at the backend default, 50, with the top up on', () => {
+  it('starts at the backend default, 50', () => {
     expect(form().targetCompanies).toBe('50')
-    expect(form().topUp).toBe(true)
   })
 
   it('reads a number the way people type it', () => {
@@ -219,11 +217,10 @@ describe('how many companies and the top up (PLAN-V21 T3-3)', () => {
     expect(wholeNumberOf('')).toBeNull()
   })
 
-  it('sends the target and the top up for discovery only', () => {
-    expect(bodyOf(form({ targetCompanies: '25', topUp: false }), OPTIONS).params).toMatchObject({
-      target_companies: 25,
-      top_up: false,
-    })
+  it('sends the target for discovery only, and never a top up', () => {
+    const discovery = bodyOf(form({ targetCompanies: '25' }), OPTIONS).params
+    expect(discovery).toMatchObject({ target_companies: 25 })
+    expect(discovery).not.toHaveProperty('top_up')
     for (const mode of ['watchlist', 'tenure', 'company'] as const) {
       const params = bodyOf(form({ mode }), OPTIONS).params
       expect(params).not.toHaveProperty('target_companies')
@@ -234,7 +231,6 @@ describe('how many companies and the top up (PLAN-V21 T3-3)', () => {
   it('leaves the target out when the field is empty: the run aims for the default', () => {
     const params = bodyOf(form({ targetCompanies: '  ' }), OPTIONS).params
     expect(params).not.toHaveProperty('target_companies')
-    expect(params).toMatchObject({ top_up: true })
   })
 
   it('says why in plain words when the number cannot be used, and sends no target', () => {
@@ -268,13 +264,5 @@ describe('how many companies and the top up (PLAN-V21 T3-3)', () => {
       error: null,
       pulledTo: null,
     })
-  })
-
-  it('sends no top up while HubSpot names may not go to Claude', () => {
-    const closed = {
-      ...OPTIONS,
-      top_up: { default: true, allowed: false, message: "Waits for Levi's OK." },
-    }
-    expect(bodyOf(initialForm(closed), closed).params).toMatchObject({ top_up: false })
   })
 })

@@ -113,6 +113,8 @@ ROUTES = [
     ("POST", f"{API}/companies/assistant/companies/preview"),  # PLAN-V23 T1-4
     ("POST", f"{API}/companies/assistant/companies"),
     ("GET", f"{API}/companies/assistant/companies/find"),  # PLAN-V24 T3-2
+    ("GET", f"{API}/companies/assistant/research"),  # PLAN-V27 T4-1
+    ("POST", f"{API}/companies/assistant/research"),  # PLAN-V27 T4-2
     ("POST", f"{API}/auth/login"),
     ("POST", f"{API}/auth/logout"),
     ("POST", f"{API}/auth/logout-everywhere"),
@@ -190,6 +192,9 @@ ROUTES = [
     ("POST", f"{LF}/leads/{{lead_id}}/hubspot/send"),
     ("POST", f"{LF}/leads/{{lead_id}}/recheck"),
     ("POST", f"{LF}/leads/{{lead_id}}/override-exclusion"),
+    ("POST", f"{LF}/leads/{{lead_id}}/hubspot-match"),  # PLAN-V27 T1-3
+    ("POST", f"{LF}/leads/hubspot/preview-many"),  # PLAN-V27 T3-1
+    ("POST", f"{LF}/leads/hubspot/send-many"),
     ("GET", f"{LF}/leads/{{lead_id}}/profile"),  # PLAN-V16 T1-10
     ("GET", f"{LF}/watchlist"),
     ("GET", f"{LF}/review/{{run_id}}"),
@@ -328,11 +333,11 @@ def test_the_health_check_keeps_its_own_503_text_and_gets_the_problem_body(
     assert response["content"]["application/json"]["schema"]["$ref"].endswith("/ProblemDetails")
 
 
-def test_the_event_union_is_in_the_file_with_all_eighteen_types(schema: dict[str, Any]) -> None:
+def test_the_event_union_is_in_the_file_with_all_nineteen_types(schema: dict[str, Any]) -> None:
     components = schema["components"]["schemas"]
     union = components["RunEvent"]
     assert union["discriminator"]["propertyName"] == "type"
-    assert len(union["oneOf"]) == 18
+    assert len(union["oneOf"]) == 19
     assert set(union["discriminator"]["mapping"]) == {
         "run_started",
         "run_resumed",
@@ -348,6 +353,7 @@ def test_the_event_union_is_in_the_file_with_all_eighteen_types(schema: dict[str
         "company_started",
         "company_done",
         "company_failed",
+        "finding",  # PLAN-V27 T4-2
         "progress",
         "problem",
         "cap_reached",
@@ -479,6 +485,7 @@ def test_the_lead_filters_sort_and_paging_are_declared_on_the_list(schema: dict[
         "open_deal",
         "dissolved_deal",
         "possible_match",
+        "quiet",  # PLAN-V27 choice 3
     ]
 
 
@@ -675,6 +682,7 @@ def test_every_part_of_the_run_params_says_which_mode_uses_it(schema: dict[str, 
         "watchlist",
         "companies",
         "recheck",
+        "from_assistant",  # PLAN-V27 T4-2
     }
     expected = {
         "cities": "discovery",
@@ -688,6 +696,7 @@ def test_every_part_of_the_run_params_says_which_mode_uses_it(schema: dict[str, 
         "watchlist": "watchlist",
         "companies": "company",
         "recheck": "company",
+        "from_assistant": "company",
     }
     for name, mode in expected.items():
         assert f"mode {mode}" in parts[name]["description"], name
@@ -719,6 +728,7 @@ def test_a_company_done_event_says_the_hubspot_status_in_words_the_website_can_s
         "open_deal",
         "dissolved_deal",
         "possible_match",
+        "quiet",  # PLAN-V27 choice 3
     ]
     assert done["result"]["type"] == "string"  # the result stays plain text
 

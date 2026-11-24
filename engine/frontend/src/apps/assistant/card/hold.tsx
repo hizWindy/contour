@@ -14,9 +14,10 @@
  *   With reduced motion there is no bar, and the words count the seconds.
  *
  * Plain code with one small toast part, so it outlives the card: the card closes as the hold
- * starts.
+ * starts. The clock itself (the timer, `pagehide`, the sign-out check) is `lib/hold.ts`.
  */
 import { toast } from 'sonner'
+import { HOLD_MS, runHold } from '@/lib/hold'
 import { HoldCountdown } from './countdown'
 import type { CardAction } from './draft'
 import { inTextBox } from './keys'
@@ -24,9 +25,6 @@ import { HOLD_TITLES, UNDO } from './words'
 
 /** Things that keep Esc for themselves while they are open: a dialog, a menu or a list. */
 const OVERLAY = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]'
-
-/** How long a send waits (choice 22). */
-export const HOLD_MS = 5000
 
 export interface HoldOptions {
   action: CardAction
@@ -44,35 +42,29 @@ export interface HoldOptions {
   ms?: number
 }
 
-/** Starts the hold. The returned function stops it without sending (the card's own tests). */
+/**
+ * Starts the hold, in a toast. The clock is the shared one (`lib/hold.ts`, also used by Results'
+ * bulk add to HubSpot). The returned function stops it without sending (the card's own tests).
+ */
 export function startHold({
   action,
   title,
   send,
   onUndo,
-  stillSignedIn = () => true,
+  stillSignedIn,
   ms = HOLD_MS,
 }: HoldOptions): () => void {
-  let over = false
-  let timer = 0
   let id: string | number = ''
-  // The page is going: nothing is sent, and the draft is already kept.
-  const onPageHide = (): void => {
-    stop()
-  }
-  function stop(): void {
-    if (over) return
-    over = true
-    window.clearTimeout(timer)
-    window.removeEventListener('pagehide', onPageHide)
-    document.removeEventListener('keydown', onKey, true)
-    toast.dismiss(id)
-  }
-  function undo(): void {
-    if (over) return
-    stop()
-    if (stillSignedIn()) onUndo()
-  }
+  const hold = runHold({
+    send,
+    onUndo,
+    stillSignedIn,
+    ms,
+    onEnd: () => {
+      document.removeEventListener('keydown', onKey, true)
+      toast.dismiss(id)
+    },
+  })
   // Esc undoes it from the keyboard (TBC at Al-khair's look): only while it runs, not in a box,
   // and not while a dialog, a menu or a list is open, whose own Esc it is.
   function onKey(event: KeyboardEvent): void {
@@ -80,20 +72,14 @@ export function startHold({
     if (document.querySelector(OVERLAY) !== null) return
     event.preventDefault()
     event.stopPropagation()
-    undo()
+    hold.undo()
   }
   id = toast(title ?? HOLD_TITLES[action], {
     description: <HoldCountdown ms={ms} />,
     // The hold keeps its own time: a toast's own timer stops while it is pointed at.
     duration: Infinity,
-    action: { label: UNDO, onClick: undo },
+    action: { label: UNDO, onClick: hold.undo },
   })
-  timer = window.setTimeout(() => {
-    if (over) return
-    stop()
-    if (stillSignedIn()) send()
-  }, ms)
-  window.addEventListener('pagehide', onPageHide)
   document.addEventListener('keydown', onKey, true)
-  return stop
+  return hold.stop
 }

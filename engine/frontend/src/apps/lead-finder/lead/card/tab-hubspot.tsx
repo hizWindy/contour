@@ -2,28 +2,67 @@
  * The HubSpot and look-alikes tab: whether HubSpot has the company (its label, owner, open deals,
  * the last dissolved deal, and possible matches for a person to confirm), then the clients with
  * deals and the other leads that read alike.
+ *
+ * A possible match is settled here (PLAN-V27 T1-3, choice 4): "Same company" beside each candidate
+ * links the lead to it, and "It's new" says HubSpot doesn't have it. Someone who can't change
+ * Results (a Viewer) sees the candidates without the buttons. A settled card says who settled it.
  */
 import { Link } from 'react-router'
-import { useLeadHubSpot, useLeadSimilar } from '@/api/hooks'
-import type { LeadDetail } from '@/api/types'
-import { useCan } from '@/auth/can'
+import { toast } from 'sonner'
+import { useLeadHubSpot, useLeadSimilar, usePickHubSpotMatch } from '@/api/hooks'
+import type { HubSpotPick, LeadDetail } from '@/api/types'
+import { useCan, useCanWrite } from '@/auth/can'
 import { ErrorState } from '@/components/error-state'
 import { PendingText } from '@/components/skeletons'
 import { InHubSpotBadge } from '@/components/hubspot'
 import { ResultBadge } from '@/components/result-badge'
-import { formatDate, formatPercent } from '@/lib/format'
+import { Button } from '@/components/ui/button'
+import { formatDate, formatMonthYear, formatPercent } from '@/lib/format'
+import { IN_HUBSPOT_STATUSES } from '@/lib/labels'
 import { Section, ShowFirst } from './parts'
 import { REASON_WORDS } from './words'
+
+/** What a settled match did, in one line for the toast. */
+function settledWords(lead: LeadDetail): string {
+  const hubspot = lead.hubspot
+  if (hubspot.status === 'new') {
+    return `${lead.company} is marked as new.`
+  }
+  const linked = `${lead.company} is linked to ${hubspot.name ?? 'its HubSpot company'}.`
+  if (hubspot.status === 'quiet') {
+    // The months are a setting, so the words give the month, not "a year" (the review, M1).
+    const since = hubspot.last_activity
+      ? `It's quiet since ${formatMonthYear(hubspot.last_activity)}`
+      : 'Nobody has worked it in HubSpot'
+    return `${linked} ${since}, so it stays a new lead.`
+  }
+  return IN_HUBSPOT_STATUSES.includes(hubspot.status)
+    ? `${linked} Results now keeps it under "In HubSpot".`
+    : linked
+}
 
 function HubSpot({ lead }: { lead: LeadDetail }) {
   const hubspot = lead.hubspot
   const canSendHubSpot = useCan('lead_finder.send_to_hubspot')
+  const canSettle = useCanWrite('lead_finder.results') && hubspot.status === 'possible_match'
   const sent = useLeadHubSpot(lead.id, canSendHubSpot).data
+  const settle = usePickHubSpotMatch()
+  const pick = (choice: HubSpotPick): void => {
+    settle.mutate(
+      { leadId: lead.id, pick: choice },
+      {
+        onSuccess: (settled) => {
+          toast(settledWords(settled))
+        },
+      },
+    )
+  }
   return (
     <Section title="HubSpot">
       <div className="flex flex-wrap items-center gap-2">
         <InHubSpotBadge
           status={hubspot.status}
+          lastActivity={hubspot.last_activity}
           name={hubspot.name}
           href={sent?.hubspot_url ?? null}
         />
@@ -31,6 +70,9 @@ function HubSpot({ lead }: { lead: LeadDetail }) {
           <span className="text-muted-foreground">Owner: {hubspot.owner}</span>
         ) : null}
       </div>
+      {hubspot.confirmed_by ? (
+        <p className="text-muted-foreground">Settled by {hubspot.confirmed_by}.</p>
+      ) : null}
       {hubspot.open_deals.length > 0 ? <p>Open deals: {hubspot.open_deals.join('; ')}</p> : null}
       {hubspot.last_dissolved ? (
         <p className="text-muted-foreground">
@@ -38,25 +80,70 @@ function HubSpot({ lead }: { lead: LeadDetail }) {
         </p>
       ) : null}
       {hubspot.candidates.length > 0 ? (
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-2">
           <p className="font-semibold">Might be the same company. A person confirms.</p>
           <ShowFirst
             items={hubspot.candidates}
             label="Possible matches in HubSpot"
-            className="gap-1"
+            className={canSettle ? 'gap-2' : 'gap-1'}
             keyOf={(candidate) => candidate.hubspot_id}
             render={(candidate) => (
-              <>
-                {candidate.name}{' '}
-                <span className="text-muted-foreground">
-                  ({REASON_WORDS[candidate.reason] ?? candidate.reason},{' '}
-                  {formatPercent(candidate.score * 100)} alike
-                  {candidate.open_deals.length > 0 ? ', has an open deal' : ''})
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <span className="min-w-0">
+                  {candidate.name}{' '}
+                  <span className="text-muted-foreground">
+                    ({REASON_WORDS[candidate.reason] ?? candidate.reason},{' '}
+                    {formatPercent(candidate.score * 100)} alike
+                    {candidate.open_deals.length > 0 ? ', has an open deal' : ''})
+                  </span>
                 </span>
-              </>
+                {canSettle ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-label={`Same company as ${candidate.name}`}
+                    disabled={settle.isPending}
+                    onClick={() => {
+                      pick({ pick: 'same', hubspot_id: candidate.hubspot_id })
+                    }}
+                  >
+                    Same company
+                  </Button>
+                ) : null}
+              </div>
             )}
           />
+          {canSettle ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={settle.isPending}
+                onClick={() => {
+                  pick({ pick: 'new' })
+                }}
+              >
+                It&apos;s new
+              </Button>
+              <span className="text-caption text-muted-foreground">
+                None of these: HubSpot doesn&apos;t have {lead.company}.
+              </span>
+            </div>
+          ) : null}
         </div>
+      ) : null}
+      {settle.error ? (
+        <ErrorState
+          error={settle.error}
+          context="The match wasn't saved."
+          onRetry={() => {
+            if (settle.variables) {
+              pick(settle.variables.pick)
+            }
+          }}
+        />
       ) : null}
     </Section>
   )

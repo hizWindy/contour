@@ -13,7 +13,14 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 import { api, unwrap } from '../client'
 import { queryKeys } from '../query'
-import type { AssistantCommand, AssistantCommandIn, Today } from '../types'
+import type {
+  AssistantCommand,
+  AssistantCommandIn,
+  AssistantResearch,
+  AssistantResearchIn,
+  AssistantResearchStarted,
+  Today,
+} from '../types'
 
 /** What the command would do, or the `ApiProblem` (409 `assistant_off`, 429, 503 and the rest). */
 export async function readCommand(
@@ -21,6 +28,42 @@ export async function readCommand(
   signal?: AbortSignal,
 ): Promise<AssistantCommand> {
   return unwrap(await api.POST('/companies/assistant/command', { body, signal }))
+}
+
+// --- Research (PLAN-V27 T4-2) --------------------------------------------------------------------
+
+/**
+ * What we know of one company the research card has settled, free: the choice picked
+ * (`companyKey`) or a new company. `said` is always the rep's words as heard, never a choice's
+ * HubSpot name, so HubSpot's spelling stays out of Claude.
+ */
+export async function readResearch(
+  said: string,
+  companyKey: string | null,
+  signal?: AbortSignal,
+): Promise<AssistantResearch> {
+  return unwrap(
+    await api.GET('/companies/assistant/research', {
+      params: { query: { name: said, ...(companyKey ? { company_key: companyKey } : {}) } },
+      signal,
+    }),
+  )
+}
+
+/**
+ * Starts a research of one company (a Lead Finder run) in the background, with the card's key, so a
+ * double press starts one. Answers its run id at once, or the `ApiProblem` (403, 409, 422, 503).
+ */
+export async function startResearch(
+  body: AssistantResearchIn,
+  key: string,
+): Promise<AssistantResearchStarted> {
+  return unwrap(
+    await api.POST('/companies/assistant/research', {
+      body,
+      params: { header: { 'idempotency-key': key } },
+    }),
+  )
 }
 
 // --- Today ---------------------------------------------------------------------------------------

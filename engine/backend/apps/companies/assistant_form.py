@@ -105,6 +105,8 @@ The actions:
 - task: add a task or a reminder to do something.
 - email: email one or more teammates at Contour.
 - open: open a page.
+- research: find out about one client company, or research it with the Lead Finder, like \
+"Research Northwind" or "what do we know about North Wind". Put its name in company.
 - change, send, cancel: only while a review card is open (the prompt says so). change sets one \
 of its boxes, send sends it, cancel closes it.
 - unknown: words that make sense but ask for something else, or when you can't tell which of \
@@ -113,7 +115,8 @@ these actions they mean.
 Thursday". Fill in nothing else.
 
 The form:
-- company: the client company's name as heard, like "North Wind". Empty if none.
+- company: the client company's name as heard, like "North Wind". Empty if none. For \
+research, only the name: leave out words like "the company".
 - person: the client person's name as heard, like "James". Never a teammate. Empty if none.
 - meeting: the words that name a meeting, like "Thursday's meeting" or "my next meeting".
 - when: the day for a task, a call's follow-up, a meeting or a changed date, in one of these \
@@ -227,6 +230,43 @@ def unclear_shortcut(text: str) -> CommandAnswer | None:
     if any(len(word) >= 2 and word not in FILLERS for word in words):
         return None
     return blank_answer("unclear")
+
+
+# "Research Northwind" (PLAN-V27 T4-1): plainly research and a name, so no request is needed.
+RESEARCH_SAID: Final = re.compile(
+    r"^(?:please\s+)?research\b(?P<name>.*?)(?:,?\s+please)?$", re.IGNORECASE
+)
+# A name the shortcut takes: up to 8 words of the characters a company name may have. Anything
+# more, like "research Northwind then email Lee", goes to Claude.
+CURLY: Final = chr(0x2019)  # a typographic apostrophe
+RESEARCH_NAME: Final = re.compile(rf"[\w&'{CURLY}.,()/ -]*")
+RESEARCH_NAME_WORDS: Final = 8
+# Words that mean more than a name follows "research".
+NOT_A_NAME: Final = frozenset(
+    {"then", "and then", "log", "call", "email", "task", "remind", "send", "open", "note"}
+)
+END_MARKS: Final = " .!?"
+
+
+def research_shortcut(text: str, card: AssistantCardIn | None) -> CommandAnswer | None:
+    """Research, when the words are plainly "research" and a company's name, or "research" alone
+    (the card then asks for a name, or uses the company on screen). Free: no request. Never on an
+    open card, where only change, send and cancel count."""
+    if card is not None:
+        return None
+    found = RESEARCH_SAID.fullmatch(" ".join(text.split()).strip(END_MARKS))
+    if found is None:
+        return None
+    name = found.group("name").strip(" ,:;-")
+    words = name.casefold().split()
+    if (
+        len(words) > RESEARCH_NAME_WORDS
+        or not RESEARCH_NAME.fullmatch(name)
+        or any(word.strip(",.") in NOT_A_NAME for word in words)
+        or " and then " in f" {name.casefold()} "
+    ):
+        return None
+    return blank_answer("research").model_copy(update={"company": name})
 
 
 def card_shortcut(text: str, card: AssistantCardIn | None) -> CommandAnswer | None:

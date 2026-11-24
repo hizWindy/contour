@@ -361,12 +361,11 @@ class _Discovery(Strict):
         examples=[50],
     )
     top_up: bool = Field(
-        True,
+        False,
         description=(
-            "Used by mode discovery only (PLAN-V21 T1-6). When the sweeps come up short of the "
-            "target, add companies from the HubSpot watchlist in the run's places, most likely "
-            "first. It needs the OK for HubSpot names to go to Claude (`top_up.allowed` in the run "
-            "options); without it nothing is added."
+            "Used by mode discovery only, and no longer used (PLAN-V27 choice 5): a short run is "
+            "not topped up from the HubSpot watchlist any more. It is still accepted so a saved "
+            "run or schedule still loads."
         ),
     )
 
@@ -489,11 +488,32 @@ class CompanyParams(_Caps):
     recheck: bool = Field(
         False, description="Search again even when memory is fresh. Used by Re-check."
     )
+    from_assistant: bool = Field(
+        False,
+        description=(
+            "The Assistant started it, for one company (PLAN-V27 choice 19): it runs in the "
+            "background, behind people's own requests, with at most 2 Claude requests at once."
+        ),
+    )
 
     @field_validator("companies")
     @classmethod
     def _companies(cls, value: list[CompanyIn]) -> list[CompanyIn]:
         return _unique_companies(value)
+
+    @field_validator("from_assistant")
+    @classmethod
+    def _one_company(cls, value: bool, info: ValidationInfo) -> bool:
+        return _one_from_assistant(value, info)
+
+
+def _one_from_assistant(value: bool, info: ValidationInfo) -> bool:
+    """The Assistant researches one company at a time."""
+    if value and len(info.data.get("companies") or []) > 1:
+        raise PydanticCustomError(
+            "from_assistant", "The Assistant researches one company at a time"
+        )
+    return value
 
 
 class TestsetParams(_Caps):
@@ -508,7 +528,8 @@ class LeadFinderRunParams(_Discovery, _Caps):
     A real run uses the model of its mode (above), which refuses the parts it doesn't use. So
     send only the parts of your mode: `cities`, `area`, `triggers`, `since_days`, `sources`,
     `target_companies`, `top_up` and `goal_leads` for discovery, `watchlist` for watchlist,
-    `companies` and `recheck` for company, and `caps` for every mode (testset has nothing else).
+    `companies`, `recheck` and `from_assistant` for company, and `caps` for every mode (testset has
+    nothing else).
     """
 
     watchlist: WatchlistOptions = Field(
@@ -526,8 +547,20 @@ class LeadFinderRunParams(_Discovery, _Caps):
             "Used by mode company only. Search again even when memory is fresh. Re-check sets it."
         ),
     )
+    from_assistant: bool = Field(
+        False,
+        description=(
+            "Used by mode company only. The Assistant started it, for one company (PLAN-V27 "
+            "choice 19): it runs in the background, with at most 2 Claude requests at once."
+        ),
+    )
 
     @field_validator("companies")
     @classmethod
     def _companies(cls, value: list[CompanyIn]) -> list[CompanyIn]:
         return _unique_companies(value)
+
+    @field_validator("from_assistant")
+    @classmethod
+    def _one_company(cls, value: bool, info: ValidationInfo) -> bool:
+        return _one_from_assistant(value, info)

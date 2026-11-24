@@ -76,7 +76,7 @@ FIELD_LABELS = {
     "research_date": "AI research date",
 }
 # HubSpot statuses that name a company already in HubSpot.
-KNOWN = ("in_hubspot", "open_deal", "dissolved_deal")
+KNOWN = ("in_hubspot", "open_deal", "dissolved_deal", "quiet")
 
 
 def subject_of(lead_id: uuid.UUID) -> str:
@@ -177,9 +177,12 @@ async def mark_sent(session: AsyncSession, written: WriteOut) -> None:
     lead = await session.get(Lead, lead_id)
     if lead is None:
         return
-    # A new lead (or a possible match) is now in HubSpot. An open or dissolved deal stays as is.
+    # A new lead (or a possible match) is now in HubSpot, and a quiet one was just worked
+    # (PLAN-V27). An open or dissolved deal stays as is.
     status = (
-        "in_hubspot" if lead.hubspot_status in ("new", "possible_match") else lead.hubspot_status
+        "in_hubspot"
+        if lead.hubspot_status in ("new", "possible_match", "quiet")
+        else lead.hubspot_status
     )
     card = dict(lead.card or {})
     hubspot = dict(card.get("hubspot") or {})

@@ -46,8 +46,6 @@ export interface StartForm {
   maxCompanies: string
   /** How many companies a discovery run tries to research, as typed (PLAN-V21 T3-3). */
   targetCompanies: string
-  /** Fill a short discovery run from the HubSpot watchlist (PLAN-V21 T3-3). */
-  topUp: boolean
 }
 
 export const EMPTY_ROW: CompanyRow = { name: '', city: '', website: '' }
@@ -76,7 +74,6 @@ export function initialForm(options: RunOptions): StartForm {
     runCap: '',
     maxCompanies: '',
     targetCompanies: String(options.target_companies.default),
-    topUp: options.top_up.default,
   }
 }
 
@@ -209,7 +206,6 @@ export function bodyOf(form: StartForm, options: RunOptions): RunCreate {
       params.target_companies = target
     }
     // Only with the web search: without it the run researches just the tools' new items (M1)
-    params.top_up = form.topUp && options.top_up.allowed && form.sources.includes('web')
   } else if (form.mode === 'watchlist') {
     const limit = clean(form.watchLimit)
     params.watchlist = {

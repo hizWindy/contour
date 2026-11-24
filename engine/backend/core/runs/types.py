@@ -272,6 +272,9 @@ class RunKind[P: BaseModel]:
       (PLAN-V26 choice 1). Without it a run is in the Runs lane.
     - `finished(run, session, settings)` is called once the run has ended for good (done, failed
       or cancelled), after its last write. An interrupted run is not over: it carries on later.
+    - `in_background(params)` says a person started it but doesn't sit and wait, like a research
+      the Assistant runs (PLAN-V27 choice 20). It asks Claude in the People lane, behind the
+      lane's other requests, with at most `BACKGROUND_PLACES` places at once.
     """
 
     mode: str  # like "discovery"
@@ -284,6 +287,11 @@ class RunKind[P: BaseModel]:
     versions: VersionsFn | None = None
     finished: FinishedFn | None = None
     person_waits: PersonWaitsFn[P] | None = None
+    in_background: PersonWaitsFn[P] | None = None
+
+
+# The most Claude places a run in the background holds at once (PLAN-V27 choice 20, TBC)
+BACKGROUND_PLACES = 2
 
 
 # --- What the manager is built from -------------------------------------------------------

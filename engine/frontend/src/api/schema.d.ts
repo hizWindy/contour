@@ -188,7 +188,7 @@ export interface paths {
         put?: never;
         /**
          * Read a command
-         * @description Turns one thing a rep said or typed into one action for the review card: `pre_read`, `log_call`, `task`, `email` or `open`, or on an open card (`card`) `change`, `send` or `cancel`. Anything else is `unknown`, and `read_back` lists what the Assistant can do. Words too unclear to make a command are `unclear` (PLAN-V23): `read_back` holds the words as heard and `unsure` the stop line; words too short to be a command (like 'um') are `unclear` with no Claude request. One small Claude request, on the call notes' model and within their cap for one note; a card's plain 'send it' or 'cancel' needs none. Claude gets only the words (emails and phone numbers blanked), today's date and an open card's box names. Code finds the company, the person, the meeting and the teammates in our HubSpot copy: each comes back as `heard`, then `found` (one match) or `choices` (two or more, best first). With no company named, the one on screen (`on_page`). A company is found in this order: the one on screen when the words are close to it, the team's learned names, our copy, then HubSpot's own search (one free request), which reads what it finds into our copy (`from_hubspot`). Found nowhere after HubSpot was searched: `can_add`, so the card may offer to add it. With no HubSpot connection it isn't searched, and `can_add` is false. It writes nothing to HubSpot, sends nothing and keeps no copy of the words; its cost goes to the search log. Behind the Call logs or the Meetings tick; a Viewer gets 403 `viewer_read_only`. 409 `assistant_off` while call notes or their AI sort are off, or Claude isn't set up. 422 `command_empty`, or `command_too_long` over 2,000 characters. 429 `too_many_commands` over 20 in a minute for one person, with `Retry-After`. 503 `claude_unavailable` when Claude takes over 15 seconds, is down, or today's limit is reached, with `Retry-After`.
+         * @description Turns one thing a rep said or typed into one action for the review card: `pre_read`, `log_call`, `task`, `email`, `open` or `research`, or on an open card (`card`) `change`, `send` or `cancel`. `research` (PLAN-V27 T4-1, 'Research Northwind') comes with `research`: what we know and what happens next, settled from our copies with no Claude request (see GET /assistant/research); plainly 'research' and a name, or 'research' alone, needs no Claude request at all. Anything else is `unknown`, and `read_back` lists what the Assistant can do. Words too unclear to make a command are `unclear` (PLAN-V23): `read_back` holds the words as heard and `unsure` the stop line; words too short to be a command (like 'um') are `unclear` with no Claude request. One small Claude request, on the call notes' model and within their cap for one note; a card's plain 'send it' or 'cancel' needs none. Claude gets only the words (emails and phone numbers blanked), today's date and an open card's box names. Code finds the company, the person, the meeting and the teammates in our HubSpot copy: each comes back as `heard`, then `found` (one match) or `choices` (two or more, best first). With no company named, the one on screen (`on_page`). A company is found in this order: the one on screen when the words are close to it, the team's learned names, our copy, then HubSpot's own search (one free request), which reads what it finds into our copy (`from_hubspot`). Found nowhere after HubSpot was searched: `can_add`, so the card may offer to add it. With no HubSpot connection it isn't searched, and `can_add` is false. It writes nothing to HubSpot, sends nothing and keeps no copy of the words; its cost goes to the search log. Behind the Call logs or the Meetings tick; a Viewer gets 403 `viewer_read_only`. 409 `assistant_off` while call notes or their AI sort are off, or Claude isn't set up. 422 `command_empty`, or `command_too_long` over 2,000 characters. 429 `too_many_commands` over 20 in a minute for one person, with `Retry-After`. 503 `claude_unavailable` when Claude takes over 15 seconds, is down, or today's limit is reached, with `Retry-After`.
          */
         post: operations["read_assistant_command"];
         delete?: never;
@@ -355,6 +355,30 @@ export interface paths {
         get: operations["read_assistant_names"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/assistant/research": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What we know about a company, before researching it
+         * @description The research card's block for one company the card has settled (PLAN-V27 T4-1): the choice picked (`company_key`), or a new company by its `name`. It is the command's `research` again, free, with no Claude request: HubSpot's view from our copy (`new`, `in_hubspot`, `open_deal`, `dissolved_deal` or `quiet`, with `last_activity`); for people with a Lead Finder tick, its lead card from the last 30 days and Property Daily's lease end and size from our copy, each with its day and source (`known`). `next`: `open_lead` (open the card, no cost), `open_prep` (in HubSpot and not quiet: open its call prep), `ask` (new or quiet: `question` like 'Research Northwind? About US$0.40.', with `cost_usd` from past research or US$0.40) or `needs_name`. `can_start` false: `blocked` has the words ('Researching a new company needs the Lead Finder. Ask your Platform admin.'). 404 `company_not_found` when `company_key` isn't open to this person. Behind the Call logs or the Meetings tick; a Viewer gets 403 `viewer_read_only`.
+         */
+        get: operations["read_assistant_research"];
+        put?: never;
+        /**
+         * Research a company
+         * @description Starts a Lead Finder run of one company in the background, after the card's Enter, 'yes' or tap (PLAN-V27 choices 18 to 20), and answers its `run_id` at once: follow it with GET /runs/{run_id}/events. Each `finding` event is one line with its source, as it arrives; `company_done` has the lead and its `tier`; `run_finished` ends it. It is a run like any other: the company cap, the run cap and the daily limit stop it as they stop a run, and it shows on the Runs page. It asks Claude behind people's own requests, with at most 2 at once, so nobody else waits. About US$0.34 to 0.42 a company (TBC). Send the card's `Idempotency-Key`: the same key and body give back the first run, so a double press starts one. Needs the Lead Finder's Start a run tick: 403 `feature_not_allowed` otherwise ('Researching a new company needs the Lead Finder. Ask your Platform admin.'), and a Viewer gets 403 `viewer_read_only`. 409 `run_already_active` while the run limit is full, `idempotency_key_reused` for a key sent with another body. 422 `research_name` for a name or city that can't be researched. 503 `runs_not_ready` while the run engine isn't running.
+         */
+        post: operations["start_assistant_research"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1595,6 +1619,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/lead-finder/leads/hubspot/preview-many": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview adding many leads to HubSpot
+         * @description Up to 25 leads (PLAN-V27 T3-1). Each is previewed as a single send is, one at a time, in the order given: a new company or the empty fields of one HubSpot has, the note and the list. A lead sent before gets its send back with `already_sent`. A lead that can't be previewed has its `problem`, and the others go on. The owner is the person asking, when they have a HubSpot user; otherwise none (TBC with Levi). Writes nothing, and works while writing is switched off.
+         */
+        post: operations["preview_many"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/lead-finder/leads/hubspot/send-many": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send many previewed leads to HubSpot
+         * @description Up to 25 (lead, write) pairs from `preview-many` (PLAN-V27 T3-1). Each is sent as a single send is, one at a time, once only: `sent`, `already_sent` (a second call sends nothing twice), or `failed` with plain words, and one failure never stops the rest. A sent lead's status is `sent`. Needs HUBSPOT_WRITE_ENABLED=true; until then the whole batch answers 409 hubspot_write_off and nothing is written.
+         */
+        post: operations["send_many"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/lead-finder/leads/map": {
         parameters: {
             query?: never;
@@ -1670,6 +1734,26 @@ export interface paths {
         get: operations["get_lead_hubspot"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/lead-finder/leads/{lead_id}/hubspot-match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settle a possible HubSpot match: the same company, or new
+         * @description For a lead whose HubSpot status is `possible_match` (PLAN-V27 T1-3). `pick: same` with the `hubspot_id` of one of its candidates links the lead to that company: its status becomes the company's own, or `quiet` when nobody has worked it for `hubspot_quiet_months`. `pick: new` says it isn't in HubSpot. The card is judged again with its saved facts, and says who settled it. Free: our HubSpot copy only. Answers 404 for an unknown lead, 409 `not_a_maybe` when it isn't a possible match (already settled), 422 `not_a_candidate` for another company, and 409 `hubspot_company_gone` when that company left our copy.
+         */
+        post: operations["settle_hubspot_match"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2785,7 +2869,7 @@ export interface components {
              * Action
              * @enum {string}
              */
-            action: "pre_read" | "log_call" | "task" | "email" | "open" | "change" | "send" | "cancel" | "unknown" | "unclear";
+            action: "pre_read" | "log_call" | "task" | "email" | "open" | "research" | "change" | "send" | "cancel" | "unknown" | "unclear";
             /**
              * Call Type
              * @description For a call: HubSpot's call type, Prospecting Call unless the command words said another, like 'log a follow-up call' (PLAN-V25 T3-1). None for other actions
@@ -2825,6 +2909,8 @@ export interface components {
              * @description The card's first line, like 'Log a call with James Sample at Sample Logistics. Follow-up task on Fri 21 Nov.' For `unclear`, the words as heard, for the bar's text line
              */
             read_back: string;
+            /** @description For research (PLAN-V27 T4-1): what we know and what happens next. None for other actions */
+            research?: components["schemas"]["AssistantResearch"] | null;
             task: components["schemas"]["AssistantTask"] | null;
             /**
              * Unsure
@@ -3276,6 +3362,133 @@ export interface components {
              */
             problem: string | null;
         };
+        /**
+         * AssistantResearch
+         * @description A research command, settled from what we already know: free, with no Claude request
+         *     (PLAN-V27 choice 17). Nothing is started: the card's Enter, 'yes' or tap does that, through
+         *     POST /assistant/research.
+         */
+        AssistantResearch: {
+            /**
+             * Area M2
+             * @description Its office size in square metres, from the same copy
+             */
+            area_m2: number | null;
+            /**
+             * Blocked
+             * @description Why they can't, for ask: 'Researching a new company needs the Lead Finder. Ask your Platform admin.' None when they can
+             */
+            blocked: string | null;
+            /**
+             * Can Start
+             * @description This person may start a research: the Lead Finder's Start a run tick, and not a Viewer
+             */
+            can_start: boolean;
+            /**
+             * City
+             * @description Its city in our copy, when known
+             */
+            city: string | null;
+            /**
+             * Company
+             * @description The name to research, as the card sends it to POST /assistant/research. Empty for needs_name and choose
+             */
+            company: string;
+            /**
+             * Company Key
+             * @description The company, when found: a HubSpot id, or lead:<id>. None when it is new
+             */
+            company_key: string | null;
+            /**
+             * Cost Usd
+             * @description For ask: about what one company's research costs (from past research, else US$0.40). None otherwise
+             */
+            cost_usd: string | null;
+            /**
+             * Hubspot
+             * @description HubSpot's view of it. None for needs_name
+             */
+            hubspot: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "quiet" | "possible_match") | null;
+            /**
+             * Known
+             * @description What we know, as the card's lines, in order: HubSpot, the lead card, the lease end, the size
+             */
+            known: components["schemas"]["ResearchFact"][];
+            /**
+             * Last Activity
+             * @description The last day anyone worked it in HubSpot (its last activity, or the day its last deal dissolved). None: never, or not in HubSpot
+             */
+            last_activity: string | null;
+            /** @description Its lead card from the last 30 days. Only for people with a Lead Finder tick */
+            lead: components["schemas"]["ResearchCard"] | null;
+            /**
+             * Lease End
+             * @description When its lease ends, from Property Daily or Arealytics in our copy. Only for people with a Lead Finder tick
+             */
+            lease_end: string | null;
+            /**
+             * Next
+             * @enum {string}
+             */
+            next: "open_lead" | "open_prep" | "ask" | "choose" | "needs_name";
+            /**
+             * Question
+             * @description For ask, when it can start: 'Research Northwind? About US$0.40.' None otherwise
+             */
+            question: string | null;
+        };
+        /**
+         * AssistantResearchIn
+         * @description A research to start, as the card has it.
+         */
+        AssistantResearchIn: {
+            /**
+             * City
+             * @description Its city, when known, like Perth (422 `research_name` when it isn't a place name)
+             * @example Perth
+             */
+            city?: string | null;
+            /**
+             * Company
+             * @description The name to research: the block's `research.company`, as it came. 2 to 80 characters and at most 8 words: letters, digits, spaces and & ' . , - ( ) / (422 `research_name` otherwise). For a company in our HubSpot copy while HubSpot names may not go to Claude, the server uses `said` instead
+             * @example Northwind
+             */
+            company: string;
+            /**
+             * Company Key
+             * @description The company, when found: a HubSpot id, or lead:<id>. Empty: a new company
+             * @example 201
+             */
+            company_key?: string | null;
+            /**
+             * Said
+             * @description The rep's words for the company, as heard (the command's `company.heard`). A HubSpot company is researched under these words while HubSpot names may not go to Claude; without them it is refused (422 `research_name`, "Say the company's name to research it.")
+             * @example North Wind
+             */
+            said?: string | null;
+        };
+        /**
+         * AssistantResearchStarted
+         * @description A research of one company, started in the background.
+         */
+        AssistantResearchStarted: {
+            /**
+             * Company
+             * @description The name being researched
+             */
+            company: string;
+            /**
+             * Run Id
+             * Format: uuid
+             * @description The run: follow it with GET /runs/{run_id}/events (finding, company_done with the tier, then run_finished)
+             */
+            run_id: string;
+            /**
+             * Status
+             * @description The run's status now: queued or running
+             */
+            status: string;
+        };
         /** AssistantTask */
         AssistantTask: {
             /**
@@ -3364,6 +3577,106 @@ export interface components {
              * @example Send Sample Logistics the floor plan
              */
             subject: string;
+        };
+        /** BatchPreview */
+        BatchPreview: {
+            /**
+             * Can Write
+             * @description Whether writing is switched on (HUBSPOT_WRITE_ENABLED)
+             */
+            can_write: boolean;
+            /** Items */
+            items: components["schemas"]["BatchPreviewItem"][];
+            owner: components["schemas"]["SendOwner"];
+            /**
+             * Waiting For
+             * @description Why writing can't happen yet, if it can't
+             */
+            waiting_for?: string | null;
+        };
+        /** BatchPreviewBody */
+        BatchPreviewBody: {
+            /**
+             * Lead Ids
+             * @description 1 to 25 leads, each once
+             */
+            lead_ids: string[];
+        };
+        /** BatchPreviewItem */
+        BatchPreviewItem: {
+            /**
+             * Already Sent
+             * @description It was sent before: Send leaves it as it is
+             */
+            already_sent: boolean;
+            /**
+             * Company
+             * @description The lead's company. null when the lead is gone
+             */
+            company: string | null;
+            /**
+             * Lead Id
+             * Format: uuid
+             */
+            lead_id: string;
+            /**
+             * Problem
+             * @description Why it couldn't be previewed, in plain words
+             */
+            problem: string | null;
+            /** @description Its preview, or its earlier send. null on failure */
+            write: components["schemas"]["WriteOut"] | null;
+        };
+        /** BatchSendBody */
+        BatchSendBody: {
+            /** Items */
+            items: components["schemas"]["BatchSendPair"][];
+        };
+        /** BatchSendItem */
+        BatchSendItem: {
+            /** Company */
+            company: string | null;
+            /**
+             * Lead Id
+             * Format: uuid
+             */
+            lead_id: string;
+            /**
+             * Problem
+             * @description Why it failed, in plain words
+             */
+            problem: string | null;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "sent" | "failed" | "already_sent";
+            write: components["schemas"]["WriteOut"] | null;
+        };
+        /** BatchSendOut */
+        BatchSendOut: {
+            /** Already Sent */
+            already_sent: number;
+            /** Failed */
+            failed: number;
+            /** Items */
+            items: components["schemas"]["BatchSendItem"][];
+            /** Sent */
+            sent: number;
+        };
+        /** BatchSendPair */
+        BatchSendPair: {
+            /**
+             * Lead Id
+             * Format: uuid
+             */
+            lead_id: string;
+            /**
+             * Write Id
+             * Format: uuid
+             * @description The write id the batch preview gave this lead
+             */
+            write_id: string;
         };
         /**
          * Blocked
@@ -4188,7 +4501,7 @@ export interface components {
              * @description Whether HubSpot already has this company
              * @enum {string}
              */
-            hubspot_status: "new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match";
+            hubspot_status: "new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match" | "quiet";
             /**
              * Lead Id
              * Format: uuid
@@ -4208,6 +4521,11 @@ export interface components {
             result: string;
             /** Score */
             score: number;
+            /**
+             * Tier
+             * @description Levi's tier: A, B, C or discard (PLAN-V27 T4-2: 'Done: Northwind is a B lead.'). Empty in a run from before it, and for a card with no tier.
+             */
+            tier?: string | null;
         };
         /** CompanyDoneEvent */
         CompanyDoneEvent: {
@@ -5484,6 +5802,55 @@ export interface components {
              */
             state: "pass" | "fail" | "estimated";
         };
+        /**
+         * FindingData
+         * @description One thing the research found, as it arrives (PLAN-V27 choice 19), for the Assistant's
+         *     progress: 'Found: Northwind hired 40 staff this year (news.example.com).' Plain words, with no
+         *     email address or phone number. Only a run the Assistant started sends them for now; Part 5's
+         *     loop sends the same event with the question it asks next.
+         */
+        FindingData: {
+            /**
+             * Company
+             * @description The company being researched, as the run names it
+             */
+            company: string;
+            /**
+             * Next Question
+             * @description What the research checks next, like 'A second office?' None: nothing said
+             */
+            next_question?: string | null;
+            /**
+             * Source Url
+             * @description The page it comes from. None: none
+             */
+            source_url: string | null;
+            /**
+             * Text
+             * @description One short plain sentence, without 'Found:'
+             * @example Northwind hired 40 staff this year.
+             */
+            text: string;
+        };
+        /** FindingEvent */
+        FindingEvent: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            data: components["schemas"]["FindingData"];
+            /**
+             * Seq
+             * @description 1, 2, 3 ... in the order the events happened
+             */
+            seq: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "finding";
+        };
         /** Fit */
         Fit: {
             /** Healthy */
@@ -5884,12 +6251,22 @@ export interface components {
              * @description Companies that might be the same one. A person decides.
              */
             candidates: components["schemas"]["MatchCandidate"][];
+            /**
+             * Confirmed By
+             * @description Who settled a possible match by hand: 'Same company' or 'It's new' on the lead card (PLAN-V27 T1-3). A HubSpot sync's relabel leaves a settled lead as it is.
+             */
+            confirmed_by: string | null;
             /** Hubspot Id */
             hubspot_id: string | null;
+            /**
+             * Last Activity
+             * @description When someone last worked the HubSpot company (a call, email, meeting, note or task), from our copy. Empty when it isn't in HubSpot or has no activity date (PLAN-V27).
+             */
+            last_activity: string | null;
             /** Last Dissolved */
             last_dissolved: string | null;
             /** Matched By */
-            matched_by: ("domain" | "name" | "hubspot_id" | "close_name" | "similar_profile" | "name_in_deal") | null;
+            matched_by: ("domain" | "name" | "hubspot_id" | "close_name" | "similar_profile" | "name_in_deal" | "same_name") | null;
             /** Name */
             name: string | null;
             /** Open Deals */
@@ -5900,7 +6277,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match";
+            status: "new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match" | "quiet";
         };
         /**
          * HubSpotOwnerChoice
@@ -5973,6 +6350,24 @@ export interface components {
              * @description Each active owner's id and name, by name (one with no name last)
              */
             owners: components["schemas"]["HubSpotOwnerChoice"][];
+        };
+        /**
+         * HubSpotPick
+         * @description Settle a possible HubSpot match (PLAN-V27 T1-3): `same` with one candidate's
+         *     `hubspot_id`, or `new`.
+         */
+        HubSpotPick: {
+            /**
+             * Hubspot Id
+             * @description With `same`: the HubSpot id of one of the lead's candidates.
+             */
+            hubspot_id?: string | null;
+            /**
+             * Pick
+             * @description same: it is that HubSpot company. new: it isn't in HubSpot.
+             * @enum {string}
+             */
+            pick: "same" | "new";
         };
         /** HubSpotStatus */
         HubSpotStatus: {
@@ -6517,7 +6912,8 @@ export interface components {
          *     A real run uses the model of its mode (above), which refuses the parts it doesn't use. So
          *     send only the parts of your mode: `cities`, `area`, `triggers`, `since_days`, `sources`,
          *     `target_companies`, `top_up` and `goal_leads` for discovery, `watchlist` for watchlist,
-         *     `companies` and `recheck` for company, and `caps` for every mode (testset has nothing else).
+         *     `companies`, `recheck` and `from_assistant` for company, and `caps` for every mode (testset has
+         *     nothing else).
          */
         LeadFinderRunParams: {
             /**
@@ -6546,6 +6942,12 @@ export interface components {
              * @description Used by mode company only: 1 to 25 companies
              */
             companies: components["schemas"]["CompanyIn"][];
+            /**
+             * From Assistant
+             * @description Used by mode company only. The Assistant started it, for one company (PLAN-V27 choice 19): it runs in the background, with at most 2 Claude requests at once.
+             * @default false
+             */
+            from_assistant: boolean;
             /**
              * Goal Leads
              * @description Used by mode discovery only, and no longer used (PLAN-V20). It is still accepted so a page that was open before the change can start a run, and then ignored: no run stops for a goal of good leads. A run researches every company it chooses, up to its company limit and its money limits.
@@ -6582,8 +6984,8 @@ export interface components {
             target_companies: number | null;
             /**
              * Top Up
-             * @description Used by mode discovery only (PLAN-V21 T1-6). When the sweeps come up short of the target, add companies from the HubSpot watchlist in the run's places, most likely first. It needs the OK for HubSpot names to go to Claude (`top_up.allowed` in the run options); without it nothing is added.
-             * @default true
+             * @description Used by mode discovery only, and no longer used (PLAN-V27 choice 5): a short run is not topped up from the HubSpot watchlist any more. It is still accepted so a saved run or schedule still loads.
+             * @default false
              */
             top_up: boolean;
             /**
@@ -6755,7 +7157,7 @@ export interface components {
              * Hubspot Status
              * @enum {string}
              */
-            hubspot_status: "new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match";
+            hubspot_status: "new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match" | "quiet";
             /**
              * Id
              * Format: uuid
@@ -7048,7 +7450,7 @@ export interface components {
              * Reason
              * @enum {string}
              */
-            reason: "close_name" | "similar_profile" | "name_in_deal";
+            reason: "same_name" | "close_name" | "similar_profile" | "name_in_deal";
             /** Score */
             score: number;
         };
@@ -8628,6 +9030,38 @@ export interface components {
              */
             stage: "open_deal" | "customer" | "past_customer" | "lost_deal" | "contacted" | "cold";
         };
+        /**
+         * ResearchCard
+         * @description The company's newest lead card from the last 30 days.
+         */
+        ResearchCard: {
+            /**
+             * Found On
+             * Format: date
+             * @description The day it was made, Melbourne time
+             */
+            found_on: string;
+            /**
+             * Lead Id
+             * Format: uuid
+             */
+            lead_id: string;
+            /**
+             * Link
+             * @description The card's page, like /leads/<id>
+             */
+            link: string;
+            /**
+             * Result
+             * @description Like pass, director_review, watch or drop
+             */
+            result: string;
+            /**
+             * Tier
+             * @description Levi's tier: A, B, C or discard. None: no tier yet
+             */
+            tier: string | null;
+        };
         /** ResearchCost */
         ResearchCost: {
             /** Angles From Memory */
@@ -8640,6 +9074,37 @@ export interface components {
             cost_usd: string;
             /** Web Searches */
             web_searches: number;
+        };
+        /**
+         * ResearchFact
+         * @description One thing we already know, as the card's line, with its date and source.
+         */
+        ResearchFact: {
+            /**
+             * Day
+             * @description The day it is from. None: no day (like not in HubSpot)
+             */
+            day: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "hubspot" | "lead" | "lease_end" | "size";
+            /**
+             * Source
+             * @description Where it is from: HubSpot, Lead Finder, Property Daily or Arealytics
+             */
+            source: string;
+            /**
+             * Text
+             * @description The card's line, like 'Northwind: not in HubSpot.' or 'Property Daily, 3 Oct: lease ends March 2028.'
+             */
+            text: string;
+            /**
+             * Url
+             * @description The page it came from, for a property tool's fact
+             */
+            url: string | null;
         };
         /**
          * ResearchRequest
@@ -9318,7 +9783,7 @@ export interface components {
             /** Warnings */
             warnings: string[];
         };
-        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunResumedEvent"] | components["schemas"]["PlanReadyEvent"] | components["schemas"]["SliceStartedEvent"] | components["schemas"]["SliceDoneEvent"] | components["schemas"]["SliceFailedEvent"] | components["schemas"]["MergedEvent"] | components["schemas"]["SweepStartedEvent"] | components["schemas"]["SweepDoneEvent"] | components["schemas"]["ToppedUpEvent"] | components["schemas"]["CompanySkippedEvent"] | components["schemas"]["CompanyStartedEvent"] | components["schemas"]["CompanyDoneEvent"] | components["schemas"]["CompanyFailedEvent"] | components["schemas"]["ProgressEvent"] | components["schemas"]["RunProblemEvent"] | components["schemas"]["CapReachedEvent"] | components["schemas"]["RunFinishedEvent"];
+        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunResumedEvent"] | components["schemas"]["PlanReadyEvent"] | components["schemas"]["SliceStartedEvent"] | components["schemas"]["SliceDoneEvent"] | components["schemas"]["SliceFailedEvent"] | components["schemas"]["MergedEvent"] | components["schemas"]["SweepStartedEvent"] | components["schemas"]["SweepDoneEvent"] | components["schemas"]["ToppedUpEvent"] | components["schemas"]["CompanySkippedEvent"] | components["schemas"]["CompanyStartedEvent"] | components["schemas"]["CompanyDoneEvent"] | components["schemas"]["CompanyFailedEvent"] | components["schemas"]["FindingEvent"] | components["schemas"]["ProgressEvent"] | components["schemas"]["RunProblemEvent"] | components["schemas"]["CapReachedEvent"] | components["schemas"]["RunFinishedEvent"];
         /** RunFacet */
         RunFacet: {
             /** Count */
@@ -9412,8 +9877,8 @@ export interface components {
             };
             /** @description How many companies a discovery run tries to research (PLAN-V21 T1-4) */
             target_companies: components["schemas"]["TargetOption"];
-            /** @description The top up from the HubSpot watchlist for a short run (PLAN-V21 T1-6) */
-            top_up: components["schemas"]["TopUpOption"];
+            /** @description Always off: the top up is gone (PLAN-V27 choice 5). Kept only so a page opened before the change still draws */
+            top_up?: components["schemas"]["TopUpOption"];
             /** Triggers */
             triggers: components["schemas"]["TriggerOption"][];
             /**
@@ -10159,6 +10624,19 @@ export interface components {
              * @description The id the preview gave. It is the write's key
              */
             write_id: string;
+        };
+        /** SendOwner */
+        SendOwner: {
+            /**
+             * Hubspot Owner Id
+             * @description Their HubSpot owner id. null: the companies get no owner (choice 15, TBC)
+             */
+            hubspot_owner_id: string | null;
+            /**
+             * Name
+             * @description The person who presses Send
+             */
+            name: string;
         };
         /**
          * SessionOut
@@ -11722,20 +12200,21 @@ export interface components {
         };
         /**
          * TopUpOption
-         * @description Whether a short discovery run is topped up from the HubSpot watchlist (PLAN-V21 T1-6).
+         * @description Kept for a Start page opened before PLAN-V27, which reads it (the review, M1): the top up
+         *     from the HubSpot watchlist is gone (choice 5), so it is always off. Goes in a later release.
          */
         TopUpOption: {
             /**
              * Allowed
-             * @description False while HubSpot names may not go to Claude: then nothing is added
+             * @default false
              */
             allowed: boolean;
-            /** Default */
-            default: boolean;
             /**
-             * Message
-             * @description Why it isn't allowed, in one plain sentence for Start. Empty when it is.
+             * Default
+             * @default false
              */
+            default: boolean;
+            /** Message */
             message?: string | null;
         };
         /**
@@ -14524,6 +15003,256 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssistantNames"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    read_assistant_research: {
+        parameters: {
+            query?: {
+                /** @description The rep's words for the company, as heard (never a choice's HubSpot name): the block's `company` comes from them */
+                name?: string;
+                /** @description The choice picked: a HubSpot id, or lead:<id> */
+                company_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantResearch"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    start_assistant_research: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Any unique text (a UUID is fine), made when the card asks. The same key and body give back the first run */
+                "idempotency-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantResearchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantResearchStarted"];
                 };
             };
             /** @description The request can't be understood */
@@ -22749,7 +23478,7 @@ export interface operations {
                 office_m2_min?: number | null;
                 office_m2_max?: number | null;
                 /** @description Repeat the key to match several values */
-                hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match")[] | null;
+                hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match" | "quiet")[] | null;
                 /** @description Repeat the key to match several values */
                 status?: ("new" | "watching" | "rejected" | "sent")[] | null;
                 /** @description Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values */
@@ -22917,7 +23646,7 @@ export interface operations {
                 office_m2_min?: number | null;
                 office_m2_max?: number | null;
                 /** @description Repeat the key to match several values */
-                hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match")[] | null;
+                hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match" | "quiet")[] | null;
                 /** @description Repeat the key to match several values */
                 status?: ("new" | "watching" | "rejected" | "sent")[] | null;
                 /** @description Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values */
@@ -23084,7 +23813,7 @@ export interface operations {
                 office_m2_min?: number | null;
                 office_m2_max?: number | null;
                 /** @description Repeat the key to match several values */
-                hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match")[] | null;
+                hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match" | "quiet")[] | null;
                 /** @description Repeat the key to match several values */
                 status?: ("new" | "watching" | "rejected" | "sent")[] | null;
                 /** @description Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values */
@@ -23232,6 +23961,252 @@ export interface operations {
             };
         };
     };
+    preview_many: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchPreviewBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchPreview"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    send_many: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchSendBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchSendOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     lead_map: {
         parameters: {
             query?: {
@@ -23249,7 +24224,7 @@ export interface operations {
                 office_m2_min?: number | null;
                 office_m2_max?: number | null;
                 /** @description Repeat the key to match several values */
-                hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match")[] | null;
+                hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match" | "quiet")[] | null;
                 /** @description Repeat the key to match several values */
                 status?: ("new" | "watching" | "rejected" | "sent")[] | null;
                 /** @description Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values */
@@ -23783,6 +24758,131 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WriteOut"] | null;
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    settle_hubspot_match: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lead_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HubSpotPick"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadDetail"];
                 };
             };
             /** @description The request can't be understood */

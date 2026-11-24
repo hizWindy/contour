@@ -85,16 +85,16 @@ export function setupLines(run: Run, names: DetailNames): DetailLine[] {
     })
   }
 
-  // PLAN-V21: how many companies a discovery run a person started aims for, and whether a short
-  // run tops up from the HubSpot watchlist. An automatic run has no target, so neither line shows.
+  // PLAN-V21: how many companies a discovery run a person started aims for. An automatic run has
+  // no target, so the line doesn't show. Only a run from before PLAN-V27 could top up from the
+  // HubSpot watchlist, so only one that asked for it says so.
   const target =
     typeof params.target_companies === 'number' ? params.target_companies : run.counts.target
   if (run.mode === 'discovery' && target !== null) {
     lines.push({ label: 'How many companies', value: pluralise(target, 'company', 'companies') })
-    lines.push({
-      label: 'Top up from HubSpot',
-      value: params.top_up === false ? 'No' : 'Yes, if the searches come up short',
-    })
+    if (params.top_up === true) {
+      lines.push({ label: 'Top up from HubSpot', value: 'Yes, if the searches come up short' })
+    }
   }
 
   const companies = Array.isArray(params.companies)

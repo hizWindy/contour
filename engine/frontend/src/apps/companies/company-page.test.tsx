@@ -3,8 +3,8 @@
  * screen, and the page keeps room for it, so what the keyboard lands on is never under it (WCAG
  * 2.2 2.4.11). Made-up names only.
  */
-import { screen } from '@testing-library/react'
-import { Route, Routes } from 'react-router'
+import { screen, waitFor } from '@testing-library/react'
+import { Route, Routes, useLocation } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import type { CompanyDetail } from '@/api/types'
 import { renderWithProviders } from '@/test/render'
@@ -58,12 +58,20 @@ function mockServer(): void {
   )
 }
 
-function renderPage() {
+function Where() {
+  const location = useLocation()
+  return <p data-testid="where">{`${location.pathname}${location.search}`}</p>
+}
+
+function renderPage(route = '/companies/101') {
   return renderWithProviders(
-    <Routes>
-      <Route path="/companies/:key" element={<CompanyPage />} />
-    </Routes>,
-    { route: '/companies/101' },
+    <>
+      <Routes>
+        <Route path="/companies/:key" element={<CompanyPage />} />
+      </Routes>
+      <Where />
+    </>,
+    { route },
   )
 }
 
@@ -83,5 +91,14 @@ describe("a company's own page", () => {
     await screen.findByRole('heading', { level: 1, name: 'Sample Logistics Pty Ltd' })
     expect(document.querySelector('[data-slot=prep-bar]')).toBeNull()
     expect(document.documentElement.style.scrollPaddingBottom).toBe('')
+  })
+
+  it('opens call prep with ?prep=1 (research in the Assistant, PLAN-V27 T4-2), then drops it', async () => {
+    mockServer()
+    renderPage('/companies/101?prep=1')
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByTestId('where')).toHaveTextContent(/^\/companies\/101$/)
+    })
   })
 })

@@ -9,6 +9,7 @@ Run it from engine/backend:
     uv run lead-finder forms
     uv run lead-finder refill --yes
     uv run lead-finder why-now --lead <id> --lead <id> --yes
+    uv run lead-finder compare-research --yes
 The first two spend money on Claude. Every request is in the search log. `rejudge` is free: it
 judges the saved leads again with the current rules, from their cards, and saves nothing.
 `rejudge --save --yes` also saves the new result, score, tier and confidence on each lead
@@ -20,6 +21,9 @@ estimated cost, and spends nothing.
 the daily quota). It needs SIGNALHIRE_API_KEY in engine/.env, and uses no database.
 `forms` checks that every answer form Claude gets is under Anthropic's limits for strict forms
 (free). With `--live --yes` it also sends each form to Claude once, at low effort (a few cents).
+`compare-research` (PLAN-V27 T5-2) runs today's research and Quick Deep Research's loop on the
+10 test companies, with memory off, and prints the facts, signs, cost and times of each. It spends
+money (at most US$20), so it needs `--yes`, on Al-khair's word.
 `refill` fills the answer form again for the leads whose form failed, from the notes memory
 keeps: no web search, about US$0.35 a lead, two requests (PLAN-V4 B5, PLAN-V20).
 """
@@ -144,6 +148,28 @@ async def _research(requests: list[ResearchRequest]) -> list[LeadCard]:
     finally:
         await get_engine().dispose()
     return cards
+
+
+async def _compare() -> int:
+    from apps.lead_finder.compare import compare, table
+    from core.db.engine import get_engine, get_sessionmaker
+    from core.memory.embedder import get_embedder
+
+    testset = load_testset()
+    requests = [
+        ResearchRequest(company=c.name, city=c.city, website=c.website) for c in testset.companies
+    ]
+    try:
+        async with get_sessionmaker()() as session:
+            measured, stopped = await compare(
+                session, get_embedder(), get_claude(), load_rules(), get_settings(), requests
+            )
+    finally:
+        await get_engine().dispose()
+    print(table(measured))
+    if stopped:
+        print(stopped)
+    return 0
 
 
 async def _relabel(*, write: bool) -> str:
@@ -545,6 +571,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     why_now.add_argument("--run", type=uuid.UUID, help="Every lead of this run.")
     why_now.add_argument("--yes", action="store_true", help="Confirm the spend.")
+    compare_cmd = commands.add_parser(
+        "compare-research",
+        help="Today's research and Quick Deep Research on the 10 test companies, memory off "
+        "(costs money, at most US$20; PLAN-V27 T5-2).",
+    )
+    compare_cmd.add_argument("--yes", action="store_true", help="Confirm the spend.")
     args = parser.parse_args(argv)
 
     try:
@@ -563,7 +595,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _headcount(args)
         if args.command == "forms":  # no database either
             return _forms(args)
+        if args.command == "compare-research" and not args.yes:
+            from apps.lead_finder.compare import LIMIT_USD, most_per_company
+
+            count = len(load_testset().companies)
+            most = min(most_per_company(get_settings()) * count, LIMIT_USD)
+            print(
+                f"This researches {count} companies twice (today's research and the deep loop), "
+                f"memory off. At most US${most:.2f}. Add --yes to go ahead."
+            )
+            return 1
         migrate()
+        if args.command == "compare-research":
+            return asyncio.run(_compare(), loop_factory=loop_factory())
         if args.command == "refill":
             return _refill_command(args)
         if args.command == "why-now":

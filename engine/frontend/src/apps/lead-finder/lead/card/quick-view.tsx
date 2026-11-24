@@ -159,6 +159,7 @@ export function QuickView({ lead }: { lead: LeadDetail }) {
           <span className="flex flex-wrap items-center gap-2">
             <InHubSpotBadge
               status={lead.hubspot.status}
+              lastActivity={lead.hubspot.last_activity}
               name={lead.hubspot.name}
               href={sent?.hubspot_url ?? null}
             />

@@ -236,7 +236,9 @@ async def test_the_choose_rules_skip_open_deals_and_fresh_leads(
         e["name"]: e["reason"]
         for e in of_type(await stored_json(session_factory, run_id), "company_skipped")
     }
-    assert skipped["Kent Town Legal"].startswith("Open deal in HubSpot")
+    # PLAN-V27 choice 7: the companies already in HubSpot are one line, not one each
+    assert "Kent Town Legal" not in skipped
+    assert skipped["1 company"] == "already in HubSpot"
     assert skipped["Boxhill Software"].startswith("researched 2 days ago")
     assert row.counts["researched"] == 3
 
@@ -675,6 +677,7 @@ async def test_a_run_without_the_web_finds_its_companies_in_property_dailys_feed
 
     monkeypatch.setattr(run_sources, "recent_items", recent)
     ready = lf_settings(
+        tool_feeds_find_companies=True,  # the feed as before PLAN-V27 (its A6 switch)
         property_daily_enabled=True,
         property_daily_username="someone",
         property_daily_password="something",
@@ -719,7 +722,7 @@ async def test_a_run_without_the_web_finds_its_companies_in_property_dailys_feed
 async def test_a_run_that_names_a_tool_that_isnt_ready_is_refused(
     make_lf_manager: MakeLeadFinderManager,
 ) -> None:
-    manager = make_lf_manager(FakeClaude())
+    manager = make_lf_manager(FakeClaude(), settings=lf_settings(tool_feeds_find_companies=True))
     with pytest.raises(Problem) as refused:
         await start(manager, "discovery", {**DISCOVERY, "sources": ["web", "property_daily"]})
     assert (refused.value.status, refused.value.code) == (422, "source_not_ready")

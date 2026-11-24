@@ -65,6 +65,7 @@ from apps.lead_finder.fields import (
     CompanyExtrasForm,
     CompanyFacts,
     Fact,
+    Note,
     TriggerFound,
     join_facts,
 )
@@ -104,6 +105,7 @@ from apps.lead_finder.property import (
     office_hint_lines,
     record_signs,
 )
+from apps.lead_finder.quiet import quiet_status
 from apps.lead_finder.rules import MAX_DAMPENER_SEARCHES, LeadFinderRules, Result
 from apps.lead_finder.sanitize import (
     clean_company_name,
@@ -152,6 +154,7 @@ from core.hubspot.matching import (
     Status,
     match_company,
 )
+from core.hubspot.meetings import without_contact_details
 from core.hubspot.profiles import build_profile_text_from_facts
 from core.memory.embedder import Embedder
 from core.memory.models import MemoryItem
@@ -197,6 +200,10 @@ FORM_FAILED_SUMMARY = (
     "The facts are missing: Claude couldn't fill in the answer form. Re-check this lead."
 )
 NOTE_MAX_CHARS = 400  # a note's claim: one line, cut after parsing (a long answer is paid for)
+# The findings one angle sends the Assistant as it answers (PLAN-V27 choice 19, TBC): the first
+# few, so the progress stays short. Every note still goes on the card.
+FINDINGS_PER_ANGLE = 3
+FINDING_MAX_CHARS = 300  # core.runs.schemas.FINDING_TEXT_MAX
 # A sign discovery found that the research didn't find again (PLAN-V21 T1-8): its words on the card
 SEARCH_SIGN_WORDS = "Sign from the search, not checked by the research"
 SEARCH_SIGN_CHARS = 240  # like discovery's own sentence of what happened
@@ -248,6 +255,20 @@ class HubSpotOut(BaseModel):
     last_dissolved: date | None
     candidates: list[MatchCandidate] = Field(
         default_factory=list, description="Companies that might be the same one. A person decides."
+    )
+    last_activity: date | None = Field(
+        None,
+        description=(
+            "When someone last worked the HubSpot company (a call, email, meeting, note or task), "
+            "from our copy. Empty when it isn't in HubSpot or has no activity date (PLAN-V27)."
+        ),
+    )
+    confirmed_by: str | None = Field(
+        None,
+        description=(
+            "Who settled a possible match by hand: 'Same company' or 'It's new' on the lead card "
+            "(PLAN-V27 T1-3). A HubSpot sync's relabel leaves a settled lead as it is."
+        ),
     )
 
 
@@ -538,9 +559,12 @@ async def research_company(
     # first, in place of the property angle (PLAN-V11 C2).
     tenure = context.focus == "tenure"
     try:
-        angles = TENURE_ANGLES if tenure else ANGLES
-        todo = [angle for angle in angles if angle not in covered]
-        await _search(job, claude, [(a, _angle_prompt(a, job)) for a in todo])
+        if context.deep and not tenure:  # Quick Deep Research (PLAN-V27 Part 5, a test)
+            await _deep_search(job, claude, covered)
+        else:
+            angles = TENURE_ANGLES if tenure else ANGLES
+            todo = [angle for angle in angles if angle not in covered]
+            await _search(job, claude, [(a, _angle_prompt(a, job)) for a in todo])
 
         # 3. Fill the form, and check the sources
         prompt = extract_prompt(rules)
@@ -904,7 +928,11 @@ async def _judge_and_card(
         found_name=facts.name,
         fuzzy_min=settings.match_fuzzy_min,
         profile_min=settings.match_profile_min,
+        name_needs_city=True,  # the same name in another city is a maybe (PLAN-V27 choice 26)
     )
+    # A HubSpot company nobody has worked for a while is `quiet` on the card (PLAN-V27 choice 3).
+    # The rules below still judge the match itself.
+    quiet = await quiet_status(session, hubspot, settings.hubspot_quiet_months, job.today)
     # The office's size, lease end and move-in date: the first source in `data_sources` that has
     # one (the property tools, HubSpot, then the research), and the signs the records show
     # (PLAN-V16 T1-8). The others stay on the card.
@@ -942,7 +970,9 @@ async def _judge_and_card(
         contact_role=facts.contact_role,
         opening_line=facts.opening_line,
         facts=facts,
-        hubspot=HubSpotOut(**asdict(hubspot)),
+        hubspot=HubSpotOut(
+            **{**asdict(hubspot), "status": quiet.status}, last_activity=quiet.last_activity
+        ),
         notes=[
             NoteOut(
                 claim=note.claim,
@@ -1099,6 +1129,7 @@ async def _search(job: Job, claude: Claude, prompts: list[tuple[str, str]]) -> N
             raise
         job.budget.record(reply, reserved=granted, on_spend=job.context.on_reply)
         job.replies.append((f"search:{angle}", reply))
+        await _send_findings(job, reply)
         return angle, reply
 
     results = await asyncio.gather(*(one(a, p) for a, p in prompts), return_exceptions=True)
@@ -1113,13 +1144,92 @@ async def _search(job: Job, claude: Claude, prompts: list[tuple[str, str]]) -> N
         if reply.parsed is None:
             job.problems.append(f"{angle}: the answer didn't fit the form ({reply.stop_reason}).")
             continue
-        seen = {url_key(source.url) for source in reply.sources}
-        for note in reply.parsed.notes:
-            if url_key(note.url) in seen and safe_http_url(note.url):
-                claim = one_line(note.claim, NOTE_MAX_CHARS)
-                job.notes.append(FoundNote(claim, note.url, note.published, angle, False))
+        for note in _seen_notes(reply):
+            claim = one_line(note.claim, NOTE_MAX_CHARS)
+            job.notes.append(FoundNote(claim, note.url, note.published, angle, False))
     if unavailable is not None:
         raise unavailable
+
+
+def _seen_notes(reply: Reply[AngleNotes]) -> list[Note]:
+    """The notes whose link the web tools really returned, and is a plain web address."""
+    if reply.parsed is None:
+        return []
+    seen = {url_key(source.url) for source in reply.sources}
+    return [
+        note for note in reply.parsed.notes if url_key(note.url) in seen and safe_http_url(note.url)
+    ]
+
+
+async def _deep_search(job: Job, claude: Claude, covered: set[str]) -> None:
+    """Quick Deep Research's loop (deep.py) in place of the angles: its notes join the job's, and
+    the answer form, the gap check, the match and the score go on as for the angles. Its first
+    questions skip what memory, Signal Hire and the property tools already answered."""
+    from apps.lead_finder.deep import DeepSetup, deep_search  # it imports nothing from here
+
+    city = job.request.city
+    metro = city_of(city, job.rules) if city else None
+    office = office_hint_lines(job.from_tools, metro, job.rules, job.settings, job.today)
+    answered = set(covered)
+    if job.from_tools is not None and any(r.lease_end for r in job.from_tools.records):
+        answered.add("property")
+    if job.early_staff is not None and job.early_staff.candidate is not None:
+        answered.add("people")
+    setup = DeepSetup(
+        company=job.company,
+        city=city,
+        hints=f"{_hints(job)}{_property_hints(job)}",
+        covered=frozenset(answered),
+        known=(*(note.claim for note in job.notes), *office),
+        system=research_prompt().text,
+        model=job.settings.model_deep,
+        effort=job.effort,
+        blocked=job.blocked,
+        fetches=job.settings.fetches_per_request,
+    )
+    send = job.context.on_finding
+
+    async def found(text: str, url: str, next_question: str | None) -> None:
+        if send is None:
+            return
+        line = one_line(without_contact_details(text), FINDING_MAX_CHARS)
+        if not line:
+            return
+        try:
+            await send(line, url, next_question)
+        except Exception as error:  # a cancel still stops the research
+            log.warning("finding_not_sent", extra={"kind": type(error).__name__})
+
+    result = await deep_search(
+        claude,
+        setup,
+        job.budget,
+        searches=job.settings.searches_per_request,
+        on_finding=found if send is not None else None,
+        on_reply=job.context.on_reply,
+    )
+    for note in result.notes:
+        job.notes.append(FoundNote(note.claim, note.url, note.published, "deep", False))
+    job.replies.extend(result.replies)
+    job.problems.extend(result.problems)
+
+
+async def _send_findings(job: Job, reply: Reply[AngleNotes]) -> None:
+    """The first few notes of an angle's answer, as they arrive, to whoever follows the research
+    (PLAN-V27 choice 19): one plain line each, with no email address or phone number. Sending
+    never stops the research: a failure is logged."""
+    send = job.context.on_finding
+    if send is None:
+        return
+    for note in _seen_notes(reply)[:FINDINGS_PER_ANGLE]:
+        text = one_line(without_contact_details(note.claim), FINDING_MAX_CHARS)
+        if not text:
+            continue
+        try:
+            await send(text, note.url, None)
+        except Exception as error:  # a cancel still stops the research
+            log.warning("finding_not_sent", extra={"kind": type(error).__name__})
+            return
 
 
 async def _company_details(
@@ -1752,7 +1862,7 @@ def _lead_values(
         "staff_in_city": staff if isinstance(staff, int) and not isinstance(staff, bool) else None,
         **verdict_columns(card),
         "contact_role": clip(card.contact_role, LIMITS["lead.contact_role"]),
-        "hubspot_status": hubspot.status,
+        "hubspot_status": card.hubspot.status,  # `quiet` included (PLAN-V27)
         "hubspot_id": hubspot.hubspot_id,
         "cost_usd": card.research.cost_usd,
         "web_searches": card.research.web_searches,

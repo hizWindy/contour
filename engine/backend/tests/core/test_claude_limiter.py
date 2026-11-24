@@ -331,3 +331,69 @@ def test_a_late_release_from_a_finished_loop_does_not_free_a_place_in_the_next_o
         assert gate.in_flight == 0
 
     asyncio.run(second_loop())
+
+
+# --- Work in the background (PLAN-V27 choice 20) ----------------------------------------------
+
+
+class Asker:
+    """Like `Holder`, for a work with a key that may wait `behind` or hold at `most` places."""
+
+    def __init__(
+        self,
+        gate: ClaudeGate,
+        name: str,
+        entered: list[str],
+        *,
+        key: str,
+        behind: bool = False,
+        most: int | None = None,
+    ) -> None:
+        self.name = name
+        self.leave = asyncio.Event()
+        self.task = asyncio.create_task(self._run(gate, entered, key, behind, most))
+
+    async def _run(
+        self, gate: ClaudeGate, entered: list[str], key: str, behind: bool, most: int | None
+    ) -> None:
+        async with gate.acquire(key, behind=behind, most=most):
+            entered.append(self.name)
+            await self.leave.wait()
+
+
+async def test_a_command_that_comes_later_goes_ahead_of_waiting_research() -> None:
+    gate = ClaudeGate(1)
+    entered: list[str] = []
+    first = Asker(gate, "first", entered, key="prep:1")
+    await settle()
+    research = Asker(gate, "research", entered, key="run:r", behind=True)
+    await settle()
+    command = Asker(gate, "command", entered, key="cmd:1")
+    await settle()
+    assert entered == ["first"]
+    first.leave.set()
+    await settle()
+    assert entered == ["first", "command"]  # the command came later but goes first
+    command.leave.set()
+    await settle()
+    assert entered == ["first", "command", "research"]
+    research.leave.set()
+    await finished(first.task, command.task, research.task)
+
+
+async def test_a_research_never_holds_more_than_its_places_and_never_blocks_the_line() -> None:
+    gate = ClaudeGate(4)
+    entered: list[str] = []
+    questions = [Asker(gate, f"q{n}", entered, key="run:r", behind=True, most=2) for n in range(4)]
+    await settle()
+    assert entered == ["q0", "q1"]  # 2 places, though 4 are free
+    other = Asker(gate, "other", entered, key="prep:2")
+    await settle()
+    assert entered == ["q0", "q1", "other"]  # someone else's request starts at once
+    questions[0].leave.set()
+    await settle()
+    assert entered == ["q0", "q1", "other", "q2"]
+    for asker in [*questions, other]:
+        asker.leave.set()
+    await finished(*(asker.task for asker in [*questions, other]))
+    assert (gate.in_flight, gate.waiting) == (0, 0)

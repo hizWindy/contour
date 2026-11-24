@@ -308,6 +308,27 @@ export function DataTable<TData>({
                   const title = header.isPlaceholder
                     ? null
                     : flexRender(header.column.columnDef.header, header.getContext())
+                  const sortable = canSort ? (
+                    <button
+                      type="button"
+                      onClick={header.column.getToggleSortingHandler()}
+                      className={cn(
+                        '-mx-1 inline-flex items-center gap-1 rounded-sm px-1 font-semibold hover:text-foreground',
+                        right && 'flex-row-reverse',
+                      )}
+                    >
+                      <span>{title}</span>
+                      {sorted === 'asc' ? (
+                        <ArrowUp aria-hidden="true" className="size-4" />
+                      ) : sorted === 'desc' ? (
+                        <ArrowDown aria-hidden="true" className="size-4" />
+                      ) : (
+                        <ArrowUpDown aria-hidden="true" className="size-4 text-muted-foreground" />
+                      )}
+                    </button>
+                  ) : (
+                    title
+                  )
                   return (
                     <TableHead
                       key={header.id}
@@ -323,30 +344,12 @@ export function DataTable<TData>({
                         meta?.sticky && 'sm:left-0 sm:z-20',
                       )}
                     >
-                      {canSort ? (
-                        <button
-                          type="button"
-                          onClick={header.column.getToggleSortingHandler()}
-                          className={cn(
-                            '-mx-1 inline-flex items-center gap-1 rounded-sm px-1 font-semibold hover:text-foreground',
-                            right && 'flex-row-reverse',
-                          )}
-                        >
-                          <span>{title}</span>
-                          {sorted === 'asc' ? (
-                            <ArrowUp aria-hidden="true" className="size-4" />
-                          ) : sorted === 'desc' ? (
-                            <ArrowDown aria-hidden="true" className="size-4" />
-                          ) : (
-                            <ArrowUpDown
-                              aria-hidden="true"
-                              className="size-4 text-muted-foreground"
-                            />
-                          )}
-                        </button>
-                      ) : (
-                        title
-                      )}
+                      {/* One shape for every header, so a control arriving later never
+                          replaces the sort button under the pointer. */}
+                      <span className="inline-flex items-center gap-3">
+                        {meta?.headStart}
+                        {sortable}
+                      </span>
                     </TableHead>
                   )
                 })}

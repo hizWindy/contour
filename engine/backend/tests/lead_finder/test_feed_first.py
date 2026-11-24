@@ -21,6 +21,7 @@ from core.config import ENGINE_DIR, Settings
 from core.hubspot.importer import read_export
 from core.hubspot.service import save_export
 from core.runs.manager import RunManager
+from core.runs.schemas import RunCreate
 from core.sources import store
 from core.sources.models import SourceState
 from core.sources.property_daily.parse import Parsed
@@ -37,6 +38,7 @@ READY = {
     "property_daily_enabled": True,
     "property_daily_username": "someone",
     "property_daily_password": "something",
+    "tool_feeds_find_companies": True,  # the feed as before PLAN-V27 (its A6 switch)
 }
 BOTH = {
     "cities": ["Melbourne"],
@@ -204,3 +206,52 @@ async def test_a_run_with_no_web_search_is_never_topped_up(
     assert row.status == "done"
     assert row.counts["topped_up"] == 0
     assert row.counts["researched"] == 1  # the email's one item
+
+
+# --- Property Daily is a trigger, not a source of leads (PLAN-V27 T2-1, choice 8) ---------------
+
+WEB_ONLY = {**READY, "tool_feeds_find_companies": False}  # choice 8, once S2 and A6 allow
+
+
+async def test_a_run_finds_companies_on_the_web_only_and_reads_no_new_email(
+    make_lf_manager: MakeLeadFinderManager,
+    session_factory: async_sessionmaker[AsyncSession],
+    reader: EmailReader,
+) -> None:
+    """Property Daily is ready and the run names it, but the feed's switch is off:
+    no email is read, no item becomes a company found, and the saved `sources` is ignored."""
+    manager = make_lf_manager(FakeClaude(), settings=lf_settings(**WEB_ONLY))
+    row = await run(manager, session_factory, BOTH)
+
+    assert row.status == "done"
+    assert reader.feeds == []  # no new email read at the start
+    events = await stored_json(session_factory, row.id)
+    plan = next(event["data"] for event in events if event["type"] == "plan_ready")
+    assert plan["companies"] == 0  # nothing from the feed
+    assert plan["slices"] > 0  # the web is searched
+    async with session_factory() as session:
+        leads = (await session.scalars(select(Lead).where(Lead.run_id == row.id))).all()
+    assert COMPANY not in [lead.company for lead in leads]
+    assert row.counts["by_source"].get("property_daily", 0) == 0
+
+
+async def test_an_old_saved_choice_without_the_web_is_ignored(
+    make_lf_manager: MakeLeadFinderManager,
+    session_factory: async_sessionmaker[AsyncSession],
+    reader: EmailReader,
+) -> None:
+    """A run saved with Property Daily alone, and Property Daily not ready, while the feeds don't
+    find companies: no refusal, and the run searches the web."""
+    manager = make_lf_manager(FakeClaude(), settings=lf_settings(tool_feeds_find_companies=False))
+    row = await run(manager, session_factory, {**BOTH, "sources": ["property_daily"]})
+    assert row.status == "done"
+    plan = next(
+        event["data"]
+        for event in await stored_json(session_factory, row.id)
+        if event["type"] == "plan_ready"
+    )
+    assert plan["slices"] > 0
+    estimate = await manager.estimate(
+        RunCreate(app=APP, mode="discovery", params={**BOTH, "sources": ["property_daily"]})
+    )
+    assert estimate.valid and estimate.slices > 0

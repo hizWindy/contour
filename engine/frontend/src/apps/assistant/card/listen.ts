@@ -30,6 +30,11 @@ export interface ListenOptions {
   env?: MicEnv
   makeTool?: VoiceToolMaker | null
   ms?: number
+  /**
+   * Reads the words heard so far: "send it" or "cancel" by default. The research card reads
+   * "yes" too (PLAN-V27 T4-2).
+   */
+  read?: (text: string) => 'send' | 'cancel' | null
 }
 
 /**
@@ -44,6 +49,7 @@ export function listenForSendIt({
   env,
   makeTool,
   ms = LISTEN_MS,
+  read = sendOrCancel,
 }: ListenOptions): (quietly?: boolean) => void {
   let over = false
   const mic = new MicSession({
@@ -69,7 +75,7 @@ export function listenForSendIt({
       end()
       return
     }
-    const heard = sendOrCancel(mic.text())
+    const heard = read(mic.text())
     if (heard === null) return
     end()
     if (heard === 'send') onSend()

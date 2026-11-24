@@ -10,6 +10,11 @@ code that asks never names a lane. The places where work starts do:
 
 Anything else (start-up, the command line) is Jobs. asyncio copies a context into each task it
 makes, so work started in the background keeps the lane and the person of whoever started it.
+
+Work a person starts but doesn't sit and wait for, like a research the Assistant runs in the
+background (PLAN-V27 choice 20), is People work that waits `behind` the rest of its lane: a
+command or a call note that comes later still goes first. `most` caps how many places it holds at
+once (2), so it never fills the lane.
 """
 
 import uuid
@@ -28,6 +33,8 @@ class Work:
     lane: Lane = "jobs"
     user_id: uuid.UUID | None = None  # the person who started it. None: nobody did, like a schedule
     key: str | None = None  # what a screen asks the wait of, like "prep:<id>"
+    behind: bool = False  # waits behind the lane's other requests (PLAN-V27 choice 20)
+    most: int | None = None  # the most places it holds at once. None: no cap of its own
 
 
 _NOBODY: Final = Work()  # frozen, so one can be shared

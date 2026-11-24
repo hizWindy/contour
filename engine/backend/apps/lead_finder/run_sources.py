@@ -18,6 +18,12 @@ the contract part 2).
   to a firm) is never a reason to look at a company. The merge then makes a company found by a tool
   and by the web one candidate.
 
+**Web only (PLAN-V27 choice 8).** Property Daily and Arealytics are triggers, not sources of leads:
+while `tool_feeds_find_companies` is off (on until S2 and A6), a run reads no tool's feed and no new
+emails, and a saved `sources` is ignored (`web_only`), so it finds companies on the web only. The
+research still looks each company up in the tools (`property.py`), and their lease ends, sizes and
+signs count as before. Switched on, the feed works as described above.
+
 **Two ways to ask whether a tool is ready.** The Start page asks `live_source_options`, which reads
 `core.sources.reader.source_availability` (Track 2, joined at M1): it also knows a tool paused for
 24 hours after a block. The checks that must stay pure (a run's start, `picked_tools`) read the
@@ -120,11 +126,22 @@ async def live_source_options(
     return found
 
 
+def web_only[P: (DiscoveryParams, LeadFinderRunParams)](params: P, settings: Settings) -> P:
+    """The params as a run uses them: with `tool_feeds_find_companies` off, a saved `sources` is
+    ignored, so the run searches the web (PLAN-V27 choice 8)."""
+    if settings.tool_feeds_find_companies or params.sources is None:
+        return params
+    return params.model_copy(update={"sources": None})
+
+
 def picked_tools(
     params: DiscoveryParams | LeadFinderRunParams, settings: Settings
 ) -> list[SourceId]:
     """The tools whose feed the run reads: the ones it names, or every ready one when it names
-    none. A tool it names must be ready (`check_sources`)."""
+    none. A tool it names must be ready (`check_sources`). None while the feeds don't find
+    companies (PLAN-V27 choice 8)."""
+    if not settings.tool_feeds_find_companies:
+        return []
     ready = tool_readiness(settings)
     if params.sources is None:
         return [tool for tool in SOURCE_IDS if ready[tool].ready]
@@ -133,8 +150,9 @@ def picked_tools(
 
 def check_sources(params: DiscoveryParams, settings: Settings) -> None:
     """Raises a 422 `source_not_ready` when the run names a tool that isn't ready, with the tool's
-    own sentence. Pure: the run manager and the estimate both call it."""
-    if params.sources is None:
+    own sentence. Pure: the run manager and the estimate both call it. Nothing to check while
+    the feeds don't find companies: `sources` is ignored then (PLAN-V27 choice 8)."""
+    if params.sources is None or not settings.tool_feeds_find_companies:
         return
     ready = tool_readiness(settings)
     late = [source for source in params.sources if not ready[source].ready]

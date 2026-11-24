@@ -10,7 +10,7 @@ never be accepted from a caller.
 """
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Literal
@@ -22,6 +22,9 @@ Origin = Literal["typed", "web", "hubspot"]  # where the company name came from
 # money). tenure: the office questions first, for the lease and tenure run (PLAN-V11 C2).
 Focus = Literal["growth", "tenure"]
 OnReply = Callable[[Reply[Any]], None]  # called as each Claude reply arrives
+# Called with (one plain line, its link, the question asked next or None) as each finding
+# arrives (PLAN-V27 choices 19 and 22). Today's research has no next question; Part 5's loop does.
+OnFinding = Callable[[str, str, str | None], Awaitable[None]]
 
 
 @dataclass(frozen=True)
@@ -80,3 +83,9 @@ class ResearchContext:
     # a meter of its own, set by the settings.
     signalhire_credits: CreditMeter | None = None
     focus: Focus = "growth"  # tenure: the lease and tenure run asks the office questions first
+    # Who follows the research as it goes, like the Assistant (PLAN-V27 choice 19). None: nobody
+    on_finding: OnFinding | None = None
+    # Quick Deep Research (PLAN-V27 Part 5): search with the loop of questions (deep.py) in place
+    # of the four angles. Only the Assistant's research, and only while `assistant_research_style`
+    # is `deep`.
+    deep: bool = False

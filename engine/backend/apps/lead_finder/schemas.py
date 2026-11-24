@@ -129,19 +129,6 @@ class TargetOption(BaseModel):
     )
 
 
-class TopUpOption(BaseModel):
-    """Whether a short discovery run is topped up from the HubSpot watchlist (PLAN-V21 T1-6)."""
-
-    default: bool
-    allowed: bool = Field(
-        description="False while HubSpot names may not go to Claude: then nothing is added"
-    )
-    message: str | None = Field(
-        None,
-        description="Why it isn't allowed, in one plain sentence for Start. Empty when it is.",
-    )
-
-
 class OptionCaps(BaseModel):
     run_cap_usd: Decimal
     max_companies: int
@@ -161,6 +148,15 @@ class SourceOption(BaseModel):
         "it is ready.",
         examples=["Property Daily is switched off. An Admin can switch it on."],
     )
+
+
+class TopUpOption(BaseModel):
+    """Kept for a Start page opened before PLAN-V27, which reads it (the review, M1): the top up
+    from the HubSpot watchlist is gone (choice 5), so it is always off. Goes in a later release."""
+
+    default: bool = False
+    allowed: bool = False
+    message: str | None = None
 
 
 class RunOptions(BaseModel):
@@ -183,7 +179,9 @@ class RunOptions(BaseModel):
         description="How many companies a discovery run tries to research (PLAN-V21 T1-4)"
     )
     top_up: TopUpOption = Field(
-        description="The top up from the HubSpot watchlist for a short run (PLAN-V21 T1-6)"
+        default_factory=TopUpOption,
+        description="Always off: the top up is gone (PLAN-V27 choice 5). Kept only so a page "
+        "opened before the change still draws",
     )
     sources: dict[RunSource, SourceOption] = Field(
         description=(
@@ -349,6 +347,22 @@ class LeadDetail(LeadCard):
         default_factory=list,
         description="Rivals to check: competitors found because this is a good lead in a booming "
         "industry (PLAN-V9 B5). Empty for most leads.",
+    )
+
+
+class HubSpotPick(BaseModel):
+    """Settle a possible HubSpot match (PLAN-V27 T1-3): `same` with one candidate's
+    `hubspot_id`, or `new`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pick: Literal["same", "new"] = Field(
+        description="same: it is that HubSpot company. new: it isn't in HubSpot."
+    )
+    hubspot_id: str | None = Field(
+        None,
+        max_length=32,
+        description="With `same`: the HubSpot id of one of the lead's candidates.",
     )
 
 

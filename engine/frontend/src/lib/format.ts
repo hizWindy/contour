@@ -71,6 +71,16 @@ const dateFormats = {
     minute: '2-digit',
     hour12: true,
   }),
+  monthYear: new Intl.DateTimeFormat(LOCALE, {
+    timeZone: TIME_ZONE,
+    month: 'long',
+    year: 'numeric',
+  }),
+  calendarMonthYear: new Intl.DateTimeFormat(LOCALE, {
+    timeZone: 'UTC',
+    month: 'long',
+    year: 'numeric',
+  }),
   melbourneDay: new Intl.DateTimeFormat('en-CA', {
     timeZone: TIME_ZONE,
     year: 'numeric',
@@ -98,6 +108,17 @@ export function formatDateTime(value: string | number | Date | null | undefined)
     return tidy(dateFormats.calendar.format(moment.date))
   }
   return tidy(dateFormats.dateTime.format(moment.date))
+}
+
+/** `March 2025`, in Melbourne time. Missing or unreadable gives `UNKNOWN`. */
+export function formatMonthYear(value: string | number | Date | null | undefined): string {
+  const moment = toMoment(value)
+  if (!moment) {
+    return UNKNOWN
+  }
+  return tidy(
+    (moment.dateOnly ? dateFormats.calendarMonthYear : dateFormats.monthYear).format(moment.date),
+  )
 }
 
 /** `3:04 pm`, in Melbourne time. */

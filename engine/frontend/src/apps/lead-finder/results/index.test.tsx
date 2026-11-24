@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { Route, Routes, useLocation, useNavigate } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { LeadFacets, LeadRow, MapPoint } from '@/api/types'
-import { asPhone } from '@/test/screen'
+import { asLaptop, asPhone } from '@/test/screen'
 import { renderWithProviders } from '@/test/render'
 import { HOSTILE, LEAD_ID, makeLead } from '../lead/test-lead'
 import ResultsPage from './index'
@@ -128,6 +128,7 @@ const POINTS: MapPoint[] = [
 interface Backend {
   rows: LeadRow[]
   requests: URL[]
+  facets?: LeadFacets
   mapTotal?: number
   exported?: Response
 }
@@ -139,7 +140,7 @@ function mockApi(changes: Partial<Backend> = {}): Backend {
       case '/api/v1/lead-finder/leads':
         return Response.json({ total: backend.rows.length, items: backend.rows })
       case '/api/v1/lead-finder/leads/facets':
-        return Response.json(FACETS)
+        return Response.json(backend.facets ?? FACETS)
       case '/api/v1/lead-finder/leads/map':
         return Response.json({ total: backend.mapTotal ?? POINTS.length, items: POINTS })
       case '/api/v1/lead-finder/leads/export':
@@ -685,7 +686,7 @@ describe('the results page', () => {
   })
 
   it('says there are no leads yet, and where to start', async () => {
-    mockApi({ rows: [] })
+    mockApi({ rows: [], facets: { ...FACETS, hubspot_status: [] } })
     renderResults()
     expect(await screen.findByText('No leads yet.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Start a run' })).toHaveAttribute('href', '/start')
@@ -821,5 +822,129 @@ describe('Results by tier (PLAN-V16 T3-5)', () => {
     expect(lastQuery(backend, '/leads').getAll('tier')).toEqual(['A', 'B', 'C', 'discard', 'none'])
     expect(address().get('excluded')).toBe('true')
     expect(address().get('tier')).toBe('all')
+  })
+})
+
+/** Facets with 5 leads in HubSpot, 2 with an open deal and 1 dissolved: 8 the chip hides. */
+const HUBSPOT_FACETS: LeadFacets = {
+  ...FACETS,
+  hubspot_status: [
+    { value: 'new', count: 3 },
+    { value: 'quiet', count: 1 },
+    { value: 'in_hubspot', count: 5 },
+    { value: 'open_deal', count: 2 },
+    { value: 'dissolved_deal', count: 1 },
+    { value: 'possible_match', count: 2 },
+  ],
+}
+
+const NEW_LEADS = ['new', 'quiet', 'possible_match']
+
+describe.each([
+  ['1440', asLaptop],
+  ['390', asPhone],
+])('Results shows new leads by default, at %s px (PLAN-V27 T1-3)', (_width, screenSize) => {
+  it('hides the leads HubSpot has behind "In HubSpot (8)", and a press shows them', async () => {
+    screenSize()
+    const backend = mockApi({ facets: HUBSPOT_FACETS })
+    const { user } = renderResults()
+    await screen.findByRole('table', { name: 'Leads' })
+
+    // Every leads route asks for new, quiet and possible-match leads only.
+    expect(lastQuery(backend, '/leads').getAll('hubspot_status')).toEqual(NEW_LEADS)
+    expect(lastQuery(backend, '/leads/facets').getAll('hubspot_status')).toEqual(NEW_LEADS)
+    expect(address().toString()).toBe('')
+    const chip = await screen.findByRole('button', { name: 'In HubSpot (8)' })
+    expect(chip).toHaveAttribute('aria-pressed', 'false')
+    expect(
+      screen.getByText('New leads only. Leads already in HubSpot are hidden.'),
+    ).toBeInTheDocument()
+
+    await user.click(chip)
+    expect(address().get('show_in_hubspot')).toBe('true')
+    await waitFor(() => {
+      expect(lastQuery(backend, '/leads').has('hubspot_status')).toBe(false)
+    })
+    expect(lastQuery(backend, '/leads/facets').has('hubspot_status')).toBe(false)
+    // The count stays: the facets' HubSpot counts leave the HubSpot filter out.
+    expect(screen.getByRole('button', { name: 'In HubSpot (8)' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByText('Showing leads already in HubSpot too.')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'In HubSpot (8)' }))
+    expect(address().has('show_in_hubspot')).toBe(false)
+    await waitFor(() => {
+      expect(lastQuery(backend, '/leads').getAll('hubspot_status')).toEqual(NEW_LEADS)
+    })
+  })
+
+  it('keeps the chip pressed after a reload, from the address', async () => {
+    screenSize()
+    const backend = mockApi({ facets: HUBSPOT_FACETS })
+    renderResults('?show_in_hubspot=true')
+    await screen.findByRole('table', { name: 'Leads' })
+    expect(lastQuery(backend, '/leads').has('hubspot_status')).toBe(false)
+    expect(await screen.findByRole('button', { name: 'In HubSpot (8)' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  it('works from the keyboard alone: Space presses the chip', async () => {
+    screenSize()
+    mockApi({ facets: HUBSPOT_FACETS })
+    const { user } = renderResults()
+    const chip = await screen.findByRole('button', { name: 'In HubSpot (8)' })
+    chip.focus()
+    await user.keyboard(' ')
+    expect(address().get('show_in_hubspot')).toBe('true')
+    expect(chip).toHaveAttribute('aria-pressed', 'true')
+    await user.keyboard('{Enter}')
+    expect(address().has('show_in_hubspot')).toBe(false)
+  })
+})
+
+describe('the "In HubSpot" chip (PLAN-V27 T1-3)', () => {
+  it('steps aside when HubSpot labels are picked in the filter: the pick wins', async () => {
+    const backend = mockApi({ facets: HUBSPOT_FACETS })
+    renderResults('?hubspot_status=open_deal')
+    await screen.findByRole('table', { name: 'Leads' })
+    expect(lastQuery(backend, '/leads').getAll('hubspot_status')).toEqual(['open_deal'])
+    expect(screen.queryByRole('button', { name: /^In HubSpot/ })).toBeNull()
+  })
+
+  it('sends the same new-leads filter to the map', async () => {
+    const backend = mockApi({ facets: HUBSPOT_FACETS })
+    renderResults('?view=map')
+    await screen.findByRole('list', { name: 'Leads on the map' })
+    expect(lastQuery(backend, '/leads/map').getAll('hubspot_status')).toEqual(NEW_LEADS)
+  })
+
+  it('sends the same new-leads filter to the CSV', async () => {
+    const backend = mockApi({ facets: HUBSPOT_FACETS })
+    // jsdom has no object URLs. The stand-in goes away after the test (unstubGlobals).
+    class TestURL extends URL {
+      static override createObjectURL = vi.fn(() => 'blob:leads')
+      static override revokeObjectURL = vi.fn()
+    }
+    vi.stubGlobal('URL', TestURL)
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    const { user } = renderResults()
+    await screen.findByRole('table', { name: 'Leads' })
+    await user.click(screen.getByRole('button', { name: 'Download CSV' }))
+    await waitFor(() => {
+      expect(lastQuery(backend, '/leads/export').getAll('hubspot_status')).toEqual(NEW_LEADS)
+    })
+  })
+
+  it('says when every lead is in HubSpot, with a way to show them', async () => {
+    mockApi({ rows: [], facets: HUBSPOT_FACETS })
+    const { user } = renderResults()
+    expect(await screen.findByText('No new leads yet.')).toBeInTheDocument()
+    expect(screen.getByText('8 leads already in HubSpot are hidden.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Show them' }))
+    expect(address().get('show_in_hubspot')).toBe('true')
   })
 })

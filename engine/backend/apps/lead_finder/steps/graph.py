@@ -20,15 +20,19 @@ resume continues where it stopped instead of paying twice.
 - `merge`: the same company found twice becomes one (pure). A discovery run merges after every
   sweep, so "companies after merging" grows as the searches go.
 - `choose`: the rules that skip a company (HubSpot deals, fresh or decided leads), then the best
-  first, up to the run's company limit. The watchlist keeps its own order. Typed companies and
+  first, up to the run's company limit. A discovery run also leaves out every company HubSpot
+  surely has, unless nobody has worked it for `hubspot_quiet_months` (PLAN-V27 choice 3), so the
+  places those used go to new companies and a run searches on until it has its target of them.
+  The watchlist keeps its own order. Typed companies and
   the test set are researched as asked, up to the limit. It only decides: `settle` says who was
   left out, once.
 - `next_sweep` (PLAN-V21 T1-4): a discovery run a person started that has fewer companies than its
   target searches its signs again in a new way (`plan.sweep_searches`), up to
   `discovery_max_sweeps`, while discovery's share of the money lasts. The target never ends a run
   early: a run that meets it in sweep 1 researches everything it chose, up to its limit.
-- `settle`: says who was left out and why, marks the rivals, and tops a short discovery run up from
-  the HubSpot watchlist in its places (PLAN-V21 T1-6), most likely first.
+- `settle`: says who was left out and why (the companies already in HubSpot in one line, PLAN-V27
+  choice 7), and marks the rivals. A short discovery run says so; it is no longer topped up from
+  the HubSpot watchlist (PLAN-V27 choice 5).
 - `research`: one company (steps/company.py), side by side (the run's research gate). Every
   company the run chose is researched, up to its limits: a goal never stops a run.
 - `finish`: nothing. The run's outcome is worked out after the graph, from the database: its
@@ -48,7 +52,7 @@ from core.runtime import disable_tracing
 disable_tracing()  # before LangGraph is imported (importing it could read the tracing switches)
 
 import logging  # noqa: E402
-from datetime import UTC, datetime  # noqa: E402
+from datetime import UTC, date, datetime  # noqa: E402
 from typing import Any, cast  # noqa: E402
 from zoneinfo import ZoneInfo  # noqa: E402
 
@@ -62,6 +66,7 @@ from apps.lead_finder.context import CreditMeter  # noqa: E402
 from apps.lead_finder.goal import goal_for_run, good_of  # noqa: E402
 from apps.lead_finder.params import DiscoveryParams  # noqa: E402
 from apps.lead_finder.prompts import discover_prompt  # noqa: E402
+from apps.lead_finder.quiet import CAN_BE_QUIET, last_activity_of  # noqa: E402
 from apps.lead_finder.rivals import (  # noqa: E402
     mark_rivals,
     pending_for_run,
@@ -75,6 +80,7 @@ from apps.lead_finder.run_sources import (  # noqa: E402
 )
 from apps.lead_finder.sources import tool_of  # noqa: E402
 from apps.lead_finder.steps.choose import (  # noqa: E402
+    IN_HUBSPOT_REASON,
     OVER_LIMIT_REASON,
     ExistingLead,
     decide,
@@ -98,7 +104,6 @@ from apps.lead_finder.steps.state import (  # noqa: E402
     State,
     day_of,
 )
-from apps.lead_finder.steps.top_up import top_up_tasks  # noqa: E402
 from apps.lead_finder.tables import Lead, company_key  # noqa: E402
 from core.claude.budget import BudgetSpent  # noqa: E402
 from core.hubspot.matching import HubSpotMatch, match_company  # noqa: E402
@@ -114,7 +119,6 @@ from core.runs.schemas import (  # noqa: E402
     SliceStartedData,
     SweepDoneData,
     SweepStartedData,
-    ToppedUpData,
 )
 from core.runs.types import RunContext, RunOutcome  # noqa: E402
 from core.searches.service import log_reply  # noqa: E402
@@ -380,9 +384,11 @@ def _merged_of_task(task: CompanyTask) -> Merged:
 
 async def _matches_and_leads(
     ctx: RunContext[Any], companies: list[Merged], tasks: dict[str, CompanyTask]
-) -> tuple[dict[str, HubSpotMatch], list[ExistingLead]]:
+) -> tuple[dict[str, HubSpotMatch], list[ExistingLead], dict[str, date | None]]:
     """What `decide` needs from the database: each company's HubSpot match (names and websites
-    only, no Claude) and the leads already saved under any of their names."""
+    only, no Claude), the leads already saved under any of their names, and the last activity day
+    of each HubSpot company matched (PLAN-V27). The same name counts only in the same city
+    (choice 26), so a different company with the same name is a maybe, never left out."""
     matches: dict[str, HubSpotMatch] = {}
     keys = sorted({key for company in companies for key in company.keys})
     async with ctx.session() as session:
@@ -396,7 +402,16 @@ async def _matches_and_leads(
                 hubspot_id=task["hubspot_id"] if task else None,
                 found_name=company.names[1] if len(company.names) > 1 else None,
                 fuzzy_min=ctx.settings.match_fuzzy_min,
+                name_needs_city=True,
             )
+        activity = await last_activity_of(
+            session,
+            [
+                match.hubspot_id
+                for match in matches.values()
+                if match.hubspot_id and match.status in CAN_BE_QUIET
+            ],
+        )
         rows = (
             await session.execute(
                 select(
@@ -420,7 +435,7 @@ async def _matches_and_leads(
         )
         for row in rows
     ]
-    return matches, leads
+    return matches, leads, activity
 
 
 async def choose(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
@@ -433,6 +448,7 @@ async def choose(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
     limit = ctx.caps.max_companies
     recheck = bool(getattr(ctx.params, "recheck", False))
     skipped: list[tuple[str, str]] = []
+    in_hubspot: list[str] = []
     chosen_keys: list[str] = []
     if mode in ("company", "testset"):  # researched as asked, up to the limit
         chosen = list(state["known"][:limit])
@@ -444,7 +460,7 @@ async def choose(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
         else:  # the watchlist: HubSpot companies, already in their own order
             tasks = {_merged_of_task(task).key: task for task in state["known"]}
             merged = [_merged_of_task(task) for task in state["known"]]
-        matches, leads = await _matches_and_leads(ctx, merged, tasks)
+        matches, leads, activity = await _matches_and_leads(ctx, merged, tasks)
         decision = decide(
             merged,
             matches,
@@ -455,8 +471,11 @@ async def choose(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
             limit,
             ctx.settings,
             ranked=mode == "discovery",
+            new_only=mode == "discovery",
+            activity=activity,
         )
         skipped = decision.skipped
+        in_hubspot = decision.left_out_hubspot
         over = decision.over_limit_count
         chosen_keys = [company.key for company in decision.chosen]
         chosen = [
@@ -469,6 +488,7 @@ async def choose(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
         "chosen": chosen,
         "decision": {
             "skipped": [[name, reason] for name, reason in skipped],
+            "in_hubspot": in_hubspot,
             "over": over,
             "chosen_keys": chosen_keys,
         },
@@ -541,8 +561,8 @@ def after_next_sweep(state: State) -> list[Send] | str:
 
 
 async def settle(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
-    """Says once who was left out and why, marks the rivals, and tops a short discovery run up from
-    the HubSpot watchlist (PLAN-V21 T1-6). Then the research starts."""
+    """Says once who was left out and why, and marks the rivals. A short discovery run says it came
+    up short (PLAN-V27 choice 5). Then the research starts."""
     run = _ctx(runtime)
     ctx = run.run
     counts = ctx.totals.counts
@@ -551,6 +571,17 @@ async def settle(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
     for name, reason in decision.get("skipped") or []:
         counts.skipped += 1
         await ctx.emit_event(CompanySkippedData(name=name, reason=reason))
+    in_hubspot = [str(name) for name in decision.get("in_hubspot") or []]
+    if in_hubspot:  # one line for all of them (PLAN-V27 choice 7)
+        counts.skipped += len(in_hubspot)
+        word = "company" if len(in_hubspot) == 1 else "companies"
+        await ctx.emit_event(
+            CompanySkippedData(
+                name=f"{len(in_hubspot)} {word}",
+                reason=IN_HUBSPOT_REASON,
+                count=len(in_hubspot),
+            )
+        )
     over = int(decision.get("over") or 0)
     if over:
         counts.skipped += over
@@ -564,72 +595,30 @@ async def settle(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
             run.rules.criteria.rivals.sign,
             merged,
             list(decision.get("chosen_keys") or []),
-            [str(pair[0]) for pair in decision.get("skipped") or []],
+            [*(str(pair[0]) for pair in decision.get("skipped") or []), *in_hubspot],
             run_cities(ctx.params, run.rules),
         )
-        added = await _top_up(run, state, chosen)
-        if added:
-            chosen = [*chosen, *added]
-            counts.topped_up = len(added)
-            await ctx.emit_event(
-                ToppedUpData(count=len(added), names=[task["name"] for task in added])
-            )
+        await _say_if_short(run, len(chosen))
     counts.chosen = len(chosen)
     return {"chosen": chosen}
 
 
-async def _top_up(run: RunCtx, state: State, chosen: list[CompanyTask]) -> list[CompanyTask]:
-    """The watchlist companies that fill a short run (PLAN-V21 T1-6): only for a discovery run a
-    person started that asked for it (`top_up`), while HubSpot names may go to Claude, and only up
-    to its target and its company limit."""
+async def _say_if_short(run: RunCtx, chosen: int) -> None:
+    """A run a person started that found fewer new companies than its target says so, with what to
+    try (PLAN-V27 choice 5): "Found 31 of 50. Try a longer look-back or more places." It is no
+    longer topped up from the HubSpot watchlist."""
     ctx = run.run
     target = ctx.totals.counts.target
-    params = ctx.params
-    if (
-        target is None
-        or not person_discovery(ctx)
-        or not web_picked(params)  # its estimate counts only the tools' items (review, M1)
-        or not getattr(params, "top_up", False)
-        or not ctx.settings.hubspot_names_to_claude_ok
-        or run.stop_reason is not None
-        or ctx.cancelled.is_set()
-    ):
-        return []
-    need = min(target, ctx.caps.max_companies) - len(chosen)
-    if need <= 0:
-        return []
-    return await top_up_tasks(
-        ctx,
-        run.rules,
-        need,
-        cities=run_cities(params, run.rules),
-        national=run.rules.criteria.cities.national in params.cities,
-        taken={company_key(task["name"]) for task in chosen},
-        today=state["today"],
-        decide_batch=_decide_watchlist,
+    if target is None or not person_discovery(ctx) or ctx.cancelled.is_set():
+        return
+    wanted = min(target, ctx.caps.max_companies)
+    if chosen >= wanted:
+        return
+    await ctx.emit_event(
+        RunProblemData(
+            message=f"Found {chosen} of {wanted}. Try a longer look-back or more places."
+        )
     )
-
-
-async def _decide_watchlist(
-    ctx: RunContext[Any], rules: LeadFinderRules, tasks: list[CompanyTask], today: str
-) -> list[CompanyTask]:
-    """The rules a watchlist run applies, for a batch of watchlist companies, in their order:
-    the ones `decide` keeps."""
-    by_key = {_merged_of_task(task).key: task for task in tasks}
-    merged = [_merged_of_task(task) for task in tasks]
-    matches, leads = await _matches_and_leads(ctx, merged, by_key)
-    decision = decide(
-        merged,
-        matches,
-        leads,
-        rules,
-        ctx.params,
-        day_of(today),
-        len(merged),
-        ctx.settings,
-        ranked=False,
-    )
-    return [by_key[company.key] for company in decision.chosen]
 
 
 async def _mark_rivals(

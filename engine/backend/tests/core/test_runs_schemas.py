@@ -25,6 +25,7 @@ from core.runs.schemas import (
     CompanySkippedData,
     CompanyStartedData,
     EventLog,
+    FindingData,
     MergedData,
     PlanReadyData,
     ProgressData,
@@ -102,6 +103,12 @@ SAMPLES: dict[str, BaseModel] = {
         hubspot_status="new",
     ),
     "company_failed": CompanyFailedData(name="Acme", reason="the form couldn't be filled"),
+    "finding": FindingData(  # PLAN-V27 T4-2
+        company="Acme",
+        text="Acme hired 40 staff this year.",
+        source_url="https://news.example.com/acme",
+        next_question="A second office?",
+    ),
     "progress": ProgressData(
         cost_usd=Decimal("3.5"), web_searches=21, claude_requests=9, counts=COUNTS
     ),
@@ -127,6 +134,7 @@ SPEC_EVENT_TYPES = {
     "company_started",
     "company_done",
     "company_failed",
+    "finding",
     "progress",
     "problem",
     "cap_reached",
@@ -221,11 +229,11 @@ def test_a_model_that_is_not_an_event_has_no_type_and_neither_has_a_subclass() -
         event_type_of(RunCaps())  # a part of an event is not an event
 
 
-def test_the_hubspot_status_of_a_finished_company_is_one_of_the_five_words() -> None:
+def test_the_hubspot_status_of_a_finished_company_is_one_of_the_six_words() -> None:
     from core.hubspot.matching import Status
 
     words = set(get_args(Status))
-    assert words == {"new", "in_hubspot", "open_deal", "dissolved_deal", "possible_match"}
+    assert words == {"new", "in_hubspot", "open_deal", "dissolved_deal", "possible_match", "quiet"}
     for word in words:
         data = CompanyDoneData(
             name="Acme",

@@ -4,8 +4,8 @@
 Behind the Call logs or the Meetings tick. Viewers get no V (choice 18), so the command step
 refuses one, though it changes nothing; every route that changes something refuses one too. The
 services are assistant.py (the command), today.py (Today), assistant_tasks.py (a task on its
-own, Done and reopen), team_email.py (the team email) and assistant_find.py (a company said again
-on the card, PLAN-V24).
+own, Done and reopen), team_email.py (the team email), assistant_find.py (a company said again
+on the card, PLAN-V24) and assistant_research.py (research in the Assistant, PLAN-V27 Part 4).
 """
 
 import uuid
@@ -18,6 +18,7 @@ from apps.companies import (
     assistant_find,
     assistant_learned,
     assistant_names,
+    assistant_research,
     assistant_tasks,
     team_email,
     today,
@@ -25,10 +26,12 @@ from apps.companies import (
 from apps.companies.api_meetings import SourceDep, WriterDep
 from apps.companies.assistant import Assistant, CommandLimit, check_on, read_command
 from apps.companies.assistant_add import CompanyAdds
+from apps.companies.assistant_find import Context, EstimateFn
 from apps.companies.assistant_names import HintCache
 from apps.companies.assistant_rank import Asker
 from apps.companies.assistant_schemas import (
     FIND_WORDS_MAX_CHARS,
+    RESEARCH_NAME_MAX_CHARS,
     AssistantCommand,
     AssistantCommandIn,
     AssistantCompanyAdded,
@@ -37,6 +40,9 @@ from apps.companies.assistant_schemas import (
     AssistantCompanyPreview,
     AssistantEmailIn,
     AssistantNames,
+    AssistantResearch,
+    AssistantResearchIn,
+    AssistantResearchStarted,
     AssistantTaskIn,
     LearnedNameIn,
     LearnedNamePage,
@@ -50,7 +56,7 @@ from apps.companies.today import TaskCopy
 from core.api.access import SignedInDep, need
 from core.api.deps import SessionDep, SettingsDep
 from core.api.models import OFFSET_MAX, SafeText
-from core.api.runs import IDEMPOTENCY_PATTERN
+from core.api.runs import IDEMPOTENCY_PATTERN, manager_of
 from core.api.signin import AdminDep, NowDep
 from core.config import Settings
 from core.hubspot.writer import WriteOut
@@ -70,6 +76,13 @@ def assistant_state(request: Request) -> Assistant:
 async def assistant_on(settings: SettingsDep) -> Settings:
     """The settings in use, once the command step works (409 `assistant_off` otherwise)."""
     return check_on(settings)
+
+
+def run_estimate(request: Request) -> EstimateFn | None:
+    """The run manager's estimate, for what a research costs. None while the run engine isn't
+    running: the card then says the plan's US$0.40."""
+    manager = getattr(request.app.state, "run_manager", None)
+    return manager.estimate if manager is not None else None
 
 
 def task_copy(request: Request) -> TaskCopy:
@@ -152,8 +165,12 @@ CHANGES = need("companies.call_logs", "companies.meetings", write=True)
     summary="Read a command",
     description=(
         "Turns one thing a rep said or typed into one action for the review card: `pre_read`, "
-        "`log_call`, `task`, `email` or `open`, or on an open card (`card`) `change`, `send` or "
-        "`cancel`. Anything else is `unknown`, and `read_back` lists what the Assistant can do. "
+        "`log_call`, `task`, `email`, `open` or `research`, or on an open card (`card`) "
+        "`change`, `send` or `cancel`. `research` (PLAN-V27 T4-1, 'Research Northwind') comes "
+        "with `research`: what we know and what happens next, settled from our copies with no "
+        "Claude request (see GET /assistant/research); plainly 'research' and a name, or "
+        "'research' alone, needs no Claude request at all. Anything else is `unknown`, and "
+        "`read_back` lists what the Assistant can do. "
         "Words too unclear to make a command are `unclear` (PLAN-V23): `read_back` holds the "
         "words as heard and `unsure` the stop line; words too short to be a command (like 'um') "
         "are `unclear` with no Claude request. "
@@ -197,6 +214,7 @@ async def read_assistant_command(
         leads=leads,
         now=now,
         app=request.app,
+        estimate=run_estimate(request),
     )
 
 
@@ -304,6 +322,122 @@ async def read_assistant_names(
         copy=copy,
         hints=hints,
         now=now,
+    )
+
+
+# --- Research in the Assistant (PLAN-V27 Part 4) -------------------------------------------------
+
+
+@router.get(
+    "/research",
+    response_model=AssistantResearch,
+    dependencies=[Depends(CHANGES)],
+    summary="What we know about a company, before researching it",
+    description=(
+        "The research card's block for one company the card has settled (PLAN-V27 T4-1): the "
+        "choice picked (`company_key`), or a new company by its `name`. It is the command's "
+        "`research` again, free, with no Claude request: HubSpot's view from our copy (`new`, "
+        "`in_hubspot`, `open_deal`, `dissolved_deal` or `quiet`, with `last_activity`); for "
+        "people with a Lead Finder tick, its lead card from the last 30 days and Property "
+        "Daily's lease end and size from our copy, each with its day and source (`known`). "
+        "`next`: `open_lead` (open the card, no cost), `open_prep` (in HubSpot and not quiet: "
+        "open its call prep), `ask` (new or quiet: `question` like 'Research Northwind? About "
+        "US$0.40.', with `cost_usd` from past research or US$0.40) or `needs_name`. "
+        "`can_start` false: `blocked` has the words ('Researching a new company needs the Lead "
+        "Finder. Ask your Platform admin.'). 404 `company_not_found` when `company_key` isn't "
+        "open to this person. Behind the Call logs or the Meetings tick; a Viewer gets 403 "
+        "`viewer_read_only`."
+    ),
+)
+async def read_assistant_research(
+    request: Request,
+    session: SessionDep,
+    settings: SettingsDep,
+    auth: SignedInDep,
+    leads: LeadsDep,
+    source: SourceDep,
+    now: NowDep,
+    name: Annotated[
+        SafeText,
+        Query(
+            max_length=RESEARCH_NAME_MAX_CHARS,
+            description="The rep's words for the company, as heard (never a choice's HubSpot "
+            "name): the block's `company` comes from them",
+            examples=["Northwind"],
+        ),
+    ] = "",
+    company_key: Annotated[
+        SafeText | None,
+        Query(max_length=64, description="The choice picked: a HubSpot id, or lead:<id>"),
+    ] = None,
+) -> AssistantResearch:
+    context = Context(
+        said=name,
+        typed=name,
+        on_page=None,
+        card=None,
+        auth=auth,
+        settings=settings,
+        meetings=source,
+        leads=leads,
+        now=now,
+        today=now.astimezone(MELBOURNE).date(),
+        estimate=run_estimate(request),
+    )
+    return await assistant_research.known_research(session, name, company_key, context)
+
+
+@router.post(
+    "/research",
+    response_model=AssistantResearchStarted,
+    status_code=201,
+    dependencies=[Depends(CHANGES)],
+    summary="Research a company",
+    description=(
+        "Starts a Lead Finder run of one company in the background, after the card's Enter, "
+        "'yes' or tap (PLAN-V27 choices 18 to 20), and answers its `run_id` at once: follow it "
+        "with GET /runs/{run_id}/events. Each `finding` event is one line with its source, as "
+        "it arrives; `company_done` has the lead and its `tier`; `run_finished` ends it. It is "
+        "a run like any other: the company cap, the run cap and the daily limit stop it as they "
+        "stop a run, and it shows on the Runs page. It asks Claude behind people's own "
+        "requests, with at most 2 at once, so nobody else waits. About US$0.34 to 0.42 a "
+        "company (TBC). Send the card's `Idempotency-Key`: the same key and body give back the "
+        "first run, so a double press starts one. Needs the Lead Finder's Start a run tick: "
+        "403 `feature_not_allowed` otherwise ('Researching a new company needs the Lead Finder. "
+        "Ask your Platform admin.'), and a Viewer gets 403 `viewer_read_only`. 409 "
+        "`run_already_active` while the run limit is full, `idempotency_key_reused` for a key "
+        "sent with another body. 422 `research_name` for a name or city that can't be "
+        "researched. 503 `runs_not_ready` while the run engine isn't running."
+    ),
+)
+async def start_assistant_research(
+    body: AssistantResearchIn,
+    request: Request,
+    session: SessionDep,
+    settings: SettingsDep,
+    auth: SignedInDep,
+    leads: LeadsDep,
+    idempotency_key: Annotated[
+        str | None,
+        Header(
+            min_length=1,
+            max_length=64,
+            pattern=IDEMPOTENCY_PATTERN,
+            description="Any unique text (a UUID is fine), made when the card asks. The same key "
+            "and body give back the first run",
+        ),
+    ] = None,
+) -> AssistantResearchStarted:
+    if not assistant_research.may_start(auth, leads):  # before the run engine is looked up
+        raise assistant_research.needs_lead_finder()
+    return await assistant_research.start_research(
+        session,
+        body,
+        runs=manager_of(request),
+        auth=auth,
+        leads=leads,
+        key=idempotency_key,
+        settings=settings,
     )
 
 

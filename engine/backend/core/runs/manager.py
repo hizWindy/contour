@@ -76,6 +76,7 @@ from core.runs.schemas import (
     RunSummary,
 )
 from core.runs.types import (
+    BACKGROUND_PLACES,
     CheckpointerSource,
     ClaudeProvider,
     EventStream,
@@ -647,8 +648,18 @@ class RunManager:
     def _work(entry: _Entry, job: _Job) -> Work:
         """The run's lane at Claude and who started it (PLAN-V26 T1-1). A resumed run keeps
         both, whoever resumed it."""
-        waits = job.kind.person_waits
-        watched = job.schedule_id is None and waits is not None and waits(job.params)
+        waits, background = job.kind.person_waits, job.kind.in_background
+        by_person = job.schedule_id is None
+        if by_person and background is not None and background(job.params):
+            # A person started it but doesn't wait on it (PLAN-V27 choice 20)
+            return Work(
+                "people",
+                job.started_by,
+                run_key(entry.run_id),
+                behind=True,
+                most=BACKGROUND_PLACES,
+            )
+        watched = by_person and waits is not None and waits(job.params)
         lane: Lane = "people" if watched else "runs"
         return Work(lane, job.started_by, run_key(entry.run_id))
 

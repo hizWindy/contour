@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { csvName } from '@/api/hooks'
+import type { LeadFacets } from '@/api/types'
 import {
   activeFilterCount,
   dateOf,
@@ -7,6 +8,9 @@ import {
   DEFAULT_STATE,
   exportQuery,
   filterQuery,
+  hidesInHubSpot,
+  hubspotChipApplies,
+  inHubSpotCount,
   isDefaultTiers,
   listQuery,
   NO_FILTERS,
@@ -34,6 +38,7 @@ describe('the results address', () => {
         `&run_id=${RUN}&min_score=60` +
         `&office_m2_min=1000&office_m2_max=5000&created_since=2026-10-01&created_until=2026-10-26` +
         `&trigger_since=2026-01-01&q=acme&include_tests=true&facts_missing=true` +
+        `&show_in_hubspot=true` +
         `&sort=company&order=asc&page=3` +
         `&view=map&lead=${LEAD}`,
     )
@@ -68,6 +73,7 @@ describe('the results address', () => {
         q: 'acme',
         include_tests: true,
         facts_missing: true,
+        show_in_hubspot: true,
       },
     })
     // Written back, it reads the same.
@@ -115,18 +121,23 @@ describe('the results address', () => {
       page: 2,
       filters: { ...NO_FILTERS, city: ['Perth'], min_score: 0 },
     }
+    // PLAN-V27: new leads only, unless the "In HubSpot" chip is pressed.
+    const newLeads = ['new', 'quiet', 'possible_match']
     expect(filterQuery(state.filters)).toEqual({
       tier: ['A', 'B', 'C', 'none'],
       city: ['Perth'],
+      hubspot_status: newLeads,
       min_score: 0,
     })
     expect(filterQuery({ ...NO_FILTERS, origin: ['web'] })).toEqual({
       tier: ['A', 'B', 'C', 'none'],
+      hubspot_status: newLeads,
       origin: ['web'],
     })
     expect(listQuery(state)).toEqual({
       tier: ['A', 'B', 'C', 'none'],
       city: ['Perth'],
+      hubspot_status: newLeads,
       min_score: 0,
       sort: 'score',
       order: 'desc',
@@ -136,6 +147,7 @@ describe('the results address', () => {
     expect(exportQuery(state)).toEqual({
       tier: ['A', 'B', 'C', 'none'],
       city: ['Perth'],
+      hubspot_status: newLeads,
       min_score: 0,
       sort: 'score',
       order: 'desc',
@@ -221,5 +233,51 @@ describe('the tier and the other PLAN-V16 filters (T3-5)', () => {
       'confidence=low&city_group=regional&has_property=true&excluded=true',
     )
     expect(activeFilterCount(state.filters)).toBe(4)
+  })
+})
+
+describe('new leads only (PLAN-V27 T1-3, choice 6)', () => {
+  const FACETS = {
+    hubspot_status: [
+      { value: 'new', count: 3 },
+      { value: 'in_hubspot', count: 5 },
+      { value: 'open_deal', count: 2 },
+      { value: 'dissolved_deal', count: 1 },
+      { value: 'quiet', count: 4 },
+    ],
+  } as LeadFacets
+
+  it('asks for new, quiet and possible-match leads until the chip is pressed', () => {
+    expect(hidesInHubSpot(NO_FILTERS)).toBe(true)
+    expect(filterQuery(NO_FILTERS).hubspot_status).toEqual(['new', 'quiet', 'possible_match'])
+    const shown = { ...NO_FILTERS, show_in_hubspot: true }
+    expect(hidesInHubSpot(shown)).toBe(false)
+    expect(filterQuery(shown).hubspot_status).toBeUndefined()
+    expect(writeResults({ ...DEFAULT_STATE, filters: shown }).toString()).toBe(
+      'show_in_hubspot=true',
+    )
+  })
+
+  it('lets a HubSpot pick win over the chip, pressed or not', () => {
+    for (const show of [false, true]) {
+      const picked = {
+        ...NO_FILTERS,
+        hubspot_status: ['open_deal' as const],
+        show_in_hubspot: show,
+      }
+      expect(hubspotChipApplies(picked)).toBe(false)
+      expect(hidesInHubSpot(picked)).toBe(false)
+      expect(filterQuery(picked).hubspot_status).toEqual(['open_deal'])
+    }
+  })
+
+  it('counts In HubSpot, Open deal and Dissolved deal for the chip, once the facets are in', () => {
+    expect(inHubSpotCount(FACETS)).toBe(8)
+    expect(inHubSpotCount(undefined)).toBeUndefined()
+    expect(inHubSpotCount({ hubspot_status: [] } as unknown as LeadFacets)).toBe(0)
+  })
+
+  it('is not a filter in use: Clear all and the counts leave it alone', () => {
+    expect(activeFilterCount({ ...NO_FILTERS, show_in_hubspot: true })).toBe(0)
   })
 })

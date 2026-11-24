@@ -10,6 +10,10 @@ The rules, in this order, for each company (the first that applies skips it):
 2. HubSpot says a deal was dissolved less than `never_suggest.dissolved_deal_wait_months` ago,
    unless a signal is newer than the day it was dissolved. This is the rule of the lead card,
    asked of `scoring.judge`, so the card and the choice can't disagree.
+   With `new_only` (a Find new leads run, PLAN-V27 choice 3), any company HubSpot surely has is
+   left out too, unless nobody has worked it for `hubspot_quiet_months` (`quiet.py`). A maybe
+   (`possible_match`) is never left out: only a sure match (choice 26). These are counted in
+   `left_out_hubspot`, and the run says so in one line (choice 7).
 3. A lead for it was made less than `memory_fresh_days` ago (unless the run is a re-check).
    Test leads (`is_test`) are ignored.
 4. A lead for it was sent or rejected, unless a signal is newer than that decision.
@@ -28,6 +32,7 @@ from typing import Any
 
 from apps.lead_finder.context import Signal
 from apps.lead_finder.fields import CompanyFacts, Fact, TriggerFound
+from apps.lead_finder.quiet import CAN_BE_QUIET, SURE_MATCH, is_quiet, last_worked
 from apps.lead_finder.rules import LeadFinderRules, Sign
 from apps.lead_finder.scoring import DAYS_PER_YEAR, Group, judge, parse_date
 from apps.lead_finder.sources import source_kind
@@ -36,6 +41,9 @@ from core.config import Settings
 from core.hubspot.matching import HubSpotMatch
 
 OVER_LIMIT_REASON = "over the run's company limit"
+# The one feed line of a Find new leads run (PLAN-V27 choice 7): "Left out 12 companies already
+# in HubSpot." The website words it from this reason.
+IN_HUBSPOT_REASON = "already in HubSpot"
 LEASE_ENDING = "lease_ending"  # the trigger whose date is when the lease ends
 
 
@@ -60,11 +68,14 @@ class Decision:
     - `skipped`: (name, reason) for each company left out by a rule. Plain words.
     - `over_limit_count`: how many more were left out because of the company limit. They are
       counted, not listed: say it once with `OVER_LIMIT_REASON`.
+    - `left_out_hubspot`: with `new_only`, the names left out because HubSpot has them (an open
+      deal, a recent dissolved deal, or recent activity). Said once, with `IN_HUBSPOT_REASON`.
     """
 
     chosen: list[Merged]
     skipped: list[tuple[str, str]] = field(default_factory=list)
     over_limit_count: int = 0
+    left_out_hubspot: list[str] = field(default_factory=list)
 
 
 # --- Ranking --------------------------------------------------------------------------------
@@ -210,6 +221,21 @@ def _hubspot_reason(
     return None
 
 
+def _worked_recently(
+    match: HubSpotMatch | None,
+    activity: Mapping[str, date | None],
+    months: int,
+    today: date,
+) -> bool:
+    """HubSpot surely has it, and someone worked it in the last `months` (PLAN-V27 choice 3). A
+    maybe, or a match the matcher wasn't sure of, is never "in HubSpot" here (choice 26)."""
+    if match is None or match.hubspot_id is None or match.status not in CAN_BE_QUIET:
+        return False
+    if match.matched_by not in SURE_MATCH:
+        return False
+    return not is_quiet(last_worked(match, activity.get(match.hubspot_id)), months, today)
+
+
 def _day(moment: datetime) -> date:
     return moment.date()
 
@@ -276,6 +302,8 @@ def decide(
     settings: Settings,
     *,
     ranked: bool = True,
+    new_only: bool = False,
+    activity: Mapping[str, date | None] | None = None,
 ) -> Decision:
     """Apply the rules (module text), rank the rest and keep the top `max_companies`.
 
@@ -286,7 +314,10 @@ def decide(
       entry counts as not in HubSpot.
     - `existing_leads`: leads already saved. Found by `company_key`, for every name of a company.
     - `params`: only `params.recheck` is read (False when the params have none, as discovery's).
-    - `settings`: only `settings.memory_fresh_days` is read.
+    - `settings`: only `settings.memory_fresh_days` and `settings.hubspot_quiet_months` are read.
+    - `new_only`: a Find new leads run (PLAN-V27): leave out the companies HubSpot has (rule 2).
+    - `activity`: the last activity day of each matched HubSpot company, by HubSpot id. A company
+      missing from it has no activity date, so it is quiet.
     """
     recheck = bool(getattr(params, "recheck", False))
     by_key: dict[str, list[ExistingLead]] = {}
@@ -295,9 +326,19 @@ def decide(
 
     kept: list[Merged] = []
     skipped: list[tuple[str, str]] = []
+    in_hubspot: list[str] = []
+    worked = activity or {}
+    months = settings.hubspot_quiet_months
     order = merged if not ranked else sorted(merged, key=lambda c: (c.name.casefold(), c.name))
     for company in order:
-        reason = _hubspot_reason(company, hubspot_matches.get(company.key), rules, today)
+        match = hubspot_matches.get(company.key)
+        reason = _hubspot_reason(company, match, rules, today)
+        if new_only and (
+            (reason is not None and match is not None and match.matched_by in SURE_MATCH)
+            or (reason is None and _worked_recently(match, worked, months, today))
+        ):
+            in_hubspot.append(company.name)
+            continue
         if reason is None:
             leads = [lead for key in company.keys for lead in by_key.get(key, [])]
             reason = _lead_reason(company, leads, today, settings.memory_fresh_days, recheck)
@@ -312,4 +353,5 @@ def decide(
         chosen=best_first[:limit],
         skipped=skipped,
         over_limit_count=max(0, len(best_first) - limit),
+        left_out_hubspot=in_hubspot,
     )
