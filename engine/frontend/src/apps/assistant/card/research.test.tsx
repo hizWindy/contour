@@ -265,7 +265,8 @@ describe.each([
 
   it('a tap starts it too, once, and each finding shows as it arrives, then the end', async () => {
     size()
-    const { user, posts } = show(researchCommand())
+    const { user, posts, queryClient } = show(researchCommand())
+    const refreshed = vi.spyOn(queryClient, 'invalidateQueries')
     const found = await card()
     await user.click(within(found).getByRole('button', { name: /Start research/ }))
     await waitFor(() => {
@@ -336,6 +337,9 @@ describe.each([
     expect(document.querySelector('[data-slot=research-said]')).toHaveTextContent(
       'Done: Northwind is a B lead.',
     )
+    // Its lead shows in Results, on Home and in the runs list without a reload.
+    expect(refreshed).toHaveBeenCalledWith({ queryKey: queryKeys.leads.lists() })
+    expect(refreshed).toHaveBeenCalledWith({ queryKey: queryKeys.runs.lists() })
   })
 
   it('a failed or stopped research says so plainly, with Open the run', async () => {

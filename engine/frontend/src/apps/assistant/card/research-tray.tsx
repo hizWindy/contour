@@ -20,9 +20,11 @@
 import { Check, CircleAlert, X } from 'lucide-react'
 import { useEffect, useId, useState } from 'react'
 import { Link } from 'react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 // From the hooks' index, which the first visit has: a direct import splits a file out of it.
-import { usePreviewLeadHubSpot, useSendLeadHubSpot } from '@/api/hooks'
+import { refreshLeads, usePreviewLeadHubSpot, useSendLeadHubSpot } from '@/api/hooks'
+import { queryKeys } from '@/api/query'
 import { useCanWrite } from '@/auth/can'
 import { SendToHubSpotDialog } from '@/components/hubspot/send-to-hubspot-dialog'
 import { SourceLink } from '@/components/source-link'
@@ -170,6 +172,13 @@ function ResearchItem({ research }: { research: Research }) {
   useEffect(() => {
     if (end) sayResearch(end)
   }, [end])
+  // Once it ends, its lead shows in Results, on Home and in the runs list, as after a run's page.
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    if (!state.finished) return
+    refreshLeads(queryClient)
+    void queryClient.invalidateQueries({ queryKey: queryKeys.runs.lists() })
+  }, [state.finished, queryClient])
 
   return (
     <section
