@@ -1,22 +1,22 @@
 # Live voice: plan, version 28
 
-This plan gives the Assistant a live voice. A rep presses V and talks, as on a phone call. Gemini 3.8 Live, Google's talking AI, listens, talks back and asks when unsure. Claude still writes every card through today's command step, so a spoken command gives the same card as a typed one. Nothing reaches HubSpot until the rep says "send it" or presses Enter. Our own server carries the sound between the browser and Google. So the key never leaves the server, and every minute is counted against a monthly limit. Today's free mic and typing stay as the fallback. One session builds it, in five parts, after PLAN-V27 joins `master`.
+This plan gives the Assistant a live voice. A rep presses V and talks, as on a phone call. Gemini 3.8 Live, Google's talking AI, listens, talks back and asks when unsure. Claude still writes every card through today's command step, so a spoken command gives the same card as a typed one. Nothing reaches HubSpot until the rep says "send it" or presses Enter. Our own server carries the sound between the browser and Google. So the key never leaves the server, and every minute is counted against a monthly limit. Today's free mic and typing stay as the fallback. One session builds it, in five parts, on top of PLAN-V27, which joined `master` on 25 Nov.
 
 **TBC** means to be confirmed.
 
-- **Status:** drafted on 25 Nov 2026 from Al-khair's chat, on `plan-v28` in `../contour-v28`. Not approved yet. Nothing built.
+- **Status:** drafted on 25 Nov 2026 from Al-khair's chat, on `plan-v28` in `../contour-v28`, and checked the same day against `master` with PLAN-V27 joined (`b52190b`). Not approved yet. Nothing built.
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
 - **Last updated:** 25 Nov 2026.
-- **Progress:** Before the build: 0 of 3 (the branch is made; S0's other parts wait for `merge v27`). Parts 1 to 5: 0 of 21. M1 to M4: 0 of 4.
+- **Progress:** Before the build: 0 of 3 (the branch is made, and PLAN-V27 has joined `master`, so S0 can run). Parts 1 to 5: 0 of 21. M1 to M4: 0 of 4.
 - **Sources:**
   - Al-khair's chat on 25 Nov: his Google account, a test key with about US$5, "the implementation must be superb", and a branch of its own while PLAN-V27 merges;
   - the approval paper `documents/voice/VOICE.pdf` (version 3, 24 Nov), still waiting for Levi's four ticks;
   - Google's page "Start and manage live sessions" (Gemini Enterprise Agent Platform), and the pages it links to, read on 25 Nov: the Live API overview and reference, Gemini 3.8 Live's model page and guide, asynchronous function calling, language and voice, capabilities, and best practices;
   - Google's blog post "Build real-time voice applications with Gemini 3.8 Live and 3.5 Transcribe" (15 Sep 2026);
   - free checks with the test key on 25 Nov, with no sound and no text sent (see the Log);
-  - the code on `master` (`d32ff3f`) and `plan-v27`'s changed files, read on 25 Nov;
+  - the code on `master` (`d32ff3f`), then on `master` with PLAN-V27 joined (`b52190b`), read on 25 Nov;
   - the AI Brain's notes on live voice models (24 Nov) and the first plan (25 Nov).
-- **Comes after:** [PLAN-V27](PLAN-V27.md). It changes `api_assistant.py`, `assistant_schemas.py`, `config.py`, `hand-over.ts`, `bar.tsx` and `card/listen.ts`, which this plan also touches. So the build starts only after `merge v27` (S0). New code goes in new files wherever it can.
+- **Comes after:** [PLAN-V27](PLAN-V27.md), which joined `master` on 25 Nov (`b52190b`, pushed). It changed `api_assistant.py`, `assistant_schemas.py`, `config.py`, `hand-over.ts`, `bar.tsx` and `card/listen.ts`, which this plan also touches, and it added research by voice (choice 7, T3-1, T3-2 and T5-1 cover it). S0 merges it in. New code goes in new files wherever it can.
 
 ## Why
 
@@ -83,7 +83,7 @@ You'll also answer things along the way:
 - **The relay:** the part of our server that carries sound and messages between the browser and Google.
 - **A talk:** one conversation with Gemini, from V to its end. A **connection** to Google lasts about 10 minutes. A talk can go on over several connections, through **resumption**: Google sends a handle (an id), and a new connection with it carries on the same talk.
 - **Tool call:** Gemini asking our code to do something, here "ask Contour". The **tool answer** is what our code sends back.
-- **The card's ear:** the review card's own listening for "send it", "later", "cancel" and a choice (`card/listen.ts`). It uses no AI.
+- **The card's ear:** how an open card hears the rep in a conversation (`attachCard` in `bar-session.ts`, PLAN-V24). It uses no AI: "send it" sends, "later" or "cancel" does what Later or Cancel does, and "the second one" or a name from its list picks it (`choose.ts`). Anything else goes to the command step as a change. The research card (PLAN-V27) also hears "yes", to start. In a conversation, a card opens no mic of its own.
 - **Barge-in:** the rep talks while the Assistant talks, and the Assistant stops at once.
 - **The meter:** our count of the tokens Google reports for each talk (`usageMetadata`), turned into US dollars.
 
@@ -93,7 +93,8 @@ You'll also answer things along the way:
 - **The mic** (`call-notes/mic/session.ts`, `MicSession`): the mic check, echo cancellation, following the headset. The sound tap is `on-device/capture.ts` with `capture.worklet.ts` (pieces of 100 ms, at the device's rate).
 - **The engine choice** (`call-notes/mic/voice-engine.ts`): Chrome's speech service, or the model on the device.
 - **The command step** (`POST /api/v1/companies/assistant/command`): Claude Haiku (the call notes' model), one small request, 15 s at most, 20 a minute a person. It takes `text`, `source`, `on_page`, `card` and `last_turn`. Then `handOver` (`assistant/voice/hand-over.ts`) sends its answer to a page or to the review card.
-- **The card's ear** (`assistant/card/listen.ts`), and the card's Send with its idempotency key (`Card-Key`): a repeated send sends nothing again.
+- **The card's ear** (`attachCard`, PLAN-V24 T2-3): in a conversation, an open card hears each turn through the conversation's one mic. Outside one, it listens 5 seconds for "send it" or "cancel" (`card/listen.ts`). The card's Send has its idempotency key (`Card-Key`): a repeated send sends nothing again.
+- **Research by voice** (PLAN-V27 T4-1, T4-2): "Research Northwind" is the command step's `research` action. A lead card from the last 30 days opens at once, and so does a HubSpot company's call prep if the company isn't quiet, each with its line. A new or quiet company, or a maybe, opens the research card. It asks once, with the cost, and "yes" starts a paid research. With no name, the bar asks for one.
 - **The names** (`GET /api/v1/companies/assistant/names`, `assistant_names.hint_list`, PLAN-V23): up to 50 names this person is likely to say (`name_hints_max`).
 - **Safety patterns:** `BROWSER_SPEECH_OK`, so a voice goes to Google only with Levi's OK; the sign-in guard already covers WebSockets and closes a refused one with 1008 before it opens (`core/api/guard.py`); the host check (`core/api/security.py`); and the sign-in cookie is `SameSite=Strict`.
 - **The tests' fakes:** `fake-mic.ts` and `on-device/fake-worker.ts`.
@@ -115,7 +116,7 @@ Each has its reason. Change any of them before its step starts.
 **The conversation**
 
 6. **One tool, `ask_contour(request)`.** Set as non-blocking (`behavior: NON_BLOCKING`), so Gemini can say "One moment" while Claude works. Its answer is spoken once the rep is quiet (`scheduling: WHEN_IDLE`). Google's advice: a tool answer always has `status`, `retryable` and `message`, and is never empty.
-7. **"Send it" comes from the rep's words, never from Gemini's guess.** The card's ear reads Google's transcript of what the rep said. A tool call alone never sends. Gemini says "Sent" only when the card's Send has worked.
+7. **"Send it", and the research card's "yes", come from the rep's words, never from Gemini's guess.** One sends to HubSpot; the other starts a paid research. Live voice runs as the bar's conversation, so an open card hears Google's transcript of what the rep said through its ear (`attachCard`), and opens no mic of its own. A tool call alone never sends or starts a research. Gemini says "Sent" only when the card's Send has worked.
 8. **What Claude gets:** Gemini's `request` (the rep's words, as Gemini heard them) as `text`, with `source` `mic`, as the free mic sends it. T5-2 compares it with Google's transcript for names and dates, and keeps the better one (TBC).
 9. **Asking back:** Claude's unsure line (PLAN-V25) is the question Gemini asks, like "Jo Sample or Jo Northwind?". Gemini doesn't ask its own questions about companies or people.
 10. **Short talk, and the instruction in Google's order:** who it is (Contour's Assistant, a helpful colleague); how it talks (one or two short sentences, no lists, never the whole card read out, no made-up names or dates); when to use the tool (anything about calls, tasks, emails, companies, people, meetings or pages, in the rep's words); and its limits ("sent" only when the tool says so; at most two tool calls in a row without speaking, as Google advises; talk not meant for it is ignored).
@@ -169,14 +170,14 @@ One session builds every step, in order: S0, then Parts 1 to 5. The parts share 
 - **Backend steps:** `backend-agent`, with the `api-change` and `db-migration` skills.
 - **Website steps:** `frontend-agent`, with the `ui-build` and `design-review` skills.
 - **Cross-layer checks:** the `flow-trace` skill on a whole talk (V, sound, tool, card, send, end), and the `security-check` skill on the relay (the key, the new data flow to Google, the WebSocket's sign-in and `Origin`, and the logs).
-- **One migration,** `0030_v28_live_voice` (TBC: the next free number once PLAN-V27 has joined).
+- **One migration,** `0030_v28_live_voice`: `master`'s newest is `0029_v26_activity`, and PLAN-V27 added none (checked 25 Nov).
 - **M1's independent check:** a fresh `review-agent` with the `merge-check` skill, and the `simulator-agent` with the fake Google.
 
 ## How to work this plan
 
 As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
 
-- **The copy:** `plan-v28` in `../contour-v28`, made on 25 Nov from `master` (`d32ff3f`). After `merge v27`, S0 merges `master` in.
+- **The copy:** `plan-v28` in `../contour-v28`, made on 25 Nov from `master` (`d32ff3f`). S0 merges `master` in, now that PLAN-V27 has joined it.
 - **Ports and database:** backend `API_PORT=8151`, website 5321 (TBC: check they're free), database `leadfinder_v28` (a copy of the dev database at `master`'s newest migration), test suffix `_v28`. Leave older plans' ports alone (8041 to 8141, 5211 to 5311).
 - **The copy's `engine/.env`** holds the `POSTGRES_*` lines (database `leadfinder_v28`) and the test key, `GEMINI_API_KEY`. Never print the key, or put it in a test, a log line, this plan or a commit. Tests use a fake key.
 - **No Claude key and no HubSpot key** in the copy. Blank `ANTHROPIC_API_KEY` for the process: it's also a Windows user setting. T5-2 uses Claude, on Al-khair's word.
@@ -185,11 +186,11 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
 
 ## Before the build starts
 
-- [ ] **S0. The branch and the copy** (after `merge v27`).
-  - `plan-v28` was made on 25 Nov; its first commit holds this plan. Merge `master` in once PLAN-V27 has joined: `git merge master -m "Merge master into plan-v28: PLAN-V27 joins before S0"`.
+- [ ] **S0. The branch and the copy** (PLAN-V27 joined `master` on 25 Nov, so it can run).
+  - `plan-v28` was made on 25 Nov; its first commit holds this plan. Merge `master` in: `git merge master -m "Merge master into plan-v28: PLAN-V27 joins before S0"`.
   - `uv sync --frozen` in `engine/backend`, `npm ci` in `engine/frontend`, and a copy of `COMPANIES.xlsx` from the main folder.
   - Make the database `leadfinder_v28`, and check the newest migration. This plan's migration takes the next number.
-  - Add the plan's line to the plan list in `AGENTS.md`. If Al-khair's move of the list from `CLAUDE.md` is still uncommitted, ask first.
+  - Add the plan's line to the plan list in `AGENTS.md`. Al-khair's move of the list from `CLAUDE.md` to `AGENTS.md` was still uncommitted in the main folder on 25 Nov: if it still is, ask first.
   - **Done when:** `plan-v28` has PLAN-V27, and the fast backend tests and the website tests pass on it.
 - [ ] **S1. Google checks** (Al-khair, about 10 minutes; the try costs about US$0.01, on his word).
   - In Google AI Studio: the key's project is on the paid tier (billing on, so Google doesn't train on it). Set spend emails at US$3 and US$4 if it offers them (TBC). Find out whether the US$5 is a prepaid credit or a budget.
@@ -263,15 +264,15 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
 ## Part 3: the link to Claude and the card
 
 - [ ] **T3-1. "Ask Contour".** (New: `live/bridge.ts`, using `hand-over.ts` and the command step.) Choices 5 to 10.
-  - **A tool call while a card is open:** the card's ear reads the rep's words first (Google's finished transcript since the last tool call): "send it", "later", "cancel", or a choice. If the tool call comes before the finished words, it waits up to 0.5 s for them (TBC at S1).
+  - **A tool call while a card is open:** the card's ear (`attachCard`) reads the rep's words first (Google's finished transcript since the last tool call): "send it", "later", "cancel", a pick from its list, or "yes" on the research card. If the tool call comes before the finished words, it waits up to 0.5 s for them (TBC at S1).
   - **Anything else, or no card:** the command step, with `text` (choice 8), `source` `mic`, `on_page`, `card` and `last_turn` (kept as `last-turn.ts` keeps it), as the free mic sends them. Its answer goes to `handOver`, as today: a page opens, the card opens, or a line shows.
-  - **The tool answer to Gemini:** `status`, `retryable` and `message`, the line to say. A card opened: "Ready. Say send it." Unsure: Claude's question. Unknown: the read-back, short. An error (409, 429, 503): its plain words.
-  - **Done when:** tests with a fake relay pass for each kind of answer, and the same command typed and spoken opens the same card.
-- [ ] **T3-2. "Send it".** Choice 7.
-  - Only the card's own Send, and only when the rep's words were a send word (the card's ear), or the rep pressed Enter or clicked Send.
+  - **The tool answer to Gemini:** `status`, `retryable` and `message`, the line to say. A card opened: "Ready. Say send it." Unsure: Claude's question. A research: the page's line (`handOver`'s `tell`), the research card's question with its cost, or the bar's line asking for a name. Unknown: the read-back, short. An error (409, 429, 503): its plain words.
+  - **Done when:** tests with a fake relay pass for each kind of answer; the same command typed and spoken opens the same card; and in live voice, neither card opens a mic of its own.
+- [ ] **T3-2. "Send it", and the research card's "yes".** Choice 7.
+  - Only the card's own Send, and only when the rep's words were a send word (the card's ear), or the rep pressed Enter or clicked Send. The research card starts the same way: on the rep's own "yes", Enter or a click.
   - The tool answer says "sent" only after the card's Send has worked. Otherwise it gives the card's own error line.
   - One send per card (`Card-Key`), however many times "send it" is heard.
-  - **Done when:** tests pass: a tool call with no send word sends nothing; "send it" sends once; a failed send is said as failed; and the `flow-trace` skill passes on this path.
+  - **Done when:** tests pass: a tool call with no send word sends nothing; "send it" sends once; a "yes" only in Gemini's request starts no research; a failed send is said as failed; and the `flow-trace` skill passes on this path.
 - [ ] **T3-3. Asking back and talking over.** Choice 9.
   - Claude's unsure line becomes Gemini's question. The rep's answer ("the first one", "Jo Sample") goes to the card's ear.
   - A tool call Google cancels (the rep talked over it) stops its command request (`AbortController`). A late answer never opens a second card.
@@ -291,7 +292,7 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
 
 ## Part 5: real tests and tuning
 
-- [ ] **T5-1. The practice set** (free). `plan/TEST-V28.md` lists 20 practice requests and the card each should give: 5 calls with a name clash, 5 tasks with dates ("next Friday", "the 3rd"), 3 emails, 3 changes to an open card, 2 "send it", and 2 pages ("open Northwind"). Made-up companies and people only, added to `leadfinder_v28`.
+- [ ] **T5-1. The practice set** (free). `plan/TEST-V28.md` lists 20 practice requests and the card each should give: 5 calls with a name clash, 5 tasks with dates ("next Friday", "the 3rd"), 3 emails, 3 changes to an open card, 2 "send it", 1 page ("open Northwind"), and 1 research that stops at the research card's question ("Research Sample Logistics", then "cancel", so nothing is spent). Made-up companies and people only, added to `leadfinder_v28`.
   - **Done when:** the set is written, and its companies and people are in the copy's database.
 - [ ] **T5-2. The 20 requests, for real** (paid, on Al-khair's word: about US$1 of Gemini, TBC, and about US$0.40 of Claude; the meter stops at US$4).
   - On the laptop: Edge and Chrome, once on the laptop's speakers and once with a headset. On a phone: Safari on an iPhone, or Chrome on Android.
@@ -349,3 +350,9 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
   - **Agent Platform, `us-central1`:** the Live connection read the key, then closed (1008): its API is off in the key's project. Its model lookup over REST refuses API keys (it wants a sign-in token).
   - **Gemini API:** the model list has `models/gemini-3.8-live`, and also `gemini-3.8-live-extended-thinking` and `gemini-3.5-transcribe-live`.
   - **Gemini API Live setup** with `models/gemini-3.8-live`: accepted (`setupComplete`) with audio replies in the voice "Kore", an instruction, one `NON_BLOCKING` tool, automatic voice detection (low, low, 300 ms, 800 ms), both transcripts, resumption, and compression (10,000 to 4,000). Also accepted: `customVocabulary`, `languageCodes` `en-AU`, `activityHandling` and `turnCoverage`. Google sent a resume handle (`sessionResumptionUpdate`, `resumable` true) right after the setup.
+- 25 Nov 2026, later: PLAN-V27 joined `master` (`b52190b`, pushed). This plan was checked against it:
+  - **Unchanged:** the command step's input (`text`, `source`, `on_page`, `card`, `last_turn`), `voice-engine.ts` and `bar-session.ts`. `handOver` gains research and two optional tools; T3-1 uses `tell` for the line to say.
+  - **New in PLAN-V27:** research by voice, and the research card's "yes". Added to "What exists already", choice 7, T3-1, T3-2 and T5-1.
+  - **Corrected:** in a conversation, the card's ear is `attachCard`, not `listen.ts`, and a card opens no mic of its own.
+  - **Migration:** the newest is `0029_v26_activity`, so this plan's is `0030`.
+  - **The test key** is still only in the copy's `engine/.env`: no commit, no file git could commit, and no AI Brain note holds it.
