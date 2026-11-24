@@ -7,6 +7,9 @@ is answered 401 `auth_required` and the route never runs. `AdminDep` also needs 
 The guard (`core.api.guard`) has usually checked the cookie already, before any body was read, and
 leaves the answer in `request.state.auth`. These dependencies use it when it is there and look the
 cookie up themselves when it isn't, so a route is safe even if it is mounted without the guard.
+
+`maybe_auth` and the clock take any connection, a request or a WebSocket (PLAN-V28: live voice's
+socket), so a project's router-wide checks work on its sockets too.
 """
 
 import ipaddress
@@ -14,6 +17,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import Depends, Request
+from starlette.requests import HTTPConnection
 
 from core.api.deps import SessionDep
 from core.api.errors import Problem
@@ -26,7 +30,7 @@ from core.auth.throttle import UnknownLogins
 from core.config import Settings, get_settings
 
 
-def clock_dependency(request: Request) -> datetime:
+def clock_dependency(request: HTTPConnection) -> datetime:
     """The time now. A test moves it with `app.state.clock = lambda: later`."""
     clock = getattr(request.app.state, "clock", None) or utcnow
     now: datetime = clock()
@@ -108,7 +112,7 @@ def sign_in_needed(gone: Gone | None, settings: Settings) -> Problem:
 
 
 async def maybe_auth(
-    request: Request, db: SessionDep, settings: AuthSettingsDep, now: NowDep
+    request: HTTPConnection, db: SessionDep, settings: AuthSettingsDep, now: NowDep
 ) -> AuthContext | None:
     known = getattr(request.state, "auth", None)
     if isinstance(known, AuthContext):

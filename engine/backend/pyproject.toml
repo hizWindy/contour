@@ -29,6 +29,9 @@ dependencies = [
     "sse-starlette>=3.5.1",
     "tzdata>=2026.5",
     "uvicorn[standard]",
+    # Live voice's connection to Google (PLAN-V28 choice 3). uvicorn[standard] brings it already:
+    # named here because our own code uses it, at the version the lock holds.
+    "websockets>=17.3",
 ]
 
 [project.scripts]

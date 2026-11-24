@@ -1,12 +1,14 @@
 """The FastAPI app. Swagger is at /docs. All endpoints sit under /api/v1."""
 
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.routing import APIRoute
+from pydantic import TypeAdapter
+from pydantic.json_schema import JsonSchemaMode
 from starlette.types import ASGIApp
 
 from core.api import (
@@ -120,6 +122,29 @@ def document_problems(schema: dict[str, Any]) -> None:
                     response["content"] = body
 
 
+COMPONENT_REF = "#/components/schemas/{model}"
+
+
+def document_schemas(schema: dict[str, Any], types: Sequence[tuple[Any, JsonSchemaMode]]) -> None:
+    """Adds types no route's body or answer holds (like a WebSocket's messages, PLAN-V28) to the
+    OpenAPI file's `components.schemas`, the same way FastAPI writes a route's models, so the
+    website's types have them too. Each type needs a name: a model, or a `type X = ...` alias. A
+    name that is already there with other content stops the app from building: two types can't
+    share one name in the contract."""
+    components: dict[str, Any] = schema.setdefault("components", {}).setdefault("schemas", {})
+    for found_type, mode in types:
+        name = getattr(found_type, "__name__", None)
+        if not isinstance(name, str):
+            raise RuntimeError(f"{found_type!r} needs a name in the contract: make it an alias")
+        written = TypeAdapter(found_type).json_schema(ref_template=COMPONENT_REF, mode=mode)
+        named: dict[str, Any] = written.pop("$defs", {})
+        if "$ref" not in written:
+            named[name] = written  # an alias at the top is written in place: give it its name
+        for key, body in named.items():
+            if components.setdefault(key, body) != body:
+                raise RuntimeError(f"Two types are called {key} in the API contract")
+
+
 class EngineApp(FastAPI):
     def build_middleware_stack(self) -> ASGIApp:
         """The whole stack, wrapped in the request id (PLAN-V15 T1-2). Outside Starlette's own
@@ -133,6 +158,8 @@ class EngineApp(FastAPI):
         if not built_before:
             document_problems(schema)
             document_sign_in(schema)
+            for spec in getattr(self.state, "apps", ()):
+                document_schemas(schema, spec.schemas)
         return schema
 
 

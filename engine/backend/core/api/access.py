@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends, Request
+from starlette.requests import HTTPConnection
 
 from core.api.deps import SessionDep
 from core.api.errors import Problem
@@ -108,9 +109,10 @@ def can_use(auth: AuthContext | None, app: str) -> bool:
 
 
 async def signed_in(
-    request: Request, db: SessionDep, settings: AuthSettingsDep, now: NowDep
+    request: HTTPConnection, db: SessionDep, settings: AuthSettingsDep, now: NowDep
 ) -> AuthContext | None:
-    """Who is signed in, where sign-in is required. None when sign-in is off."""
+    """Who is signed in, where sign-in is required. None when sign-in is off. A request or a
+    WebSocket (PLAN-V28), so `require_app` guards a project's sockets too."""
     if not settings.auth_required:
         return None
     return await maybe_auth(request, db, settings, now)

@@ -8,6 +8,7 @@ from apps.companies.api import router
 from apps.companies.data_tables import DATA_TABLES
 from apps.companies.editables import EDITABLES
 from apps.companies.jobs import JOBS
+from apps.companies.live_voice.messages import CONTRACT as LIVE_VOICE_MESSAGES
 from apps.companies.meeting_form import MeetingFormRunner
 from apps.companies.note_batch import NoteSender
 from apps.companies.note_fields import check_note_fields
@@ -111,4 +112,5 @@ APP = AppSpec(
     data_tables=DATA_TABLES,  # Admin's Data tab (PLAN-V26 Part 4)
     jobs=JOBS,  # the morning search ahead (PLAN-V10 D5)
     on_shutdown=stop_background,  # running preps and sorts stop and log their spend
+    schemas=LIVE_VOICE_MESSAGES,  # live voice's socket messages, for the website (PLAN-V28)
 )

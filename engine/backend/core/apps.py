@@ -13,6 +13,8 @@ from fastapi import APIRouter, FastAPI
 from core.hubspot.needs import HubSpotNeeds
 
 if TYPE_CHECKING:
+    from pydantic.json_schema import JsonSchemaMode
+
     # Only for the type. Importing it would load the Claude client into every migration.
     from core.activity import ActivityPart
     from core.company_leads import CompanyLeads
@@ -57,6 +59,10 @@ class AppSpec:
     # PLAN-V15 T1-6: called once when the backend stops, before the database pool closes, so
     # a project can stop its own background work cleanly (call prep: its running preps).
     on_shutdown: Callable[[FastAPI], Awaitable[None]] | None = None
+    # PLAN-V28 T1-3: types no route's body or answer holds, like a WebSocket's messages, for the
+    # API contract the website's types come from. Each is (a type, "validation" for what the
+    # backend reads or "serialization" for what it sends). `EngineApp.openapi` adds them.
+    schemas: "tuple[tuple[Any, JsonSchemaMode], ...]" = ()
 
 
 def load_apps(names: Sequence[str]) -> list[AppSpec]:

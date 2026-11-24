@@ -473,6 +473,7 @@ dependencies = [
     { name = "sse-starlette" },
     { name = "tzdata" },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "websockets" },
 ]
 
 [package.dev-dependencies]
@@ -514,6 +515,7 @@ requires-dist = [
     { name = "sse-starlette", specifier = ">=3.5.1" },
     { name = "tzdata", specifier = ">=2026.5" },
     { name = "uvicorn", extras = ["standard"] },
+    { name = "websockets", specifier = ">=17.3" },
 ]
 
 [package.metadata.requires-dev]

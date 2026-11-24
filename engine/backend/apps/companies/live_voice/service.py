@@ -1,4 +1,4 @@
-"""Live voice's service (PLAN-V28 T1-2): starting a talk.
+"""Live voice's service (PLAN-V28 T1-2, T1-3): starting a talk, and opening its socket.
 
 **A start** (`POST /assistant/voice/session`) checks, in this order, with the plan's codes:
 1. the Call logs or the Meetings tick, never a Viewer (the route's `need`: 403
@@ -11,6 +11,8 @@ Then the person's other talks end (`replaced`), and a `ready` row is made. Its s
 within 60 seconds. With sign-in off there is no person: the laptop is one person, as for the
 Assistant's other routes.
 
+**The socket** opens a talk once: its owner's `ready` row (60 seconds at most) becomes `open`.
+
 **The month** is a Melbourne calendar month (TBC). Its total is every talk started in it: what
 the rows hold, plus what the talks running here have counted since their last write.
 """
@@ -18,32 +20,43 @@ the rows hold, plus what the talks running here have counted since their last wr
 import logging
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Final
 
 from fastapi import FastAPI
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from apps.companies import assistant_names
 from apps.companies.assistant import person_key
 from apps.companies.assistant_names import HintCache
 from apps.companies.live_voice import store, words
+from apps.companies.live_voice.google_live import Endpoint, GoogleLink, endpoint_for, open_link
+from apps.companies.live_voice.meter import Meter
+from apps.companies.live_voice.models import VoiceSession
+from apps.companies.live_voice.pricing import prices_for
+from apps.companies.live_voice.relay import BrowserSocket, Relay, RelayLimits
 from apps.companies.live_voice.schemas import VoiceLimits, VoiceSessionOut
-from apps.companies.live_voice.setup import instruction
+from apps.companies.live_voice.setup import build_setup, instruction
+from apps.companies.live_voice.store import Save
 from apps.companies.live_voice.talks import READY_FOR, Owner, Ready, Talks
 from apps.companies.meeting_store import MeetingSource
 from apps.companies.notes import MELBOURNE
 from apps.companies.today import TaskCopy
 from core.api.access import can_use
 from core.auth import users
+from core.auth.clock import utcnow
 from core.auth.sessions import AuthContext
 from core.config import Settings
+from core.db.engine import get_sessionmaker
+from core.prefs.service import effective_settings
 
 log = logging.getLogger(__name__)
 
 SOCKET_PATH: Final = "/api/v1/companies/assistant/voice/live"
+
+Sessions = async_sessionmaker[AsyncSession]
 
 
 def _on_app[T](app: FastAPI, name: str, make: Callable[[], T]) -> T:
@@ -59,11 +72,22 @@ def talks_of(app: FastAPI) -> Talks:
     return _on_app(app, "live_voice_talks", Talks)
 
 
+def sessions_of(app: FastAPI) -> Sessions:
+    found: Sessions | None = getattr(app.state, "session_factory", None)
+    return found or get_sessionmaker()
+
+
+def clock_of(app: FastAPI) -> Callable[[], datetime]:
+    """The time now, as the routes see it (a test moves `app.state.clock`)."""
+    clock: Callable[[], datetime] | None = getattr(app.state, "clock", None)
+    return clock or utcnow
+
+
 def owner_of(auth: AuthContext | None) -> Owner:
     return auth.user.id if auth is not None else None
 
 
-# --- The month -----------------------------------------------------------------------------------
+# --- The month (T1-5) -----------------------------------------------------------------------------
 
 
 def month_bounds(now: datetime) -> tuple[datetime, datetime, str]:
@@ -99,6 +123,52 @@ async def spent_this_month(
 
 def seconds_to(end: datetime, now: datetime) -> int:
     return max(1, int((end - now).total_seconds()))
+
+
+class MonthBudget:
+    """The relay's view of the month's limit: the cap in use (it may change on the Settings
+    page), and what every other talk has spent."""
+
+    def __init__(self, sessions: Sessions, talks: Talks, now: Callable[[], datetime]) -> None:
+        self._sessions = sessions
+        self._talks = talks
+        self._now = now
+
+    async def read(self, talk_id: uuid.UUID) -> tuple[Decimal, Decimal]:
+        async with self._sessions() as session:
+            settings = await effective_settings(session)
+            spent = await spent_this_month(session, self._talks, self._now(), besides=talk_id)
+        return settings.live_voice_month_cap_usd, spent.cost_usd
+
+
+class TalkRows:
+    """The relay's row in the database, written while this relay still holds the talk."""
+
+    def __init__(
+        self, sessions: Sessions, talk_id: uuid.UUID, lease: datetime, now: Callable[[], datetime]
+    ) -> None:
+        self._sessions = sessions
+        self._talk_id = talk_id
+        self._lease = lease
+        self._now = now
+
+    async def save(self, saved: Save) -> None:
+        async with self._sessions() as session:
+            await store.save(session, self._talk_id, self._lease, saved, self._now())
+            await session.commit()
+
+    async def finish(self, saved: Save, *, status: str, reason: str) -> None:
+        async with self._sessions() as session:
+            await store.finish(
+                session,
+                self._talk_id,
+                self._lease,
+                saved,
+                status=status,
+                reason=reason,
+                now=self._now(),
+            )
+            await session.commit()
 
 
 # --- The names (choice 22) ------------------------------------------------------------------------
@@ -198,4 +268,92 @@ async def start_talk(
         socket=f"{SOCKET_PATH}?session={row.id}",
         expires_at=now + READY_FOR,
         limits=limits_of(settings),
+    )
+
+
+# --- The socket (T1-3) ----------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Opened:
+    """A talk whose socket may run: its row (now `open`)."""
+
+    row: VoiceSession
+    resumed: bool
+    names: tuple[str, ...] = field(default=(), repr=False)
+
+
+async def open_talk(
+    sessions: Sessions, talks: Talks, talk_id: uuid.UUID, owner: Owner, now: datetime
+) -> Opened | None:
+    """The talk's row becomes `open` for its owner, once. None when it can't: another person's,
+    unknown, too old, opened already, or ended. The caller has taken `talks.begin_open`."""
+    async with sessions() as session:
+        row = await store.open_ready(session, talk_id, owner, since=now - READY_FOR, now=now)
+        if row is not None:
+            await session.commit()
+            ready = talks.take_ready(talk_id)
+            names = ready.names if ready is not None and ready.owner == owner else ()
+            return Opened(row, resumed=False, names=names)
+        found = await store.find(session, talk_id)
+        if found is not None and found.user_id == owner and found.status == "ready":
+            await store.end_one(session, talk_id, "expired", now)  # nobody opened it in time
+            await session.commit()
+            talks.take_ready(talk_id)
+        return None
+
+
+async def end_talk(sessions: Sessions, talk_id: uuid.UUID, reason: str, now: datetime) -> None:
+    """Ends a talk nothing carries (its socket failed to start). Never raises: it is a clean-up."""
+    try:
+        async with sessions() as session:
+            await store.end_one(session, talk_id, reason, now)
+            await session.commit()
+    except Exception as error:
+        log.error("live_voice_end_failed", extra={"kind": type(error).__name__})
+
+
+def relay_limits(app: FastAPI, settings: Settings) -> RelayLimits:
+    """The relay's numbers from settings (a test puts its own on `app.state.live_voice_limits`)."""
+    found: RelayLimits | None = getattr(app.state, "live_voice_limits", None)
+    if found is not None:
+        return found
+    return RelayLimits(
+        talk_seconds=settings.live_voice_talk_minutes * 60,
+        idle_seconds=settings.live_voice_idle_minutes * 60,
+        tool_seconds=settings.live_voice_tool_timeout_seconds,
+    )
+
+
+def make_relay(
+    app: FastAPI,
+    browser: BrowserSocket,
+    opened: Opened,
+    settings: Settings,
+    *,
+    names: tuple[str, ...],
+) -> Relay:
+    """The talk's relay, with Google's address (a test puts a fake one on
+    `app.state.live_voice_endpoint`), the meter and the row's writer."""
+    endpoint: Endpoint = getattr(app.state, "live_voice_endpoint", None) or endpoint_for(settings)
+    sent_names = names if settings.live_voice_names_ok else ()
+
+    async def dial(handle: str | None, seconds: float) -> GoogleLink:
+        setup = build_setup(model=endpoint.model, names=sent_names, handle=handle)
+        return await open_link(endpoint, setup, seconds=seconds)
+
+    row = opened.row
+    assert row.opened_at is not None  # the claim set it
+    sessions = sessions_of(app)
+    now = clock_of(app)
+    return Relay(
+        talk_id=row.id,
+        owner=row.user_id,
+        browser=browser,
+        dial=dial,
+        rows=TalkRows(sessions, row.id, row.opened_at, now),
+        budget=MonthBudget(sessions, talks_of(app), now),
+        meter=Meter(prices_for(settings.live_voice_model), totals=settings.live_voice_usage_totals),
+        limits=relay_limits(app, settings),
+        talk_minutes=settings.live_voice_talk_minutes,
     )

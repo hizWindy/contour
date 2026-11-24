@@ -1,36 +1,69 @@
-"""PLAN-V28 T1-2 on the test database: starting a talk.
+"""PLAN-V28 T1-2 to T1-5 on the test database: starting a talk, the socket end to end through a
+real server and a fake Google, a backend restart, and the month's line.
 
 Sign-in is on (the World harness), so every check runs as it does live. The key is made up and no
 test reaches Google. Names are made up ("Jo Sample", "Sample Logistics").
 """
 
+import asyncio
+import contextlib
+import json
+import logging
 import uuid
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable, Generator
+from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
 import httpx
 import pytest
+import uvicorn
+from fastapi import FastAPI
 from sqlalchemy import select
+from websockets.asyncio.client import ClientConnection, connect
+from websockets.exceptions import InvalidStatus
 
 from apps.companies.live_voice.models import VoiceSession
+from apps.companies.live_voice.relay import RelayLimits
 from apps.companies.live_voice.service import month_bounds, talks_of
 from apps.companies.live_voice.talks import Ready
 from core.auth import admin
 from core.auth.models import User
+from tests.companies.live_voice_fakes import FAKE_KEY, FakeGoogle, frames
 from tests.core.auth_world import FAST, GOOD, World, make_platform_admin, sign_in
 
 pytestmark = pytest.mark.integration
 
-FAKE_KEY = "test-key-not-real-7Q2Z"  # made up: no test reaches Google
-
 VOICE = "/api/v1/companies/assistant/voice"
+ORIGIN = "http://localhost:5173"
+LIMITS = RelayLimits(
+    tool_seconds=0.5,
+    save_every_seconds=0.3,
+    open_seconds=3,
+    limit_finish_seconds=0.5,
+    quiet_seconds=0.05,
+    move_lead_seconds=0.4,
+    old_drain_seconds=0.1,
+    tick_seconds=0.02,
+)
 
 
 @pytest.fixture
 def live_voice_on(server_env: Callable[..., None]) -> None:
     server_env(LIVE_VOICE_OK="true", GEMINI_API_KEY=FAKE_KEY)
+
+
+@pytest.fixture
+async def google() -> AsyncIterator[FakeGoogle]:
+    async with FakeGoogle() as fake:
+        yield fake
+
+
+def ready_app(world: World, google: FakeGoogle) -> FastAPI:
+    world.app.state.live_voice_endpoint = google.endpoint()
+    world.app.state.live_voice_limits = LIMITS
+    return world.app
 
 
 async def account(
@@ -185,3 +218,215 @@ async def test_with_sign_in_off_the_laptop_is_one_person(world: World, live_voic
 
 
 # --- The socket, end to end (T1-3, T1-4) ---------------------------------------------------------
+
+
+class _Server(uvicorn.Server):
+    @contextlib.contextmanager
+    def capture_signals(self) -> Generator[None, None, None]:
+        yield  # leave Ctrl+C to pytest
+
+
+@dataclass
+class Served:
+    host: str
+    server: _Server
+    task: "asyncio.Task[None]"
+
+    async def stop(self) -> None:
+        """Stops the server the way a deploy does: every open socket gets 1012 first."""
+        self.server.should_exit = True
+        await asyncio.wait_for(self.task, 20)
+
+
+async def serve(app: FastAPI) -> Served:
+    server = _Server(
+        uvicorn.Config(
+            app,
+            host="127.0.0.1",
+            port=0,
+            log_config=None,
+            access_log=False,
+            lifespan="off",
+            ws="auto",
+            timeout_graceful_shutdown=10,
+        )
+    )
+    task = asyncio.create_task(server.serve())
+    for _ in range(500):
+        if server.started:
+            break
+        await asyncio.sleep(0.02)
+    port = server.servers[0].sockets[0].getsockname()[1]
+    return Served(f"127.0.0.1:{port}", server, task)
+
+
+@contextlib.asynccontextmanager
+async def served(app: FastAPI) -> AsyncIterator[Served]:
+    running = await serve(app)
+    try:
+        yield running
+    finally:
+        if not running.task.done():
+            await running.stop()
+
+
+async def signed_in(served_: Served, login: str) -> tuple[httpx.AsyncClient, str]:
+    client = httpx.AsyncClient(base_url=f"http://{served_.host}", timeout=10)
+    response = await sign_in(client, login=login)
+    assert response.status_code == 200, response.text
+    return client, f"contour_session={client.cookies['contour_session']}"
+
+
+def socket_of(
+    served_: Served, talk_id: str, cookie: str | None, *, origin: str | None = ORIGIN
+) -> Any:
+    headers = {"Cookie": cookie} if cookie else None
+    return connect(
+        f"ws://{served_.host}{VOICE}/live?session={talk_id}",
+        origin=origin,  # type: ignore[arg-type]
+        additional_headers=headers,
+        open_timeout=5,
+        proxy=None,
+    )
+
+
+async def next_json(socket: ClientConnection, kind: str, seconds: float = 5) -> dict[str, Any]:
+    async with asyncio.timeout(seconds):
+        while True:
+            raw = await socket.recv()
+            if isinstance(raw, str):
+                message = json.loads(raw)
+                if message["type"] == kind:
+                    return dict(message)
+
+
+async def refused_socket(served_: Served, talk_id: str, cookie: str | None, **options: Any) -> None:
+    with pytest.raises(InvalidStatus) as caught:
+        async with socket_of(served_, talk_id, cookie, **options):
+            pass
+    assert caught.value.response.status_code == 403  # closed before it opened
+
+
+async def test_the_socket_carries_a_whole_talk_and_writes_its_row(
+    world: World, google: FakeGoogle, live_voice_on: None
+) -> None:
+    await account(world, "jo.sample")
+    async with served(ready_app(world, google)) as live:
+        client, cookie = await signed_in(live, "jo.sample")
+        talk_id = (await start(client)).json()["id"]
+        async with socket_of(live, talk_id, cookie) as socket:
+            assert (await next_json(socket, "ready"))["resumed"] is False
+            conn = await google.next()
+            assert conn.headers["x-goog-api-key"] == FAKE_KEY
+            pieces = frames(0.2)
+            for piece in pieces:
+                await socket.send(piece)
+            await conn.wait_for(lambda c: bytes(c.audio) == b"".join(pieces))
+            await conn.sound(b"\x02\x00" * 1200)
+            assert await socket.recv() == b"\x02\x00" * 1200
+            await conn.tool_call("call-1", "Log a call with Jo at Sample Logistics")
+            call = await next_json(socket, "tool_call")
+            assert call["request"] == "Log a call with Jo at Sample Logistics"
+            await socket.send(
+                json.dumps(
+                    {"type": "tool_answer", "id": "call-1", "status": "ok", "message": "Ready."}
+                )
+            )
+            await conn.wait_for(lambda c: bool(c.sent("toolResponse")))
+            await conn.handle("handle-1")
+            await conn.usage(promptTokenCount=1000, responseTokenCount=100)
+            await socket.send(json.dumps({"type": "stop"}))
+            ended = await next_json(socket, "ended")
+            assert ended == {"type": "ended", "reason": "stopped", "line": None}
+        await client.aclose()
+    (row,) = await rows(world)
+    assert (row.status, row.end_reason, row.resume_handle) == ("ended", "stopped", None)
+    assert (row.tool_calls, row.tokens_in_other, row.tokens_out_other) == (1, 1000, 100)
+    assert row.cost_usd == Decimal("0.004200")  # 1,000 in at US$3, 100 out at US$12 a million
+    assert row.opened_at is not None and row.ended_at is not None
+
+
+async def test_a_wrong_origin_no_session_and_another_persons_talk_are_refused(
+    world: World, google: FakeGoogle, live_voice_on: None
+) -> None:
+    await account(world, "jo.sample")
+    await account(world, "sam.sample")
+    async with served(ready_app(world, google)) as live:
+        jo, jo_cookie = await signed_in(live, "jo.sample")
+        sam, sam_cookie = await signed_in(live, "sam.sample")
+        talk_id = (await start(jo)).json()["id"]
+        await refused_socket(live, talk_id, jo_cookie, origin="https://evil.example")
+        await refused_socket(live, talk_id, jo_cookie, origin=None)
+        await refused_socket(live, talk_id, None)  # no session: the sign-in guard
+        await refused_socket(live, talk_id, sam_cookie)  # not Sam's talk
+        await refused_socket(live, str(uuid.uuid4()), jo_cookie)
+        await refused_socket(live, "not-an-id", jo_cookie)
+        assert google.connections == []
+        async with socket_of(live, talk_id, jo_cookie) as socket:  # still Jo's to open
+            await next_json(socket, "ready")
+            await refused_socket(live, talk_id, jo_cookie)  # a talk opens once
+            await socket.send(json.dumps({"type": "stop"}))
+            await next_json(socket, "ended")
+        await refused_socket(live, talk_id, jo_cookie)  # and never again once ended
+        await jo.aclose()
+        await sam.aclose()
+
+
+async def test_a_ready_talk_older_than_60_seconds_cant_be_opened(
+    world: World, google: FakeGoogle, live_voice_on: None
+) -> None:
+    await account(world, "jo.sample")
+    async with served(ready_app(world, google)) as live:
+        client, cookie = await signed_in(live, "jo.sample")
+        talk_id = (await start(client)).json()["id"]
+        world.clock.advance(seconds=61)
+        await refused_socket(live, talk_id, cookie)
+        await client.aclose()
+    (row,) = await rows(world)
+    assert (row.status, row.end_reason) == ("ended", "expired")
+
+
+async def test_a_second_start_closes_the_first_talks_socket_as_replaced(
+    world: World, google: FakeGoogle, live_voice_on: None
+) -> None:
+    await account(world, "jo.sample")
+    async with served(ready_app(world, google)) as live:
+        client, cookie = await signed_in(live, "jo.sample")
+        first = (await start(client)).json()["id"]
+        async with socket_of(live, first, cookie) as socket:
+            await next_json(socket, "ready")
+            assert (await start(client)).status_code == 201
+            ended = await next_json(socket, "ended")
+            assert ended["reason"] == "replaced"
+            assert ended["line"] == "Live voice moved to your newer window."
+        await client.aclose()
+        await asyncio.sleep(0.2)
+    by_id = {str(row.id): row for row in await rows(world)}
+    assert (by_id[first].status, by_id[first].end_reason) == ("ended", "replaced")
+
+
+async def test_the_key_is_in_no_log_line_and_no_message_to_the_browser(
+    world: World, google: FakeGoogle, live_voice_on: None, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    await account(world, "jo.sample")
+    received: list[str | bytes] = []
+    async with served(ready_app(world, google)) as live:
+        client, cookie = await signed_in(live, "jo.sample")
+        talk_id = (await start(client)).json()["id"]
+        async with socket_of(live, talk_id, cookie) as socket:
+            await next_json(socket, "ready")
+            conn = await google.next()
+            await conn.handle("handle-secret")
+            await conn.heard("Jo Sample at Sample Logistics", finished=True)
+            await socket.send(json.dumps({"type": "stop"}))
+            async for message in socket:
+                received.append(message)
+        await client.aclose()
+    logged = "\n".join(json.dumps(record.__dict__, default=str) for record in caplog.records)
+    sent = json.dumps([m if isinstance(m, str) else m.hex() for m in received])
+    for secret in (FAKE_KEY, "handle-secret"):
+        assert secret not in logged
+        assert secret not in sent
+    assert "Sample Logistics" not in logged
+    assert any(record.getMessage() == "live_voice_end" for record in caplog.records)

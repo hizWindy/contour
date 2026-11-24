@@ -32,6 +32,8 @@ if TYPE_CHECKING:
 DATABASE_DOWN = "The database isn't running. Start it from engine/ with: docker compose up -d"
 DEFAULT_OPENAPI_PATH = ENGINE_DIR / "frontend" / "openapi.json"
 GRACEFUL_SHUTDOWN_SECONDS = 15  # uvicorn waits this long for open requests and streams
+WS_PING_SECONDS = 20.0  # a WebSocket's ping, and how long its answer may take (PLAN-V28)
+WS_MAX_BYTES = 64 * 1024  # the largest WebSocket message uvicorn takes in
 # Runs that can still be resumed (failed, interrupted) keep their events: a resume reads them.
 PURGEABLE_STATUSES = ("done", "cancelled")
 
@@ -81,12 +83,19 @@ def serve(reload: bool = False) -> int:
     # server behind App Platform (CLIENT_IP_HEADER): uvicorn trusts no forwarding header at all,
     # and core.api.signin.client_ip reads the one header that the front door writes.
     behind_proxy = settings.server_mode and not settings.client_ip_header
-    proxy: dict[str, Any] = {
+    options: dict[str, Any] = {
         "proxy_headers": behind_proxy,
         "forwarded_allow_ips": ",".join(settings.trusted_proxies) if behind_proxy else None,
         # The app writes one `request_done` line per request, with its id and time (PLAN-V15
         # T1-2), so uvicorn's own access line would only double the log.
         "access_log": False,
+        # The browser's WebSockets (PLAN-V28: live voice): pinged every 20 s and dropped after
+        # 20 s without an answer, so a quiet talk stays open and a dead one goes. A message over
+        # 64 KB is refused before the app reads it (the relay's own caps are 4 KB of sound and
+        # 8 KB of text).
+        "ws_ping_interval": WS_PING_SECONDS,
+        "ws_ping_timeout": WS_PING_SECONDS,
+        "ws_max_size": WS_MAX_BYTES,
     }
     if reload:
         # uvicorn's reloader runs the app in a child process on the selector loop.
@@ -99,7 +108,7 @@ def serve(reload: bool = False) -> int:
             reload_dirs=[str(BACKEND_DIR)],
             log_config=None,
             timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_SECONDS,
-            **proxy,
+            **options,
         )
         return 0
     config = uvicorn.Config(
@@ -109,7 +118,7 @@ def serve(reload: bool = False) -> int:
         port=settings.api_port,
         log_config=None,
         timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_SECONDS,
-        **proxy,
+        **options,
     )
     asyncio.run(uvicorn.Server(config).serve(), loop_factory=loop_factory())
     return 0

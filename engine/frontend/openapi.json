@@ -22490,6 +22490,126 @@
         "title": "ValidationProblem",
         "type": "object"
       },
+      "VoiceBrowserMessage": {
+        "discriminator": {
+          "mapping": {
+            "pause": "#/components/schemas/VoicePause",
+            "stop": "#/components/schemas/VoiceStop",
+            "tool_answer": "#/components/schemas/VoiceToolAnswer"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/VoicePause"
+          },
+          {
+            "$ref": "#/components/schemas/VoiceStop"
+          },
+          {
+            "$ref": "#/components/schemas/VoiceToolAnswer"
+          }
+        ]
+      },
+      "VoiceEnded": {
+        "description": "The talk ended. The socket closes next.",
+        "properties": {
+          "line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What to show, like \"Live voice can't reach Google. Using the free mic.\" None for a plain stop",
+            "title": "Line"
+          },
+          "reason": {
+            "enum": [
+              "stopped",
+              "left",
+              "dropped",
+              "unreachable",
+              "time_limit",
+              "limit",
+              "idle",
+              "replaced",
+              "expired",
+              "refused",
+              "restart",
+              "error"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "type": {
+            "const": "ended",
+            "default": "ended",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "reason",
+          "line"
+        ],
+        "title": "VoiceEnded",
+        "type": "object"
+      },
+      "VoiceHeard": {
+        "description": "The rep's words as Google heard them. Shown as captions; kept nowhere.",
+        "properties": {
+          "final": {
+            "default": false,
+            "description": "Google says these words are finished",
+            "title": "Final",
+            "type": "boolean"
+          },
+          "interim": {
+            "default": false,
+            "description": "A guess: the next `heard` replaces it",
+            "title": "Interim",
+            "type": "boolean"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "type": {
+            "const": "heard",
+            "default": "heard",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "text",
+          "final",
+          "interim"
+        ],
+        "title": "VoiceHeard",
+        "type": "object"
+      },
+      "VoiceInterrupted": {
+        "description": "The rep talked over the Assistant: stop its sound and empty the buffer at once.",
+        "properties": {
+          "type": {
+            "const": "interrupted",
+            "default": "interrupted",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "VoiceInterrupted",
+        "type": "object"
+      },
       "VoiceLimits": {
         "description": "What the browser must keep to, and the talk's own limits.",
         "properties": {
@@ -22559,6 +22679,147 @@
         "title": "VoiceLimits",
         "type": "object"
       },
+      "VoicePause": {
+        "additionalProperties": false,
+        "description": "The rep went quiet: Google may answer now. Becomes Google's `audioStreamEnd`.",
+        "properties": {
+          "type": {
+            "const": "pause",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "VoicePause",
+        "type": "object"
+      },
+      "VoiceReady": {
+        "description": "Google is ready: send sound now.",
+        "properties": {
+          "resumed": {
+            "default": false,
+            "description": "This talk carried on after the backend restarted",
+            "title": "Resumed",
+            "type": "boolean"
+          },
+          "type": {
+            "const": "ready",
+            "default": "ready",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "resumed"
+        ],
+        "title": "VoiceReady",
+        "type": "object"
+      },
+      "VoiceReconnected": {
+        "description": "The talk carries on.",
+        "properties": {
+          "type": {
+            "const": "reconnected",
+            "default": "reconnected",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "VoiceReconnected",
+        "type": "object"
+      },
+      "VoiceReconnecting": {
+        "description": "The connection to Google dropped: the relay is resuming it (up to 2 tries in 10 s).",
+        "properties": {
+          "type": {
+            "const": "reconnecting",
+            "default": "reconnecting",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "VoiceReconnecting",
+        "type": "object"
+      },
+      "VoiceRelayMessage": {
+        "discriminator": {
+          "mapping": {
+            "ended": "#/components/schemas/VoiceEnded",
+            "heard": "#/components/schemas/VoiceHeard",
+            "interrupted": "#/components/schemas/VoiceInterrupted",
+            "ready": "#/components/schemas/VoiceReady",
+            "reconnected": "#/components/schemas/VoiceReconnected",
+            "reconnecting": "#/components/schemas/VoiceReconnecting",
+            "said": "#/components/schemas/VoiceSaid",
+            "tool_call": "#/components/schemas/VoiceToolCall",
+            "tool_cancel": "#/components/schemas/VoiceToolCancel",
+            "turn_complete": "#/components/schemas/VoiceTurnComplete"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/VoiceReady"
+          },
+          {
+            "$ref": "#/components/schemas/VoiceHeard"
+          },
+          {
+            "$ref": "#/components/schemas/VoiceSaid"
+          },
+          {
+            "$ref": "#/components/schemas/VoiceInterrupted"
+          },
+          {
+            "$ref": "#/components/schemas/VoiceTurnComplete"
+          },
+          {
+            "$ref": "#/components/schemas/VoiceToolCall"
+          },
+          {
+            "$ref": "#/components/schemas/VoiceToolCancel"
+          },
+          {
+            "$ref": "#/components/schemas/VoiceReconnecting"
+          },
+          {
+            "$ref": "#/components/schemas/VoiceReconnected"
+          },
+          {
+            "$ref": "#/components/schemas/VoiceEnded"
+          }
+        ]
+      },
+      "VoiceSaid": {
+        "description": "The Assistant's words as it says them. Shown as captions; kept nowhere.",
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "type": {
+            "const": "said",
+            "default": "said",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "text"
+        ],
+        "title": "VoiceSaid",
+        "type": "object"
+      },
       "VoiceSessionIn": {
         "additionalProperties": false,
         "properties": {
@@ -22616,6 +22877,144 @@
           "limits"
         ],
         "title": "VoiceSessionOut",
+        "type": "object"
+      },
+      "VoiceStop": {
+        "additionalProperties": false,
+        "description": "End the talk: Stop, V, Esc, \"that's all\", or the browser's 2-minute quiet stop.",
+        "properties": {
+          "type": {
+            "const": "stop",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "VoiceStop",
+        "type": "object"
+      },
+      "VoiceToolAnswer": {
+        "additionalProperties": false,
+        "description": "What Contour did with a `tool_call`, for Gemini to say. Never empty when it reaches\nGoogle: a blank `message` gets the status's own words.",
+        "properties": {
+          "id": {
+            "description": "The tool call's id",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "description": "The line for Gemini to say, like \"Ready. Say send it.\" or Claude's question",
+            "examples": [
+              "Ready. Say send it."
+            ],
+            "maxLength": 500,
+            "title": "Message",
+            "type": "string"
+          },
+          "retryable": {
+            "default": false,
+            "description": "Asking again may work",
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "status": {
+            "description": "ok: done or ready (a card opened); unsure: `message` is a question to ask; error: it failed; timeout: it took too long",
+            "enum": [
+              "ok",
+              "unsure",
+              "error",
+              "timeout"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "type": {
+            "const": "tool_answer",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "status"
+        ],
+        "title": "VoiceToolAnswer",
+        "type": "object"
+      },
+      "VoiceToolCall": {
+        "description": "Gemini asks Contour: run the command step with `request`, then answer with the same id.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "request": {
+            "description": "The rep's request, in their words as Gemini heard them",
+            "examples": [
+              "Log a call with Jo at Sample Logistics. They want a site tour next week."
+            ],
+            "title": "Request",
+            "type": "string"
+          },
+          "type": {
+            "const": "tool_call",
+            "default": "tool_call",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "request"
+        ],
+        "title": "VoiceToolCall",
+        "type": "object"
+      },
+      "VoiceToolCancel": {
+        "description": "Stop working on these tool calls (Google cancelled them, or no answer came in time). A late\nanswer is ignored.",
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ids",
+            "type": "array"
+          },
+          "type": {
+            "const": "tool_cancel",
+            "default": "tool_cancel",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "ids"
+        ],
+        "title": "VoiceToolCancel",
+        "type": "object"
+      },
+      "VoiceTurnComplete": {
+        "description": "The Assistant finished its turn.",
+        "properties": {
+          "type": {
+            "const": "turn_complete",
+            "default": "turn_complete",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "VoiceTurnComplete",
         "type": "object"
       },
       "WatchCounts": {

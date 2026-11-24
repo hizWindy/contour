@@ -12512,6 +12512,64 @@ export interface components {
              */
             type: string;
         };
+        VoiceBrowserMessage: components["schemas"]["VoicePause"] | components["schemas"]["VoiceStop"] | components["schemas"]["VoiceToolAnswer"];
+        /**
+         * VoiceEnded
+         * @description The talk ended. The socket closes next.
+         */
+        VoiceEnded: {
+            /**
+             * Line
+             * @description What to show, like "Live voice can't reach Google. Using the free mic." None for a plain stop
+             */
+            line: string | null;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "stopped" | "left" | "dropped" | "unreachable" | "time_limit" | "limit" | "idle" | "replaced" | "expired" | "refused" | "restart" | "error";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "ended";
+        };
+        /**
+         * VoiceHeard
+         * @description The rep's words as Google heard them. Shown as captions; kept nowhere.
+         */
+        VoiceHeard: {
+            /**
+             * Final
+             * @description Google says these words are finished
+             * @default false
+             */
+            final: boolean;
+            /**
+             * Interim
+             * @description A guess: the next `heard` replaces it
+             * @default false
+             */
+            interim: boolean;
+            /** Text */
+            text: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "heard";
+        };
+        /**
+         * VoiceInterrupted
+         * @description The rep talked over the Assistant: stop its sound and empty the buffer at once.
+         */
+        VoiceInterrupted: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "interrupted";
+        };
         /**
          * VoiceLimits
          * @description What the browser must keep to, and the talk's own limits.
@@ -12569,6 +12627,70 @@ export interface components {
              */
             tool_seconds: number;
         };
+        /**
+         * VoicePause
+         * @description The rep went quiet: Google may answer now. Becomes Google's `audioStreamEnd`.
+         */
+        VoicePause: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "pause";
+        };
+        /**
+         * VoiceReady
+         * @description Google is ready: send sound now.
+         */
+        VoiceReady: {
+            /**
+             * Resumed
+             * @description This talk carried on after the backend restarted
+             * @default false
+             */
+            resumed: boolean;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "ready";
+        };
+        /**
+         * VoiceReconnected
+         * @description The talk carries on.
+         */
+        VoiceReconnected: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "reconnected";
+        };
+        /**
+         * VoiceReconnecting
+         * @description The connection to Google dropped: the relay is resuming it (up to 2 tries in 10 s).
+         */
+        VoiceReconnecting: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "reconnecting";
+        };
+        VoiceRelayMessage: components["schemas"]["VoiceReady"] | components["schemas"]["VoiceHeard"] | components["schemas"]["VoiceSaid"] | components["schemas"]["VoiceInterrupted"] | components["schemas"]["VoiceTurnComplete"] | components["schemas"]["VoiceToolCall"] | components["schemas"]["VoiceToolCancel"] | components["schemas"]["VoiceReconnecting"] | components["schemas"]["VoiceReconnected"] | components["schemas"]["VoiceEnded"];
+        /**
+         * VoiceSaid
+         * @description The Assistant's words as it says them. Shown as captions; kept nowhere.
+         */
+        VoiceSaid: {
+            /** Text */
+            text: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "said";
+        };
         /** VoiceSessionIn */
         VoiceSessionIn: {
             /**
@@ -12601,6 +12723,97 @@ export interface components {
              * @example /api/v1/companies/assistant/voice/live?session=0b6f...
              */
             socket: string;
+        };
+        /**
+         * VoiceStop
+         * @description End the talk: Stop, V, Esc, "that's all", or the browser's 2-minute quiet stop.
+         */
+        VoiceStop: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "stop";
+        };
+        /**
+         * VoiceToolAnswer
+         * @description What Contour did with a `tool_call`, for Gemini to say. Never empty when it reaches
+         *     Google: a blank `message` gets the status's own words.
+         */
+        VoiceToolAnswer: {
+            /**
+             * Id
+             * @description The tool call's id
+             */
+            id: string;
+            /**
+             * Message
+             * @description The line for Gemini to say, like "Ready. Say send it." or Claude's question
+             * @default
+             * @example Ready. Say send it.
+             */
+            message: string;
+            /**
+             * Retryable
+             * @description Asking again may work
+             * @default false
+             */
+            retryable: boolean;
+            /**
+             * Status
+             * @description ok: done or ready (a card opened); unsure: `message` is a question to ask; error: it failed; timeout: it took too long
+             * @enum {string}
+             */
+            status: "ok" | "unsure" | "error" | "timeout";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tool_answer";
+        };
+        /**
+         * VoiceToolCall
+         * @description Gemini asks Contour: run the command step with `request`, then answer with the same id.
+         */
+        VoiceToolCall: {
+            /** Id */
+            id: string;
+            /**
+             * Request
+             * @description The rep's request, in their words as Gemini heard them
+             * @example Log a call with Jo at Sample Logistics. They want a site tour next week.
+             */
+            request: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tool_call";
+        };
+        /**
+         * VoiceToolCancel
+         * @description Stop working on these tool calls (Google cancelled them, or no answer came in time). A late
+         *     answer is ignored.
+         */
+        VoiceToolCancel: {
+            /** Ids */
+            ids: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tool_cancel";
+        };
+        /**
+         * VoiceTurnComplete
+         * @description The Assistant finished its turn.
+         */
+        VoiceTurnComplete: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "turn_complete";
         };
         /**
          * WatchCounts

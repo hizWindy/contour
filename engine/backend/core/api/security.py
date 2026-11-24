@@ -10,7 +10,9 @@ Three layers, added by `add_security_layers`:
   DELETE. If it is there and it isn't one of ours (or it is `null`), the request is refused
   before its body is read. This stops a web page from using the engine through the person's
   browser, even with forms that skip CORS checks. No `Origin` means curl, the command line or
-  a test, which is allowed.
+  a test, which is allowed. A WebSocket (PLAN-V28: live voice) is stricter: a browser always
+  sends `Origin` when it opens one, so it needs exactly one, and ours, or it is closed with 1008
+  before it opens. CORS never applies to a WebSocket, so this is its only origin check.
 - **Security headers** on every response, including errors.
 
 They are plain ASGI middleware (not BaseHTTPMiddleware), so streaming responses like the live
@@ -76,14 +78,27 @@ def allowed_origins(settings: Settings) -> frozenset[str]:
     return frozenset({origin.lower() for origin in settings.cors_origins} | own)
 
 
+def socket_origin_allowed(headers: Headers, allowed: frozenset[str]) -> bool:
+    """A WebSocket comes from one of our own pages: exactly one `Origin`, and one of ours. A
+    browser always sends it; "null", none or two are refused."""
+    origins = headers.getlist("origin")
+    return len(origins) == 1 and origins[0].strip().lower() in allowed
+
+
 class OriginGuard:
-    """Refuses a POST, PUT, PATCH or DELETE from an origin that isn't ours."""
+    """Refuses a POST, PUT, PATCH or DELETE from an origin that isn't ours, and a WebSocket from
+    anywhere but our own pages (closed with 1008 before it opens)."""
 
     def __init__(self, app: ASGIApp, allowed: frozenset[str]) -> None:
         self.app = app
         self.allowed = allowed
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "websocket" and not socket_origin_allowed(
+            Headers(scope=scope), self.allowed
+        ):
+            await send({"type": "websocket.close", "code": 1008})  # refused before it opens
+            return
         if scope["type"] == "http" and scope["method"] in UNSAFE_METHODS:
             origins = Headers(scope=scope).getlist("origin")
             # The answer comes from the headers alone, so the body is never read.
@@ -206,7 +221,9 @@ def add_security_layers(app: FastAPI, settings: Settings) -> None:
     if getattr(app.state, "security_layers", False):
         return
     app.state.security_layers = True
-    app.add_middleware(OriginGuard, allowed=allowed_origins(settings))
+    # Kept on the app too, so a WebSocket route checks the same list itself (PLAN-V28).
+    app.state.allowed_origins = allowed_origins(settings)
+    app.add_middleware(OriginGuard, allowed=app.state.allowed_origins)
 
     # The host check and the headers wrap the finished stack, not the middleware list. Then
     # the host check is the outermost layer however the other layers were added (a CORS layer
