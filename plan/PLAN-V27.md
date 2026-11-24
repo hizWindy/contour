@@ -7,7 +7,7 @@ This plan makes the Lead Finder about new companies only. The Run tab keeps one 
 - **Status:** drafted on 23 Nov 2026 from Al-khair's chat. Approved by Al-khair on 24 Nov (`implement v27`), and being built on `plan-v27` in `../contour-v27`.
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
 - **Last updated:** 25 Nov 2026.
-- **Progress:** S0, T1-1, T1-2, T1-4, T2-2, T2-3, T3-1, T4-1, T4-3 and T5-1 done (24 Nov), and T3-3, T4-4 and T5-4 (25 Nov). Built and waiting: T1-3, T3-2 and T4-2 (Al-khair's look), T2-1 (S2's numbers). M1 done (25 Nov): `master` holds this plan. T5-2 (paid) and T5-3 wait for Al-khair.
+- **Progress:** S0, T1-1, T1-2, T1-4, T2-2, T2-3, T3-1, T4-1, T4-3 and T5-1 done (24 Nov), and T3-3, T4-4 and T5-4 (25 Nov). Built and waiting: T1-3, T3-2 and T4-2 (Al-khair's look), T2-1 (S2's numbers). M1 and M2 done (25 Nov): live runs `b52190b`. M3's paid steps, T5-2 (paid) and T5-3 wait for Al-khair; S2, S3 and the browser pass are still open (see the Log).
 - **Sources:**
   - Al-khair's chat on 23 Nov 2026: his six asks, then his note that Property Daily is one of the triggers, not a source of leads;
   - the code on `master` (`ff0f658`), read on 23 Nov;
@@ -252,7 +252,7 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
 ## Merge, checks and going live
 
 - [x] **M1. Merge** (`merge v27`, on Al-khair's word). Done 25 Nov 2026, without the simulator pass (see the Log). Full checks, the `merge-check` skill, a fresh `review-agent`, and the `simulator-agent` on the new flows. Then `git merge --ff-only plan-v27` in the main folder.
-- [ ] **M2. Deploy** (`deploy v27`), after S2 and S3. First the `simulator-agent` on the new flows (M1 couldn't run it), then push `master` and deploy.
+- [x] **M2. Deploy** (`deploy v27`). Done 25 Nov 2026, on Al-khair's word ("cleanly and faster"), before S2, S3 and the `simulator-agent` (see the Log). Push `master`, then deploy.
 - [ ] **M3. The live check:**
   1. The Run tab shows only Find new leads.
   2. A Find new leads run with a target of 25 and a US$15 cap (paid, on Al-khair's word): Results has no HubSpot company with recent activity, and the feed has the "Left out" line.
@@ -332,3 +332,8 @@ As [PLAN-V25](PLAN-V25.md)'s "How to work this plan", with these changes:
   - **A fresh `review-agent`:** "Ready with notes", no blocker. Its four "should fix" items are fixed (`7b06458`): (1) `tool_feeds_find_companies` is **on** by default until S2 and A6, so no deploy can lose Property Daily's own finds (decision 7); choice 8 is then one Admin click; (2) the research tray sits above a bar fixed at the bottom of a phone (`--bottom-bar`), so it no longer covers "Add to HubSpot"; (3) the run options keep an always-off `top_up`, so a Start page opened before the deploy still draws; (4) the quiet toast gives the month, the four new settings sit in their groups with plain choice words, and no plan name shows on screen. Tests after the fixes: the fast backend set passes (the hook), the changed backend files 386 passed, the changed website areas 1,150 of 1,150.
   - **The review's notes, for Al-khair (TBC):** (a) choice 26: when a found company's city is unknown, or the HubSpot company has no office, the exact name still counts as sure, so a different company with the same name worked in the last 12 months is left out; small today (145 of 13,921 companies have an activity date), check the live count at S2; (b) after a bulk add, the sent leads move behind the "In HubSpot" chip; (c) a lead marked "Same company" never turns quiet later (`relabel` skips settled leads); (d) after a 409 `not_a_maybe`, the error keeps "Try again"; (e) with `max_concurrent_runs` at 1, "Research Northwind" is refused while any run goes, a city round included; (f) Old offices leaves before S1 tells Levi.
   - **Not run: the `simulator-agent`.** The laptop had 0.9 GB of memory free, and a browser pass needs about 2 GB. It runs before `deploy v27` (M2), with the screens at 1440 and 390 px.
+- 25 Nov 2026, M2 (`deploy v27`, on Al-khair's word, "cleanly and faster"):
+  - **Pushed** `master` (`d32ff3f..b52190b`, 12 commits, 135 files). Checked first: no key, `.env`, `COMPANIES.xlsx`, `plan/shots/` or client name; the only emails are made-up ones.
+  - **Deployed** from the dashboard by Al-khair: Windows App Control now blocks `doctl.exe` on this laptop, and the DigitalOcean connector can look but has no deploy action. Deployment `bf419054` (24 Nov 22:09 UTC, 25 Nov 9:09 am Sydney): 11 of 11 steps, backend, `migrate` and website all on `b52190b`, backend healthy. No migration in this plan.
+  - **Free live checks** at https://contourhq.online (the old `ondigitalocean.app` address answers 400 `host_not_allowed`, as since 20 Nov): health ok, database ok; the website serves the new bundle; the new routes answer 401 without sign-in.
+  - **Skipped to go faster, still open:** the `simulator-agent` (0.6 GB of memory free); S2 (it can still read the runs before this deploy); S3 (if HubSpot write is off on live, the bulk add says so and writes nothing). M3 step 1 needs a signed-in look; steps 2 to 4 cost money or write to HubSpot, on Al-khair's word.
