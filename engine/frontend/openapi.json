@@ -22490,6 +22490,134 @@
         "title": "ValidationProblem",
         "type": "object"
       },
+      "VoiceLimits": {
+        "description": "What the browser must keep to, and the talk's own limits.",
+        "properties": {
+          "audio_rate_max": {
+            "default": 1.5,
+            "description": "Sound may average at most this many times real time",
+            "title": "Audio Rate Max",
+            "type": "number"
+          },
+          "frame_bytes": {
+            "default": 640,
+            "description": "One 20 ms piece of sound to the relay",
+            "title": "Frame Bytes",
+            "type": "integer"
+          },
+          "idle_seconds": {
+            "description": "A talk ends after this long with nothing at all from the browser",
+            "title": "Idle Seconds",
+            "type": "integer"
+          },
+          "max_binary_bytes": {
+            "default": 4096,
+            "description": "The largest sound frame taken",
+            "title": "Max Binary Bytes",
+            "type": "integer"
+          },
+          "max_text_bytes": {
+            "default": 8192,
+            "description": "The largest JSON message taken",
+            "title": "Max Text Bytes",
+            "type": "integer"
+          },
+          "sample_rate_in": {
+            "default": 16000,
+            "description": "Sound to the relay: 16-bit PCM, mono",
+            "title": "Sample Rate In",
+            "type": "integer"
+          },
+          "sample_rate_out": {
+            "default": 24000,
+            "description": "Sound from the relay: 16-bit PCM",
+            "title": "Sample Rate Out",
+            "type": "integer"
+          },
+          "talk_seconds": {
+            "description": "A talk ends after this long (30 minutes, TBC)",
+            "title": "Talk Seconds",
+            "type": "integer"
+          },
+          "tool_seconds": {
+            "description": "A tool call not answered in this long gets the relay's own answer",
+            "title": "Tool Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "talk_seconds",
+          "idle_seconds",
+          "tool_seconds",
+          "sample_rate_in",
+          "sample_rate_out",
+          "frame_bytes",
+          "max_binary_bytes",
+          "max_text_bytes",
+          "audio_rate_max"
+        ],
+        "title": "VoiceLimits",
+        "type": "object"
+      },
+      "VoiceSessionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "company_key": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The company on screen (a HubSpot id, or lead:<id>), so its names come first in the hints. Only its key: the names are read on the server, from our copy",
+            "examples": [
+              "101"
+            ],
+            "title": "Company Key"
+          }
+        },
+        "title": "VoiceSessionIn",
+        "type": "object"
+      },
+      "VoiceSessionOut": {
+        "description": "A talk that is ready: open its socket within 60 seconds.",
+        "properties": {
+          "expires_at": {
+            "description": "Open the socket before this, or start again",
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/VoiceLimits"
+          },
+          "socket": {
+            "description": "The socket's path on this site, with the talk's id",
+            "examples": [
+              "/api/v1/companies/assistant/voice/live?session=0b6f..."
+            ],
+            "title": "Socket",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "socket",
+          "expires_at",
+          "limits"
+        ],
+        "title": "VoiceSessionOut",
+        "type": "object"
+      },
       "WatchCounts": {
         "description": "How the HubSpot companies split. Every company is counted once.",
         "properties": {
@@ -27381,6 +27509,160 @@
           }
         ],
         "summary": "Today",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/assistant/voice/session": {
+      "post": {
+        "description": "PLAN-V28: makes a `ready` talk and answers its `id`, the socket's path (`socket`, `WS ...?session=<id>`) and the limits. Open the socket within 60 seconds (`expires_at`), or start again. The checks, in this order: the Call logs or the Meetings tick (a Viewer gets 403 `viewer_read_only`); my own live voice switch (403 `live_voice_not_allowed`); live voice on, with its key, on the server (409 `live_voice_off`); this month's limit (429 `live_voice_limit`, with `Retry-After` until the month changes); and the talks at once on the server (503 `live_voice_busy`, with `Retry-After`). Starting many times in a minute is 429 `too_many_starts`. A start ends my other talk, if any: its socket closes with `ended` and reason `replaced`. With the names OK on the server, up to 50 names I'm likely to say (read from our copy, with `company_key` first) go to Google as hints; they are never kept. No sound, words or names are kept: the talk's row holds counts only.",
+        "operationId": "start_live_voice",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/VoiceSessionIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceSessionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Start a live voice talk",
         "tags": [
           "Companies"
         ]

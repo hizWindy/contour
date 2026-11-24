@@ -485,6 +485,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/assistant/voice/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a live voice talk
+         * @description PLAN-V28: makes a `ready` talk and answers its `id`, the socket's path (`socket`, `WS ...?session=<id>`) and the limits. Open the socket within 60 seconds (`expires_at`), or start again. The checks, in this order: the Call logs or the Meetings tick (a Viewer gets 403 `viewer_read_only`); my own live voice switch (403 `live_voice_not_allowed`); live voice on, with its key, on the server (409 `live_voice_off`); this month's limit (429 `live_voice_limit`, with `Retry-After` until the month changes); and the talks at once on the server (503 `live_voice_busy`, with `Retry-After`). Starting many times in a minute is 429 `too_many_starts`. A start ends my other talk, if any: its socket closes with `ended` and reason `replaced`. With the names OK on the server, up to 50 names I'm likely to say (read from our copy, with `company_key` first) go to Google as hints; they are never kept. No sound, words or names are kept: the talk's row holds counts only.
+         */
+        post: operations["start_live_voice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/call-notes": {
         parameters: {
             query?: never;
@@ -12493,6 +12513,96 @@ export interface components {
             type: string;
         };
         /**
+         * VoiceLimits
+         * @description What the browser must keep to, and the talk's own limits.
+         */
+        VoiceLimits: {
+            /**
+             * Audio Rate Max
+             * @description Sound may average at most this many times real time
+             * @default 1.5
+             */
+            audio_rate_max: number;
+            /**
+             * Frame Bytes
+             * @description One 20 ms piece of sound to the relay
+             * @default 640
+             */
+            frame_bytes: number;
+            /**
+             * Idle Seconds
+             * @description A talk ends after this long with nothing at all from the browser
+             */
+            idle_seconds: number;
+            /**
+             * Max Binary Bytes
+             * @description The largest sound frame taken
+             * @default 4096
+             */
+            max_binary_bytes: number;
+            /**
+             * Max Text Bytes
+             * @description The largest JSON message taken
+             * @default 8192
+             */
+            max_text_bytes: number;
+            /**
+             * Sample Rate In
+             * @description Sound to the relay: 16-bit PCM, mono
+             * @default 16000
+             */
+            sample_rate_in: number;
+            /**
+             * Sample Rate Out
+             * @description Sound from the relay: 16-bit PCM
+             * @default 24000
+             */
+            sample_rate_out: number;
+            /**
+             * Talk Seconds
+             * @description A talk ends after this long (30 minutes, TBC)
+             */
+            talk_seconds: number;
+            /**
+             * Tool Seconds
+             * @description A tool call not answered in this long gets the relay's own answer
+             */
+            tool_seconds: number;
+        };
+        /** VoiceSessionIn */
+        VoiceSessionIn: {
+            /**
+             * Company Key
+             * @description The company on screen (a HubSpot id, or lead:<id>), so its names come first in the hints. Only its key: the names are read on the server, from our copy
+             * @example 101
+             */
+            company_key?: string | null;
+        };
+        /**
+         * VoiceSessionOut
+         * @description A talk that is ready: open its socket within 60 seconds.
+         */
+        VoiceSessionOut: {
+            /**
+             * Expires At
+             * Format: date-time
+             * @description Open the socket before this, or start again
+             */
+            expires_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            limits: components["schemas"]["VoiceLimits"];
+            /**
+             * Socket
+             * @description The socket's path on this site, with the talk's id
+             * @example /api/v1/companies/assistant/voice/live?session=0b6f...
+             */
+            socket: string;
+        };
+        /**
          * WatchCounts
          * @description How the HubSpot companies split. Every company is counted once.
          */
@@ -15899,6 +16009,129 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Today"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    start_live_voice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["VoiceSessionIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceSessionOut"];
                 };
             };
             /** @description The request can't be understood */

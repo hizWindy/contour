@@ -24,6 +24,7 @@ from apps.companies import (
 )
 from apps.companies.deals import DealState
 from apps.companies.deps import LeadsDep
+from apps.companies.live_voice import api as live_voice_api
 from apps.companies.schemas import (
     CompanyDetail,
     CompanyFacets,
@@ -150,6 +151,7 @@ router.include_router(api_script.router)
 router.include_router(api_notes.router)
 router.include_router(api_meetings.router)
 router.include_router(api_assistant.router)
+router.include_router(live_voice_api.router)  # PLAN-V28: live voice
 
 
 @router.get(
