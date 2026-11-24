@@ -206,7 +206,8 @@ export function ResearchCard({
     reading.current?.abort()
     const request = new AbortController()
     reading.current = request
-    readResearch(said || shown, picked?.key ?? null, request.signal).then(
+    // The rep's words only: a choice's HubSpot name never leaves for the server's run name
+    readResearch(said, picked?.key ?? null, request.signal).then(
       (settled) => {
         if (request.signal.aborted) return
         if (goTo(settled, shown)) return

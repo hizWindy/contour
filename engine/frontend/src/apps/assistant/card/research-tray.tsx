@@ -173,12 +173,13 @@ function ResearchItem({ research }: { research: Research }) {
     if (end) sayResearch(end)
   }, [end])
   // Once it ends, its lead shows in Results, on Home and in the runs list, as after a run's page.
+  // Any end counts, also one the stream can't follow to its last event (the flow trace).
   const queryClient = useQueryClient()
   useEffect(() => {
-    if (!state.finished) return
+    if (!end) return
     refreshLeads(queryClient)
     void queryClient.invalidateQueries({ queryKey: queryKeys.runs.lists() })
-  }, [state.finished, queryClient])
+  }, [end, queryClient])
 
   return (
     <section
