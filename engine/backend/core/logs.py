@@ -2,8 +2,9 @@
 
 Secrets and row values never reach the log. Every message, extra field and exception text passes
 through two cleaners:
-- `redact` replaces the database password, the Anthropic API key, anything shaped like an
-  Anthropic key (`sk-ant-...`) and a session cookie (`contour_session=...`) with `[redacted]`.
+- `redact` replaces the database password, the API keys (Anthropic's, and live voice's Gemini key,
+  PLAN-V28), anything shaped like an Anthropic key (`sk-ant-...`) or a Google key (`AIza...`) and
+  a session cookie (`contour_session=...`) with `[redacted]`.
 - `hide_detail` replaces the `DETAIL:` part of a Postgres error with `DETAIL: [hidden]`. That
   part quotes the values of the row that failed, like `Key (company_key)=(Acme) already
   exists.` or `Failing row contains (...)`, and those values are company names, notes and
@@ -30,6 +31,8 @@ DETAIL_HIDDEN = "DETAIL: [hidden]"
 # Anthropic keys look like sk-ant-api03-..., so this also catches a key that isn't configured
 # here (one pasted into a prompt or an error text).
 _KEY_SHAPE = r"sk-ant-[A-Za-z0-9_\-]+"
+# Google API keys (live voice's Gemini key, PLAN-V28) are AIza and 35 more characters.
+_GOOGLE_KEY_SHAPE = r"AIza[0-9A-Za-z_\-]{35}"
 # A session cookie, name and value, as it is written in a Cookie or a Set-Cookie header. The
 # engine never logs a header, so this only matters if one lands in an error text one day.
 _COOKIE_SHAPE = r"(?:__Host-)?contour_session=[^\s;,\"']*"
@@ -84,6 +87,7 @@ def _configured_secrets() -> tuple[str, ...]:
         settings.arealytics_username,
         settings.arealytics_password,
         settings.first_admin_password,
+        settings.gemini_api_key,  # live voice (PLAN-V28)
     ):
         if key is not None:
             configured.append(key.get_secret_value())
@@ -95,7 +99,7 @@ def _configured_secrets() -> tuple[str, ...]:
 def _pattern(secrets: tuple[str, ...]) -> re.Pattern[str]:
     # The longest first, so a secret that holds another one is removed whole.
     parts = [re.escape(secret) for secret in sorted(secrets, key=len, reverse=True)]
-    return re.compile("|".join([*parts, _KEY_SHAPE, _COOKIE_SHAPE]))
+    return re.compile("|".join([*parts, _KEY_SHAPE, _GOOGLE_KEY_SHAPE, _COOKIE_SHAPE]))
 
 
 def _current_pattern() -> re.Pattern[str]:

@@ -19,7 +19,13 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from core.api.deps import SessionDep
 from core.api.errors import Problem, ProblemDetails, ValidationProblem
-from core.api.models import OFFSET_MAX, OutModel, SafeText, optional_in_types
+from core.api.models import (
+    OFFSET_MAX,
+    OutModel,
+    SafeText,
+    no_default_in_types,
+    optional_in_types,
+)
 from core.api.signin import (
     AuthSettingsDep,
     HasherDep,
@@ -31,7 +37,7 @@ from core.api.signin import (
 )
 from core.auth import audit, clean, cookies, records, service, sessions, users, words
 from core.auth.features import Role as Role
-from core.auth.features import apps_from_features, effective_features
+from core.auth.features import apps_from_features, can_talk, effective_features
 from core.auth.models import AuditEntry, User, UserSession
 from core.auth.passwords import PasswordRefused
 from core.auth.sessions import Limits
@@ -134,6 +140,10 @@ class LoginOut(OutModel):
 class MeOut(OutModel):
     """Who is signed in. `user` is null only where sign-in is off (`auth_required` false)."""
 
+    # `live_voice` came in PLAN-V28 T1-1: the API always sends it, and the website's types leave
+    # it optional, so older test data still type-checks.
+    model_config = ConfigDict(json_schema_extra=optional_in_types("live_voice"))
+
     auth_required: bool = Field(
         description="False: sign-in is off on this backend and nothing needs a session"
     )
@@ -144,6 +154,16 @@ class MeOut(OutModel):
     )
     first_sign_in: bool = Field(
         False, description="True on a person's first sign-in before changing their password"
+    )
+    live_voice: bool = Field(
+        False,
+        description=(
+            "PLAN-V28: true when live voice (Gemini talks back, paid by the minute) may start for "
+            "me now: my own switch is on (set by the Platform admin), I may use V (the Call logs "
+            "or the Meetings tick, not a Viewer), and the server has it on with its key. With "
+            "sign-in off it follows the server alone. False: the free mic, as before"
+        ),
+        json_schema_extra=no_default_in_types,
     )
 
 
@@ -460,7 +480,12 @@ async def me(db: SessionDep, auth: MaybeAuthDep, settings: AuthSettingsDep, now:
     """The signed-in user and this session. The website asks first, to know whether to show the
     sign-in page. With sign-in off on this backend, `auth_required` is false and `user` is null."""
     if auth is None:
-        return MeOut(auth_required=settings.auth_required, user=None, session=None)
+        return MeOut(
+            auth_required=settings.auth_required,
+            user=None,
+            session=None,
+            live_voice=live_voice_for(settings, None),
+        )
     admin_name = await users.platform_admin_name(db)
     kept_since = records.kept_since(settings, now)
     first = await audit.is_first_sign_in(db, auth.user.id, kept_since=kept_since)
@@ -470,7 +495,20 @@ async def me(db: SessionDep, auth: MaybeAuthDep, settings: AuthSettingsDep, now:
         session=session_out(auth.session, current=True, limits=Limits.from_settings(settings)),
         platform_admin_name=admin_name,
         first_sign_in=first,
+        live_voice=live_voice_for(settings, auth.user),
     )
+
+
+def live_voice_for(settings: Settings, user: User | None) -> bool:
+    """May live voice start for this person now (PLAN-V28 T1-1)? The server's switch and the key
+    (`live_voice_ready`), then the person's own switch and V's rule (`can_talk`). With sign-in off
+    there is no person: the server's switch alone decides, as the Assistant's routes let anyone
+    in there."""
+    if not settings.live_voice_ready:
+        return False
+    if user is None:
+        return True
+    return user.live_voice and can_talk(user.role, user.features)
 
 
 @router.get("/sessions", response_model=SessionPage, summary="Your signed-in browsers")

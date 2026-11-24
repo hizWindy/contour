@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sse_starlette.sse import AppStatus, EventSourceResponse
 
+from apps.companies.live_voice.models import VoiceSession
 from apps.companies.tables import (
     CallNote,
     LearnedName,
@@ -183,6 +184,13 @@ async def fill_every_table(factory: async_sessionmaker[AsyncSession]) -> None:
                     company_key="1",
                     company_name="Acme",
                     made_by=person.id,
+                ),
+                VoiceSession(
+                    user_id=person.id,
+                    status="ready",
+                    service="gemini_api",
+                    model="gemini-3.8-live",
+                    prompt_version="test",
                 ),
                 HubSpotDeal(hubspot_deal_id="9", hubspot_company_id="1", name="Acme fit-out"),
                 RunEvent(run_id=run.id, seq=1, type="run_started", data={}),

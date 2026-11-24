@@ -10,6 +10,8 @@ change also takes "No HubSpot user".
 PLAN-V26 Part 2: a reset may keep the person signed in, the username can be changed, a locked
 person can be unlocked, and every change here records the admin, their address and their device
 (`audit.made_by`).
+
+PLAN-V28 T1-1: each person's live voice switch (`live_voice`, off), changed in Edit person.
 """
 
 import uuid
@@ -63,9 +65,10 @@ class LockOut(OutModel):
 
 
 class PersonOut(OutModel):
-    # `hubspot` (PLAN-V23 T3-1) and `lock` (PLAN-V26 T2-4): the API always sends them, and the
-    # website's types leave them optional, so older test data still type-checks.
-    model_config = ConfigDict(json_schema_extra=optional_in_types("hubspot", "lock"))
+    # `hubspot` (PLAN-V23 T3-1), `lock` (PLAN-V26 T2-4) and `live_voice` (PLAN-V28 T1-1): the API
+    # always sends them, and the website's types leave them optional, so older test data still
+    # type-checks.
+    model_config = ConfigDict(json_schema_extra=optional_in_types("hubspot", "lock", "live_voice"))
 
     id: uuid.UUID
     name: str
@@ -89,6 +92,14 @@ class PersonOut(OutModel):
         None,
         description=(
             "Too many wrong passwords in a row locked this account (PLAN-V26). null: not locked"
+        ),
+        json_schema_extra=no_default_in_types,
+    )
+    live_voice: bool = Field(
+        False,
+        description=(
+            "Live voice (paid by the minute) is on for this person (PLAN-V28). Off for everyone "
+            "to start. It works only while the server has live voice on, and with V's tick"
         ),
         json_schema_extra=no_default_in_types,
     )
@@ -183,6 +194,14 @@ class PersonPatch(BaseModel):
     position: SafeText | None = Field(None, max_length=clean.POSITION_MAX)
     role: AssignableRole | None = None
     active: bool | None = None
+    live_voice: bool | None = Field(
+        None,
+        description=(
+            "Live voice (paid by the minute) for this person (PLAN-V28 choice 16): true or false. "
+            "It works only while the server has live voice on, and with the Call logs or the "
+            "Meetings tick. A change applies to their next talk"
+        ),
+    )
 
     @field_validator("features")
     @classmethod
@@ -245,6 +264,7 @@ def _out_fields(
         "hubspot_owner": hubspot_owner,
         "hubspot": owners.hubspot_user(user),
         "lock": lock,
+        "live_voice": bool(user.live_voice),
     }
 
 
@@ -397,6 +417,11 @@ async def add_person(
     "/{user_id}",
     response_model=PersonOut,
     summary="Change a person's username, ticks, position, role or whether they can sign in",
+    description=(
+        "A merge patch: only the fields sent change. `live_voice` (PLAN-V28) turns the paid live "
+        "voice on or off for this person; the sign-in log keeps who changed it. Platform admin "
+        "only (403 `platform_admin_only`)."
+    ),
 )
 async def change_person(
     user_id: Annotated[uuid.UUID, Path()],
@@ -447,6 +472,8 @@ async def change_person(
         user.active = body.active
         if not user.active:
             await sessions.end_for_user(session, user.id, now)
+    if "live_voice" in sent and body.live_voice is not None:
+        user.live_voice = body.live_voice  # a paid service: the log keeps who turned it on
     audit.add_entry(
         session,
         "account_changed",
@@ -456,6 +483,7 @@ async def change_person(
             "role": user.role,
             "features": list(user.features or []),
             "apps": list(user.apps or []),
+            "live_voice": bool(user.live_voice),
             **renamed,
             **_made_by(admin, request),
         },

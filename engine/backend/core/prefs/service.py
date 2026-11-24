@@ -65,11 +65,14 @@ ENV_ONLY_KEYS: tuple[str, ...] = (
     "arealytics_to_claude_ok",
     "browser_speech_ok",  # PLAN-V18 M1
     "sign_in_records_ok",  # PLAN-V26 T3-4
+    "live_voice_ok",  # PLAN-V28 choice 17
+    "live_voice_names_ok",  # PLAN-V28 choice 22
     "hard_run_cap_usd",
     "hard_scheduled_run_cap_usd",
     "hard_daily_cap_usd",
     "hard_company_cap_usd",
     "hard_concurrency",
+    "hard_live_voice_month_cap_usd",  # PLAN-V28 choice 18
 )
 
 ENV_ONLY_NOTE = "Changes only in engine/.env, then restart the backend."
@@ -326,6 +329,12 @@ TEXT: dict[str, tuple[str, str]] = {
         "that day, with an alert 2 minutes after the send. One per call. On to start, TBC with "
         "Levi.",
     ),
+    "live_voice_month_cap_usd": (
+        "Live voice: monthly limit (US$)",
+        "The most every live voice talk together may cost in a month (Melbourne months). At the "
+        "limit, a talk ends after its sentence and the free mic takes over until the month "
+        "changes. 0 turns live voice off for the month. US$4 to start, TBC.",
+    ),
     "memory_fresh_days": (
         "Days a note stays fresh",
         "Notes and leads younger than this are reused instead of searched again.",
@@ -377,6 +386,22 @@ TEXT: dict[str, tuple[str, str]] = {
         "Levi's OK for the mic to send a rep's voice to Google or Microsoft, through the "
         "browser's own speech service. While it is off, Voice to text offers a free model on the "
         "device and Typing only. " + ENV_ONLY_NOTE,
+    ),
+    "live_voice_ok": (
+        "Live voice may be used",
+        "The server's switch for live voice: Gemini talks with the rep, paid by the minute, and "
+        "the rep's voice goes to Google. Each person also needs their own switch, in People. "
+        + ENV_ONLY_NOTE,
+    ),
+    "live_voice_names_ok": (
+        "Live voice may send names to Google",
+        "Levi's OK to send up to 50 company and people names a rep is likely to say to Google, "
+        "so live voice hears them right. Off: no names go, and our own fix for a misheard name "
+        "still works. " + ENV_ONLY_NOTE,
+    ),
+    "hard_live_voice_month_cap_usd": (
+        "Highest live voice monthly limit (US$)",
+        "The live voice monthly limit can't be set above this. " + ENV_ONLY_NOTE,
     ),
     "hard_run_cap_usd": (
         "Highest run cap (US$)",

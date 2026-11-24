@@ -15,7 +15,15 @@ from core.data import service
 from core.data.masking import CELL_MAX, DOTS, cell, hide_contacts, is_plain
 from core.db.base import Base
 
-NEVER = ("password_hash", "token_hash", "idempotency_key", "request_id", "embedding", "record_key")
+NEVER = (
+    "password_hash",
+    "token_hash",
+    "idempotency_key",
+    "request_id",
+    "embedding",
+    "record_key",
+    "resume_handle",  # live voice's Google handle (PLAN-V28): a secret
+)
 
 
 @pytest.mark.parametrize(

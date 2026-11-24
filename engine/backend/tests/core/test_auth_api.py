@@ -278,6 +278,7 @@ async def test_where_sign_in_is_off_me_says_so_and_nothing_needs_a_session(
         "session": None,
         "platform_admin_name": None,
         "first_sign_in": False,
+        "live_voice": False,  # PLAN-V28: off on the server
     }
     # A person can still sign in there (to try it), and then me knows them.
     await make_account(world)
@@ -723,6 +724,7 @@ def test_the_routes_are_documented_with_their_answers() -> None:
         "session",
         "platform_admin_name",
         "first_sign_in",
+        "live_voice",  # PLAN-V28 T1-1
     }
     problem = schema["components"]["schemas"]["ProblemDetails"]["properties"]
     assert {"reason", "retry_after_seconds"} <= set(problem)

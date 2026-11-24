@@ -37,7 +37,7 @@ def conninfo(database_url: str) -> Iterator[str]:
             "companies.preps, core.hubspot_meetings, core.hubspot_meeting_reads, "
             "core.hubspot_owner_teams, "
             "companies.call_notes, "
-            "companies.meeting_forms, companies.learned_names, "
+            "companies.meeting_forms, companies.learned_names, companies.voice_sessions, "
             # The tables that point at a person (PLAN-V26), and the ones that point at those.
             "core.admin_edits, core.searches, lead_finder.rivals, lead_finder.leads, "
             "core.run_events, core.runs, "

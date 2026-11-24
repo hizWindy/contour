@@ -7,9 +7,10 @@ Two kinds of setting:
   the pace and the sync times), for Property Daily and Arealytics (PLAN-V16) their logins,
   whether their facts may go to Claude, and the pause between pages, for call notes and the
   pre-meeting form (PLAN-V17) the models, caps and limits, the switch that writes a pre-read on
-  the meeting itself, and the internal email domains, and for the mic (PLAN-V18) the OK for the
-  browser's own speech service. They change only in engine/.env, then a restart. The website
-  can't change them.
+  the meeting itself, and the internal email domains, for the mic (PLAN-V18) the OK for the
+  browser's own speech service, and for live voice (PLAN-V28) the Gemini key, the server switch,
+  the OK for names, the service, the month's ceiling and the talks' limits. They change only in
+  engine/.env, then a restart. The website can't change them.
 - **Editable:** caps, concurrency, models and thresholds (the keys in EDITABLE_KEYS). The
   `core.prefs` package stores overrides in the database, checks each against its min and max
   here, and then clamps the result to the ceilings with `clamp_to_ceilings`.
@@ -123,6 +124,8 @@ EDITABLE_KEYS: Final[list[str]] = [
     "name_hints_max",
     # An FYI task for the company's owner when someone else's call reaches HubSpot (PLAN-V23 T2-2)
     "notify_owner_calls",
+    # Live voice's monthly limit (PLAN-V28 choice 18)
+    "live_voice_month_cap_usd",
 ]
 
 # Which env-only ceiling caps each editable key.
@@ -142,7 +145,17 @@ CEILINGS: Final[dict[str, str]] = {
     "claude_people_concurrency": "hard_concurrency",
     "claude_runs_concurrency": "hard_concurrency",
     "claude_jobs_concurrency": "hard_concurrency",
+    "live_voice_month_cap_usd": "hard_live_voice_month_cap_usd",  # PLAN-V28 choice 18
 }
+
+# Live voice (PLAN-V28): Google's two services, and the model, locked by name (choice 4). A new
+# model needs its prices in apps/companies/live_voice/pricing.py first (a test checks this).
+LiveVoiceService = Literal["gemini_api", "agent_platform"]
+LiveVoiceModel = Literal["gemini-3.8-live"]
+# A Google Cloud project id (6 to 30 characters) and a region like us-central1. Both go into
+# Google's address, so nothing else may.
+GCP_PROJECT = re.compile(r"[a-z][a-z0-9-]{4,28}[a-z0-9]")
+GCP_LOCATION = re.compile(r"[a-z]+-[a-z]+[0-9]{1,2}")
 
 
 def discovery_cap_usd(run_cap_usd: Decimal, discovery_share: float) -> Decimal:
@@ -579,6 +592,41 @@ class Settings(BaseSettings):
     # Levi, W4: one per call, none, or one a day).
     notify_owner_calls: StrictBool = True
 
+    # --- Live voice (PLAN-V28). Off until Levi's OK and Al-khair's switch. ----------------------
+    # Gemini 3.8 Live talks with the rep; our server carries the sound, so the key never leaves
+    # it (choice 1). The key is a secret: never logged, never sent to the website. Empty: off.
+    gemini_api_key: SecretStr | None = None
+    # The server switch (choice 17), like browser_speech_ok: with it off, or with no key, live
+    # voice is off for everyone. Same exact-text rule.
+    live_voice_ok: StrictBool = False
+    # May this person's likely names (company and people names) go to Google, as transcript hints
+    # and in the instruction (choice 22, Levi's L2)? Off until he says yes. Same exact-text rule.
+    live_voice_names_ok: StrictBool = False
+    live_voice_model: LiveVoiceModel = "gemini-3.8-live"
+    # Which Google service (choice 2, A2). agent_platform needs the project and the region.
+    live_voice_service: LiveVoiceService = "gemini_api"
+    live_voice_project: str | None = None  # a Google Cloud project id, for agent_platform
+    live_voice_location: str | None = None  # its region, like us-central1
+    # The month's limit can't be set above this on the Settings page (choice 18). US$5 while the
+    # test key is in use. Env-only.
+    hard_live_voice_month_cap_usd: Decimal = Field(
+        Decimal("5"), ge=Decimal("0"), le=Decimal("1000")
+    )
+    # The month's limit (Melbourne months, TBC), on the Settings page: every talk together. US$4
+    # to start (TBC). 0 turns live voice off for the month.
+    live_voice_month_cap_usd: Decimal = Field(Decimal("4"), ge=Decimal("0"), le=Decimal("5"))
+    # The limits (choice 20, all TBC). Env-only.
+    live_voice_max_talks: int = Field(10, ge=1, le=50)  # talks at once on this backend
+    live_voice_talk_minutes: int = Field(30, ge=1, le=120)  # one talk, from V to its end
+    live_voice_tool_timeout_seconds: int = Field(20, ge=5, le=120)  # a tool call's answer
+    # A backstop: nothing at all from the browser for this long ends the talk. The browser's own
+    # quiet stop (2 minutes) normally comes first.
+    live_voice_idle_minutes: int = Field(5, ge=1, le=60)
+    # Whether Google's usage counts are running totals for a connection (true) or each message's
+    # own (false, the default: each is added, which over-counts if they are totals, the safe
+    # side). TBC at S1.
+    live_voice_usage_totals: StrictBool = False
+
     # --- Validators --------------------------------------------------------------------
 
     @field_validator(
@@ -599,6 +647,9 @@ class Settings(BaseSettings):
         "meeting_forms_enabled",
         "meeting_note_on_meeting",
         "notify_owner_calls",
+        "live_voice_ok",
+        "live_voice_names_ok",
+        "live_voice_usage_totals",
         mode="before",
     )
     @classmethod
@@ -735,6 +786,38 @@ class Settings(BaseSettings):
     def _blank_login_is_not_set(cls, value: Any) -> Any:
         if isinstance(value, str) and not value.strip():
             return None
+        return value
+
+    @field_validator("gemini_api_key", mode="before")
+    @classmethod
+    def _blank_key_is_not_set(cls, value: Any) -> Any:
+        """An empty key is no key (the tests blank it). Spaces around a pasted key are dropped."""
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
+
+    @field_validator("live_voice_project", "live_voice_location", mode="before")
+    @classmethod
+    def _blank_place_is_not_set(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip().lower() or None
+        return value
+
+    @field_validator("live_voice_project")
+    @classmethod
+    def _gcp_project(cls, value: str | None) -> str | None:
+        if value is not None and not GCP_PROJECT.fullmatch(value):
+            raise ValueError(
+                "live_voice_project must be a Google Cloud project id: 6 to 30 lower case "
+                "letters, digits and dashes, starting with a letter"
+            )
+        return value
+
+    @field_validator("live_voice_location")
+    @classmethod
+    def _gcp_location(cls, value: str | None) -> str | None:
+        if value is not None and not GCP_LOCATION.fullmatch(value):
+            raise ValueError("live_voice_location must be a Google Cloud region, like us-central1")
         return value
 
     @field_validator("source_page_wait_seconds", mode="before")
@@ -893,6 +976,44 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _the_agent_platform_has_its_place(self) -> "Settings":
+        """Live voice on the Agent Platform needs the project and its region (PLAN-V28 T1-1): its
+        address and the model's name are made from them. One missing stops the backend from
+        starting, with the reason, rather than failing at the first talk."""
+        if self.live_voice_service != "agent_platform":
+            return self
+        missing = [
+            name
+            for name, value in (
+                ("live_voice_project", self.live_voice_project),
+                ("live_voice_location", self.live_voice_location),
+            )
+            if value is None
+        ]
+        if missing:
+            raise ValidationError.from_exception_data(
+                "Settings",
+                [
+                    InitErrorDetails(
+                        type=PydanticCustomError(
+                            "live_voice_service",
+                            "{message}",
+                            {
+                                "message": "LIVE_VOICE_SERVICE=agent_platform needs "
+                                "LIVE_VOICE_PROJECT (the Google Cloud project id) and "
+                                "LIVE_VOICE_LOCATION (its region, like us-central1). Set both, "
+                                "or use LIVE_VOICE_SERVICE=gemini_api."
+                            },
+                        ),
+                        loc=(name,),
+                        input=None,
+                    )
+                    for name in missing
+                ],
+            )
+        return self
+
+    @model_validator(mode="after")
     def _the_waits_come_before_the_lock(self) -> "Settings":
         if self.login_free_tries >= self.login_lock_tries:
             raise ValueError(
@@ -964,6 +1085,13 @@ class Settings(BaseSettings):
     def public_host(self) -> str | None:
         """The host name of `public_origin`, in lower case, or None."""
         return urlsplit(self.public_origin).hostname if self.public_origin else None
+
+    @property
+    def live_voice_ready(self) -> bool:
+        """Live voice may run on this server (PLAN-V28 choice 17): the switch is on, the key is
+        there, and the Companies project (whose Assistant it is) is loaded. A person also needs
+        their own switch and V's tick."""
+        return self.live_voice_ok and self.gemini_api_key is not None and "companies" in self.apps
 
     def database_url(self, database: str | None = None) -> str:
         """The SQLAlchemy address for psycopg 3. Works for both sync and async engines."""

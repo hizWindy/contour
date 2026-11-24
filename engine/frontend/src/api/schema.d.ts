@@ -2151,7 +2151,10 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Change a person's username, ticks, position, role or whether they can sign in */
+        /**
+         * Change a person's username, ticks, position, role or whether they can sign in
+         * @description A merge patch: only the fields sent change. `live_voice` (PLAN-V28) turns the paid live voice on or off for this person; the sign-in log keeps who changed it. Platform admin only (403 `platform_admin_only`).
+         */
         patch: operations["change_person"];
         trace?: never;
     };
@@ -7471,6 +7474,11 @@ export interface components {
              */
             first_sign_in: boolean;
             /**
+             * Live Voice
+             * @description PLAN-V28: true when live voice (Gemini talks back, paid by the minute) may start for me now: my own switch is on (set by the Platform admin), I may use V (the Call logs or the Meetings tick, not a Viewer), and the server has it on with its key. With sign-in off it follows the server alone. False: the free mic, as before
+             */
+            live_voice?: boolean;
+            /**
              * Platform Admin Name
              * @description The Platform admin's name, for Ask <name> access messages
              */
@@ -8248,6 +8256,11 @@ export interface components {
             id: string;
             /** Last Signed In At */
             last_signed_in_at: string | null;
+            /**
+             * Live Voice
+             * @description Live voice (paid by the minute) is on for this person (PLAN-V28). Off for everyone to start. It works only while the server has live voice on, and with V's tick
+             */
+            live_voice?: boolean;
             /** @description Too many wrong passwords in a row locked this account (PLAN-V26). null: not locked */
             lock?: components["schemas"]["LockOut"] | null;
             /** Name */
@@ -8362,6 +8375,11 @@ export interface components {
             id: string;
             /** Last Signed In At */
             last_signed_in_at: string | null;
+            /**
+             * Live Voice
+             * @description Live voice (paid by the minute) is on for this person (PLAN-V28). Off for everyone to start. It works only while the server has live voice on, and with V's tick
+             */
+            live_voice?: boolean;
             /** @description Too many wrong passwords in a row locked this account (PLAN-V26). null: not locked */
             lock?: components["schemas"]["LockOut"] | null;
             /** Name */
@@ -8388,6 +8406,11 @@ export interface components {
             active?: boolean | null;
             /** Features */
             features?: ("lead_finder.start_run" | "lead_finder.results" | "lead_finder.rules" | "lead_finder.send_to_hubspot" | "companies.companies" | "companies.call_logs" | "companies.meetings" | "companies.call_prep")[] | null;
+            /**
+             * Live Voice
+             * @description Live voice (paid by the minute) for this person (PLAN-V28 choice 16): true or false. It works only while the server has live voice on, and with the Call logs or the Meetings tick. A change applies to their next talk
+             */
+            live_voice?: boolean | null;
             /** Position */
             position?: string | null;
             /** Role */

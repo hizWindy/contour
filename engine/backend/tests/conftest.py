@@ -75,9 +75,16 @@ os.environ["AREALYTICS_ENABLED"] = "false"
 # The mic's browser speech service waits for Levi's OK (PLAN-V18 M1): a test that wants it on says
 # so, whatever engine/.env holds.
 os.environ["BROWSER_SPEECH_OK"] = "false"
+# Live voice (PLAN-V28): whatever engine/.env holds, no test reads the real Gemini key or reaches
+# Google. A test that wants live voice on sets a fake key and the switch itself (`server_env`).
+os.environ["GEMINI_API_KEY"] = ""
+os.environ["LIVE_VOICE_OK"] = "false"
+os.environ["LIVE_VOICE_NAMES_OK"] = "false"
+os.environ["LIVE_VOICE_SERVICE"] = "gemini_api"
 get_settings.cache_clear()
 
 TEST_TABLES = (
+    "companies.voice_sessions",
     "companies.learned_names",
     "companies.meeting_forms",
     "companies.call_notes",

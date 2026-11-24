@@ -11381,6 +11381,11 @@
             "title": "First Sign In",
             "type": "boolean"
           },
+          "live_voice": {
+            "description": "PLAN-V28: true when live voice (Gemini talks back, paid by the minute) may start for me now: my own switch is on (set by the Platform admin), I may use V (the Call logs or the Meetings tick, not a Viewer), and the server has it on with its key. With sign-in off it follows the server alone. False: the free mic, as before",
+            "title": "Live Voice",
+            "type": "boolean"
+          },
           "platform_admin_name": {
             "anyOf": [
               {
@@ -13173,6 +13178,11 @@
             ],
             "title": "Last Signed In At"
           },
+          "live_voice": {
+            "description": "Live voice (paid by the minute) is on for this person (PLAN-V28). Off for everyone to start. It works only while the server has live voice on, and with V's tick",
+            "title": "Live Voice",
+            "type": "boolean"
+          },
           "lock": {
             "anyOf": [
               {
@@ -13484,6 +13494,11 @@
             ],
             "title": "Last Signed In At"
           },
+          "live_voice": {
+            "description": "Live voice (paid by the minute) is on for this person (PLAN-V28). Off for everyone to start. It works only while the server has live voice on, and with V's tick",
+            "title": "Live Voice",
+            "type": "boolean"
+          },
           "lock": {
             "anyOf": [
               {
@@ -13589,6 +13604,18 @@
               }
             ],
             "title": "Features"
+          },
+          "live_voice": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Live voice (paid by the minute) for this person (PLAN-V28 choice 16): true or false. It works only while the server has live voice on, and with the Call logs or the Meetings tick. A change applies to their next talk",
+            "title": "Live Voice"
           },
           "position": {
             "anyOf": [
@@ -43720,6 +43747,7 @@
     },
     "/people/{user_id}": {
       "patch": {
+        "description": "A merge patch: only the fields sent change. `live_voice` (PLAN-V28) turns the paid live voice on or off for this person; the sign-in log keeps who changed it. Platform admin only (403 `platform_admin_only`).",
         "operationId": "change_person",
         "parameters": [
           {

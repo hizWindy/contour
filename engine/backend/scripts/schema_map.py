@@ -121,6 +121,11 @@ PURPOSE = {
     "lead_finder.signalhire_details": (
         "Signal Hire's company record, saved so a company is paid for once a month."
     ),
+    "companies.voice_sessions": (
+        "One row for each live voice talk (PLAN-V28): who, when, its status and why it ended, "
+        "tokens, seconds, tool calls, reconnects and the estimated US$. Counts only: no sound, no "
+        "words, no names. The resume handle is cleared when the talk ends."
+    ),
     "langgraph.checkpoints": "A saved point in a run's graph, so a stopped run can continue.",
     "langgraph.checkpoint_blobs": "Large values that belong to a checkpoint.",
     "langgraph.checkpoint_writes": "The pending writes of a checkpoint step.",

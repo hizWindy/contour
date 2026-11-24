@@ -114,4 +114,24 @@ DATA_TABLES: Final = (
         search=("scope", "tone"),
         newest="updated_at",
     ),
+    # Live voice's talks (PLAN-V28): counts only. The resume handle is a secret: never listed.
+    DataTable(
+        "companies.voice_sessions",
+        "Live voice talks",
+        GROUP,
+        (
+            C("created_at", "Started"),
+            C("status", "Status"),
+            C("end_reason", "Why it ended"),
+            C("talk_seconds", "Seconds open"),
+            C("listen_seconds", "Listening (s)"),
+            C("speak_seconds", "Talking (s)"),
+            C("tool_calls", "Requests"),
+            C("reconnects", "Reconnects"),
+            C("cost_usd", "About (US$)"),
+            C("user_id", "Person id"),
+        ),
+        search=("status", "end_reason"),
+        newest="created_at",
+    ),
 )

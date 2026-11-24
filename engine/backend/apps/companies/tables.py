@@ -23,6 +23,9 @@ HubSpot.
 
 `companies.learned_names` keeps the names the team taught the mic (PLAN-V23 T1-2): words as heard,
 and the company they mean.
+
+`companies.voice_sessions` keeps each live voice talk's counts (PLAN-V28 T1-2). Its model is in
+`live_voice/models.py`, imported here so the migrations see it.
 """
 
 import uuid
@@ -48,6 +51,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql.elements import TextClause
 
+import apps.companies.live_voice.models  # noqa: F401  (live voice's talks, PLAN-V28)
 import core.auth.models  # a prep points at core.users
 import core.hubspot.models  # noqa: F401  (a call note points at core.hubspot_writes)
 from core.db.base import CORE_SCHEMA, Base

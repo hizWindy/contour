@@ -15,6 +15,8 @@ of every sign-in (core.audit_log). PLAN-V6 B1.
 - **Who a user is in HubSpot** (PLAN-V17 T1-4): a HubSpot owner's id, so the calls a rep logs land
   under their name, and how it was matched (`email` by the sync, or `person`: set by an Admin).
   Never the owner's email. `core.hubspot.owners` keeps it.
+- **Live voice** (PLAN-V28 choice 16): each person's switch for the paid live voice, off until
+  the Platform admin turns it on.
 """
 
 import uuid
@@ -130,6 +132,10 @@ class User(Base):
     no_hubspot_user: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false")
     )
+    # "Live voice (paid by the minute)" (PLAN-V28 choice 16): off for everyone, set only by the
+    # Platform admin in Edit person. Not a tick: an Admin gets every tick by itself, and this
+    # turns on a paid service. It works only with the server's switch and the key too.
+    live_voice: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
 
 
 class UserSession(Base):

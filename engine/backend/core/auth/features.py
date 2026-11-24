@@ -147,3 +147,16 @@ def effective_features(role: str, features: Sequence[str] | None) -> list[str]:
     if is_admin(role):
         return list(FEATURES)
     return normalize_features(features or ())
+
+
+# The Assistant's V key (PLAN-V22 choice 18): the Call logs or the Meetings tick, never a Viewer.
+VOICE_FEATURES: tuple[Feature, ...] = ("companies.call_logs", "companies.meetings")
+
+
+def can_talk(role: str, features: Sequence[str] | None) -> bool:
+    """V's rule: not a Viewer, with the Call logs or the Meetings tick (Admins have every tick).
+    Live voice (PLAN-V28) adds the person's own switch on top of it."""
+    if is_viewer(role):
+        return False
+    owned = effective_features(role, features)
+    return any(feature in owned for feature in VOICE_FEATURES)
