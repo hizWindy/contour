@@ -13,12 +13,17 @@
  *
  * Under the settings, the names the mic learned (PLAN-V23 T1-2, T1-5), with Remove
  * (`learned-names.tsx`).
+ *
+ * Live voice (PLAN-V28 T1-1, T1-5): its monthly limit sits in Money, with the other US$ limits, and
+ * this month's use shows right under it, where the limit is changed: "Live voice this month: 42
+ * minutes, about US$0.51 of US$4.00." It is read only where the limit is on the page.
  */
 import { RotateCcw, Save } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { fieldErrorMap, toApiProblem } from '@/api/client'
 import { useResetSetting, useSettings, useUpdateSettings } from '@/api/hooks'
+import { useLiveVoiceMonth } from '@/api/hooks/live-voice'
 import type { SettingField, SettingValue } from '@/api/types'
 import { ErrorState } from '@/components/error-state'
 import { Money } from '@/components/money'
@@ -55,6 +60,26 @@ import {
 } from './settings-groups'
 
 const DEFAULT_CHOICE = '__default__'
+
+/** Live voice's monthly limit (PLAN-V28): this month's use shows under it. */
+const LIVE_VOICE_CAP = 'live_voice_month_cap_usd'
+
+/** This month's live voice, under its limit. A line that holds its place while it loads. */
+function LiveVoiceMonth() {
+  const month = useLiveVoiceMonth()
+  if (month.error) {
+    return (
+      <p data-slot="live-voice-month" className="text-caption text-muted-foreground">
+        This month&apos;s live voice couldn&apos;t be read. Try again in a minute.
+      </p>
+    )
+  }
+  return (
+    <p data-slot="live-voice-month" className="text-caption text-foreground tabular-nums">
+      {month.data?.line ?? ' '}
+    </p>
+  )
+}
 
 function shown(value: SettingValue): string {
   if (value === null) return 'The main model'
@@ -144,6 +169,7 @@ function SettingRow({
   resetting,
   onChange,
   onReset,
+  under,
 }: {
   field: SettingField
   draft: SettingValue
@@ -152,6 +178,8 @@ function SettingRow({
   resetting: boolean
   onChange: (value: SettingValue) => void
   onReset: () => void
+  /** A line of its own under the description, like live voice's month. */
+  under?: ReactNode
 }) {
   const id = `setting-${field.key}`
   const range =
@@ -167,6 +195,7 @@ function SettingRow({
         <p id={`${id}-line`} className="text-caption text-muted-foreground">
           {details ? `${field.description}${range}` : firstSentence(field.description)}
         </p>
+        {under}
         {field.overridden ? (
           <div className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
             <Badge variant="outline">Changed</Badge>
@@ -287,6 +316,7 @@ export default function AdminSettingsTab() {
                 error={errors[field.key]}
                 details={details}
                 resetting={reset.isPending}
+                under={field.key === LIVE_VOICE_CAP ? <LiveVoiceMonth /> : undefined}
                 onChange={(value) => {
                   setDrafts((current) => ({ ...current, [field.key]: value }))
                 }}
