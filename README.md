@@ -24,7 +24,7 @@ It holds the plans, research and decisions behind each AI tool Contour is buildi
 | [HUBSPOT.md](HUBSPOT.md) | A simple guide to HubSpot (Contour's customer database) and how the projects connect to it |
 | [CONTOUR.md](CONTOUR.md) | Background on Contour and the AI Engineer role |
 | [minutes of meeting/](<minutes of meeting/>) | Notes from the AI project meetings with Levi |
-| [CLAUDE.md](CLAUDE.md) | Writing rules for the files in this folder |
+| [AGENTS.md](AGENTS.md) | Working and writing rules for this folder (imported by [CLAUDE.md](CLAUDE.md)) |
 | [assets/](assets/) | The Contour logo, in navy for light pages and cream for dark pages |
 
 ## Where things stand

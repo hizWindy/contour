@@ -43,8 +43,9 @@ Write down each result as a count, like "3,586 passed".
 ## 5. Security, design and docs
 
 - The `security-check` skill on the whole diff: `git diff master...plan-vNN`.
+- The `flow-trace` skill on every new or changed user action in the diff.
 - The `design-review` skill on the files changed under `engine/frontend/src/`.
-- The docs match the code: `engine/AGENTS.md`, `engine/DESIGN.md`, `projects/prep/PREP.md` if call prep changed, and the go signals in `CLAUDE.md`.
+- The docs match the code: `engine/AGENTS.md`, `engine/DESIGN.md`, `projects/prep/PREP.md` if call prep changed, and the go signals in `AGENTS.md`.
 
 ## The verdict
 

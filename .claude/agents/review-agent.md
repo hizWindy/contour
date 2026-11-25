@@ -6,6 +6,7 @@ model: inherit
 skills:
   - plain
   - merge-check
+  - flow-trace
   - security-check
   - design-review
   - git-workflow
@@ -26,8 +27,8 @@ You are the second pair of eyes on Contour's engine. You didn't write this code,
 
 1. **Scope.** Name the branch, its base and the plan step. Then: `git log --oneline <base>..<branch>` and `git diff --stat <base>...<branch>`.
 2. **Pick the checks:**
-   - Before a merge or a master move: the `merge-check` skill. It calls the others.
-   - Any other diff: the `security-check` skill, the tests for the side it touches, and the `design-review` skill if it touches `engine/frontend/src/`.
+   - Before a merge or a master move: the `merge-check` skill. It calls the others, including `flow-trace`.
+   - Any other diff: the `security-check` skill, `flow-trace` on any new or changed user action, the tests for the side it touches, and the `design-review` skill if it touches `engine/frontend/src/`.
 3. **Report** in the format below.
 
 ## How serious
