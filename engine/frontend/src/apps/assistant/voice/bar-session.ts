@@ -561,11 +561,18 @@ export class BarSession {
 
   /**
    * Each listening is a conversation, unless V is held: "Keep listening", or a live talk, which is
-   * always one (PLAN-V28; TBC at T5-2).
+   * always one (PLAN-V28; TBC at T5-2), or the free mic that took over from one in this bar (T4-1).
    */
   get keepsListening(): boolean {
-    return this.keepAsked || this.talk !== null
+    return this.keepAsked || this.talk !== null || this.fellBack
   }
+
+  /**
+   * The free mic took over from live voice in this bar (T4-1): the rep pressed V for a talk, so it
+   * goes on as a conversation, whatever "Keep listening" says (TBC at Al-khair's look). A new start
+   * (V, or the bar opening) forgets it.
+   */
+  private fellBack = false
 
   /** The conversation listens now: the mic stays on across turns. */
   private live = false
@@ -708,6 +715,7 @@ export class BarSession {
    */
   start(tool: VoiceToolKind | null): void {
     this.over = false
+    this.fellBack = false
     this.tool = tool ?? 'typing'
     if (tool === null || tool === 'typing') {
       this.set({
@@ -892,9 +900,11 @@ export class BarSession {
   /**
    * The free mic takes over from live voice (T4-1), saying why. Words no tool call took go to the
    * text line, so none is lost; so does everything where no free engine can run here. Otherwise
-   * the free mic listens at once, with the line under its words. Turns already said still go on.
+   * the free mic listens at once, with the line under its words, as a conversation (TBC at
+   * Al-khair's look): a turn still being worked out goes on, and its answer never closes the bar.
    */
   private fallBack(line: string, unsent: string): void {
+    this.fellBack = true
     const words = unsent.trim()
     if (words !== '' || pickEngine(this.tool, this.env) === null) {
       this.drain = 'quiet'

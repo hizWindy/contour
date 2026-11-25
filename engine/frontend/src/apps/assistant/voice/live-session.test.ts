@@ -195,7 +195,8 @@ describe('a start that fails falls back to the free mic at once (T2-3), saying w
     expect(now().phase).toBe('listening')
     expect(now().live).toBeNull()
     expect(now().notice).toEqual({ line })
-    expect(session.keepsListening).toBe(false)
+    // The rep pressed V for a talk: the free mic goes on as a conversation (T4-1, TBC).
+    expect(session.keepsListening).toBe(true)
   })
 
   it('a mic the browser refuses says so, as the free mic does', () => {

@@ -7,7 +7,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiProblem } from '@/api/client'
 import { CHROME_LAPTOP } from '@/apps/companies/call-notes/mic/fake-mic'
-import { taskCommand } from '../card/fixtures'
+import { command, taskCommand } from '../card/fixtures'
+import { TIMES } from './bar-session'
 import { TASK_WORDS, setUp, live, tick } from './live/fake-session'
 import { letLiveBack, liveHeldOff } from './live/limit'
 import type { TalkEnd } from './live/talk'
@@ -118,14 +119,52 @@ describe('the free mic takes over (T4-1)', () => {
     })
   })
 
-  it('turns already said still go on', async () => {
-    const { talk, readings, handed } = await live()
+  it('a turn in flight at the fallback is worked out, and the bar stays, listening', async () => {
+    const { talk, readings, handed, onClose, now } = await live()
     talk.call('call-1', TASK_WORDS, TASK_WORDS)
     talk.finish({ kind: 'lost' })
+    await tick(100)
     readings[0]?.answer(taskCommand())
     await tick()
 
     expect(handed).toHaveLength(1)
+    expect(onClose).not.toHaveBeenCalled()
+    expect(now().phase).toBe('listening')
+    expect(now().conversation).not.toBeNull()
+  })
+
+  it('the free mic goes on as a conversation, with "Keep listening" off (TBC)', async () => {
+    // The set-up leaves "Keep listening" off: one command per V with the free mic alone.
+    const { session, talks, mic, readings, onClose, now } = await live()
+    talks.last().finish({ kind: 'failed' })
+    await tick(100)
+    expect(session.keepsListening).toBe(true)
+
+    mic.say('Open Northwind')
+    await tick(TIMES.longPause + 100)
+    readings[0]?.answer(command({ action: 'open', read_back: 'Opening Northwind.' }))
+    await tick()
+    expect(now().phase).toBe('listening')
+
+    mic.say('Open Sample Logistics')
+    await tick(TIMES.longPause + 100)
+    expect(readings.map((one) => one.body.text)).toEqual([
+      'Open Northwind',
+      'Open Sample Logistics',
+    ])
+    expect(mic.tools).toHaveLength(1)
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('a new start forgets it: the free mic alone is one command per V again', async () => {
+    const { session, talks } = await live()
+    talks.last().finish({ kind: 'failed' })
+    await tick(100)
+    session.dispose()
+    session.start('browser_service')
+    talks.last().finish({ kind: 'mic', problem: 'blocked_browser' })
+
+    expect(session.keepsListening).toBe(false)
   })
 
   it('the next V tries live voice again after a drop', async () => {
