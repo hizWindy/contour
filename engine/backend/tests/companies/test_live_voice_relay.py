@@ -281,6 +281,22 @@ async def test_a_tool_call_reaches_the_browser_and_its_answer_reaches_google_wit
     await stop(talk)
 
 
+async def test_a_tool_answer_reaches_google_with_no_email_or_phone_number(
+    google: FakeGoogle,
+) -> None:
+    talk, conn = await opened(google)
+    await conn.tool_call("call-5", "Email Jo")
+    await talk.browser.wait_for("tool_call")
+    line = "Ready to email jo@northwind.example. Or ring 0412 345 678. Say send it."
+    talk.browser.send({"type": "tool_answer", "id": "call-5", "status": "ok", "message": line})
+    await conn.wait_for(lambda c: bool(c.sent("toolResponse")))
+    said = conn.sent("toolResponse")[0]["toolResponse"]["functionResponses"][0]
+    message = said["response"]["message"]
+    assert "jo@northwind" not in message and "345 678" not in message
+    assert message.startswith("Ready to email") and message.endswith("Say send it.")
+    await stop(talk)
+
+
 async def test_a_blank_answer_still_gives_google_words(google: FakeGoogle) -> None:
     talk, conn = await opened(google)
     await conn.tool_call("call-2", "Open Northwind")
@@ -526,6 +542,23 @@ async def test_two_drops_in_a_row_still_resume(google: FakeGoogle) -> None:
     await resumed.wait_for(lambda c: len(c.audio) == 5 * 640)
     await stop(talk)
     assert talk.end_row()[0].counts.reconnects == 1
+
+
+async def test_a_drop_mid_sentence_doesnt_leave_the_talk_waiting_for_it(
+    google: FakeGoogle,
+) -> None:
+    budget = FakeBudget(cap=Decimal("0.01"), others=Decimal("0.0099"))
+    patient = RelayLimits(**{**QUICK.__dict__, "limit_finish_seconds": 30})
+    talk, first = await opened(google, budget=budget, limits=patient)
+    await first.handle("handle-1")
+    await first.sound(b"\x00\x00" * 2400)  # Gemini is speaking
+    await talk.browser.wait_sound(4800)
+    await first.close(1011)  # and the connection drops mid-sentence
+    resumed = await google.next()
+    await talk.browser.wait_for("reconnected")
+    await resumed.usage(promptTokenCount=1000)  # over the limit, with no sentence to finish
+    await talk.done()  # at once: it never waits 30 s for the lost sentence
+    assert talk.end_row()[2] == "limit"
 
 
 async def test_a_third_drop_in_a_row_ends_the_talk_with_its_line(google: FakeGoogle) -> None:

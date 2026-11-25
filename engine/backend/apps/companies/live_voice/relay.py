@@ -14,6 +14,7 @@ can spend faster than talking), and JSON at most 10 messages a second. Breaking 
 **The tool** (choice 6): only `ask_contour` with a `request` reaches the browser. Anything else
 gets an error answer from the relay. An answer the browser doesn't send in 20 seconds is the
 relay's own: "That took too long. Try again." (TBC), and the browser is told to stop working on it.
+A tool answer goes to Google with every email address and phone number blanked (`facts.scrub`).
 
 **Long talks and drops** (choice 15, T1-4): each resumable `sessionResumptionUpdate` keeps its
 handle (a secret: never logged or sent to the browser). At `goAway` a new connection opens with
@@ -53,6 +54,7 @@ from typing import Any, Final, Protocol
 
 from pydantic import BaseModel, ValidationError
 
+from apps.companies.facts import scrub
 from apps.companies.live_voice.google_live import GoogleLink, GoogleUnavailable, LinkClosed
 from apps.companies.live_voice.messages import (
     AUDIO_RATE_MAX,
@@ -602,7 +604,8 @@ class Relay:
             self._late_answers += 1  # timed out or cancelled already: Google has its answer
             return
         waiting.timer.cancel()
-        words = answer.message.strip() or SAY_FOR[answer.status]
+        # No email address or phone number goes to Google, whatever the card's line held.
+        words = scrub(answer.message).strip() or SAY_FOR[answer.status]
         await self._tool_response(answer.id, waiting.name, answer.status, answer.retryable, words)
 
     async def _tool_response(
@@ -934,6 +937,7 @@ class Relay:
             return
         log.warning("live_voice_dropped", extra={**self._log, "code": closed.code})
         self._link = None  # the rep's sound waits
+        self._speaking = False  # its sentence never finishes: don't wait for it
         if self._next is not None:
             await self._take_over(self._next)
             return

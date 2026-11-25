@@ -56,14 +56,25 @@ ADMIN_ONLY = {
     ("GET", f"{API}/assistant/learned"),
     ("DELETE", f"{API}/assistant/learned/{{pair_id}}"),
 }
+# Open to the Platform admin only (PLAN-V28 T1-5): live voice's line for Admin settings.
+PLATFORM_ADMIN_ONLY = {("GET", f"{API}/assistant/voice/month")}
+# Behind each person's own live voice switch as well as the tick (PLAN-V28 choice 16), off for
+# everyone to start.
+OWN_SWITCH = {("POST", f"{API}/assistant/voice/session")}
 
 
 def open_to(answer: httpx.Response, method: str, path: str, *, admin: bool) -> bool:
-    """The route let this person through: anything but a 403, or an Admin-only route's own 403
-    for someone who isn't an Admin."""
+    """The route let this person through: anything but a 403, or the 403 of a route with a rule
+    of its own: Admin only (for someone who isn't an Admin), the Platform admin only, or each
+    person's own live voice switch."""
     if answer.status_code != 403:
         return True
-    return (method, path) in ADMIN_ONLY and not admin and answer.json()["code"] == "admin_only"
+    code = answer.json()["code"]
+    if (method, path) in ADMIN_ONLY and not admin and code == "admin_only":
+        return True
+    if (method, path) in PLATFORM_ADMIN_ONLY and code == "platform_admin_only":
+        return True
+    return (method, path) in OWN_SWITCH and code == "live_voice_not_allowed"
 
 
 async def test_every_companies_route_refuses_a_person_without_the_tick(world: World) -> None:
