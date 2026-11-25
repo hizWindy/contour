@@ -34,8 +34,8 @@ export type SignIn =
       platformAdminName?: string | null
       firstSignIn?: boolean
       /**
-       * Live voice may start for me now (PLAN-V28, `MeOut.live_voice`). Left out: not known, as
-       * just after signing in (the sign-in's answer doesn't carry it), so the free mic.
+       * Live voice may start for me now (PLAN-V28: `MeOut.live_voice`, and `LoginOut.live_voice`
+       * just after signing in). Left out: off, so the free mic.
        */
       liveVoice?: boolean
     }
