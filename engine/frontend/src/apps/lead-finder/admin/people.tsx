@@ -6,6 +6,9 @@
  *
  * PLAN-V26 Part 2: Reset password has "Sign them out everywhere", the username can be changed,
  * a locked person's row has Unlock, and one button copies the sign-in details.
+ *
+ * PLAN-V28 T1-1: Edit person has "Live voice (paid by the minute)", a switch only the Platform
+ * admin sets (this tab is theirs alone, and the server refuses anyone else).
  */
 import {
   Check,
@@ -103,6 +106,14 @@ import {
   NewHubSpotUserField,
   PICK_A_CHOICE,
 } from './hubspot-user'
+
+/** Each person's live voice switch (PLAN-V28 T1-1, "Words on screen"; the hint is TBC). */
+const LIVE_VOICE = 'Live voice (paid by the minute)'
+const LIVE_VOICE_HINT = 'The Assistant talks back. It needs the Call logs or Meetings tick.'
+
+function liveVoiceDone(name: string, on: boolean): string {
+  return on ? `Live voice is on for ${name}.` : `Live voice is off for ${name}.`
+}
 
 const ROLES = [
   { id: 'admin', label: ROLE_NAMES.admin },
@@ -466,6 +477,7 @@ function EditPerson({
       position?: string | null
       features?: Feature[]
       active?: boolean
+      live_voice?: boolean
     },
     done: string,
     onInvalidPosition?: (message: string) => void,
@@ -632,6 +644,26 @@ function EditPerson({
               }}
             />
           </div>
+
+          {/* PLAN-V28 choice 16: live voice is paid by the minute, so the Platform admin turns it
+              on for each person (this tab is theirs alone). Off for everyone to start. */}
+          <label
+            htmlFor={`${id}-live-voice`}
+            className="flex items-center justify-between gap-3 text-ui"
+          >
+            <span className="flex flex-col">
+              <span className="font-semibold">{LIVE_VOICE}</span>
+              <span className="text-caption text-muted-foreground">{LIVE_VOICE_HINT}</span>
+            </span>
+            <Switch
+              id={`${id}-live-voice`}
+              checked={person.live_voice === true}
+              disabled={change.isPending}
+              onCheckedChange={(on) => {
+                patch({ live_voice: on }, liveVoiceDone(person.name, on))
+              }}
+            />
+          </label>
 
           <HubSpotUserField id={`${id}-hubspot`} person={person} taken={taken} />
 

@@ -24,6 +24,7 @@ const GROUP_OF: Record<string, GroupId> = {
   lead_finder_round_cap_usd: 'money',
   daily_cap_usd: 'money',
   company_cap_usd: 'money',
+  live_voice_month_cap_usd: 'money', // PLAN-V28 T1-1: with the other US$ limits
   request_reserve_usd: 'money',
   slice_reserve_usd: 'money',
   discovery_share: 'money',
