@@ -140,7 +140,11 @@ function runSignOutSteps(userId: string): void {
   }
 }
 
-/** Signs in (`POST /auth/login`). The cookie is set by the answer; the page never sees it. */
+/**
+ * Signs in (`POST /auth/login`). The cookie is set by the answer; the page never sees it. The
+ * answer says whether live voice may start (PLAN-V28, `LoginOut.live_voice`, as who-am-I does), so
+ * the first V after signing in knows it at once.
+ */
 export function useLogin() {
   const queryClient = useQueryClient()
   return useMutation<SignedInUser, ApiProblem, LoginBody>({
@@ -151,6 +155,7 @@ export function useLogin() {
         user: answer.user,
         ...(answer.platform_admin_name ? { platformAdminName: answer.platform_admin_name } : {}),
         ...(answer.first_sign_in ? { firstSignIn: answer.first_sign_in } : {}),
+        ...(answer.live_voice === true ? { liveVoice: true } : {}),
       })
       return answer.user
     },
