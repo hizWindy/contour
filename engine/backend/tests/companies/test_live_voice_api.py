@@ -218,6 +218,49 @@ async def test_with_sign_in_off_the_laptop_is_one_person(world: World, live_voic
 # --- The month's line (T1-5) ---------------------------------------------------------------------
 
 
+async def test_the_month_line_adds_up_every_talk_started_this_month(
+    world: World, live_voice_on: None
+) -> None:
+    await make_platform_admin(world)
+    await account(world, "jo.sample")
+    start_, end, name = month_bounds(world.clock.now)
+    async with world.factory() as db:
+        for created, seconds, cost in (
+            (start_, 1800, "0.300000"),  # this month
+            (end - timedelta(seconds=1), 720, "0.205000"),  # this month, its last second
+            (start_ - timedelta(seconds=1), 9999, "3.000000"),  # last month
+            (end, 9999, "3.000000"),  # next month
+        ):
+            db.add(
+                VoiceSession(
+                    status="ended",
+                    end_reason="stopped",
+                    service="gemini_api",
+                    model="gemini-3.8-live",
+                    prompt_version="t",
+                    created_at=created,
+                    ended_at=created,
+                    talk_seconds=seconds,
+                    cost_usd=Decimal(cost),
+                )
+            )
+        await db.commit()
+    async with world.browser() as boss, world.browser() as staff:
+        assert (await sign_in(boss)).status_code == 200
+        assert (await sign_in(staff, login="jo.sample")).status_code == 200
+        line = (await boss.get(f"{VOICE}/month")).json()
+        refused_ = await staff.get(f"{VOICE}/month")
+    assert line == {
+        "month": name,
+        "minutes": 42,
+        "talks": 2,
+        "spent_usd": "0.51",
+        "cap_usd": "4.00",
+        "line": "Live voice this month: 42 minutes, about US$0.51 of US$4.00.",
+    }
+    assert (refused_.status_code, refused_.json()["code"]) == (403, "platform_admin_only")
+
+
 # --- The socket, end to end (T1-3, T1-4) ---------------------------------------------------------
 
 

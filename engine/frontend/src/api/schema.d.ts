@@ -485,6 +485,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/assistant/voice/month": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live voice this month
+         * @description PLAN-V28 T1-5: the Admin settings line, like "Live voice this month: 42 minutes, about US$0.51 of US$4.00.". The month is a Melbourne calendar month (TBC). Minutes are how long talks were open; US$ is the meter's estimate from Google's token counts, rounded up (Google's bill is the truth). Platform admin only (403 `platform_admin_only`).
+         */
+        get: operations["read_live_voice_month"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/assistant/voice/session": {
         parameters: {
             query?: never;
@@ -12628,6 +12648,40 @@ export interface components {
             tool_seconds: number;
         };
         /**
+         * VoiceMonth
+         * @description Live voice this month, for Admin settings (Melbourne months, TBC).
+         */
+        VoiceMonth: {
+            /**
+             * Cap Usd
+             * @description This month's limit, from the Settings page
+             */
+            cap_usd: string;
+            /**
+             * Line
+             * @example Live voice this month: 42 minutes, about US$0.51 of US$4.00.
+             */
+            line: string;
+            /**
+             * Minutes
+             * @description How long talks were open this month, in whole minutes
+             */
+            minutes: number;
+            /**
+             * Month
+             * @description Like 2026-11
+             * @example 2026-11
+             */
+            month: string;
+            /**
+             * Spent Usd
+             * @description About this much (the meter's estimate, rounded up)
+             */
+            spent_usd: string;
+            /** Talks */
+            talks: number;
+        };
+        /**
          * VoicePause
          * @description The rep went quiet: Google may answer now. Becomes Google's `audioStreamEnd`.
          */
@@ -16222,6 +16276,125 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Today"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    read_live_voice_month: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceMonth"];
                 };
             };
             /** @description The request can't be understood */

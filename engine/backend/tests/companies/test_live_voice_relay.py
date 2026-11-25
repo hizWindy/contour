@@ -15,6 +15,7 @@ import logging
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, get_args
 
 import pytest
@@ -23,11 +24,12 @@ from apps.companies.live_voice.google_live import open_link
 from apps.companies.live_voice.messages import EndReason
 from apps.companies.live_voice.meter import Counts, Meter
 from apps.companies.live_voice.models import END_REASONS
-from apps.companies.live_voice.pricing import prices_for
+from apps.companies.live_voice.pricing import Tokens, prices_for
 from apps.companies.live_voice.relay import Relay, RelayLimits, seconds_of
 from apps.companies.live_voice.setup import build_setup
 from apps.companies.live_voice.words import (
     DROPPED_LINE_DETAIL,
+    LIMIT_LINE_DETAIL,
     UNREACHABLE_LINE_DETAIL,
 )
 from tests.companies.live_voice_fakes import (
@@ -568,6 +570,109 @@ def test_googles_time_left_reads_both_ways() -> None:
 
 
 # --- The meter and the month's limit (T1-5) ------------------------------------------------------
+
+
+async def test_the_meter_counts_each_report_and_the_row_holds_counts_only(
+    google: FakeGoogle,
+) -> None:
+    talk, conn = await opened(google)
+    for piece in frames(1):
+        talk.browser.say(piece)
+    await conn.wait_for(lambda c: len(c.audio) == 50 * 640)
+    usage = {
+        "promptTokenCount": 1000,
+        "responseTokenCount": 500,
+        "totalTokenCount": 1500,
+        "promptTokensDetails": [
+            {"modality": "AUDIO", "tokenCount": 800},
+            {"modality": "TEXT", "tokenCount": 200},
+        ],
+        "responseTokensDetails": [{"modality": "AUDIO", "tokenCount": 500}],
+    }
+    await conn.usage(**usage)
+    await conn.usage(**usage)
+    await conn.sound(b"\x01\x00" * 24_000)  # 1 s of Gemini's sound
+    await talk.browser.wait_sound(48_000)
+    await stop(talk)
+    saved, _, _ = talk.end_row()
+    counts = saved.counts
+    assert (counts.tokens.in_audio, counts.tokens.in_text, counts.tokens.out_audio) == (
+        1600,
+        400,
+        1000,
+    )
+    # 2,000 in at US$3 and 1,000 out at US$12 a million: US$0.018
+    assert counts.cost_usd == Decimal("0.018000")
+    assert (counts.listen_seconds, counts.speak_seconds) == (1, 1)
+    numbers = [*counts.__dict__.values(), *counts.tokens.__dict__.values()]
+    assert all(isinstance(value, int | Decimal | Tokens) for value in numbers)  # counts only
+
+
+async def test_a_talk_that_crosses_the_limit_ends_after_its_sentence_with_its_line(
+    google: FakeGoogle,
+) -> None:
+    budget = FakeBudget(cap=Decimal("0.02"), others=Decimal("0.019"))
+    talk, conn = await opened(google, budget=budget)
+    await conn.sound(b"\x00\x00" * 2400)  # Gemini is speaking
+    await talk.browser.wait_sound(4800)
+    await conn.usage(promptTokenCount=1000, totalTokenCount=1000)  # US$0.003: over the limit
+    await asyncio.sleep(0.1)
+    assert not talk.task.done()  # it finishes its sentence first
+    for piece in frames(0.1):
+        talk.browser.say(piece)  # no new talk after the limit
+    await conn.turn_complete()
+    await talk.done()
+    assert talk.browser.of("ended")[-1] == {
+        "type": "ended",
+        "reason": "limit",
+        "line": LIMIT_LINE_DETAIL,
+    }
+    assert len(conn.audio) == 0
+    assert talk.end_row()[1:] == ("ended", "limit")
+
+
+async def test_at_the_limit_with_no_sentence_to_finish_it_ends_at_once(
+    google: FakeGoogle,
+) -> None:
+    budget = FakeBudget(cap=Decimal("0.01"), others=Decimal("0.0099"))
+    talk, conn = await opened(google, budget=budget)
+    await conn.usage(promptTokenCount=1000)
+    await talk.done()
+    assert talk.end_row()[2] == "limit"
+
+
+async def test_the_limit_waits_8_seconds_at_most_for_the_sentence(google: FakeGoogle) -> None:
+    budget = FakeBudget(cap=Decimal("0.01"), others=Decimal("0.0099"))
+    talk, conn = await opened(google, budget=budget)
+    await conn.sound(b"\x00\x00" * 2400)
+    await talk.browser.wait_sound(4800)
+    await conn.usage(promptTokenCount=1000)
+    await talk.done()  # no turnComplete: the 0.5 s stand-in for 8 s ends it
+    assert talk.end_row()[2] == "limit"
+
+
+async def test_the_row_is_written_every_little_while_and_the_limit_read_again(
+    google: FakeGoogle,
+) -> None:
+    budget = FakeBudget(cap=Decimal("4"))
+    often = RelayLimits(**{**QUICK.__dict__, "save_every_seconds": 0.1})
+    talk, conn = await opened(google, limits=often, budget=budget)
+    await conn.handle("handle-1")
+    await conn.usage(promptTokenCount=1000)
+    await asyncio.sleep(0.35)
+    assert talk.rows.saves and talk.rows.saves[-1].counts.tokens.in_other == 1000
+    assert talk.rows.saves[-1].handle == "handle-1"  # kept while the talk may carry on
+    assert budget.reads >= 2
+    budget.cap = Decimal("0.001")  # the Platform admin lowers the month's limit mid-talk
+    await talk.done()
+    assert talk.end_row()[2] == "limit"
+
+
+async def test_a_talk_over_the_limit_never_opens_google(google: FakeGoogle) -> None:
+    talk = await start(google, budget=FakeBudget(cap=Decimal("1"), others=Decimal("1")))
+    await talk.done()
+    assert google.connections == []
+    assert talk.browser.of("ended")[-1]["reason"] == "limit"
 
 
 # --- Nothing secret leaves -----------------------------------------------------------------------

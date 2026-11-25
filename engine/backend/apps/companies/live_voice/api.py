@@ -1,7 +1,8 @@
-"""Live voice's routes (PLAN-V28 T1-2 to T1-4), under /api/v1/companies/assistant/voice.
+"""Live voice's routes (PLAN-V28 T1-2 to T1-5), under /api/v1/companies/assistant/voice.
 
 - `POST /session` starts a talk (the checks are in `service.py`, in the plan's order).
 - `WS /live?session=<id>` is the talk's socket: sound and messages both ways (`messages.py`).
+- `GET /month` is the Admin settings line, for the Platform admin.
 
 The socket is refused before it opens (closed with 1008) unless every check passes: a session
 where sign-in is on (the guard), our own site's `Origin` (the origin guard, and again here), V's
@@ -17,11 +18,11 @@ from fastapi import APIRouter, Depends, Request, WebSocket
 
 from apps.companies.live_voice import service
 from apps.companies.live_voice.relay import Relay
-from apps.companies.live_voice.schemas import VoiceSessionIn, VoiceSessionOut
+from apps.companies.live_voice.schemas import VoiceMonth, VoiceSessionIn, VoiceSessionOut
 from core.api.access import SignedInDep, need
 from core.api.deps import SessionDep, SettingsDep
 from core.api.security import allowed_origins, socket_origin_allowed
-from core.api.signin import NowDep
+from core.api.signin import NowDep, PlatformAdminDep
 from core.auth.features import can_talk
 from core.config import get_settings
 from core.prefs.service import effective_settings
@@ -69,6 +70,29 @@ async def start_live_voice(
         settings=settings,
         company_key=body.company_key if body is not None else None,
         now=now,
+    )
+
+
+@router.get(
+    "/month",
+    response_model=VoiceMonth,
+    summary="Live voice this month",
+    description=(
+        'PLAN-V28 T1-5: the Admin settings line, like "Live voice this month: 42 minutes, about '
+        'US$0.51 of US$4.00.". The month is a Melbourne calendar month (TBC). Minutes are how '
+        "long talks were open; US$ is the meter's estimate from Google's token counts, rounded "
+        "up (Google's bill is the truth). Platform admin only (403 `platform_admin_only`)."
+    ),
+)
+async def read_live_voice_month(
+    request: Request,
+    session: SessionDep,
+    settings: SettingsDep,
+    admin: PlatformAdminDep,
+    now: NowDep,
+) -> VoiceMonth:
+    return await service.month_line(
+        session, talks=service.talks_of(request.app), settings=settings, now=now
     )
 
 

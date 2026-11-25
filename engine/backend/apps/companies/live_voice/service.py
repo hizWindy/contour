@@ -1,4 +1,5 @@
-"""Live voice's service (PLAN-V28 T1-2 to T1-4): starting a talk, and opening its socket.
+"""Live voice's service (PLAN-V28 T1-2 to T1-5): starting a talk, opening its socket, and the
+month's line.
 
 **A start** (`POST /assistant/voice/session`) checks, in this order, with the plan's codes:
 1. the Call logs or the Meetings tick, never a Viewer (the route's `need`: 403
@@ -38,9 +39,9 @@ from apps.companies.live_voice import store, words
 from apps.companies.live_voice.google_live import Endpoint, GoogleLink, endpoint_for, open_link
 from apps.companies.live_voice.meter import Meter
 from apps.companies.live_voice.models import VoiceSession
-from apps.companies.live_voice.pricing import prices_for
+from apps.companies.live_voice.pricing import about, prices_for
 from apps.companies.live_voice.relay import BrowserSocket, Relay, RelayLimits
-from apps.companies.live_voice.schemas import VoiceLimits, VoiceSessionOut
+from apps.companies.live_voice.schemas import VoiceLimits, VoiceMonth, VoiceSessionOut
 from apps.companies.live_voice.setup import build_setup, instruction
 from apps.companies.live_voice.store import Save
 from apps.companies.live_voice.talks import READY_FOR, Owner, Ready, Talks
@@ -132,6 +133,27 @@ async def spent_this_month(
 
 def seconds_to(end: datetime, now: datetime) -> int:
     return max(1, int((end - now).total_seconds()))
+
+
+async def month_line(
+    session: AsyncSession, *, talks: Talks, settings: Settings, now: datetime
+) -> VoiceMonth:
+    """The Admin settings line: "Live voice this month: 42 minutes, about US$0.51 of US$4.00."."""
+    _, _, name = month_bounds(now)
+    spent = await spent_this_month(session, talks, now)
+    if session.in_transaction():
+        await session.rollback()  # it only read
+    minutes = spent.talk_seconds // 60
+    usd = about(spent.cost_usd)
+    cap = settings.live_voice_month_cap_usd.quantize(Decimal("0.01"))
+    return VoiceMonth(
+        month=name,
+        minutes=minutes,
+        talks=spent.talks,
+        spent_usd=usd,
+        cap_usd=cap,
+        line=words.month_line(minutes, f"{usd:.2f}", f"{cap:.2f}"),
+    )
 
 
 class MonthBudget:

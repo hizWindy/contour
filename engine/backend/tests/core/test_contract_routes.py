@@ -116,6 +116,7 @@ ROUTES = [
     ("GET", f"{API}/companies/assistant/research"),  # PLAN-V27 T4-1
     ("POST", f"{API}/companies/assistant/research"),  # PLAN-V27 T4-2
     ("POST", f"{API}/companies/assistant/voice/session"),  # PLAN-V28 T1-2
+    ("GET", f"{API}/companies/assistant/voice/month"),  # PLAN-V28 T1-5
     ("POST", f"{API}/auth/login"),
     ("POST", f"{API}/auth/logout"),
     ("POST", f"{API}/auth/logout-everywhere"),

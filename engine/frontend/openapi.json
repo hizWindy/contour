@@ -22679,6 +22679,55 @@
         "title": "VoiceLimits",
         "type": "object"
       },
+      "VoiceMonth": {
+        "description": "Live voice this month, for Admin settings (Melbourne months, TBC).",
+        "properties": {
+          "cap_usd": {
+            "description": "This month's limit, from the Settings page",
+            "title": "Cap Usd",
+            "type": "string"
+          },
+          "line": {
+            "examples": [
+              "Live voice this month: 42 minutes, about US$0.51 of US$4.00."
+            ],
+            "title": "Line",
+            "type": "string"
+          },
+          "minutes": {
+            "description": "How long talks were open this month, in whole minutes",
+            "title": "Minutes",
+            "type": "integer"
+          },
+          "month": {
+            "description": "Like 2026-11",
+            "examples": [
+              "2026-11"
+            ],
+            "title": "Month",
+            "type": "string"
+          },
+          "spent_usd": {
+            "description": "About this much (the meter's estimate, rounded up)",
+            "title": "Spent Usd",
+            "type": "string"
+          },
+          "talks": {
+            "title": "Talks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "month",
+          "minutes",
+          "talks",
+          "spent_usd",
+          "cap_usd",
+          "line"
+        ],
+        "title": "VoiceMonth",
+        "type": "object"
+      },
       "VoicePause": {
         "additionalProperties": false,
         "description": "The rep went quiet: Google may answer now. Becomes Google's `audioStreamEnd`.",
@@ -27908,6 +27957,143 @@
           }
         ],
         "summary": "Today",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/assistant/voice/month": {
+      "get": {
+        "description": "PLAN-V28 T1-5: the Admin settings line, like \"Live voice this month: 42 minutes, about US$0.51 of US$4.00.\". The month is a Melbourne calendar month (TBC). Minutes are how long talks were open; US$ is the meter's estimate from Google's token counts, rounded up (Google's bill is the truth). Platform admin only (403 `platform_admin_only`).",
+        "operationId": "read_live_voice_month",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceMonth"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Live voice this month",
         "tags": [
           "Companies"
         ]
