@@ -4,7 +4,7 @@ A hands-on script for [PLAN-V28](PLAN-V28.md)'s T5-2: 20 practice requests, spok
 
 **TBC** means to be confirmed.
 
-- **Last updated:** 25 Nov 2026 (T5-1).
+- **Last updated:** 25 Nov 2026 (T5-1; at M1, the merge review's echo check on the speakers).
 - **What it covers:** T5-2, and the numbers T5-3 tunes from. It isn't the trial on live (M3).
 - **Where results go:** PLAN-V28's Log, under T5-2. Write numbers and what happened only. No recordings, and no real company or people names, because the plan goes to GitHub.
 
@@ -96,6 +96,7 @@ Press V once at the start: the whole set is one talk. A talk lasts 30 minutes at
 - [ ] **Talk over the Assistant** in the middle of a sentence. Expect it to stop at once, about 0.2 seconds (TBC).
 - [ ] **Say "That's all."** Expect the talk to end and the bar to close.
 - [ ] **Chrome on the laptop's speakers, no headset:** say requests 1, 5, 12, 17 and 19 again. Does the Assistant hear itself, stop, or answer itself? If it does, the gate's numbers change in T5-3, or the line "Use a headset" becomes the fallback (the plan's Risks).
+  - **An echoed "send it":** after request 12's card opens, say nothing for 10 seconds while the Assistant says "Ready. Say send it.". Expect the card to stay open, with no 5-second hold. If Google hears the Assistant's own words as yours, the hold starts (Undo still stops it): stop and report back.
 - [ ] **A phone:** say requests 1, 6, 12, 19 and 20.
   - **Android, Chrome:** the phone needs a secure page for its mic. Connect it by USB, open `chrome://inspect` on the laptop, and forward port 5321 to `localhost:5321`. Then open `http://localhost:5321` on the phone.
   - **iPhone, Safari:** it needs an HTTPS address, so a tunnel, on Al-khair's word. Otherwise it waits for M3, on live.

@@ -4,10 +4,10 @@ This plan gives the Assistant a live voice. A rep presses V and talks, as on a p
 
 **TBC** means to be confirmed.
 
-- **Status:** drafted on 25 Nov 2026 from Al-khair's chat, on `plan-v28` in `../contour-v28`, and checked the same day against `master` with PLAN-V27 joined (`b52190b`). Approved on 25 Nov ("implement v28"), and built on 25 Nov as far as it can go without Al-khair and Levi: S0, Parts 1 to 4 and T5-1 are done, except T2-4 (Al-khair's look) and T4-2 (Levi's line). T5-2 and T5-3, the paid tests, wait for Al-khair's word.
+- **Status:** drafted on 25 Nov 2026 from Al-khair's chat, on `plan-v28` in `../contour-v28`, and checked the same day against `master` with PLAN-V27 joined (`b52190b`). Approved on 25 Nov ("implement v28"), and built on 25 Nov as far as it can go without Al-khair and Levi: S0, Parts 1 to 4 and T5-1 are done, except T2-4 (Al-khair's look) and T4-2 (Levi's line). T5-2 and T5-3, the paid tests, wait for Al-khair's word. Joined `master` on 26 Nov (M1), on Al-khair's word, with part of the gate's checks, and pushed to GitHub. Not deployed.
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
-- **Last updated:** 25 Nov 2026.
-- **Progress:** Before the build: 1 of 3 (S0; S1 and S2 wait on Al-khair and Levi). Parts 1 to 5: 17 of 21 (open: T2-4, T4-2, T5-2 and T5-3). M1 to M4: 0 of 4.
+- **Last updated:** 26 Nov 2026.
+- **Progress:** Before the build: 1 of 3 (S0; S1 and S2 wait on Al-khair and Levi). Parts 1 to 5: 17 of 21 (open: T2-4, T4-2, T5-2 and T5-3). M1 to M4: 1 of 4 (M1).
 - **Sources:**
   - Al-khair's chat on 25 Nov: his Google account, a test key with about US$5, "the implementation must be superb", and a branch of its own while PLAN-V27 merges;
   - the approval paper `documents/voice/VOICE.pdf` (version 3, 24 Nov), still waiting for Levi's four ticks;
@@ -303,13 +303,15 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
 
 ## Merge, checks and going live
 
-- [ ] **M1. Merge** (`merge v28`, on Al-khair's word). Full checks, the `merge-check` skill, a fresh `review-agent`, the `simulator-agent` with the fake Google, and the `security-check` skill. Then `git merge --ff-only plan-v28` in the main folder.
+- [x] **M1. Merge** (`merge v28`, on Al-khair's word). Full checks, the `merge-check` skill, a fresh `review-agent`, the `simulator-agent` with the fake Google, and the `security-check` skill. Then `git merge --ff-only plan-v28` in the main folder.
+  - **Done** on 26 Nov, on Al-khair's word (25 and 26 Nov). On 26 Nov he said to merge without the checks the laptop's memory had stopped. The review's three fixes are in `d8d798a`. `master` is pushed to GitHub; pushing doesn't deploy. The Log lists what ran and what waits for M2.
 - [ ] **M2. Deploy** (`deploy v28`), after S2 and A2.
+  - **Before it:** the checks M1 didn't run (the Log, 26 Nov). And the review's (d): switching a person's live voice off, or making them inactive, doesn't end a talk they have open (up to 30 minutes). End it.
   - A new key for live, not the test key (it was pasted in chat), held by App Platform as an encrypted secret. `LIVE_VOICE_OK=true`, and `LIVE_VOICE_SERVICE` as A2 says.
   - Check that App Platform lets the WebSocket through to the backend, and that a 15-minute talk lasts (TBC).
   - The person switch on for Levi and Al-khair only. The month limit as A4 says.
 - [ ] **M3. The trial:** two weeks, on Levi's laptop and phone. Al-khair reads the meter each week. At the end, Levi and Al-khair set the team's limit from real use (the paper's step 6).
-- [ ] **M4. The docs.** The plan list, `engine/AGENTS.md`, `engine/DESIGN.md` (the pill's states and the captions), the AI Brain, and a short team note written with `/plain`, sent on Al-khair's word.
+- [ ] **M4. The docs.** The plan list, `engine/AGENTS.md` (its line "Our code keeps and sends no audio" is out of date with live voice: found at M1), `engine/DESIGN.md` (the pill's states and the captions), the AI Brain, and a short team note written with `/plain`, sent on Al-khair's word.
 
 ## Waiting on
 
@@ -318,6 +320,7 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
   - **A2.** Where live runs. Recommended: the **Agent Platform** in `us-central1`, so the voice stays in the US, as the paper says. It needs its API turned on in the key's project. Or the **Gemini API**: it works today, but Google doesn't fix the region. One setting either way.
   - **A3.** The paid checks: S1's try (about US$0.01) and T5-2 (about US$1.40 with Claude).
   - **A4.** The month limit for the trial on live: US$20 suggested (TBC). The paper's email suggested US$50.
+  - **A5.** A pre-read can start on Gemini's request alone. In a talk, when Gemini asks Contour for a pre-read and a meeting is found, Claude starts drafting it (about US$0.03). The rep's own words aren't checked first, as they are for "send it". Recommended: keep it. It's cheap, and Claude's caps still hold (TBC). Found by M1's review.
 - **Levi** (S2):
   - **L1.** The paper's four boxes.
   - **L2.** Names to Google: may the name list (up to 50 company and people names) go to Google as hints? And he's told that Google keeps a talk's state for up to 24 hours, for resumption, not for training.
@@ -389,3 +392,22 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
   - **Fixed:** one out-of-date comment (`2998af1`).
   - **Next:** Al-khair's look (T2-4), S1 and T5-2 on his word (TEST-V28.md), then `merge v28`.
   - **For Al-khair's look (T2-4), TBC:** the bar and the pill at 1440, 1280 and 390 px, light and dark; Mute as an icon with a tooltip, so the state's word fits at 390 px; the captions' names "You" and "Assistant"; Edit person's hint; the month line under the limit on Settings; and live voice first even where the browser's model is picked. The gate's numbers (a floor of 0.006 at 3 times the room's noise; 0.03 and 6 times while the Assistant speaks) wait for T5-2.
+- 26 Nov 2026: M1 done. `master` moved to `plan-v28` by fast-forward, and was pushed to GitHub on Al-khair's word. It isn't deployed. The laptop had 0.3 GB of 15.6 GB free, so Claude Code stopped the checks part way (25 Nov), and Al-khair said to merge without the rest.
+  - **Ran and passed:**
+    - the branches: the test key is in no commit; no client names (checked against the HubSpot copy, counts only); no new package; one migration head; and the generated files match a fresh run;
+    - ruff, the format check and mypy (509 files), and the core tests with the database: 2,507 passed, 25 skipped by design (16 minutes);
+    - the `design-review` skill on the screens changed since T2-4's check: nothing to fix;
+    - a fresh `review-agent`: Ready with notes, no blocker.
+  - **The review's three fixes** (`d8d798a`), each with a test that fails without it:
+    - Settings: saving a new live voice limit reads this month's line again, so the line names the new limit;
+    - the names switch's words no longer say "no names go". Off, the hint list isn't sent, but names the rep says, and names in the Assistant's answers, still reach Google;
+    - Activity names a change to a person's live voice switch.
+    - Their checks: 10 website tests, lint, format and types; 91 backend tests in the three files that read the settings' words; and the commit hook (ruff, mypy and the fast tests).
+  - **Not run, so before M2:** the Companies, Lead Finder, end-to-end and gate tests (`RUN_GATES=1`); the website's full lint, tests, build and page weight; the `simulator-agent` with the fake Google (it needs about 2 GB free); and the `security-check` skill on the whole diff (Part 1's backend and the website side each had one).
+  - **The review's other notes:**
+    - (a) A5, above.
+    - (b) On speakers, Google might hear the Assistant's own "Ready. Say send it." as the rep's words and start the send's 5-second hold (Undo still stops it). Added to TEST-V28's speakers check.
+    - (c) A transcript that comes more than 0.5 s after its tool call joins the next call's words. The review found it fails safe. S1 shows how late Google's transcript comes (TBC).
+    - (d) Switching a person off, or making them inactive, doesn't end their open talk (up to 30 minutes): before M2.
+    - (e) A network stall of more than about 4.5 s may end a talk as "something went wrong" (not confirmed): watch for it at M3.
+    - (f) `engine/AGENTS.md`'s "Our code keeps and sends no audio" is out of date: M4. Not changed now, because the main folder has its own uncommitted edits to that file.
