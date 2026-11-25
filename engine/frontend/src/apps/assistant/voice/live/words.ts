@@ -40,6 +40,11 @@ export const LIVE_WRONG = 'Live voice stopped: something went wrong. Using the f
 export const READY = 'Ready. Say send it.'
 /** The card's Send has worked, after its 5-second hold (choice 7). */
 export const SENT_LINE = 'Sent.'
+/**
+ * The card's Send is still going 3 s before the relay would answer for it ("That took too long"):
+ * the card's own line says how it ends (the coordinator's words, 25 Nov; TBC at T5-2).
+ */
+export const STILL_SENDING = "Still sending. The card will say when it's done."
 /** Undo was pressed in the hold, or the hold stopped: nothing went. */
 export const NOT_SENT_LINE = 'Not sent.'
 /** "Send" came only from Gemini's words, never the rep's (choice 7): nothing went. */

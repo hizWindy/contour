@@ -14,7 +14,9 @@
  *   - unknown: the read-back, short (its first sentence);
  *   - 409, 429 and 503: their own plain words;
  *   - a send (choice 7): "Sent." only once the card's Send has worked, after its hold; the card's
- *     own error line; or "Not sent." after Undo.
+ *     own error line; or "Not sent." after Undo. A send still going 3 s before the relay would
+ *     answer for it (`STILL_SENDING_BEFORE_MS`) is said as still going, never as "That took too
+ *     long": the card's Send goes on, and its own line says how it ended.
  */
 import type { ApiProblem } from '@/api/client'
 import type { AssistantCommand } from '@/api/types'
@@ -31,6 +33,7 @@ import {
   SAY_CANCEL_FIRST,
   SAY_SEND_IT_FIRST,
   SENT_LINE,
+  STILL_SENDING,
 } from './words'
 
 /** The tool answer, less its `id`: what Contour did, and the line to say. */
@@ -147,6 +150,15 @@ export function replyForProblem(problem: ApiProblem): Reply {
   const retryable = problem.status === 429 || problem.status === 503 || problem.status === 0
   return failed(words ? `${words}.` : DONE, retryable)
 }
+
+/**
+ * How long before the relay would answer a tool call itself (its `answerBy`) a send still going is
+ * said as still going (T3-2; TBC at T5-2).
+ */
+export const STILL_SENDING_BEFORE_MS = 3000
+
+/** A send still going near the relay's deadline: the card's own line says how it ends. */
+export const STILL_SENDING_REPLY: Reply = ok(STILL_SENDING)
 
 /** "Sent." only once the send worked; the card's error line; or "Not sent." after Undo. */
 export function replyForSend(outcome: SendOutcome): Reply {

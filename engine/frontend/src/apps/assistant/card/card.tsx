@@ -200,7 +200,12 @@ import {
   type SendOutcome,
   type SendTools,
 } from './send'
-import { ok as okReply, replyForSend, unsure as unsureReply } from '../voice/live/bridge'
+import {
+  ok as okReply,
+  replyForSend,
+  STILL_SENDING_REPLY,
+  unsure as unsureReply,
+} from '../voice/live/bridge'
 import { FILL_IN_FIRST, READY } from '../voice/live/words'
 import { openCard, openedCard, type CardRequest } from './store'
 import { isNoHubSpotUser, needsTeammate } from './teammate-rules'
@@ -1108,7 +1113,7 @@ function DraftCard({
       const started = trySend('voice')
       const outcome = started ? sending.current : null
       return outcome
-        ? { line: SENT, reply: outcome.then(replyForSend) }
+        ? { line: SENT, reply: outcome.then(replyForSend), meanwhile: STILL_SENDING_REPLY }
         : { line: null, reply: unsureReply(FILL_IN_FIRST) }
     }
     if (fixed === 'later') {

@@ -15,7 +15,7 @@ import { queryKeys } from '@/api/query'
 import type { AssistantCommand, AssistantCommandIn, AssistantResearch } from '@/api/types'
 import { CHROME_LAPTOP, FakeMic } from '@/apps/companies/call-notes/mic/fake-mic'
 import { mockApi, type Answer, type Call } from '@/test/mock-api'
-import { createTestQueryClient, renderWithProviders } from '@/test/render'
+import { createTestQueryClient, renderWithProviders, startManualClock } from '@/test/render'
 import {
   API,
   callCommand,
@@ -31,11 +31,14 @@ import {
   write,
 } from '../card/fixtures'
 import { clearResearches } from '../card/research-store'
+import { TASK_ADDED } from '../card/words'
 import { closeCard } from '../card/store'
 import VoiceBar from './bar'
 import { setKeepListening } from './keep-listening'
+import { STILL_SENDING_BEFORE_MS } from './live/bridge'
 import { FakeTalks, type FakeTalk } from './live/fake-talk'
-import { NOT_SENT_LINE, READY, SAY_SEND_IT_FIRST, SENT_LINE } from './live/words'
+import { TOOL_SECONDS } from './live/talk'
+import { NOT_SENT_LINE, READY, SAY_SEND_IT_FIRST, SENT_LINE, STILL_SENDING } from './live/words'
 import { closeVoiceBar, openVoiceBar } from './store'
 
 const BAR = 'Speak to the Assistant'
@@ -370,5 +373,62 @@ describe('"send it" (T3-2, choice 7)', () => {
       expect(talk.answerTo('call-3')?.status).toBe('ok')
     })
     expect(of(RESEARCH)).toHaveLength(1)
+  })
+})
+
+describe('a send that outlasts the relay (T3-2)', () => {
+  /** The server answers the task's send `ms` after it is asked. */
+  const slow = (ms: number) => () =>
+    new Promise<Response>((resolve) => {
+      setTimeout(() => {
+        resolve(Response.json(write({ status: 'done' })))
+      }, ms)
+    })
+
+  /** The answers to one tool call, in order. */
+  const answersTo = (talk: FakeTalk, id: string) => talk.answers.filter((one) => one.id === id)
+
+  it('says "Still sending." 3 s before the relay would answer for it, once', async () => {
+    startManualClock()
+    const { talks, of } = page({ [TASK_WORDS]: taskCommand() }, { tasks: slow(20_000) })
+    const talk = await talking(talks)
+    await call(talk, 'call-1', TASK_WORDS)
+    await screen.findByRole('dialog', { name: TASK_CARD })
+    await wait(600)
+    // The relay would answer this call itself 20 s from now.
+    await call(talk, 'call-2', 'Send it', 'Send it.')
+    await wait(TOOL_SECONDS * 1000 - STILL_SENDING_BEFORE_MS - 100)
+
+    // The hold is over and the send is going, but nothing is said yet.
+    expect(of(API.tasks)).toHaveLength(1)
+    expect(answersTo(talk, 'call-2')).toEqual([])
+    await wait(100)
+    expect(answersTo(talk, 'call-2')).toEqual([
+      { id: 'call-2', status: 'ok', retryable: false, message: STILL_SENDING },
+    ])
+
+    // The send ends later: the card's own line says so, and the call isn't answered again.
+    await wait(10_000)
+    expect(await screen.findByText(TASK_ADDED)).toBeInTheDocument()
+    expect(answersTo(talk, 'call-2')).toHaveLength(1)
+    expect(of(API.tasks)).toHaveLength(1)
+  })
+
+  it('a send that ends in time still answers "Sent."', async () => {
+    startManualClock()
+    const { talks } = page({ [TASK_WORDS]: taskCommand() }, { tasks: slow(10_000) })
+    const talk = await talking(talks)
+    await call(talk, 'call-1', TASK_WORDS)
+    await screen.findByRole('dialog', { name: TASK_CARD })
+    await wait(600)
+    await call(talk, 'call-2', 'Send it', 'Send it.')
+    // The 5 s hold, then 10 s of sending: 15 s, before the 17 s mark.
+    await wait(HOLD + 10_000 + 100)
+
+    expect(answersTo(talk, 'call-2')).toEqual([
+      { id: 'call-2', status: 'ok', retryable: false, message: SENT_LINE },
+    ])
+    await wait(TOOL_SECONDS * 1000)
+    expect(answersTo(talk, 'call-2')).toHaveLength(1)
   })
 })

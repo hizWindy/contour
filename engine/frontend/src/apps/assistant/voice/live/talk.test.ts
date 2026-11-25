@@ -412,14 +412,21 @@ describe('tool calls (T3-1)', () => {
     const set = await live()
     const socket = set.sockets.last()
     socket.say({ type: 'heard', text: ' Log a call with Jo', final: false, interim: false })
+    const arrived = Date.now()
     socket.say({ type: 'tool_call', id: 'call-1', request: 'Log a call with Jo Sample' })
 
     expect(set.now().working).toBe(1)
     // It waits up to 0.5 s for the rep's words Google is still sending.
     expect(set.calls).toEqual([])
     await vi.advanceTimersByTimeAsync(CALL_WORDS_MS)
+    // The relay answers for it 20 s after it came (the start's tool_seconds), not after the wait.
     expect(set.calls).toEqual([
-      { id: 'call-1', request: 'Log a call with Jo Sample', heard: 'Log a call with Jo' },
+      {
+        id: 'call-1',
+        request: 'Log a call with Jo Sample',
+        heard: 'Log a call with Jo',
+        answerBy: arrived + SESSION.limits.tool_seconds * 1000,
+      },
     ])
 
     set.talk.answer({
@@ -439,6 +446,16 @@ describe('tool calls (T3-1)', () => {
         message: 'Ready. Say send it.',
       },
     ])
+  })
+
+  it("says when the relay answers a call itself, from the start's own limit (T3-2)", async () => {
+    const limits = { ...SESSION.limits, tool_seconds: 12 }
+    const set = await live({ begin: () => Promise.resolve({ ...SESSION, limits }) })
+    const arrived = Date.now()
+    set.sockets.last().say({ type: 'tool_call', id: 'call-1', request: 'Send it' })
+    await vi.advanceTimersByTimeAsync(CALL_WORDS_MS)
+
+    expect(set.calls.map((call) => call.answerBy)).toEqual([arrived + 12_000])
   })
 
   it('stops working on a call Google cancelled, and never answers it', async () => {

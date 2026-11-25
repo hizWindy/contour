@@ -9,7 +9,7 @@
  *   talks.last().finish({ kind: 'failed' })      // it ended by itself
  */
 import type { Talk, TalkEnd, TalkOptions, TalkSnapshot, ToolAnswer } from './talk'
-import { NO_CAPTIONS } from './talk'
+import { NO_CAPTIONS, TOOL_SECONDS } from './talk'
 
 const STARTING: TalkSnapshot = {
   phase: 'connecting',
@@ -86,10 +86,13 @@ export class FakeTalk implements Talk {
     this.left = words
   }
 
-  /** Gemini asks Contour, with the rep's own words since the last call (PLAN-V28 T3-1). */
-  call(id: string, request: string, heard = ''): void {
+  /**
+   * Gemini asks Contour, with the rep's own words since the last call (PLAN-V28 T3-1). The relay
+   * answers it itself `TOOL_SECONDS` from now, unless the test says when.
+   */
+  call(id: string, request: string, heard = '', answerBy = Date.now() + TOOL_SECONDS * 1000): void {
     this.set({ working: this.snapshot.working + 1 })
-    this.options.onToolCall?.({ id, request, heard })
+    this.options.onToolCall?.({ id, request, heard, answerBy })
   }
 
   /** Google cancelled tool calls (T3-3). */

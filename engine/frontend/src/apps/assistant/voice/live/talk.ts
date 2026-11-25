@@ -77,6 +77,12 @@ export const DUCK_MS = 1000
  */
 export const CALL_WORDS_MS = 500
 
+/**
+ * The relay answers a tool call itself after this long ("That took too long. Try again."), until
+ * the start says otherwise (`VoiceSessionOut.limits.tool_seconds`, 20 s today).
+ */
+export const TOOL_SECONDS = 20
+
 /** What the captions show: the rep's words as Google hears them, then the Assistant's. */
 export interface Captions {
   /** The rep's words this exchange. */
@@ -170,6 +176,11 @@ export interface ToolCall {
   request: string
   /** The rep's own words since the last tool call, as Google heard them so far. */
   heard: string
+  /**
+   * When the relay answers it itself, on this page's clock (`Date.now()`): its arrival plus the
+   * start's `limits.tool_seconds`. A send still going answers before then (PLAN-V28 T3-2).
+   */
+  answerBy: number
 }
 
 /** A tool answer: the relay's five fields, less its `type`. */
@@ -306,8 +317,13 @@ export class LiveTalk implements Talk {
   /** Google's guess at the words being said now: shown, never acted on. */
   private guess = ''
   /** A tool call waiting up to 0.5 s for the rep's words that are still coming (T3-1). */
-  private window: { call: { id: string; request: string }; words: string; timer: number } | null =
-    null
+  private window: {
+    call: { id: string; request: string; answerBy: number }
+    words: string
+    timer: number
+  } | null = null
+  /** How long the relay waits for a tool answer before it answers itself: the start's limit. */
+  private toolMs = TOOL_SECONDS * 1000
   /** The rep's turn so far, for "that's all" (T3-4). */
   private repTurn = ''
   private readonly onRepTurn: ((words: string) => void) | null
@@ -438,6 +454,7 @@ export class LiveTalk implements Talk {
       return
     }
     this.set({ bars: soundIn.bars })
+    this.toolMs = started.limits.tool_seconds * 1000
     this.relay = new Relay(started.socket, this.relayHandlers, this.env.relay)
     this.relay.open()
   }
@@ -666,7 +683,7 @@ export class LiveTalk implements Talk {
         this.set({ working: this.pending.size })
         // The rep's words so far are this call's, and so are those within the next 0.5 s.
         this.window = {
-          call: { id: message.id, request: message.request },
+          call: { id: message.id, request: message.request, answerBy: Date.now() + this.toolMs },
           words: this.sinceCall,
           timer: window.setTimeout(() => {
             this.closeWindow()

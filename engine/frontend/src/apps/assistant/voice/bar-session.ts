@@ -119,6 +119,7 @@ import {
   ok,
   replyFor,
   replyForProblem,
+  STILL_SENDING_BEFORE_MS,
   type Reply,
 } from './live/bridge'
 import { holdLiveOff, liveHeldOff, melbourneMonthEnd } from './live/limit'
@@ -274,6 +275,11 @@ export interface CardTook {
    * after its hold. Left out: "Ready. Say send it."
    */
   reply?: Reply | Promise<Reply>
+  /**
+   * Said instead, once, when `reply` isn't known 3 s before the relay would answer the tool call
+   * itself (`STILL_SENDING_BEFORE_MS`): a send still going after its hold (T3-2). Left out: none.
+   */
+  meanwhile?: Reply
 }
 
 /** A review card open in the conversation (T2-3): it hears each turn first. */
@@ -390,6 +396,8 @@ interface LiveCall {
   id: string
   /** The rep's own words since the last tool call: what the card's ear reads (choice 7). */
   heard: string
+  /** When the relay answers it itself, on this page's clock (`ToolCall.answerBy`). */
+  answerBy: number
   /** Answers the tool call, once; later answers are dropped. */
   reply: (reply: Reply) => void
 }
@@ -422,18 +430,30 @@ function withLater(failed: string, later: readonly Turn[]): string {
 
 /**
  * Answers a tool call with what a card did (PLAN-V28 T3-2): at once, or once it is known, like a
- * send after its 5-second hold. A promise that fails is said as not done.
+ * send after its 5-second hold. A promise that fails is said as not done. With `meanwhile` (a send),
+ * an answer not known 3 s before the relay would give its own is `meanwhile`, once: the relay's
+ * "That took too long. Try again." is never what Gemini hears about a send still going.
  */
-function answerWith(call: LiveCall, reply: Reply | Promise<Reply>): void {
+function answerWith(call: LiveCall, reply: Reply | Promise<Reply>, meanwhile?: Reply): void {
   if (!(reply instanceof Promise)) {
     call.reply(reply)
     return
   }
+  const timer = meanwhile
+    ? window.setTimeout(
+        () => {
+          call.reply(meanwhile)
+        },
+        Math.max(0, call.answerBy - STILL_SENDING_BEFORE_MS - Date.now()),
+      )
+    : 0
   reply.then(
     (known) => {
+      window.clearTimeout(timer)
       call.reply(known)
     },
     () => {
+      window.clearTimeout(timer)
       call.reply({ status: 'error', retryable: true, message: NOT_DONE })
     },
   )
@@ -910,6 +930,7 @@ export class BarSession {
       call: {
         id: call.id,
         heard: call.heard,
+        answerBy: call.answerBy,
         reply: (reply) => {
           if (answered) return
           answered = true
@@ -1564,7 +1585,7 @@ export class BarSession {
     if (took) {
       this.setConversation({ line: took.line })
       // The card says what it did: "Sent." only once its Send has worked, after the hold.
-      if (call) answerWith(call, took.reply ?? ok(READY))
+      if (call) answerWith(call, took.reply ?? ok(READY), took.meanwhile)
       this.next()
       return
     }
