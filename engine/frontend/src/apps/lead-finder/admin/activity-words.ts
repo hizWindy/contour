@@ -23,6 +23,7 @@ const FIELDS: Record<string, string> = {
   active: 'can sign in',
   hubspot_owner: 'HubSpot user',
   name: 'name',
+  live_voice: 'live voice', // PLAN-V28 T1-1: a paid service, so its switch is named
 }
 
 function text(value: unknown): string | null {

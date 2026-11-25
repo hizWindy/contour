@@ -125,6 +125,8 @@ export const queryKeys = {
   },
   settings: {
     all: ['settings'] as const,
+    /** This month's live voice, under its limit (PLAN-V28 T1-5): a saved setting reads it again. */
+    liveVoiceMonth: () => ['settings', 'live-voice-month'] as const,
   },
   schedules: {
     all: ['schedules'] as const,

@@ -29,6 +29,7 @@ from core.auth.models import User
 from core.config import CEILINGS, EDITABLE_KEYS, Settings, clamp_to_ceilings, field_bounds
 from core.db.engine import get_session
 from core.logs import JsonFormatter, redact
+from core.prefs.service import TEXT
 from tests.core.auth_world import World, make_account, make_platform_admin, me, sign_in
 
 FAKE_KEY = "test-key-not-real"
@@ -125,6 +126,16 @@ def test_the_project_and_region_go_into_googles_address_so_only_plain_names_pass
 
 
 # --- The month's limit ---------------------------------------------------------------------------
+
+
+def test_the_names_switch_says_what_still_reaches_google_with_it_off() -> None:
+    """Off sends no list of names, but names the rep says, and names in the Assistant's answers
+    ("Jo Sample or Jo Northwind?"), still reach Google during a talk. Settings must never say that
+    no names go: Levi reads it to decide L2 (found by merge v28's review)."""
+    _label, words = TEXT["live_voice_names_ok"]
+    assert "no names go" not in words
+    assert "Off: the list isn't sent" in words
+    assert "names the rep says, and names in the Assistant's answers, reach Google" in words
 
 
 def test_the_month_limit_is_on_the_settings_page_under_its_ceiling() -> None:

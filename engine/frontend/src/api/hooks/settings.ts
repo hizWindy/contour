@@ -11,11 +11,15 @@ export function useSettings() {
   })
 }
 
-/** A change to settings alters the caps the Start page shows, so those are refreshed too. */
+/**
+ * A change to settings alters the caps the Start page shows, so those are refreshed too, and the
+ * live voice month's line, which names its limit (PLAN-V28 T1-5).
+ */
 function refreshAfterSettings(queryClient: QueryClient, settings: SettingsOut): void {
   queryClient.setQueryData(queryKeys.settings.all, settings)
   void queryClient.invalidateQueries({ queryKey: queryKeys.runOptions.all })
   void queryClient.invalidateQueries({ queryKey: ['runs', 'estimate'] })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.settings.liveVoiceMonth() })
 }
 
 /** Saves some settings (`PATCH /settings`). Wrong values come back as field errors `values.<key>`. */

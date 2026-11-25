@@ -7,7 +7,7 @@
  */
 import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { mockApi } from '@/test/mock-api'
+import { mockApi, type Call } from '@/test/mock-api'
 import { renderWithProviders } from '@/test/render'
 import { asLaptop, asPhone } from '@/test/screen'
 import AdminSettingsTab from './settings'
@@ -100,6 +100,37 @@ describe.each([
       ).toBeInTheDocument()
       expect(limit).toBeEnabled()
     })
+  })
+})
+
+describe('a new limit, saved', () => {
+  it('reads this month again, so the line names the new limit (merge v28, the review)', async () => {
+    let cap = LIMIT.value
+    const line = (limit: string) =>
+      `Live voice this month: 42 minutes, about US$0.51 of US$${limit}.`
+    mockApi({
+      '/api/v1/settings': (call: Call) => {
+        if (call.method === 'PATCH') {
+          const { values } = call.body as { values: Record<string, unknown> }
+          cap = Number(values.live_voice_month_cap_usd).toFixed(2)
+        }
+        return Response.json(
+          settingsOut([{ ...LIMIT, value: cap, overridden: cap !== LIMIT.default }]),
+        )
+      },
+      '/api/v1/companies/assistant/voice/month': () =>
+        Response.json({ ...MONTH, cap_usd: cap, line: line(cap) }),
+    })
+    const { user } = renderWithProviders(<AdminSettingsTab />)
+    const limit = await screen.findByLabelText('Live voice: monthly limit (US$)')
+    expect(await screen.findByText(line('4.00'))).toBeInTheDocument()
+
+    await user.clear(limit)
+    await user.type(limit, '3')
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    expect(await screen.findByText(line('3.00'))).toBeInTheDocument()
+    expect(screen.queryByText(line('4.00'))).toBeNull()
   })
 })
 

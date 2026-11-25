@@ -6,7 +6,7 @@
  *   screen, so its names come first. It answers the socket's path, to open within 60 seconds, or
  *   a refusal in plain words (403, 409, 429 or 503), which the free mic takes over from.
  * - **The month** (T1-5, Platform admin): "Live voice this month: 42 minutes, about US$0.51 of
- *   US$4.00." Under the settings' key, so a new limit saved there reads it again.
+ *   US$4.00." A saved setting reads it again (`refreshAfterSettings`), so a new limit shows.
  */
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { api, unwrap } from '../client'
@@ -28,7 +28,7 @@ export async function startLiveVoice(
 
 export function liveVoiceMonthQueryOptions() {
   return queryOptions<VoiceMonth>({
-    queryKey: [...queryKeys.settings.all, 'live-voice-month'],
+    queryKey: queryKeys.settings.liveVoiceMonth(),
     queryFn: async ({ signal }) =>
       unwrap(await api.GET('/companies/assistant/voice/month', { signal })),
   })

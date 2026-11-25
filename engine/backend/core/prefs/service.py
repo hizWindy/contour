@@ -395,9 +395,10 @@ TEXT: dict[str, tuple[str, str]] = {
     ),
     "live_voice_names_ok": (
         "Live voice may send names to Google",
-        "Levi's OK to send up to 50 company and people names a rep is likely to say to Google, "
-        "so live voice hears them right. Off: no names go, and our own fix for a misheard name "
-        "still works. " + ENV_ONLY_NOTE,
+        "Levi's OK to send Google a list of up to 50 company and people names a rep is likely to "
+        "say, so live voice hears them right. Off: the list isn't sent, and our own fix for a "
+        "misheard name still works. Either way, names the rep says, and names in the Assistant's "
+        "answers, reach Google during a talk. " + ENV_ONLY_NOTE,
     ),
     "hard_live_voice_month_cap_usd": (
         "Highest live voice monthly limit (US$)",
