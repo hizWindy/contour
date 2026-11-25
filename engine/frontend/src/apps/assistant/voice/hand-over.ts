@@ -23,7 +23,7 @@
  *   for a rep who can log calls, Log call opens with the words in a new call note, and the rep picks
  *   the company. Anyone else is told the Assistant can't read commands yet.
  */
-import { api, toApiProblem, unwrap } from '@/api/client'
+import { api, isAbort, toApiProblem, unwrap } from '@/api/client'
 import type {
   AssistantCommand,
   AssistantMeetingHit,
@@ -67,8 +67,11 @@ export function unclearAnswer(command: AssistantCommand, said: string): AfterAns
   return { kind: 'unclear', words, line: command.unsure?.trim() || unclearWords(words) }
 }
 
-/** Starts a meeting's pre-read, as Meetings' "Draft it" does. Answers with its id. */
-export type StartPreRead = (meetingId: string) => Promise<{ id: string }>
+/**
+ * Starts a meeting's pre-read, as Meetings' "Draft it" does. Answers with its id. `signal`: the
+ * turn's abort (PLAN-V28 T3-3), for a tool call Google cancelled.
+ */
+export type StartPreRead = (meetingId: string, signal?: AbortSignal) => Promise<{ id: string }>
 
 export interface HandOverTools {
   /** Opens a page of the app. */
@@ -92,6 +95,11 @@ export interface HandOverTools {
   canPrep?: () => boolean
   /** Says a line as a page opens (a toast). For tests. */
   tell?: (line: string) => void
+  /**
+   * The turn's abort, in live voice (PLAN-V28 T3-3): a tool call Google cancelled while its
+   * pre-read starts stops the start, and opens nothing. Left out: nothing stops it.
+   */
+  signal?: AbortSignal
 }
 
 /** The actions whose card is the review card. */
@@ -125,21 +133,24 @@ export function preReadPath(formId: string): string {
 }
 
 /** POST /meetings/forms for a HubSpot meeting: the server reads its own place. */
-export const startPreRead: StartPreRead = async (meetingId) =>
+export const startPreRead: StartPreRead = async (meetingId, signal) =>
   unwrap(
     await api.POST('/companies/meetings/forms', {
       body: { meeting_id: meetingId, where: 'unknown' },
+      ...(signal ? { signal } : {}),
     }),
   )
 
 /**
  * A meeting's pre-read opens: its page at once if it has one, else once it has started. A failed
- * start says why in the bar. If the rep closed the bar meanwhile, the page doesn't open.
+ * start says why in the bar. If the rep closed the bar meanwhile, or Google cancelled the tool
+ * call it came from (`signal`, PLAN-V28 T3-3), the page doesn't open.
  */
 export function openMeeting(
   meeting: AssistantMeetingHit,
   go: (to: string) => void,
   start: StartPreRead = startPreRead,
+  signal?: AbortSignal,
 ): AfterAnswer | Promise<AfterAnswer> {
   if (meeting.form) {
     go(preReadPath(meeting.form.id))
@@ -151,12 +162,14 @@ export function openMeeting(
     go(MEETINGS_PATH)
     return CLOSE
   }
-  return start(meetingId).then(
+  return (signal ? start(meetingId, signal) : start(meetingId)).then(
     (form): AfterAnswer => {
-      if (isVoiceBarOpen()) go(preReadPath(form.id))
+      if (isVoiceBarOpen() && signal?.aborted !== true) go(preReadPath(form.id))
       return CLOSE
     },
     (error: unknown): AfterAnswer => {
+      // Stopped by a cancelled tool call: nothing to say.
+      if (signal?.aborted === true || isAbort(error)) return CLOSE
       const problem = toApiProblem(error)
       return { kind: 'show', line: problem.title, unsure: problem.detail, again: false }
     },
@@ -201,6 +214,7 @@ export function handOver(
     tell = (line) => {
       toast(line)
     },
+    signal,
   }: HandOverTools,
 ): AfterAnswer | Promise<AfterAnswer> {
   if (heard.kind === 'dictation') {
@@ -216,7 +230,7 @@ export function handOver(
   }
   if (command.action === 'research') return researchAnswer(heard, go, canPrep(), tell)
   if (command.action === 'pre_read' && command.meeting?.found) {
-    return openMeeting(command.meeting.found, go, start)
+    return openMeeting(command.meeting.found, go, start, signal)
   }
   if (command.action === 'log_call' && command.quick === true && quickLog(heard)) return CLOSE
   if (CARD_ACTIONS.has(command.action) || command.action === 'pre_read') {

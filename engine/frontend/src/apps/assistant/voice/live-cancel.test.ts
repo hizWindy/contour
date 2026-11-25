@@ -3,10 +3,12 @@
  * card's ear; a tool call Google cancels stops its command request, is never answered, and opens
  * nothing late. Made-up names only.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { command, taskCommand } from '../card/fixtures'
+import { handOver, preReadPath } from './hand-over'
 import { TASK_WORDS, live, ear, tick } from './live/fake-session'
 import { READY } from './live/words'
+import { closeVoiceBar, openVoiceBar } from './store'
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -62,5 +64,79 @@ describe('asking back and talking over (T3-3)', () => {
 
     expect(talk.answers).toHaveLength(1)
     expect(talk.stopped).toBe(false)
+  })
+})
+
+describe('a pre-read starting for a tool call Google cancels (T3-3)', () => {
+  /** "Draft the pre-read for my Sample Logistics meeting": the meeting has none yet. */
+  const PRE_READ = command({
+    action: 'pre_read',
+    read_back: 'Draft the pre-read for Fit-out walkthrough.',
+    meeting: {
+      found: {
+        id: 'meeting-1',
+        title: 'Fit-out walkthrough',
+        starts_at: '2026-11-27T09:00:00+11:00',
+        company_key: '201',
+        company_name: 'Sample Logistics Pty Ltd',
+        form: null,
+      },
+      choices: [],
+      from_page: false,
+      heard: 'my Sample Logistics meeting',
+    },
+  })
+
+  /** The bar with the real hand-over, a pre-read start the test ends, and the pages opened. */
+  async function preRead() {
+    const went: string[] = []
+    const signals: (AbortSignal | undefined)[] = []
+    let started: (form: { id: string }) => void = () => undefined
+    const set = await live({
+      hand: (heard, said, signal) =>
+        handOver(heard, {
+          go: (to) => {
+            went.push(to)
+          },
+          start: (_, given) => {
+            signals.push(given)
+            return new Promise((resolve) => {
+              started = resolve
+            })
+          },
+          ...(signal ? { signal } : {}),
+        }),
+    })
+    // The bar is open while the talk goes on.
+    openVoiceBar()
+    set.talk.call('call-1', 'Draft the pre-read for my Sample Logistics meeting', 'Pre-read.')
+    set.readings[0]?.answer(PRE_READ)
+    await tick()
+    return { ...set, went, signals, start: (id: string) => started({ id }) }
+  }
+
+  afterEach(() => {
+    closeVoiceBar()
+  })
+
+  it('opens nothing, and its start is stopped', async () => {
+    const set = await preRead()
+    set.talk.cancel('call-1')
+    set.start('form-1')
+    await tick()
+
+    expect(set.signals[0]?.aborted).toBe(true)
+    expect(set.went).toEqual([])
+    expect(set.talk.answers).toEqual([])
+  })
+
+  it("opens its page when it isn't cancelled", async () => {
+    const set = await preRead()
+    set.start('form-1')
+    await tick()
+
+    expect(set.signals[0]?.aborted).toBe(false)
+    expect(set.went).toEqual([preReadPath('form-1')])
+    expect(set.talk.answerTo('call-1')?.status).toBe('ok')
   })
 })

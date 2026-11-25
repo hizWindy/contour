@@ -71,9 +71,9 @@ export function setUp({ liveOn = true, mic: micOptions = LIVE_LAPTOP, hand }: Se
       new Promise<AssistantCommand>((answer, refuse) => {
         readings.push({ body, signal, answer, refuse })
       }),
-    hand: (heard, said) => {
+    hand: (heard, said, signal) => {
       handed.push(heard)
-      if (hand) return hand(heard, said)
+      if (hand) return hand(heard, said, signal)
       if (heard.kind !== 'command') return { kind: 'close' }
       const { command: said_ } = heard
       if (['log_call', 'task', 'email'].includes(said_.action)) {

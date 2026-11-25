@@ -318,9 +318,14 @@ export interface BarSessionOptions {
   /**
    * Where an answer goes (`handOver`, or the review card's own). A promise keeps "Working it out"
    * on until it settles, like a pre-read that has to start first. `said`: hears the line a page
-   * opens with (`handOver`'s `tell`), for live voice to say back (PLAN-V28 T3-1).
+   * opens with (`handOver`'s `tell`), for live voice to say back (PLAN-V28 T3-1). `signal`: a live
+   * tool call's turn, which Google may cancel while a pre-read starts: it then opens nothing (T3-3).
    */
-  hand: (heard: Heard, said?: (line: string) => void) => AfterAnswer | Promise<AfterAnswer>
+  hand: (
+    heard: Heard,
+    said?: (line: string) => void,
+    signal?: AbortSignal,
+  ) => AfterAnswer | Promise<AfterAnswer>
   /**
    * The review card that is open, while the rep speaks a change to it (T3-3): its action and the
    * names of its boxes go with the words, so the command step answers change, send or cancel.
@@ -1685,12 +1690,18 @@ export class BarSession {
       if (command.quick === true) given = { ...heard, command: { ...command, quick: false } }
     }
     let told: string | null = null
+    // A tool call Google cancels while its pre-read starts stops the start: it opens nothing (T3-3).
+    const request = new AbortController()
     const after = ear
       ? ear.answer(given)
       : call
-        ? this.hand(given, (line) => {
-            told = line
-          })
+        ? this.hand(
+            given,
+            (line) => {
+              told = line
+            },
+            request.signal,
+          )
         : this.hand(given)
     const answer = (settled: AfterAnswer): void => {
       call?.reply(
@@ -1705,7 +1716,6 @@ export class BarSession {
     }
     if (after instanceof Promise) {
       // A pre-read starting first: the turns wait for it.
-      const request = new AbortController()
       this.turnRequest = request
       void after.then((settled) => {
         if (this.turnRequest !== request || this.over) return

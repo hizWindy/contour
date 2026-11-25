@@ -536,11 +536,13 @@ export default function VoiceBar({
           names: fixNamesOf(shown.names, list),
           hints: hintsOf(shown.names, list),
           read,
-          hand: (heard, said) =>
+          hand: (heard, said, signal) =>
             handOver(heard, {
               go: (to) => {
                 void navigate(to)
               },
+              // A tool call Google cancelled while its pre-read starts opens nothing (T3-3).
+              ...(signal ? { signal } : {}),
               // Live voice says back the line a page opens with (PLAN-V28 T3-1); the toast too.
               ...(said
                 ? {
