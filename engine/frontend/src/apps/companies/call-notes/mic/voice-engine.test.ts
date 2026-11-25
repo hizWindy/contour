@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { VoiceToolKind } from '@/api/types'
 import {
+  barEngineFor,
+  browserFacts,
   deviceKind,
   engineFor,
   ENGINE_KEY,
   movedToModel,
+  pickBarEngine,
   pickEngine,
   rememberModel,
   type BrowserFacts,
@@ -188,5 +191,90 @@ describe('the move to the model, remembered on this device', () => {
     rememberModel(kept)
     expect(pick('browser_service')).toBe('model')
     expect(pick('typing')).toBeNull()
+  })
+})
+
+/*
+  PLAN-V28 T2-3: the voice bar's own engine. Live voice comes first where it may start for this
+  person (`MeOut.live_voice`) and the browser can run it (an AudioWorklet and WebSockets); without
+  it, the bar's choice is today's, browser by browser.
+*/
+describe('the voice bar, with live voice (PLAN-V28 T2-3)', () => {
+  const BROWSERS: [string, Here][] = [
+    ['Chrome on a Windows laptop', here(UA.chromeWindows)],
+    ['Chrome on a Mac', here(UA.chromeMac)],
+    ['Chrome on an Android phone', here(UA.chromeAndroid, { touchPoints: 5 })],
+    ['Edge on a Windows laptop', here(UA.edgeWindows)],
+    ['Safari on a Mac', here(UA.safariMac)],
+    ['Safari on an iPhone', here(UA.safariIphone, { touchPoints: 5 })],
+    ['the installed app on an iPhone', here(UA.installedIphone, { touchPoints: 5 })],
+    ['an iPad that says it is a Mac', IPAD_AS_MAC],
+    ['Firefox on Windows', here(UA.firefoxWindows, { speech: false })],
+    ['Firefox on Android', here(UA.firefoxAndroid, { speech: false, touchPoints: 5 })],
+    ['Opera on a Windows laptop', here(UA.operaWindows)],
+    ['Samsung Internet on Android', here(UA.samsungAndroid, { touchPoints: 5 })],
+  ]
+
+  it.each(BROWSERS)('%s gets live voice when it is on, with either voice setting', (_, browser) => {
+    const able = { ...browser, live: true }
+
+    expect(barEngineFor('browser_service', able, true)).toBe('live')
+    expect(barEngineFor('browser_model', able, true)).toBe('live')
+  })
+
+  it.each(BROWSERS)("%s keeps today's choice without live voice", (_, browser) => {
+    const able = { ...browser, live: true }
+
+    for (const setting of ['browser_service', 'browser_model', 'typing'] as const) {
+      expect(barEngineFor(setting, able, false)).toBe(engineFor(setting, browser))
+    }
+  })
+
+  it.each(BROWSERS)(
+    "%s keeps today's choice where it can't run live voice, even with it on",
+    (_, browser) => {
+      for (const setting of ['browser_service', 'browser_model'] as const) {
+        expect(barEngineFor(setting, { ...browser, live: false }, true)).toBe(
+          engineFor(setting, browser),
+        )
+        // A browser described before PLAN-V28 says nothing of live voice: it can't.
+        expect(barEngineFor(setting, browser, true)).toBe(engineFor(setting, browser))
+      }
+    },
+  )
+
+  it('typing still means no mic at all, live voice or not', () => {
+    const able = { ...here(UA.chromeWindows), live: true }
+
+    expect(barEngineFor('typing', able, true)).toBeNull()
+  })
+
+  it('a browser that can run neither the service nor the model can still run live voice', () => {
+    const unknown = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko)'
+    const bare = here(unknown, { speech: false, model: false, live: true })
+
+    expect(barEngineFor('browser_service', bare, true)).toBe('live')
+    expect(barEngineFor('browser_service', bare, false)).toBeNull()
+  })
+
+  it('reads the browser through the env, as the bar does', () => {
+    const env = (live: boolean) => ({
+      speech: () => true,
+      storage: () => null,
+      browser: (): BrowserFacts => ({
+        userAgent: UA.chromeWindows,
+        touchPoints: 0,
+        model: true,
+        live,
+      }),
+    })
+
+    expect(pickBarEngine('browser_service', true, env(true))).toBe('live')
+    expect(pickBarEngine('browser_service', false, env(true))).toBe('service')
+    expect(pickBarEngine('browser_service', true, env(false))).toBe('service')
+  })
+
+  it("this test browser has no AudioWorklet, so it says it can't run live voice", () => {
+    expect(browserFacts().live).toBe(false)
   })
 })

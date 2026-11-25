@@ -67,6 +67,11 @@
  * - **On a laptop that needs the model**, it downloads once the page is idle, so the first Speak
  *   needn't wait. Only once the setting is known and isn't typing, and never on a phone or a
  *   tablet, where it waits for Speak or "Get voice ready" in the profile menu.
+ *
+ * PLAN-V28 T2-3, **live voice** (`live/`), for a person it is on for (`MeOut.live_voice`): the
+ * session picks it at each start where this browser can run it, and the bar hands it the talk's
+ * maker. On an iPhone sound starts only inside the tap or key press that asked for it, so the
+ * audio is made inside the V key press or the Speak tap that opens the bar (`whenBarOpens`).
  */
 import { CircleAlert, RotateCcw } from 'lucide-react'
 import { AnimatePresence, m } from 'motion/react'
@@ -86,7 +91,7 @@ import { useLocation, useNavigate } from 'react-router'
 import { readCommand } from '@/api/hooks/assistant'
 import { namesQueryOptions } from '@/api/hooks/assistant-names'
 import { useCallNoteOptions } from '@/api/hooks/call-note-counts'
-import type { SignIn } from '@/api/hooks/auth'
+import { liveVoiceOf, useMe, type SignIn } from '@/api/hooks/auth'
 import { queryKeys } from '@/api/query'
 import type { AssistantCommand, AssistantCommandIn, CallNoteOptions } from '@/api/types'
 import { LiveWords } from '@/apps/companies/call-notes/mic/live-words'
@@ -131,12 +136,21 @@ import { startQuickLog } from '../card/quick'
 import { handOver } from './hand-over'
 import { isKeepListeningOn, useKeepListening } from './keep-listening'
 import { isPlainV, somethingElseOpen, VOICE_BAR } from './keys'
+import { primeAudio } from './live/audio'
+import { makeTalk, type MakeTalk } from './live/talk'
 import { cachedNames, firstCompanyOf, fixNamesOf, hintsOf, namesOnPage } from './names'
 import { onPageOf, panelCompany } from './on-page'
 import { onScreen } from './on-screen'
 import { MovedLine, SaidStatus } from './pill'
 import type { PillState } from './pill-state'
-import { closeVoiceBar, isVHeld, letGoV, openVoiceBarByKey, useVoiceBarOpen } from './store'
+import {
+  closeVoiceBar,
+  isVHeld,
+  letGoV,
+  openVoiceBarByKey,
+  useVoiceBarOpen,
+  whenBarOpens,
+} from './store'
 import { playTone, type Tone } from './tone'
 import { useVKeyOn } from './v-switch'
 import {
@@ -239,6 +253,8 @@ export interface VoiceBarProps {
   times?: Partial<Times>
   /** For tests: the tone as listening starts and stops (PLAN-V24 T5-1). Left out: the real one. */
   tone?: Tone
+  /** For tests: how a live talk is made (PLAN-V28). Left out: the real one, through our relay. */
+  talk?: MakeTalk
 }
 
 /** The model's download, while it downloads (PLAN-V24 T4-3): not while it only loads. */
@@ -310,17 +326,20 @@ function problemLine(problem: BarProblem, device?: DeviceKind): string {
       return TOO_LONG
     case 'left':
       return LEFT_PAGE
+    case 'live':
+      return problem.line
   }
 }
 
 /**
- * A line said without alarm: why there is no mic, which isn't a failure of the moment, or a
- * conversation that stopped after its quiet.
+ * A line said without alarm: why there is no mic, which isn't a failure of the moment, a
+ * conversation that stopped after its quiet, or a live talk's own last line (PLAN-V28).
  */
 function isQuiet(problem: BarProblem): boolean {
   return (
     problem.kind === 'no_voice' ||
     problem.kind === 'quiet' ||
+    problem.kind === 'live' ||
     (problem.kind === 'mic' && problem.problem === 'no_speech_tool')
   )
 }
@@ -364,6 +383,9 @@ function actionsOf(snapshot: BarSnapshot): BarAction[] {
     case 'quiet':
       // A conversation stopped after 2 minutes of quiet (PLAN-V24 choice 10).
       return ['start_again']
+    case 'live':
+      // A live talk ended with its line (PLAN-V28): start again, or type what was said.
+      return ['start_again', 'type_instead']
     case 'left':
       // A phone left the page: the words so far go in the text line (T2-5).
       return ['carry_on']
@@ -414,12 +436,15 @@ export default function VoiceBar({
   read = readCommand,
   times,
   tone = playTone,
+  talk = makeTalk,
 }: VoiceBarProps) {
   // Never for a Viewer (choice 18), whatever asked for it: V and "Speak (V)" don't either.
   const viewer = useIsViewer()
   const asked = useVoiceBarOpen()
   const open = asked && !viewer
   const options = useCallNoteOptions()
+  // Live voice may start for this person (PLAN-V28 T2-3): the session reads it again at each start.
+  const liveOn = liveVoiceOf(useMe().data)
 
   const navigate = useNavigate()
   const location = useLocation()
@@ -513,10 +538,26 @@ export default function VoiceBar({
           makeTool,
           times,
           tone,
+          // Live voice first, where it may start and this browser can run it (PLAN-V28 T2-3).
+          live: {
+            on: () => liveVoiceOf(client.getQueryData<SignIn>(queryKeys.auth.me())),
+            talk,
+          },
         }),
       )
     }
   }
+
+  // On an iPhone, the Assistant's voice may play only if its audio started inside the key press
+  // or tap that opened the bar: so it starts there (PLAN-V28 T2-2), for a person with live voice.
+  const typingOnly = options.data?.voice_tool === 'typing'
+  useEffect(() => {
+    if (viewer || !liveOn || typingOnly) return undefined
+    whenBarOpens(primeAudio)
+    return () => {
+      whenBarOpens(null)
+    }
+  }, [viewer, liveOn, typingOnly])
 
   // The hint list that came in after the bar opened: the fix and the service use it from now.
   const names = hintList.data

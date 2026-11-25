@@ -49,11 +49,15 @@ const API_TARGET = process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:8000'
  * `changeOrigin` sends `Host: 127.0.0.1:8000`, which the backend's host check accepts. The
  * browser's own `Origin` header (http://localhost:5173, the address to open) is passed on
  * unchanged.
+ *
+ * `ws: true` passes WebSockets on too: live voice's socket to the relay (PLAN-V28 T2-3), with the
+ * same `Origin`, which the relay checks.
  */
 const apiProxy: Record<string, ProxyOptions> = {
   '/api': {
     target: API_TARGET,
     changeOrigin: true,
+    ws: true,
     timeout: 0,
     proxyTimeout: 0,
     configure(proxy) {

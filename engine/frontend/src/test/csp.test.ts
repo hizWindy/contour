@@ -62,6 +62,18 @@ describe('index.html', () => {
     expect(scripts).not.toContain("'unsafe-eval'")
   })
 
+  it("keeps live voice's socket on our own host: 'self' only, never a bare wss: (PLAN-V28 T2-3)", () => {
+    // The socket opens on the page's own host (ws: for http:, wss: for https:). Chrome, Edge,
+    // Firefox and Safari 16 or later (WebKit, Sept 2022) count that as 'self'; an older Safari
+    // refuses it, and the free mic takes over. A bare `wss:` would let a script open a socket to
+    // any host, so it never goes in.
+    const connect = directives().get('connect-src') ?? []
+
+    expect(connect).toEqual(["'self'"])
+    expect(connect).not.toContain('wss:')
+    expect(connect).not.toContain('ws:')
+  })
+
   it('leaves frame-ancestors to a header, because a meta tag ignores it', () => {
     expect(directives().has('frame-ancestors')).toBe(false)
   })

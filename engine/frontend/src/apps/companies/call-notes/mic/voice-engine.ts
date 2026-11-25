@@ -21,11 +21,22 @@
  * - **`typing`:** no mic, as before.
  *
  * S2 (the iPhone test) can change the list. Nothing here loads the model: see `voice-ready.ts`.
+ *
+ * **Live voice** (PLAN-V28 T2-3, choices 16 and 25): the voice bar's own engine, `live`, comes
+ * first where it may start for this person (`MeOut.live_voice`) and the browser can run it (an
+ * AudioWorklet and WebSockets): Gemini listens and talks back through our relay. Only the bar's
+ * conversation uses it (`barEngineFor`): the mic session, the card's own 5 seconds and Log call's
+ * dictation keep today's engines (`engineFor`), unchanged. Without live voice, the bar's choice is
+ * today's, unchanged. The setting `typing` still means no mic at all. With `browser_model`, live
+ * voice still comes first for a person the Platform admin turned it on for (TBC with Al-khair).
  */
 import type { VoiceToolKind } from '@/api/types'
 
 /** The browser's live speech service, or the model on the device. */
 export type Engine = 'service' | 'model'
+
+/** The voice bar's engines: live voice (PLAN-V28), then today's. */
+export type BarEngine = Engine | 'live'
 
 /** What the choice needs to know about the browser. Tests give made-up ones. */
 export interface BrowserFacts {
@@ -34,6 +45,11 @@ export interface BrowserFacts {
   touchPoints: number
   /** The model can run here: a Web Worker, WebAssembly and the sound tap (an AudioWorklet). */
   model: boolean
+  /**
+   * Live voice can run here (PLAN-V28 T2-3): an AudioWorklet and WebSockets. Left out: it can't,
+   * so a browser described before PLAN-V28 keeps today's choice.
+   */
+  live?: boolean
 }
 
 /** Everything the choice reads: the browser, its speech service, and this device's memory. */
@@ -81,6 +97,21 @@ export function engineFor(setting: VoiceToolKind, here: Here): Engine | null {
   return setting === 'browser_service' && here.speech ? 'service' : null
 }
 
+/**
+ * The voice bar's engine (PLAN-V28 T2-3): live voice where it may start for this person
+ * (`liveVoice`, from `MeOut.live_voice`) and this browser can run it; else today's choice
+ * (`engineFor`), unchanged. Null for no mic: typing, or a browser that can run nothing.
+ */
+export function barEngineFor(
+  setting: VoiceToolKind,
+  here: Here,
+  liveVoice: boolean,
+): BarEngine | null {
+  if (setting === 'typing') return null
+  if (liveVoice && here.live === true) return 'live'
+  return engineFor(setting, here)
+}
+
 /** A phone, a tablet or a computer, from the user agent. */
 export function deviceKind(facts: BrowserFacts): DeviceKind {
   const { userAgent } = facts
@@ -102,6 +133,7 @@ export function browserFacts(): BrowserFacts {
       typeof Worker === 'function' &&
       typeof WebAssembly === 'object' &&
       typeof AudioWorkletNode === 'function',
+    live: typeof AudioWorkletNode === 'function' && typeof WebSocket === 'function',
   }
 }
 
@@ -167,4 +199,13 @@ export function hereOf(env: EngineEnv = BROWSER): Here {
 /** The engine for the setting on this device. */
 export function pickEngine(setting: VoiceToolKind, env: EngineEnv = BROWSER): Engine | null {
   return engineFor(setting, hereOf(env))
+}
+
+/** The voice bar's engine for the setting on this device (PLAN-V28 T2-3). */
+export function pickBarEngine(
+  setting: VoiceToolKind,
+  liveVoice: boolean,
+  env: EngineEnv = BROWSER,
+): BarEngine | null {
+  return barEngineFor(setting, hereOf(env), liveVoice)
 }

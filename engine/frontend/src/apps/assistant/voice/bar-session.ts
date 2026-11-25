@@ -60,6 +60,16 @@
  * browser's service or the model on the device. Where the model has to get ready first, the bar
  * stays "starting" and shows its download, and nothing counts as heard until the mic listens.
  * Type instead skips it; V or Esc closes the bar, and a download that started goes on quietly.
+ *
+ * PLAN-V28 Part 2, **live voice** (`live/`): the seam is the session's voice source. At each start
+ * it picks live voice (`pickBarEngine`: the person's `MeOut.live_voice` and a browser that can run
+ * it) or today's `MicSession`, unchanged. A live talk (`live/talk.ts`) is always a conversation, so
+ * everything a conversation has works as it is: the card's ear (`attachCard`), turns read in order
+ * and the quiet stop (2 minutes with no words either way). One mic: during a talk there is no
+ * `MicSession`, and a card that opens hears through its ear. Hold V works as a tap: Google decides
+ * the turns. A start refused, or a socket that never reached `ready`, falls back at once to the free
+ * engine (Part 4 says why). Each end closes the relay with `stop`. Part 3 turns a tool call into a
+ * turn of the same pipeline.
  */
 import { isAbort, toApiProblem } from '@/api/client'
 import type {
@@ -78,10 +88,12 @@ import {
   type MicSnapshot,
 } from '@/apps/companies/call-notes/mic/session'
 import type { NameFix } from '@/apps/companies/call-notes/mic/name-fix'
-import { pickEngine } from '@/apps/companies/call-notes/mic/voice-engine'
+import { pickBarEngine } from '@/apps/companies/call-notes/mic/voice-engine'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import type { MicProblem } from '@/apps/companies/call-notes/mic/words'
 import type { AfterAnswer, Heard } from './hand-over'
+import type { MakeTalk, Talk, TalkSnapshot } from './live/talk'
+import { LIVE_DROPPED } from './live/words'
 import { pauseFor } from './pauses'
 import { browserScreen, type KeptOn, type ScreenEnv } from './screen'
 import type { Tone } from './tone'
@@ -149,6 +161,11 @@ export type BarProblem =
   | { kind: 'too_long' }
   /** A phone left the page (locked, or another app in front): the words so far are kept (T2-5). */
   | { kind: 'left' }
+  /**
+   * A live talk ended after it began (PLAN-V28): the relay's own line, like "Live voice stopped:
+   * nothing was heard for a while. Press V to start again." (Part 4 refines what follows).
+   */
+  | { kind: 'live'; line: string }
 
 export interface ShownAnswer {
   line: string
@@ -185,6 +202,11 @@ export interface BarSnapshot {
   fixes: readonly NameFix[]
   /** The conversation, while one listens (PLAN-V24 Part 2). Null: one command per V. */
   conversation: ConversationSnapshot | null
+  /**
+   * The live talk, while there is one (PLAN-V28): its state for the pill, its captions and its
+   * bars. Left out or null: the free mic (`mic`).
+   */
+  live?: TalkSnapshot | null
 }
 
 /** The review card open now: one that hears the conversation, another kind, or none. */
@@ -252,6 +274,19 @@ export interface BarSessionOptions {
    * at each turn of a conversation. Left out: no tone.
    */
   tone?: Tone | null
+  /**
+   * Live voice (PLAN-V28): whether it may start for this person now, and how a talk is made. Left
+   * out: never, as for the card's own V.
+   */
+  live?: LiveVoice | null
+}
+
+/** What the session needs for live voice (PLAN-V28 Part 2). */
+export interface LiveVoice {
+  /** Live voice may start for this person now (`MeOut.live_voice`): read at each start. */
+  on: () => boolean
+  /** Makes one talk: the real one (`makeTalk`), or a test's fake. */
+  talk: MakeTalk
 }
 
 const STARTING: BarSnapshot = {
@@ -264,6 +299,7 @@ const STARTING: BarSnapshot = {
   voice: true,
   fixes: [],
   conversation: null,
+  live: null,
 }
 
 const NEW_CONVERSATION: ConversationSnapshot = { working: null, waiting: 0, line: null, turns: 0 }
@@ -350,8 +386,17 @@ export class BarSession {
 
   // --- A conversation (PLAN-V24 Part 2) ---------------------------------------------------------
 
-  /** "Keep listening": each listening is a conversation, unless V is held. */
-  readonly keepsListening: boolean
+  /** "Keep listening" was on as the bar opened. */
+  private readonly keepAsked: boolean
+
+  /**
+   * Each listening is a conversation, unless V is held: "Keep listening", or a live talk, which is
+   * always one (PLAN-V28; TBC at T5-2).
+   */
+  get keepsListening(): boolean {
+    return this.keepAsked || this.talk !== null
+  }
+
   /** The conversation listens now: the mic stays on across turns. */
   private live = false
   /** Turns said and not yet worked out, in order (choice 12). */
@@ -380,6 +425,14 @@ export class BarSession {
   /** The start tone played, and the stop tone is still due (PLAN-V24 T5-1). */
   private toned = false
 
+  // --- Live voice (PLAN-V28 Part 2) --------------------------------------------------------------
+
+  private readonly liveVoice: LiveVoice | null
+  /** The live talk in use: the session's voice source in place of `mic`. */
+  private talk: Talk | null = null
+  /** The talk's count of words either way, as last seen: a change restarts the quiet stop. */
+  private talkWords = 0
+
   constructor(options: BarSessionOptions) {
     this.onPage = options.onPage ?? null
     this.where = options.where ?? null
@@ -390,12 +443,13 @@ export class BarSession {
     this.hand = options.hand
     this.onClose = options.onClose
     this.cardOpen = options.cardOpen ?? (() => null)
-    this.keepsListening = options.conversation === true
+    this.keepAsked = options.conversation === true
     this.env = options.env ?? browserEnv()
     this.makeTool = options.makeTool
     this.times = { ...TIMES, ...options.times }
     this.screen = options.screen ?? browserScreen()
     this.tone = options.tone ?? null
+    this.liveVoice = options.live ?? null
   }
 
   // --- For React (useSyncExternalStore) ---------------------------------------------------------
@@ -492,7 +546,7 @@ export class BarSession {
       })
       return
     }
-    if (pickEngine(tool, this.env) === null) {
+    if (pickBarEngine(tool, this.liveOn(), this.env) === null) {
       // Neither the browser's service nor the model can run here: don't open the mic for nothing.
       this.set({
         ...STARTING,
@@ -506,10 +560,25 @@ export class BarSession {
   }
 
   /**
-   * Listens, from the start: the mic check, then the words. With "Keep listening", a conversation;
-   * turns of an earlier one that are still worked out go on, and come first.
+   * Listens, from the start: live voice where it may start (PLAN-V28), else the mic check, then the
+   * words. With "Keep listening", a conversation; turns of an earlier one that are still worked out
+   * go on, and come first.
    */
   listen(): void {
+    if (this.liveVoice && pickBarEngine(this.tool, this.liveOn(), this.env) === 'live') {
+      this.listenLive(this.liveVoice)
+      return
+    }
+    this.listenFree()
+  }
+
+  /** Live voice may start for this person now. */
+  private liveOn(): boolean {
+    return this.liveVoice?.on() === true
+  }
+
+  /** The free mic: today's engine, through the mic session. */
+  private listenFree(): void {
     this.stopListening()
     this.abortRequest()
     const mic = new MicSession({
@@ -540,12 +609,115 @@ export class BarSession {
     mic.start()
   }
 
+  // --- Live voice (PLAN-V28 Part 2) --------------------------------------------------------------
+
+  /**
+   * A live talk: always a conversation, with the screen kept on and a hidden phone page seen, as a
+   * conversation of the free mic. The company on screen goes with its start, for Google's names.
+   */
+  private listenLive(liveVoice: LiveVoice): void {
+    this.stopListening()
+    this.abortRequest()
+    const onPage = this.where ? this.where() : this.onPage
+    const talk = liveVoice.talk({ companyKey: onPage?.company_key ?? null })
+    this.talk = talk
+    this.talkWords = 0
+    this.heardWords = ''
+    this.lastUnclear = ''
+    this.live = true
+    this.unsubscribe = talk.subscribe(() => {
+      this.onTalk(talk)
+    })
+    this.set({
+      ...STARTING,
+      live: talk.getSnapshot(),
+      conversation: { ...NEW_CONVERSATION, waiting: this.queue.length },
+    })
+    this.keepScreenOn()
+    this.unwatchPage = this.screen.onVisibility(this.pageChanged)
+    talk.start()
+  }
+
+  /** The talk moved on: "Listening" from Google's `ready`, and the quiet stop from each word. */
+  private onTalk(talk: Talk): void {
+    if (talk !== this.talk || this.over) return
+    const now = talk.getSnapshot()
+    if (now.end) {
+      this.talkEnded(now)
+      return
+    }
+    const quiet = (): void => {
+      this.quietStop()
+    }
+    if (this.snapshot.phase === 'starting' && now.ready) {
+      // Google is ready: the words count from now (the tone plays as it listens).
+      this.talkWords = now.words
+      this.set({ phase: 'listening', live: now })
+      this.restart('quiet', this.times.quiet, quiet)
+      return
+    }
+    if (now.words !== this.talkWords) {
+      // Words either way, the rep's or the Assistant's: the quiet stop counts from now (T3-4).
+      this.talkWords = now.words
+      if (this.snapshot.phase === 'listening') this.restart('quiet', this.times.quiet, quiet)
+    }
+    this.set({ live: now })
+  }
+
+  /**
+   * The talk ended by itself. Before it began (a start refused, a socket that never reached
+   * `ready`), the free engine takes over at once (Part 4 says why). A mic that failed says so, as
+   * the free mic's does. After it began, the relay's line shows, with Start again and Type instead
+   * (Part 4 refines which ends hand over to the free mic).
+   */
+  private talkEnded(now: TalkSnapshot): void {
+    const end = now.end
+    if (!end || end.kind === 'stopped') return
+    if (end.kind === 'mic') {
+      this.micFailed(end.problem)
+      return
+    }
+    if (!now.ready) {
+      this.listenFree()
+      return
+    }
+    const line = end.kind === 'ended' ? end.line : end.kind === 'lost' ? LIVE_DROPPED : null
+    if (line === null) {
+      this.stopConversation()
+      return
+    }
+    const said = this.saidSoFar()
+    this.drain = 'quiet'
+    this.stopListening()
+    this.set({
+      phase: 'problem',
+      mic: null,
+      words: said,
+      problem: { kind: 'live', line },
+      conversation: null,
+    })
+  }
+
+  /** Mute in a live talk (T2-4): no sound goes, and the talk goes on. */
+  mute(on: boolean): void {
+    this.talk?.mute(on)
+  }
+
+  /** The words heard so far in the listening now: the free mic's, or the live talk's. */
+  private saidSoFar(): string {
+    return (this.mic?.text() ?? this.talk?.text() ?? '').trim()
+  }
+
   /**
    * V or Done while listening: the talk is over, and the words go to the command step. In a
    * conversation, V or Stop ends it: the turn in progress goes first.
    */
   done(): void {
     const { phase } = this.snapshot
+    if (this.talk) {
+      this.doneLive()
+      return
+    }
     const mic = this.mic
     if ((phase !== 'starting' && phase !== 'listening') || !mic) return
     if (mic.getSnapshot().preparing) {
@@ -569,6 +741,24 @@ export class BarSession {
     this.talkOver()
   }
 
+  /**
+   * V or Stop in a live talk: it ends, and the relay with it (`stop`). Before Google was ready
+   * nothing was said, so the bar closes. Turns already said are still worked out, in the bar.
+   */
+  private doneLive(): void {
+    const { phase } = this.snapshot
+    if (phase === 'starting') {
+      this.cancel()
+      return
+    }
+    if (phase !== 'listening') return
+    this.clearTimers()
+    const heardAny = (this.talk?.getSnapshot().words ?? 0) > 0
+    this.live = false
+    this.drain = 'shown'
+    this.stopConversation(heardAny)
+  }
+
   /** Esc: everything stops, the words are thrown away, and the bar closes. */
   cancel(): void {
     this.dispose()
@@ -582,8 +772,10 @@ export class BarSession {
    */
   typeInstead(): void {
     if (this.snapshot.phase === 'typing') return
-    const heard = this.mic?.text() ?? ''
-    const said = this.mic ? (heard.trim() !== '' ? heard : this.lastUnclear) : this.snapshot.words
+    // The free mic's words, or the live talk's: the rep's words as Google heard them.
+    const source = this.mic ?? this.talk
+    const heard = source?.text() ?? ''
+    const said = source ? (heard.trim() !== '' ? heard : this.lastUnclear) : this.snapshot.words
     this.keepFixes()
     this.drain = 'quiet'
     this.stopListening()
@@ -689,6 +881,8 @@ export class BarSession {
   vDown(): void {
     const { phase } = this.snapshot
     if (this.over || (phase !== 'starting' && phase !== 'listening')) return
+    // In live voice, Google decides the turns: a held V is a tap (PLAN-V28 choice 12).
+    if (this.talk) return
     window.clearTimeout(this.holdTimer)
     this.hold = 'down'
     this.holdTimer = window.setTimeout(() => {
@@ -851,7 +1045,7 @@ export class BarSession {
    * conversation's turns already said are still worked out, behind the problem.
    */
   private micFailed(problem: MicProblem): void {
-    const said = (this.mic?.text() ?? '').trim()
+    const said = this.saidSoFar()
     this.keepFixes()
     this.drain = 'quiet'
     this.stopListening()
@@ -890,7 +1084,10 @@ export class BarSession {
     })
   }
 
-  /** The mic is let go, and every wait with it. A conversation stops listening, and the screen. */
+  /**
+   * The mic is let go, and every wait with it. A conversation stops listening, and the screen. A
+   * live talk ends, and its relay with it (`stop`).
+   */
   private stopListening(): void {
     this.clearTimers()
     this.finishing = null
@@ -902,6 +1099,9 @@ export class BarSession {
     this.unsubscribe = null
     this.mic?.close()
     this.mic = null
+    const talk = this.talk
+    this.talk = null
+    talk?.stop()
   }
 
   /**
@@ -1047,7 +1247,7 @@ export class BarSession {
       return
     }
     if (!this.screen.phone()) return
-    const said = (this.mic?.text() ?? '').trim()
+    const said = this.saidSoFar()
     if (said === '') {
       // Nothing to keep: it stops, as "that's all" does.
       this.stopConversation()

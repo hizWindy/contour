@@ -38,6 +38,12 @@ describe('vite.config.ts', () => {
     expect(preview?.proxy).toBe(server?.proxy)
   })
 
+  it("passes WebSockets on, for live voice's socket to the relay (PLAN-V28 T2-3)", () => {
+    const proxy = server?.proxy?.['/api']
+
+    expect(typeof proxy === 'object' && proxy.ws).toBe(true)
+  })
+
   it('puts only the libraries every page runs on in the framework file (PLAN-V7 D2)', () => {
     const groups = config.build?.rolldownOptions?.output
     const group =

@@ -298,6 +298,9 @@ function stripProblem(problem: BarProblem, device: DeviceKind): string {
       return TOO_LONG
     case 'left':
       return LEFT_PAGE
+    case 'live':
+      // Never here: the card's own V keeps today's engines (PLAN-V28).
+      return problem.line
   }
 }
 

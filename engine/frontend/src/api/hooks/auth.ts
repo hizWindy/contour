@@ -27,15 +27,27 @@ export type SignedInUser = Schemas['UserOut']
 
 export type SignIn =
   /** Sign-in is off on this backend: everyone may use it, and there is nothing to sign out of. */
-  | { state: 'off' }
+  | { state: 'off'; liveVoice?: boolean }
   | {
       state: 'signed_in'
       user: SignedInUser
       platformAdminName?: string | null
       firstSignIn?: boolean
+      /**
+       * Live voice may start for me now (PLAN-V28, `MeOut.live_voice`). Left out: not known, as
+       * just after signing in (the sign-in's answer doesn't carry it), so the free mic.
+       */
+      liveVoice?: boolean
     }
   /** No session. `reason` and `detail` say why one ended, when one did. */
   | { state: 'signed_out'; reason: string | null; detail: string | null }
+
+/** Live voice may start for this person now (PLAN-V28 T2-3). Not known: no. */
+export function liveVoiceOf(signIn: SignIn | undefined): boolean {
+  return signIn?.state === 'off' || signIn?.state === 'signed_in'
+    ? signIn.liveVoice === true
+    : false
+}
 
 /** The state for a 401 `auth_required` from any route. */
 export function signedOutBy(problem: ApiProblem): SignIn {
@@ -58,13 +70,16 @@ export function meQueryOptions() {
     queryFn: async ({ signal }) => {
       try {
         const me = unwrap(await api.GET('/auth/me', { signal }))
-        if (!me.auth_required) return { state: 'off' }
+        // Live voice (PLAN-V28): kept only when it is on, so every other answer reads as before.
+        const live = me.live_voice === true ? { liveVoice: true } : {}
+        if (!me.auth_required) return { state: 'off', ...live }
         return me.user
           ? {
               state: 'signed_in',
               user: me.user,
               ...(me.platform_admin_name ? { platformAdminName: me.platform_admin_name } : {}),
               ...(me.first_sign_in ? { firstSignIn: me.first_sign_in } : {}),
+              ...live,
             }
           : { state: 'signed_out', reason: null, detail: null }
       } catch (error) {

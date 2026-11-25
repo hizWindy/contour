@@ -261,6 +261,22 @@ export type AssistantCompanyAdded = Schemas['AssistantCompanyAdded']
 // The card's own find for a company said or entered again (PLAN-V24 T3-2, choice 19)
 export type AssistantCompanyFind = Schemas['AssistantCompanyFind']
 
+// Live voice (PLAN-V28): a talk's start, its socket's messages (T1-3) and the month (T1-5)
+export type VoiceSessionIn = Schemas['VoiceSessionIn']
+export type VoiceSessionOut = Schemas['VoiceSessionOut']
+export type VoiceLimits = Schemas['VoiceLimits']
+export type VoiceMonth = Schemas['VoiceMonth']
+/** What the browser sends on the socket: `pause`, `stop` and `tool_answer`. */
+export type VoiceBrowserMessage = Schemas['VoiceBrowserMessage']
+export type VoiceToolAnswer = Schemas['VoiceToolAnswer']
+/** What the relay sends on the socket, told apart by `type`. */
+export type VoiceRelayMessage = Schemas['VoiceRelayMessage']
+export type VoiceRelayType = VoiceRelayMessage['type']
+export type VoiceHeard = Schemas['VoiceHeard']
+export type VoiceToolCall = Schemas['VoiceToolCall']
+export type VoiceEnded = Schemas['VoiceEnded']
+export type VoiceEndReason = VoiceEnded['reason']
+
 // The Assistant (PLAN-V22): Today (T1-3, the contract part 2) and its tasks (T1-4)
 export type Today = Schemas['Today']
 export type TodayPart = Today['parts'][number]
