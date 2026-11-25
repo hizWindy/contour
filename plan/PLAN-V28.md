@@ -4,10 +4,10 @@ This plan gives the Assistant a live voice. A rep presses V and talks, as on a p
 
 **TBC** means to be confirmed.
 
-- **Status:** drafted on 25 Nov 2026 from Al-khair's chat, on `plan-v28` in `../contour-v28`, and checked the same day against `master` with PLAN-V27 joined (`b52190b`). Not approved yet. Nothing built.
+- **Status:** drafted on 25 Nov 2026 from Al-khair's chat, on `plan-v28` in `../contour-v28`, and checked the same day against `master` with PLAN-V27 joined (`b52190b`). Approved on 25 Nov ("implement v28"), and being built: S0 and Part 1 are done.
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
 - **Last updated:** 25 Nov 2026.
-- **Progress:** Before the build: 0 of 3 (the branch is made, and PLAN-V27 has joined `master`, so S0 can run). Parts 1 to 5: 0 of 21. M1 to M4: 0 of 4.
+- **Progress:** Before the build: 1 of 3 (S0; S1 and S2 wait on Al-khair and Levi). Parts 1 to 5: 6 of 21 (Part 1). M1 to M4: 0 of 4.
 - **Sources:**
   - Al-khair's chat on 25 Nov: his Google account, a test key with about US$5, "the implementation must be superb", and a branch of its own while PLAN-V27 merges;
   - the approval paper `documents/voice/VOICE.pdf` (version 3, 24 Nov), still waiting for Levi's four ticks;
@@ -116,7 +116,7 @@ Each has its reason. Change any of them before its step starts.
 **The conversation**
 
 6. **One tool, `ask_contour(request)`.** Set as non-blocking (`behavior: NON_BLOCKING`), so Gemini can say "One moment" while Claude works. Its answer is spoken once the rep is quiet (`scheduling: WHEN_IDLE`). Google's advice: a tool answer always has `status`, `retryable` and `message`, and is never empty.
-7. **"Send it", and the research card's "yes", come from the rep's words, never from Gemini's guess.** One sends to HubSpot; the other starts a paid research. Live voice runs as the bar's conversation, so an open card hears Google's transcript of what the rep said through its ear (`attachCard`), and opens no mic of its own. A tool call alone never sends or starts a research. Gemini says "Sent" only when the card's Send has worked.
+7. **"Send it", and the research card's "yes", come from the rep's words, never from Gemini's guess.** One sends to HubSpot; the other starts a paid research. Live voice runs as the bar's conversation, so an open card hears Google's transcript of what the rep said through its ear (`attachCard`), and opens no mic of its own. A tool call alone never sends or starts a research. Gemini says "Sent" only when the card's Send has worked. So in live voice, a quick log (PLAN-V25 T3-3: "No answer, Jo Sample"), which sends itself after its 5-second hold, opens its card instead and waits for "send it" (TBC at T5-2 with Al-khair).
 8. **What Claude gets:** Gemini's `request` (the rep's words, as Gemini heard them) as `text`, with `source` `mic`, as the free mic sends it. T5-2 compares it with Google's transcript for names and dates, and keeps the better one (TBC).
 9. **Asking back:** Claude's unsure line (PLAN-V25) is the question Gemini asks, like "Jo Sample or Jo Northwind?". Gemini doesn't ask its own questions about companies or people.
 10. **Short talk, and the instruction in Google's order:** who it is (Contour's Assistant, a helpful colleague); how it talks (one or two short sentences, no lists, never the whole card read out, no made-up names or dates); when to use the tool (anything about calls, tasks, emails, companies, people, meetings or pages, in the rep's words); and its limits ("sent" only when the tool says so; at most two tool calls in a row without speaking, as Google advises; talk not meant for it is ignored).
@@ -186,7 +186,7 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
 
 ## Before the build starts
 
-- [ ] **S0. The branch and the copy** (PLAN-V27 joined `master` on 25 Nov, so it can run).
+- [x] **S0. The branch and the copy** (PLAN-V27 joined `master` on 25 Nov, so it can run). Done 25 Nov (`e18b253`). The plan list's line moves to M4, as PLAN-V27's did: the list's move to `AGENTS.md` is still uncommitted in the main folder.
   - `plan-v28` was made on 25 Nov; its first commit holds this plan. Merge `master` in: `git merge master -m "Merge master into plan-v28: PLAN-V27 joins before S0"`.
   - `uv sync --frozen` in `engine/backend`, `npm ci` in `engine/frontend`, and a copy of `COMPANIES.xlsx` from the main folder.
   - Make the database `leadfinder_v28`, and check the newest migration. This plan's migration takes the next number.
@@ -203,17 +203,17 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
 
 ## Part 1: the server side
 
-- [ ] **T1-1. Settings and the switches.** (`core/config.py`, the settings list, `core/auth/models.py`, `core/api/people.py`, `MeOut` in `core/api/auth.py`, Edit person.) Choices 16 to 18.
+- [x] **T1-1. Settings and the switches.** Done 25 Nov (`52c3f05`; the screens come with Part 2). (`core/config.py`, the settings list, `core/auth/models.py`, `core/api/people.py`, `MeOut` in `core/api/auth.py`, Edit person.) Choices 16 to 18.
   - `.env`: `GEMINI_API_KEY` (a secret), `LIVE_VOICE_OK` and `LIVE_VOICE_NAMES_OK` (exact `true` or `false`, off), `LIVE_VOICE_MODEL` (`gemini-3.8-live`), `LIVE_VOICE_SERVICE` (`gemini_api`, or `agent_platform` with `LIVE_VOICE_PROJECT` and `LIVE_VOICE_LOCATION`), and `HARD_LIVE_VOICE_MONTH_CAP_USD` (5).
   - The Settings page: `live_voice_month_cap_usd` (4, up to the ceiling).
   - Each person: `live_voice` (off), set only by the Platform admin. `MeOut` (`GET /api/v1/auth/me`) gains `live_voice`: true only when the person's switch, `LIVE_VOICE_OK` and the key are all on.
   - **Done when:** tests pass: a stray "1" doesn't turn a switch on; the limit can't go over its ceiling; only the Platform admin can set a person's switch (others get 403); an Admin without the switch reads `live_voice` false. The contract and the website's types are made again.
-- [ ] **T1-2. A talk's row, and its start.** (New: `apps/companies/live_voice/` with `models.py` and `api.py`; the migration.) Choices 16, 18 and 20.
+- [x] **T1-2. A talk's row, and its start.** Done 25 Nov (`42467d4`). (New: `apps/companies/live_voice/` with `models.py` and `api.py`; the migration.) Choices 16, 18 and 20.
   - The table `voice_sessions`: who; when it started and ended; its status (`ready`, `open`, `dropped`, `ended`) and why it ended; the service and model; the resume handle (cleared at the end); tokens in and out by kind; seconds of listening and talking; tool calls; reconnects; and the estimated US$. No sound and no words.
   - The same migration adds the person's `live_voice` column.
   - `POST /api/v1/companies/assistant/voice/session` checks, in order: the Call logs or Meetings tick (a Viewer gets 403 `viewer_read_only`); the person's switch (403 `live_voice_not_allowed`); the server switch and the key (409 `live_voice_off`); the month's limit (429 `live_voice_limit`); and the server's 10 talks (503 `live_voice_busy`). Each refusal has its plain words. It makes a `ready` row and answers with its id, the socket's path and the limits. A `ready` row older than 60 s can't be opened.
   - **Done when:** tests pass for each answer, and a second start for the same person ends the first talk.
-- [ ] **T1-3. The relay.** (New in `live_voice/`: `relay.py`, `google_live.py`, `setup.py`, `messages.py` and the instruction; a fake Google in `tests/`.) Choices 1 to 4, 6, 10 to 12, 22 and 24.
+- [x] **T1-3. The relay.** Done 25 Nov (`cd496c4`). (New in `live_voice/`: `relay.py`, `google_live.py`, `setup.py`, `messages.py` and the instruction; a fake Google in `tests/`.) Choices 1 to 4, 6, 10 to 12, 22 and 24.
   - **The browser's socket:** `WS /api/v1/companies/assistant/voice/live?session=<id>`. The sign-in guard checks it first. Then only our own site's `Origin` is let in. The row must be this person's, and `ready` (it becomes `open` once, so it can't be opened twice).
   - **Google's connection:** the key goes in a header (`x-goog-api-key`), never in the address. The setup holds: the model; audio replies in the chosen voice; the instruction; the one tool; voice detection (choice 12); both transcripts, with the names (choice 22) and `en-AU`; resumption; and compression.
   - **What it carries:** the browser's sound (raw bytes) to Google (`realtimeInput.audio`, `audio/pcm;rate=16000`); "pause" as `audioStreamEnd`; Google's sound back as raw bytes; and transcripts, `interrupted`, `turnComplete`, tool calls and cancellations as small JSON messages. The browser's tool answers go to Google as `toolResponse`, with the same `id`.
@@ -221,20 +221,20 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
   - **A tool call the browser doesn't answer in 20 s** gets the relay's own answer: `status` `timeout`, `retryable` false, "That took too long. Try again." (TBC).
   - **It ends cleanly** on Stop, when the browser leaves, or when Google closes. Then it writes the row.
   - **Done when:** tests with the fake Google pass: the setup has every field; sound goes both ways unchanged; a tool call reaches the browser and its answer reaches Google with the same id; a cancel reaches the browser; a wrong `Origin`, another person's row and a reused row are refused; and the key is in no log line and no message to the browser.
-- [ ] **T1-4. Long talks and drops.** Choice 15.
+- [x] **T1-4. Long talks and drops.** Choice 15. Done 25 Nov (`5227959`).
   - Each `sessionResumptionUpdate` with `resumable` true saves its handle in the row.
   - **At `goAway`:** the relay opens a new connection with the handle. It moves over at a quiet moment (no one talking), or at once when 10 s are left. Target: the rep hears no gap (TBC: under 1 s).
   - **Google drops by surprise:** resume with the handle, up to 2 tries in 10 s. After that, the talk ends: "the connection dropped".
   - **Our backend restarts** (a deploy): the browser reconnects with the talk's id within 30 s. A `dropped` row, or an `open` one no relay holds, opens again for its owner, and the relay resumes from the handle.
   - Pings every 20 s on both sockets, so nothing quiet gets closed.
   - **Done when:** tests pass: a `goAway` mid-talk moves to a new connection with the last handle, and no sound is lost; two drops in a row still resume; and a third ends the talk with its line.
-- [ ] **T1-5. The meter and the limit.** (`live_voice/meter.py` and `pricing.py`, and the Admin settings line.) Choices 18, 19 and 21.
+- [x] **T1-5. The meter and the limit.** Done 25 Nov (`3d86140`; the Admin line's screen comes with Part 2). (`live_voice/meter.py` and `pricing.py`, and the Admin settings line.) Choices 18, 19 and 21.
   - Each `usageMetadata` adds to the row's counts, per turn or as running totals (as S1 found). The row is written every 30 s and at the end.
   - The month's total is checked at the start and after each count. At the limit, Gemini finishes its sentence, then the talk ends with "this month's limit is reached", and the free mic takes over.
   - The Admin settings line (Platform admin): "Live voice this month: 42 minutes, about US$0.51 of US$4.00."
   - Log lines hold counts, seconds, US$ and why a talk ended. Never words, names or sound.
   - **Done when:** tests pass: a talk that crosses the limit ends with its line; a start over the limit gets 429; the month adds up every row in it (Melbourne months, TBC); and nothing in the logs or the row is a word.
-- [ ] **T1-6. Part 1 check.** Backend: ruff, mypy, the fast tests and the Companies tests. The contract and the types. The `security-check` skill.
+- [x] **T1-6. Part 1 check.** Done 25 Nov (`ec4f9c9`). Backend: ruff, mypy, the fast tests and the Companies tests. The contract and the types. The `security-check` skill.
   - **Done when:** all pass, and the numbers are in the Log.
 
 ## Part 2: sound in the browser
@@ -269,10 +269,10 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
   - **The tool answer to Gemini:** `status`, `retryable` and `message`, the line to say. A card opened: "Ready. Say send it." Unsure: Claude's question. A research: the page's line (`handOver`'s `tell`), the research card's question with its cost, or the bar's line asking for a name. Unknown: the read-back, short. An error (409, 429, 503): its plain words.
   - **Done when:** tests with a fake relay pass for each kind of answer; the same command typed and spoken opens the same card; and in live voice, neither card opens a mic of its own.
 - [ ] **T3-2. "Send it", and the research card's "yes".** Choice 7.
-  - Only the card's own Send, and only when the rep's words were a send word (the card's ear), or the rep pressed Enter or clicked Send. The research card starts the same way: on the rep's own "yes", Enter or a click.
+  - Only the card's own Send, and only when the rep's words were a send word (the card's ear), or the rep pressed Enter or clicked Send. The research card starts the same way: on the rep's own "yes", Enter or a click. A quick log never sends itself in live voice: its card opens.
   - The tool answer says "sent" only after the card's Send has worked. Otherwise it gives the card's own error line.
   - One send per card (`Card-Key`), however many times "send it" is heard.
-  - **Done when:** tests pass: a tool call with no send word sends nothing; "send it" sends once; a "yes" only in Gemini's request starts no research; a failed send is said as failed; and the `flow-trace` skill passes on this path.
+  - **Done when:** tests pass: a tool call with no send word sends nothing; "send it" sends once; a "yes" only in Gemini's request starts no research; a quick log from a tool call sends nothing until "send it"; a failed send is said as failed; and the `flow-trace` skill passes on this path.
 - [ ] **T3-3. Asking back and talking over.** Choice 9.
   - Claude's unsure line becomes Gemini's question. The rep's answer ("the first one", "Jo Sample") goes to the card's ear.
   - A tool call Google cancels (the rep talked over it) stops its command request (`AbortController`). A late answer never opens a second card.
@@ -356,3 +356,12 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
   - **Corrected:** in a conversation, the card's ear is `attachCard`, not `listen.ts`, and a card opens no mic of its own.
   - **Migration:** the newest is `0029_v26_activity`, so this plan's is `0030`.
   - **The test key** is still only in the copy's `engine/.env`: no commit, no file git could commit, and no AI Brain note holds it.
+- 25 Nov 2026: S0 done. `master` (PLAN-V27) merged in (`e18b253`). `leadfinder_v28` was copied from the dev database and migrated to `0029_v26_activity`. Before any change: 3,738 fast backend tests passed (28 skipped), and 3,263 website tests passed. The laptop's copy of HubSpot contacts is empty, so T5-1 adds its made-up people itself.
+- 25 Nov 2026: Part 1 done, in 6 commits (`52c3f05` to `ec4f9c9`), with the migration `0030_v28_live_voice` and `SCHEMA-0030.md`.
+  - **Checks:** ruff, mypy and the contract pass. The fast tests: 3,840 passed (28 skipped). The Companies tests, run again after T1-6: 882 passed, none failed or skipped (12 minutes). The core tests T1-1 touches: 682 passed.
+  - **Security check:** no blocker. Its two findings are fixed, each with a test that fails without it: emails and phone numbers are blanked in tool answers to Google, and `websockets` is pinned at 17.3 (no new package).
+  - **Added beyond the plan:** 10 starts a minute a person (429 `too_many_starts`); 10 JSON messages a second from the browser; 3 tool calls waiting at once; 3 s of the rep's sound kept while reconnecting; the Origin check before the sign-in guard as well as in the route; and a row write lands only while its relay still holds the talk.
+  - **For M2:** the month limit's field goes up to US$5, the default ceiling. A4's US$20 needs both raised then.
+  - **For Levi (L2):** with live voice on, names still reach Google inside a talk (the rep's words, and Claude's questions like "Jo Sample or Jo Northwind?"). `LIVE_VOICE_NAMES_OK` only gates the hint list.
+  - **TBC, for S1:** the Agent Platform's key header; `customVocabulary` as a list of words; `scheduling` inside `response`; usage counts per message or running totals (`LIVE_VOICE_USAGE_TOTALS`, off); text prices (the audio prices until then); and whether a resumed setup may carry new names.
+  - **Found while checking it:** a quick log (PLAN-V25 T3-3) sends itself after its 5-second hold. In live voice, the command step reads Gemini's request, so a quick log would send on Gemini's words. Choice 7 and T3-2 now say its card opens instead (TBC at T5-2 with Al-khair).
