@@ -378,4 +378,14 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
   - **Fallbacks (T4-1):** 12 causes, each with its line. Words no tool call took go to the text line. Typing takes over where no free engine runs. After the month's limit, live voice stays off until `Retry-After` or the Melbourne month's end. After a fallback, the free mic goes on as a conversation for that bar, whatever "Keep listening" says (TBC at Al-khair's look). A cancelled tool call's pre-read start opens nothing.
   - **For T5-2, TBC:** the ear matches a whole turn, so "Okay, send it" costs one more exchange than "send it"; if Gemini answers "send it" without asking Contour, nothing is sent; the bar shows "Sent." as the hold starts (PLAN-V24's rule) but says it only after; and the new spoken words (`live/words.ts`), `CALL_WORDS_MS` and `COMMAND_TEXT`.
 - 25 Nov 2026: T5-1 done. [TEST-V28.md](TEST-V28.md) has the 20 requests (on Edge with a headset), 5 again on Chrome on the laptop's speakers, and 5 on a phone. The made-up world is in `leadfinder_v28`: 5 companies and 9 people, with ids starting `990028`. None of the names is in the copy's HubSpot companies (a count only); the copy has no HubSpot contacts to check.
+- 25 Nov 2026: the last checks of the build.
+  - **The website's security check** found nothing to fix:
+    - no key or token in the diff, and no new package;
+    - no logging, no stored words and no raw HTML in the new code;
+    - the content policy is unchanged, and its test guards it;
+    - the socket only opens on our own host, under `/api/`, and the worklets load from our own files.
+  - **Still open:** names in the Assistant's lines still reach Google inside a talk (L2, above). Emails and phone numbers are blanked on the server.
+  - **Tests:** the core tests for sign-in, people, the contract and live voice: 332 passed. 25 were skipped by design (routes that are no longer stubs).
+  - **Fixed:** one out-of-date comment (`2998af1`).
+  - **Next:** Al-khair's look (T2-4), S1 and T5-2 on his word (TEST-V28.md), then `merge v28`.
   - **For Al-khair's look (T2-4), TBC:** the bar and the pill at 1440, 1280 and 390 px, light and dark; Mute as an icon with a tooltip, so the state's word fits at 390 px; the captions' names "You" and "Assistant"; Edit person's hint; the month line under the limit on Settings; and live voice first even where the browser's model is picked. The gate's numbers (a floor of 0.006 at 3 times the room's noise; 0.03 and 6 times while the Assistant speaks) wait for T5-2.
