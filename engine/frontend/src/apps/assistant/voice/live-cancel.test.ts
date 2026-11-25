@@ -93,7 +93,7 @@ describe('a pre-read starting for a tool call Google cancels (T3-3)', () => {
     const signals: (AbortSignal | undefined)[] = []
     let started: (form: { id: string }) => void = () => undefined
     const set = await live({
-      hand: (heard, said, signal) =>
+      hand: (heard, _said, signal) =>
         handOver(heard, {
           go: (to) => {
             went.push(to)
