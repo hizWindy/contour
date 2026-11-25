@@ -4,10 +4,10 @@ This plan gives the Assistant a live voice. A rep presses V and talks, as on a p
 
 **TBC** means to be confirmed.
 
-- **Status:** drafted on 25 Nov 2026 from Al-khair's chat, on `plan-v28` in `../contour-v28`, and checked the same day against `master` with PLAN-V27 joined (`b52190b`). Approved on 25 Nov ("implement v28"), and being built: S0, Part 1 and Part 2 are done, but for T2-4's look.
+- **Status:** drafted on 25 Nov 2026 from Al-khair's chat, on `plan-v28` in `../contour-v28`, and checked the same day against `master` with PLAN-V27 joined (`b52190b`). Approved on 25 Nov ("implement v28"), and built on 25 Nov as far as it can go without Al-khair and Levi: S0, Parts 1 to 4 and T5-1 are done, except T2-4 (Al-khair's look) and T4-2 (Levi's line). T5-2 and T5-3, the paid tests, wait for Al-khair's word.
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
 - **Last updated:** 25 Nov 2026.
-- **Progress:** Before the build: 1 of 3 (S0; S1 and S2 wait on Al-khair and Levi). Parts 1 to 5: 10 of 21 (Part 1, and Part 2 but T2-4, which waits for Al-khair's look). M1 to M4: 0 of 4.
+- **Progress:** Before the build: 1 of 3 (S0; S1 and S2 wait on Al-khair and Levi). Parts 1 to 5: 17 of 21 (open: T2-4, T4-2, T5-2 and T5-3). M1 to M4: 0 of 4.
 - **Sources:**
   - Al-khair's chat on 25 Nov: his Google account, a test key with about US$5, "the implementation must be superb", and a branch of its own while PLAN-V27 merges;
   - the approval paper `documents/voice/VOICE.pdf` (version 3, 24 Nov), still waiting for Levi's four ticks;
@@ -263,28 +263,28 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
 
 ## Part 3: the link to Claude and the card
 
-- [ ] **T3-1. "Ask Contour".** (New: `live/bridge.ts`, using `hand-over.ts` and the command step.) Choices 5 to 10.
+- [x] **T3-1. "Ask Contour".** Done 25 Nov (`41e3001`). (New: `live/bridge.ts`, using `hand-over.ts` and the command step.) Choices 5 to 10.
   - **A tool call while a card is open:** the card's ear (`attachCard`) reads the rep's words first (Google's finished transcript since the last tool call): "send it", "later", "cancel", a pick from its list, or "yes" on the research card. If the tool call comes before the finished words, it waits up to 0.5 s for them (TBC at S1).
   - **Anything else, or no card:** the command step, with `text` (choice 8), `source` `mic`, `on_page`, `card` and `last_turn` (kept as `last-turn.ts` keeps it), as the free mic sends them. Its answer goes to `handOver`, as today: a page opens, the card opens, or a line shows.
   - **The tool answer to Gemini:** `status`, `retryable` and `message`, the line to say. A card opened: "Ready. Say send it." Unsure: Claude's question. A research: the page's line (`handOver`'s `tell`), the research card's question with its cost, or the bar's line asking for a name. Unknown: the read-back, short. An error (409, 429, 503): its plain words.
   - **Done when:** tests with a fake relay pass for each kind of answer; the same command typed and spoken opens the same card; and in live voice, neither card opens a mic of its own.
-- [ ] **T3-2. "Send it", and the research card's "yes".** Choice 7.
+- [x] **T3-2. "Send it", and the research card's "yes".** Choice 7. Done 25 Nov (`900e972`, `19c19e4`).
   - Only the card's own Send, and only when the rep's words were a send word (the card's ear), or the rep pressed Enter or clicked Send. The research card starts the same way: on the rep's own "yes", Enter or a click. A quick log never sends itself in live voice: its card opens.
   - The tool answer says "sent" only after the card's Send has worked. Otherwise it gives the card's own error line.
   - One send per card (`Card-Key`), however many times "send it" is heard.
   - **Done when:** tests pass: a tool call with no send word sends nothing; "send it" sends once; a "yes" only in Gemini's request starts no research; a quick log from a tool call sends nothing until "send it"; a failed send is said as failed; and the `flow-trace` skill passes on this path.
-- [ ] **T3-3. Asking back and talking over.** Choice 9.
+- [x] **T3-3. Asking back and talking over.** Choice 9. Done 25 Nov (`1fe36f1`, `0334b2c`, `997e957`).
   - Claude's unsure line becomes Gemini's question. The rep's answer ("the first one", "Jo Sample") goes to the card's ear.
   - A tool call Google cancels (the rep talked over it) stops its command request (`AbortController`). A late answer never opens a second card.
   - **Done when:** tests pass for both.
-- [ ] **T3-4. How a talk ends.** As with the free mic (`bar-session.ts`): "stop listening" and "that's all" (`endsConversation`, on the transcript); 2 minutes of quiet; a phone leaving the page; V or Stop; and Esc. The wake lock works as today.
+- [x] **T3-4. How a talk ends.** Done 25 Nov (`e64271f`). As with the free mic (`bar-session.ts`): "stop listening" and "that's all" (`endsConversation`, on the transcript); 2 minutes of quiet; a phone leaving the page; V or Stop; and Esc. The wake lock works as today.
   - **Done when:** tests pass for each end, and each one closes Google's connection and writes the row.
-- [ ] **T3-5. Part 3 check.** As T2-5, plus the `flow-trace` skill on a whole talk.
+- [x] **T3-5. Part 3 check.** Done 25 Nov (`ae1f05b`). As T2-5, plus the `flow-trace` skill on a whole talk.
   - **Done when:** all pass, and the numbers are in the Log.
 
 ## Part 4: fallbacks
 
-- [ ] **T4-1. The free mic takes over.** (`live/`, `bar-session.ts`.) Choice 25.
+- [x] **T4-1. The free mic takes over.** Done 25 Nov (`182f843`, `49b8afc`). (`live/`, `bar-session.ts`.) Choice 25.
   - Google is down, the start is refused, the limit is reached, the browser is offline, or 2 reconnects failed. Then the free engine (as `voice-engine.ts` picks without live) or typing takes over by itself, with the line saying why. Words already heard go to the text line, so none is lost.
   - **Done when:** tests pass for each cause, each with its line. The next V tries live again, except at the limit, until the month changes.
 - [ ] **T4-2. The paper's backup, for Levi.** No OpenAI code (choice 26). Levi gets one line (L4).
@@ -292,7 +292,7 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
 
 ## Part 5: real tests and tuning
 
-- [ ] **T5-1. The practice set** (free). `plan/TEST-V28.md` lists 20 practice requests and the card each should give: 5 calls with a name clash, 5 tasks with dates ("next Friday", "the 3rd"), 3 emails, 3 changes to an open card, 2 "send it", 1 page ("open Northwind"), and 1 research that stops at the research card's question ("Research Sample Logistics", then "cancel", so nothing is spent). Made-up companies and people only, added to `leadfinder_v28`.
+- [x] **T5-1. The practice set** (free). Done 25 Nov: [TEST-V28.md](TEST-V28.md), and the made-up world in `leadfinder_v28`. `plan/TEST-V28.md` lists 20 practice requests and the card each should give: 5 calls (4 with a name clash, and a quick log, whose card must open), 5 tasks with dates ("next Friday", "the 3rd"), 3 emails, 3 changes to an open card, 2 "send it", 1 page ("open Northwind"), and 1 research that stops at the research card's question ("Research Sample Logistics", then "cancel", so nothing is spent). Made-up companies and people only, added to `leadfinder_v28`.
   - **Done when:** the set is written, and its companies and people are in the copy's database.
 - [ ] **T5-2. The 20 requests, for real** (paid, on Al-khair's word: about US$1 of Gemini, TBC, and about US$0.40 of Claude; the meter stops at US$4).
   - On the laptop: Edge and Chrome, once on the laptop's speakers and once with a headset. On a phone: Safari on an iPhone, or Chrome on Android.
@@ -371,4 +371,11 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
   - **The seam:** the voice bar's session picks its voice source at each start: a live talk (`live/talk.ts`), or today's `MicSession`, unchanged. A live talk is always a conversation, so the card's ear, turns in order, the quiet stop and the wake lock work as they are. A card that opens during a talk opens no mic (tested).
   - **The content policy is unchanged:** `connect-src 'self'` covers our own `wss:` in Chrome, Edge, Firefox and Safari 16 or later. An older Safari refuses the socket, and the free mic takes over (Part 4).
   - **The sign-in answer** (`LoginOut`) now says `live_voice` too, so the website knows at once after an in-app sign-in (`a0f14cf`; the website reads it in Part 3).
+- 25 Nov 2026: Part 3 and T4-1 done, in 11 commits (`99fdc04` to `997e957`). Not seen in a browser yet, and no real Google.
+  - **Checks:** lint, types and the build pass. 3,554 website tests pass in 227 files (3,441 after Part 2). The first visit is 249,938 bytes gzip, 41 files (S0: 249,841, so 97 bytes more in all); the CSS is unchanged. The bar's own file is 50,964 bytes gzip. Each new test was checked to fail without its fix; with the ear reading Gemini's request instead of the rep's words, 8 tests fail.
+  - **How it works:** a tool call becomes a turn of the bar's conversation. The card's ear reads the rep's own words (Google's transcript since the last tool call, waiting up to 0.5 s after the call for words still coming: `CALL_WORDS_MS`). The command step reads Gemini's `request` (`COMMAND_TEXT`). `send` or `cancel` from Gemini's words alone does nothing, and the answer is "Nothing was sent. To send it, say 'send it'.". A quick log opens its card. "Sent." is said only after the card's Send worked, after its hold. A send still going 3 s before the relay's 20 s is said as "Still sending. The card will say when it's done.".
+  - **The flow trace** (a whole talk, and T3-2's send path) found one bug, fixed (`ae1f05b`): a turn said to the research card while it checks a pick answered "Research which company?"; it now says it is checking. The tool answer's fields and its 500 characters match on both sides, and the sends run on the rep's own session, with no new outside write.
+  - **Fallbacks (T4-1):** 12 causes, each with its line. Words no tool call took go to the text line. Typing takes over where no free engine runs. After the month's limit, live voice stays off until `Retry-After` or the Melbourne month's end. After a fallback, the free mic goes on as a conversation for that bar, whatever "Keep listening" says (TBC at Al-khair's look). A cancelled tool call's pre-read start opens nothing.
+  - **For T5-2, TBC:** the ear matches a whole turn, so "Okay, send it" costs one more exchange than "send it"; if Gemini answers "send it" without asking Contour, nothing is sent; the bar shows "Sent." as the hold starts (PLAN-V24's rule) but says it only after; and the new spoken words (`live/words.ts`), `CALL_WORDS_MS` and `COMMAND_TEXT`.
+- 25 Nov 2026: T5-1 done. [TEST-V28.md](TEST-V28.md) has the 20 requests (on Edge with a headset), 5 again on Chrome on the laptop's speakers, and 5 on a phone. The made-up world is in `leadfinder_v28`: 5 companies and 9 people, with ids starting `990028`. None of the names is in the copy's HubSpot companies (a count only); the copy has no HubSpot contacts to check.
   - **For Al-khair's look (T2-4), TBC:** the bar and the pill at 1440, 1280 and 390 px, light and dark; Mute as an icon with a tooltip, so the state's word fits at 390 px; the captions' names "You" and "Assistant"; Edit person's hint; the month line under the limit on Settings; and live voice first even where the browser's model is picked. The gate's numbers (a floor of 0.006 at 3 times the room's noise; 0.03 and 6 times while the Assistant speaks) wait for T5-2.
