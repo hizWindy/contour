@@ -24,9 +24,10 @@ from apps.companies.live_voice.messages import EndReason
 from apps.companies.live_voice.meter import Counts, Meter
 from apps.companies.live_voice.models import END_REASONS
 from apps.companies.live_voice.pricing import prices_for
-from apps.companies.live_voice.relay import Relay, RelayLimits
+from apps.companies.live_voice.relay import Relay, RelayLimits, seconds_of
 from apps.companies.live_voice.setup import build_setup
 from apps.companies.live_voice.words import (
+    DROPPED_LINE_DETAIL,
     UNREACHABLE_LINE_DETAIL,
 )
 from tests.companies.live_voice_fakes import (
@@ -411,12 +412,15 @@ async def test_the_browser_leaving_ends_the_talk(google: FakeGoogle) -> None:
     await conn.wait_for(lambda c: c.socket.close_code is not None)
 
 
-async def test_a_backend_restart_marks_the_talk_dropped(google: FakeGoogle) -> None:
-    talk, _ = await opened(google)
+async def test_a_backend_restart_keeps_the_talk_with_its_handle(google: FakeGoogle) -> None:
+    talk, conn = await opened(google)
+    await conn.handle("handle-r", resumable=True)
+    await conn.handle("handle-mid-turn", resumable=False)  # never kept
+    await asyncio.sleep(0.05)
     talk.browser.leave(1012)  # uvicorn closes every socket with 1012 when the backend stops
     await talk.done()
-    assert talk.end_row()[1:] == ("dropped", "restart")
-    assert talk.browser.of("ended") == []  # the browser comes back by itself (T1-4)
+    saved, status, reason = talk.end_row()
+    assert (status, reason, saved.handle) == ("dropped", "restart", "handle-r")
 
 
 async def test_a_talk_stopped_while_google_opens_leaves_no_connection_open(
@@ -461,12 +465,106 @@ async def test_idle_and_the_talks_own_limit(google: FakeGoogle) -> None:
 # --- Long talks and drops (T1-4) -----------------------------------------------------------------
 
 
+async def test_a_go_away_moves_the_talk_with_the_last_handle_and_no_sound_lost(
+    google: FakeGoogle,
+) -> None:
+    talk, old = await opened(google)
+    await old.handle("handle-1")
+    await old.handle("handle-2")
+    before = frames(0.2, start=1)
+    for piece in before:
+        talk.browser.say(piece)
+    await old.wait_for(lambda c: len(c.audio) == len(before) * 640)
+    await old.go_away("1s")
+    new = await google.next()
+    assert new.setup["sessionResumption"] == {"handle": "handle-2"}
+    await old.wait_for(lambda c: c.socket.close_code is not None, seconds=3)  # moved, then closed
+    after = frames(0.2, start=500)
+    for piece in after:
+        talk.browser.say(piece)
+    await new.wait_for(lambda c: len(c.audio) == len(after) * 640)
+    assert bytes(old.audio) + bytes(new.audio) == b"".join(before + after)  # none lost
+    await new.said("Still here.")
+    await talk.browser.wait_for("said")
+    await stop(talk)
+    assert talk.end_row()[0].counts.reconnects == 1
+
+
+async def test_sound_during_a_move_goes_to_the_old_connection_until_the_move(
+    google: FakeGoogle,
+) -> None:
+    talk, old = await opened(google)
+    await old.handle("handle-1")
+    await old.go_away({"seconds": 2})
+    new = await google.next()
+    talking = frames(0.6, start=100)  # the rep talks, so the move waits for a quiet moment
+    for piece in talking:
+        talk.browser.say(piece)
+        await asyncio.sleep(0.02)
+    await new.wait_for(lambda c: len(c.audio) + len(old.audio) == len(talking) * 640, seconds=4)
+    assert bytes(old.audio) + bytes(new.audio) == b"".join(talking)
+    await stop(talk)
+
+
+async def test_two_drops_in_a_row_still_resume(google: FakeGoogle) -> None:
+    talk, first = await opened(google)
+    await first.handle("handle-1")
+    await asyncio.sleep(0.05)
+    google.plans.extend(["refuse", "accept"])  # the first try fails too: two drops in a row
+    await first.close(1011)
+    await talk.browser.wait_for("reconnecting")
+    resumed = await google.next()
+    await talk.browser.wait_for("reconnected")
+    assert [c.setup["sessionResumption"] for c in google.connections[1:]] == [
+        {"handle": "handle-1"},
+        {"handle": "handle-1"},
+    ]
+    for piece in frames(0.1):
+        talk.browser.say(piece)
+    await resumed.wait_for(lambda c: len(c.audio) == 5 * 640)
+    await stop(talk)
+    assert talk.end_row()[0].counts.reconnects == 1
+
+
+async def test_a_third_drop_in_a_row_ends_the_talk_with_its_line(google: FakeGoogle) -> None:
+    talk, first = await opened(google)
+    await first.handle("handle-1")
+    await asyncio.sleep(0.05)
+    google.plans.extend(["refuse", "refuse"])
+    await first.close(1011)
+    await talk.done(8)
+    assert talk.browser.of("ended")[-1] == {
+        "type": "ended",
+        "reason": "dropped",
+        "line": DROPPED_LINE_DETAIL,
+    }
+    assert DROPPED_LINE_DETAIL == "Live voice stopped: the connection dropped. Using the free mic."
+    assert talk.end_row()[1:] == ("ended", "dropped")
+
+
 async def test_a_drop_with_no_handle_ends_the_talk(google: FakeGoogle) -> None:
     talk, first = await opened(google)
     await first.close(1011)
     await talk.done()
     assert talk.browser.of("ended")[-1]["reason"] == "dropped"
     assert len(google.connections) == 1  # nothing to resume with
+
+
+async def test_a_talk_that_carried_on_keeps_the_time_it_had(google: FakeGoogle) -> None:
+    limits = RelayLimits(**{**QUICK.__dict__, "talk_seconds": 60})
+    talk, _ = await opened(google, limits=limits, handle="h", counts=Counts(talk_seconds=60))
+    await talk.done()
+    assert talk.end_row()[2] == "time_limit"
+    assert talk.end_row()[0].counts.talk_seconds == 60
+
+
+def test_googles_time_left_reads_both_ways() -> None:
+    assert seconds_of("50s") == 50
+    assert seconds_of("1.5s") == 1.5
+    assert seconds_of({"seconds": "50", "nanos": 500_000_000}) == 50.5
+    assert seconds_of(12) == 12
+    assert seconds_of("soon") is None
+    assert seconds_of(True) is None
 
 
 # --- The meter and the month's limit (T1-5) ------------------------------------------------------

@@ -21,6 +21,7 @@ import pytest
 import uvicorn
 from fastapi import FastAPI
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from websockets.asyncio.client import ClientConnection, connect
 from websockets.exceptions import InvalidStatus
 
@@ -30,8 +31,8 @@ from apps.companies.live_voice.service import month_bounds, talks_of
 from apps.companies.live_voice.talks import Ready
 from core.auth import admin
 from core.auth.models import User
-from tests.companies.live_voice_fakes import FAKE_KEY, FakeGoogle, frames
-from tests.core.auth_world import FAST, GOOD, World, make_platform_admin, sign_in
+from tests.companies.live_voice_fakes import FAKE_KEY, FakeConnection, FakeGoogle, frames
+from tests.core.auth_world import FAST, GOOD, World, build_world, make_platform_admin, sign_in
 
 pytestmark = pytest.mark.integration
 
@@ -405,6 +406,50 @@ async def test_a_second_start_closes_the_first_talks_socket_as_replaced(
     assert (by_id[first].status, by_id[first].end_reason) == ("ended", "replaced")
 
 
+async def test_after_a_backend_restart_the_browser_carries_on_with_the_same_talk(
+    world: World,
+    google: FakeGoogle,
+    live_voice_on: None,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await account(world, "jo.sample")
+    first_backend = await serve(ready_app(world, google))
+    client, cookie = await signed_in(first_backend, "jo.sample")
+    talk_id = (await start(client)).json()["id"]
+    await client.aclose()
+    async with socket_of(first_backend, talk_id, cookie) as socket:
+        await next_json(socket, "ready")
+        before: FakeConnection = await google.next()
+        await before.handle("handle-restart")
+        await before.usage(promptTokenCount=500)
+        await asyncio.sleep(0.4)  # the counts and the handle are written
+        await first_backend.stop()  # a deploy: the socket gets 1012
+    (row,) = await rows(world)
+    assert (row.status, row.end_reason, row.resume_handle) == (
+        "dropped",
+        "restart",
+        "handle-restart",
+    )
+    assert row.tokens_in_other == 500
+
+    second = build_world(session_factory)  # a new backend: a new app, the same database
+    second.clock.now = world.clock.now
+    second_backend = await serve(ready_app(second, google))
+    try:
+        async with socket_of(second_backend, talk_id, cookie) as socket:
+            assert (await next_json(socket, "ready"))["resumed"] is True
+            after = await google.next()
+            assert after.setup["sessionResumption"] == {"handle": "handle-restart"}
+            await after.usage(promptTokenCount=200)
+            await socket.send(json.dumps({"type": "stop"}))
+            await next_json(socket, "ended")
+    finally:
+        await second_backend.stop()
+    (row,) = await rows(world)
+    assert (row.status, row.end_reason, row.resume_handle) == ("ended", "stopped", None)
+    assert row.tokens_in_other == 700  # the counts carried on
+
+
 async def test_the_key_is_in_no_log_line_and_no_message_to_the_browser(
     world: World, google: FakeGoogle, live_voice_on: None, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -430,3 +475,71 @@ async def test_the_key_is_in_no_log_line_and_no_message_to_the_browser(
         assert secret not in sent
     assert "Sample Logistics" not in logged
     assert any(record.getMessage() == "live_voice_end" for record in caplog.records)
+
+
+async def left_by_a_dead_backend(
+    world: World, owner: User, *, status: str, seconds_ago: float
+) -> uuid.UUID:
+    """A talk a backend held when it stopped: `dropped` (it said so) or still `open` (it died)."""
+    now = world.clock.now
+    then = now - timedelta(seconds=seconds_ago)
+    talk_id = uuid.uuid4()
+    async with world.factory() as db:
+        db.add(
+            VoiceSession(
+                id=talk_id,
+                user_id=owner.id,
+                status=status,
+                end_reason="restart" if status == "dropped" else None,
+                service="gemini_api",
+                model="gemini-3.8-live",
+                prompt_version="t",
+                resume_handle="handle-left",
+                created_at=now - timedelta(minutes=5),
+                opened_at=now - timedelta(minutes=5),
+                ended_at=then if status == "dropped" else None,
+                updated_at=then,
+                tokens_in_other=100,
+                cost_usd=Decimal("0.000300"),
+            )
+        )
+        await db.commit()
+    return talk_id
+
+
+async def test_an_open_talk_no_backend_holds_carries_on_for_its_owner_only(
+    world: World, google: FakeGoogle, live_voice_on: None
+) -> None:
+    jo = await account(world, "jo.sample")
+    await account(world, "sam.sample")
+    talk_id = str(await left_by_a_dead_backend(world, jo, status="open", seconds_ago=20))
+    async with served(ready_app(world, google)) as live:
+        sam, sam_cookie = await signed_in(live, "sam.sample")
+        await refused_socket(live, talk_id, sam_cookie)  # not Sam's
+        jo_client, jo_cookie = await signed_in(live, "jo.sample")
+        async with socket_of(live, talk_id, jo_cookie) as socket:
+            assert (await next_json(socket, "ready"))["resumed"] is True
+            conn = await google.next()
+            assert conn.setup["sessionResumption"] == {"handle": "handle-left"}
+            await socket.send(json.dumps({"type": "stop"}))
+            await next_json(socket, "ended")
+        await sam.aclose()
+        await jo_client.aclose()
+    (row,) = await rows(world)
+    assert (row.status, row.end_reason, row.resume_handle) == ("ended", "stopped", None)
+    assert row.tokens_in_other == 100  # what it had counted stays
+
+
+@pytest.mark.parametrize(("status", "seconds_ago"), [("dropped", 61), ("open", 91)])
+async def test_a_talk_too_old_to_carry_on_is_refused_and_ended(
+    world: World, google: FakeGoogle, live_voice_on: None, status: str, seconds_ago: float
+) -> None:
+    jo = await account(world, "jo.sample")
+    talk_id = str(await left_by_a_dead_backend(world, jo, status=status, seconds_ago=seconds_ago))
+    async with served(ready_app(world, google)) as live:
+        client, cookie = await signed_in(live, "jo.sample")
+        await refused_socket(live, talk_id, cookie)
+        await client.aclose()
+    (row,) = await rows(world)
+    assert (row.status, row.end_reason, row.resume_handle) == ("ended", "expired", None)
+    assert google.connections == []

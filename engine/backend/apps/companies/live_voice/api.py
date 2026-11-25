@@ -1,4 +1,4 @@
-"""Live voice's routes (PLAN-V28 T1-2, T1-3), under /api/v1/companies/assistant/voice.
+"""Live voice's routes (PLAN-V28 T1-2 to T1-4), under /api/v1/companies/assistant/voice.
 
 - `POST /session` starts a talk (the checks are in `service.py`, in the plan's order).
 - `WS /live?session=<id>` is the talk's socket: sound and messages both ways (`messages.py`).
@@ -6,7 +6,7 @@
 The socket is refused before it opens (closed with 1008) unless every check passes: a session
 where sign-in is on (the guard), our own site's `Origin` (the origin guard, and again here), V's
 tick and the person's own switch, live voice on with its key, and the talk's row: this person's,
-`ready` and under 60 seconds old, opened once.
+`ready` and under 60 seconds old, opened once (or carrying on after a backend restart).
 """
 
 import logging
@@ -119,7 +119,13 @@ async def live_voice_socket(websocket: WebSocket, auth: SignedInDep) -> None:
     try:
         opened = await service.open_talk(sessions, talks, talk_id, service.owner_of(auth), now)
         if opened is not None:
-            relay = service.make_relay(app, websocket, opened, settings, names=opened.names)
+            names = opened.names
+            if opened.resumed and settings.live_voice_names_ok:
+                async with sessions() as session:
+                    names = await service.names_for(
+                        session, app, auth=auth, settings=settings, company_key=None, now=now
+                    )
+            relay = service.make_relay(app, websocket, opened, settings, names=names)
             talks.add_live(relay)
     except Exception as error:
         log.error("live_voice_socket_failed", extra={"kind": type(error).__name__})

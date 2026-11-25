@@ -1,4 +1,4 @@
-"""One live voice talk's relay (PLAN-V28 T1-3): the browser's socket on one side, Google's
+"""One live voice talk's relay (PLAN-V28 T1-3 to T1-5): the browser's socket on one side, Google's
 connection on the other, and the meter in between.
 
 **What it carries** (`messages.py` has the list): the rep's sound to Google as it comes, and
@@ -15,14 +15,22 @@ can spend faster than talking), and JSON at most 10 messages a second. Breaking 
 gets an error answer from the relay. An answer the browser doesn't send in 20 seconds is the
 relay's own: "That took too long. Try again." (TBC), and the browser is told to stop working on it.
 
+**Long talks and drops** (choice 15, T1-4): each resumable `sessionResumptionUpdate` keeps its
+handle (a secret: never logged or sent to the browser). At `goAway` a new connection opens with
+the handle, and the talk moves to it at a quiet moment (no sound from the rep for 300 ms, Gemini
+not speaking, no tool call waiting), or at once when 10 seconds are left. The rep's sound goes to
+the old connection until the move, then to the new one, so none is lost. A connection that drops
+by surprise is resumed: up to 2 tries in 10 seconds, with `reconnecting` and `reconnected`; after
+that the talk ends with "the connection dropped". The rep's sound waits (3 seconds at most) while
+it reconnects.
+
 **How a talk ends:** the browser's `stop`, the browser leaving, Google closing for good, the talk's
 time limit, the month's limit (after Gemini's sentence: its `turnComplete`, 8 seconds at most), or
-nothing from the browser for 5 minutes. A connection to Google that drops ends the talk with "the
-connection dropped" (resuming it is T1-4). Then both sides close and the row is written. When the
+nothing from the browser for 5 minutes. Then both sides close and the row is written. When the
 backend stops (uvicorn closes the browser's socket with 1012, or the task is cancelled), the talk
-is `dropped` instead (T1-4 carries it on).
+is `dropped` instead, with its handle, so the browser can come back within 30 seconds.
 
-**The meter:** every `usageMetadata` is counted, the month's total is checked after each,
+**The meter** (T1-5): every `usageMetadata` is counted, the month's total is checked after each,
 and the row is written every 30 seconds and at the end. Log lines hold counts, seconds, US$ and
 why a talk ended: never words, names, sound, a handle or the key.
 """
@@ -32,6 +40,7 @@ import base64
 import binascii
 import contextlib
 import logging
+import re
 import time
 import traceback
 import uuid
@@ -60,6 +69,8 @@ from apps.companies.live_voice.messages import (
     VoiceInterrupted,
     VoicePause,
     VoiceReady,
+    VoiceReconnected,
+    VoiceReconnecting,
     VoiceSaid,
     VoiceStop,
     VoiceToolAnswer,
@@ -78,6 +89,7 @@ SERVICE_RESTART: Final = 1012  # uvicorn closes a socket with this when the back
 POLICY: Final = 1008  # the close code for a browser that broke a cap
 NORMAL: Final = 1000
 TEXT_MAX_CHARS: Final = 2_000  # a transcript piece passed to the browser
+HANDLE_MAX_CHARS: Final = 4_096
 MAX_WAITING_CALLS: Final = 3  # tool calls waiting for the browser at once
 # The words Gemini gets when the browser's answer has none, and the relay's own answers.
 SAY_FOR: Final[dict[str, str]] = {
@@ -89,6 +101,8 @@ SAY_FOR: Final[dict[str, str]] = {
 WRONG_TOOL_WORDS: Final = "Use ask_contour, with the rep's request in their words."
 BUSY_TOOL_WORDS: Final = "One thing at a time. Wait for the last answer first."
 LIMIT_TOOL_WORDS: Final = "This month's live voice limit is reached. Say so in one sentence."
+_DURATION: Final = re.compile(r"\s*(\d+(?:\.\d+)?)s\s*")
+TAKEN_AT_ONCE: Final = frozenset({"usageMetadata", "sessionResumptionUpdate"})
 
 
 @dataclass(frozen=True)
@@ -171,6 +185,23 @@ class Waiting:
     timer: asyncio.TimerHandle = field(repr=False)
 
 
+def seconds_of(value: Any) -> float | None:
+    """Google's Duration as seconds: "50s", "1.5s", {"seconds": 50, "nanos": 0} or a number."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        found = _DURATION.fullmatch(value)
+        return float(found.group(1)) if found else None
+    if isinstance(value, Mapping):
+        try:
+            return float(value.get("seconds") or 0) + float(value.get("nanos") or 0) / 1e9
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
 def _text(value: Any) -> str | None:
     """A transcript piece, or None. Cut to a size the browser can show."""
     if isinstance(value, Mapping):
@@ -230,6 +261,13 @@ class Relay:
         self._log: dict[str, Any] = {"talk": str(talk_id)}
 
         self._link: GoogleLink | None = None  # where the rep's sound goes now
+        self._next: GoogleLink | None = None  # goAway: the new connection, ready to take over
+        self._next_early: list[dict[str, Any]] = []  # its content before the move
+        self._retired: set[GoogleLink] = set()  # old connections, giving their last counts
+        self._old_forward = False  # an old connection's sentence is still being passed on
+        self._moving = False
+        self._streak = 0  # connections lost in a row (T1-4)
+        self._resumed_at = float("-inf")
 
         self._waiting: dict[str, Waiting] = {}
         self._held_answers: list[tuple[str, str, dict[str, Any]]] = []  # while reconnecting
@@ -390,7 +428,8 @@ class Relay:
         await self._write_end(reason)
         if "sides" not in self._shut:
             self._shut.add("sides")
-            for link in (self._link, self._spare()):
+            links = [self._link, self._next, *self._retired, self._spare()]
+            for link in links:
                 if link is not None:
                     await link.close()
             if reason not in ("restart", "left"):
@@ -409,8 +448,8 @@ class Relay:
         return None if link is self._link else link
 
     def _status(self, reason: EndReason) -> str:
-        """`dropped` when the backend stopped (so T1-4 can carry it on), else `ended`."""
-        return "dropped" if reason == "restart" else "ended"
+        """`dropped` when the backend stopped and the talk can carry on, else `ended`."""
+        return "dropped" if reason == "restart" and self._handle else "ended"
 
     async def _write_end(self, reason: EndReason) -> None:
         if "row" in self._shut:
@@ -624,6 +663,22 @@ class Relay:
         if isinstance(usage, Mapping):
             self._meter.add_usage(usage, link)
             self._check_limit()
+        update = message.get("sessionResumptionUpdate")
+        if isinstance(update, Mapping) and link not in self._retired:
+            self._keep_handle(update)
+        if link is self._next:
+            # Passed on once the talk moves to it; its counts and handle are taken already.
+            rest = {k: v for k, v in message.items() if k not in TAKEN_AT_ONCE}
+            if rest:
+                self._next_early.append(rest)
+            return
+        if link in self._retired:
+            content = message.get("serverContent")
+            if self._old_forward and isinstance(content, Mapping):
+                await self._content(content)  # the end of a sentence begun before the move
+                if content.get("turnComplete") is True or content.get("interrupted") is True:
+                    self._old_forward = False
+            return
         if link is not self._link:
             return
         content = message.get("serverContent")
@@ -638,6 +693,9 @@ class Relay:
         cancelled = message.get("toolCallCancellation")
         if isinstance(cancelled, Mapping):
             await self._cancel(cancelled)
+        going = message.get("goAway")
+        if isinstance(going, Mapping):
+            self._go_away(going)
 
     async def _content(self, content: Mapping[str, Any]) -> None:
         turn = content.get("modelTurn")
@@ -732,6 +790,18 @@ class Relay:
         if stopped:
             await self._send(VoiceToolCancel(ids=stopped))
 
+    def _keep_handle(self, update: Mapping[str, Any]) -> None:
+        """Only a handle Google says can resume (not one from the middle of a turn)."""
+        handle = update.get("newHandle")
+        if update.get("resumable") is not True or not isinstance(handle, str):
+            return
+        if not handle or len(handle) > HANDLE_MAX_CHARS:
+            return
+        first = self._handle is None
+        self._handle = handle
+        if first:
+            self._save_soon()  # so a backend that dies early can still resume it
+
     # --- The month's limit ------------------------------------------------------------------------
 
     async def _read_budget(self) -> None:
@@ -784,10 +854,123 @@ class Relay:
             return
         self._check_limit()
 
+    # --- Long talks and drops (T1-4) --------------------------------------------------------------
+
+    def _quiet(self) -> bool:
+        heard_ago = self._clock() - self._rep_heard_at
+        return not self._speaking and not self._waiting and heard_ago >= self._limits.quiet_seconds
+
+    def _go_away(self, going: Mapping[str, Any]) -> None:
+        left = seconds_of(going.get("timeLeft"))
+        log.info("live_voice_go_away", extra={**self._log, "seconds_left": left})
+        if self._moving or self._handle is None:
+            return  # nothing to move with: when it closes, the drop is handled
+        self._moving = True
+        deadline = self._clock() + (left if left is not None else self._limits.move_lead_seconds)
+        self._spawn(self._move(deadline))
+
+    async def _move(self, deadline: float) -> None:
+        try:
+            seconds = max(1.0, min(self._limits.open_seconds, deadline - self._clock()))
+            try:
+                new = await self._dial(self._handle, seconds)
+            except GoogleUnavailable as error:
+                log.warning(
+                    "live_voice_move_failed",
+                    extra={**self._log, "why": error.why, "code": error.code},
+                )
+                if self._link is None:
+                    await self._resume()  # the old one is gone already
+                return
+            if self._ending.is_set():
+                await new.close()
+                return
+            self._next = new
+            self._spawn(self._from_google(new))
+            move_at = deadline - self._limits.move_lead_seconds
+            while self._link is not None and self._clock() < move_at and not self._quiet():
+                await asyncio.sleep(min(0.05, self._limits.tick_seconds))
+                if self._next is not new:
+                    return  # it closed before the move: the old one carries on until it drops
+            if self._next is new:
+                await self._take_over(new)
+        finally:
+            self._moving = False
+
+    async def _take_over(self, new: GoogleLink) -> None:
+        """The talk moves to `new`. The old connection passes on the end of a sentence it was
+        saying, gives its last counts, then closes."""
+        old, self._link, self._next = self._link, new, None
+        self._meter.reconnects += 1
+        self._resumed_at = self._clock()
+        early, self._next_early = self._next_early, []
+        if old is not None:
+            self._retired.add(old)
+            self._old_forward = self._speaking
+            self._spawn(self._retire(old))
+        log.info("live_voice_moved", extra={**self._log, "old_speaking": self._old_forward})
+        await self._flush_waiting()
+        for message in early:
+            await self._on_google(new, message)
+
+    async def _retire(self, old: GoogleLink) -> None:
+        waited = 0.0
+        step = min(0.05, self._limits.tick_seconds)
+        while self._old_forward and waited < self._limits.move_lead_seconds:
+            await asyncio.sleep(step)
+            waited += step
+        self._old_forward = False
+        await asyncio.sleep(self._limits.old_drain_seconds)
+        await old.close()
+        self._retired.discard(old)
+
     async def _lost(self, link: GoogleLink, closed: LinkClosed) -> None:
-        """The connection in use closed by Google: the talk ends (T1-4 resumes it)."""
+        """A connection closed. Only the one in use, closed by Google, is a drop."""
+        if link is self._next:
+            self._next = None
+            self._next_early = []
+            return
         if link is not self._link or link.closing or self._ending.is_set():
             return
         log.warning("live_voice_dropped", extra={**self._log, "code": closed.code})
-        self._link = None
+        self._link = None  # the rep's sound waits
+        if self._next is not None:
+            await self._take_over(self._next)
+            return
+        if self._moving:
+            return  # the move's new connection takes over as soon as it opens
+        await self._resume()
+
+    async def _resume(self) -> None:
+        if self._handle is None:
+            self.end("dropped")
+            return
+        now = self._clock()
+        if now - self._resumed_at >= self._limits.steady_seconds:
+            self._streak = 0
+        await self._send(VoiceReconnecting())
+        deadline = now + self._limits.resume_window_seconds
+        while self._streak < self._limits.resume_tries and not self._ending.is_set():
+            self._streak += 1
+            left = deadline - self._clock()
+            if left <= 0:
+                break
+            try:
+                new = await self._dial(self._handle, min(self._limits.open_seconds, left))
+            except GoogleUnavailable as error:
+                log.warning(
+                    "live_voice_resume_failed",
+                    extra={**self._log, "try": self._streak, "why": error.why, "code": error.code},
+                )
+                continue
+            if self._ending.is_set():
+                await new.close()
+                return
+            self._resumed_at = self._clock()
+            self._meter.reconnects += 1
+            self._use(new)
+            log.info("live_voice_resumed", extra={**self._log, "try": self._streak})
+            await self._flush_waiting()
+            await self._send(VoiceReconnected())
+            return
         self.end("dropped")

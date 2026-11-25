@@ -9,6 +9,7 @@ from apps.companies.data_tables import DATA_TABLES
 from apps.companies.editables import EDITABLES
 from apps.companies.jobs import JOBS
 from apps.companies.live_voice.messages import CONTRACT as LIVE_VOICE_MESSAGES
+from apps.companies.live_voice.service import stop_live_voice
 from apps.companies.meeting_form import MeetingFormRunner
 from apps.companies.note_batch import NoteSender
 from apps.companies.note_fields import check_note_fields
@@ -77,7 +78,8 @@ async def stop_meeting_forms(app: FastAPI) -> None:
 
 async def stop_background(app: FastAPI) -> None:
     """What runs in the background stops when the backend does: the preps, the sorts, the
-    sending, then the pre-reads. One that fails never keeps the others running."""
+    sending, the pre-reads, then live voice's talks (kept as dropped, so the browser can carry on
+    with the next backend, PLAN-V28 T1-4). One that fails never keeps the others running."""
     try:
         await stop_preps(app)
     finally:
@@ -87,7 +89,10 @@ async def stop_background(app: FastAPI) -> None:
             try:
                 await stop_note_sending(app)
             finally:
-                await stop_meeting_forms(app)
+                try:
+                    await stop_meeting_forms(app)
+                finally:
+                    await stop_live_voice(app)
 
 
 def check_rules() -> None:

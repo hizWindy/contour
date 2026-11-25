@@ -1,4 +1,4 @@
-"""Live voice's service (PLAN-V28 T1-2, T1-3): starting a talk, and opening its socket.
+"""Live voice's service (PLAN-V28 T1-2 to T1-4): starting a talk, and opening its socket.
 
 **A start** (`POST /assistant/voice/session`) checks, in this order, with the plan's codes:
 1. the Call logs or the Meetings tick, never a Viewer (the route's `need`: 403
@@ -11,7 +11,10 @@ Then the person's other talks end (`replaced`), and a `ready` row is made. Its s
 within 60 seconds. With sign-in off there is no person: the laptop is one person, as for the
 Assistant's other routes.
 
-**The socket** opens a talk once: its owner's `ready` row (60 seconds at most) becomes `open`.
+**The socket** opens a talk once: its owner's `ready` row (60 seconds at most) becomes `open`. The
+one exception is a backend restart (T1-4): the owner's `dropped` row (within a minute), or an
+`open` one that no relay here carries and whose row was written lately (a backend that died
+without marking it), opens again and carries on from its handle.
 
 **The month** is a Melbourne calendar month (TBC). Its total is every talk started in it: what
 the rows hold, plus what the talks running here have counted since their last write.
@@ -55,6 +58,12 @@ from core.prefs.service import effective_settings
 log = logging.getLogger(__name__)
 
 SOCKET_PATH: Final = "/api/v1/companies/assistant/voice/live"
+# After a backend restart, a dropped talk may carry on this long (the browser tries within 30
+# seconds), and an open one nobody marked may if its row was written this recently (the relay
+# writes every 30 seconds).
+RESUME_FOR: Final = timedelta(seconds=60)
+WRITTEN_WITHIN: Final = timedelta(seconds=90)
+STOP_SECONDS: Final = 5.0  # at shutdown, how long each relay may take to close and write
 
 Sessions = async_sessionmaker[AsyncSession]
 
@@ -271,12 +280,12 @@ async def start_talk(
     )
 
 
-# --- The socket (T1-3) ----------------------------------------------------------------------------
+# --- The socket (T1-3, T1-4) ----------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
 class Opened:
-    """A talk whose socket may run: its row (now `open`)."""
+    """A talk whose socket may run: its row (now `open`), and how it carries on."""
 
     row: VoiceSession
     resumed: bool
@@ -296,10 +305,31 @@ async def open_talk(
             names = ready.names if ready is not None and ready.owner == owner else ()
             return Opened(row, resumed=False, names=names)
         found = await store.find(session, talk_id)
-        if found is not None and found.user_id == owner and found.status == "ready":
-            await store.end_one(session, talk_id, "expired", now)  # nobody opened it in time
+        mine = found is not None and found.user_id == owner
+        if found is None or not mine or found.status == "ended":
+            return None
+        if found.status == "ready":  # nobody opened it in time
+            await store.end_one(session, talk_id, "expired", now)
             await session.commit()
             talks.take_ready(talk_id)
+            return None
+        row = await store.open_again(
+            session,
+            talk_id,
+            owner,
+            dropped_since=now - RESUME_FOR,
+            written_since=now - WRITTEN_WITHIN,
+            now=now,
+        )
+        if row is not None:
+            await session.commit()
+            return Opened(row, resumed=True)
+        stale = (found.status == "dropped" and (found.ended_at or now) < now - RESUME_FOR) or (
+            found.status == "open" and found.updated_at < now - WRITTEN_WITHIN
+        )
+        if stale:  # too late to carry on: end it, and its handle goes
+            await store.end_one(session, talk_id, "expired", now)
+            await session.commit()
         return None
 
 
@@ -334,7 +364,8 @@ def make_relay(
     names: tuple[str, ...],
 ) -> Relay:
     """The talk's relay, with Google's address (a test puts a fake one on
-    `app.state.live_voice_endpoint`), the meter and the row's writer."""
+    `app.state.live_voice_endpoint`), the meter (from the row's counts, for a talk that carries
+    on) and the row's writer."""
     endpoint: Endpoint = getattr(app.state, "live_voice_endpoint", None) or endpoint_for(settings)
     sent_names = names if settings.live_voice_names_ok else ()
 
@@ -353,7 +384,21 @@ def make_relay(
         dial=dial,
         rows=TalkRows(sessions, row.id, row.opened_at, now),
         budget=MonthBudget(sessions, talks_of(app), now),
-        meter=Meter(prices_for(settings.live_voice_model), totals=settings.live_voice_usage_totals),
+        meter=Meter(
+            prices_for(settings.live_voice_model),
+            totals=settings.live_voice_usage_totals,
+            start=store.counts_of(row) if opened.resumed else None,
+        ),
         limits=relay_limits(app, settings),
         talk_minutes=settings.live_voice_talk_minutes,
+        handle=row.resume_handle if opened.resumed else None,
+        resumed=opened.resumed,
     )
+
+
+async def stop_live_voice(app: FastAPI) -> None:
+    """The backend is stopping: every talk here closes both sides and is kept as `dropped` (with
+    its handle), so the browser can carry on with the next backend."""
+    talks: Talks | None = getattr(app.state, "live_voice_talks", None)
+    if talks is not None:
+        await talks.stop_all("restart", STOP_SECONDS)
