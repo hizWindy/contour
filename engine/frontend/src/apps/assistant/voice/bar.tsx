@@ -143,6 +143,7 @@ import { handOver } from './hand-over'
 import { isKeepListeningOn, useKeepListening } from './keep-listening'
 import { isPlainV, somethingElseOpen, VOICE_BAR } from './keys'
 import { primeAudio } from './live/audio'
+import { liveHeldOff } from './live/limit'
 import { makeTalk, type MakeTalk } from './live/talk'
 import { liveTitle } from './live/state'
 import { LiveCaptions, MuteToggle } from './live/view'
@@ -150,7 +151,7 @@ import { CONNECTING } from './live/words'
 import { cachedNames, firstCompanyOf, fixNamesOf, hintsOf, namesOnPage } from './names'
 import { onPageOf, panelCompany } from './on-page'
 import { onScreen } from './on-screen'
-import { MovedLine, SaidStatus } from './pill'
+import { MovedLine, NoticeLine, SaidStatus } from './pill'
 import type { PillState } from './pill-state'
 import {
   closeVoiceBar,
@@ -309,11 +310,12 @@ function titleOf(snapshot: BarSnapshot, liveFirst = false): string {
 }
 
 /**
- * Words that wait in the text line, under a line that says why: unclear words (PLAN-V23 T1-6), or
- * words over the server's limit (PLAN-V24 choice 9).
+ * Words that wait in the text line, under a line that says why: unclear words (PLAN-V23 T1-6),
+ * words over the server's limit (PLAN-V24 choice 9), or the words live voice heard when the free
+ * mic took over (PLAN-V28 T4-1).
  */
 function waits(problem: BarProblem | null): boolean {
-  return problem?.kind === 'unclear' || problem?.kind === 'too_long'
+  return problem?.kind === 'unclear' || problem?.kind === 'too_long' || problem?.kind === 'fallback'
 }
 
 /**
@@ -343,19 +345,22 @@ function problemLine(problem: BarProblem, device?: DeviceKind): string {
     case 'left':
       return LEFT_PAGE
     case 'live':
+    case 'fallback':
       return problem.line
   }
 }
 
 /**
  * A line said without alarm: why there is no mic, which isn't a failure of the moment, a
- * conversation that stopped after its quiet, or a live talk's own last line (PLAN-V28).
+ * conversation that stopped after its quiet, or a live talk's own last line, or why the free mic
+ * took over from it (PLAN-V28).
  */
 function isQuiet(problem: BarProblem): boolean {
   return (
     problem.kind === 'no_voice' ||
     problem.kind === 'quiet' ||
     problem.kind === 'live' ||
+    problem.kind === 'fallback' ||
     (problem.kind === 'mic' && problem.problem === 'no_speech_tool')
   )
 }
@@ -385,8 +390,11 @@ function actionsOf(snapshot: BarSnapshot): BarAction[] {
   if (phase === 'answer') return answer?.again ? ['try_again', 'type_instead'] : []
   if (!problem) return []
   if (phase === 'typing') {
-    // Unclear words wait in the text line: say them again, where the voice works (T1-6).
-    if (problem.kind === 'unclear') return snapshot.voice ? ['say_again'] : []
+    // Unclear words wait in the text line: say them again, where the voice works (T1-6). So do
+    // the words live voice heard as the free mic took over (PLAN-V28 T4-1).
+    if (problem.kind === 'unclear' || problem.kind === 'fallback') {
+      return snapshot.voice ? ['say_again'] : []
+    }
     // The text line is there already: only a way back to the mic, where one helps.
     return problem.kind === 'mic' && problemActions(problem.problem, false).includes('try_again')
       ? ['try_again']
@@ -409,6 +417,7 @@ function actionsOf(snapshot: BarSnapshot): BarAction[] {
     case 'no_voice':
     case 'unclear':
     case 'too_long':
+    case 'fallback':
       return []
     case 'other':
       return problem.resend ? ['try_again', 'type_instead'] : ['type_instead']
@@ -431,6 +440,8 @@ function statusOf(snapshot: BarSnapshot, liveFirst = false): string {
   const { problem } = snapshot
   // A line said without alarm has no alert of its own: the quiet stop is said here.
   if (snapshot.phase === 'problem') return problem && isQuiet(problem) ? problemLine(problem) : ''
+  // Why the free mic took over (PLAN-V28 T4-1) is said here, once: it has no alert of its own.
+  if (problem?.kind === 'fallback') return problem.line
   if (waits(problem)) return ''
   // While a command is worked out, the title says so.
   const talk = snapshot.phase === 'listening' ? snapshot.conversation : null
@@ -578,7 +589,10 @@ export default function VoiceBar({
   const typingOnly = options.data?.voice_tool === 'typing'
   useEffect(() => {
     if (viewer || !liveOn || typingOnly) return undefined
-    whenBarOpens(primeAudio)
+    // Not while this month's limit holds live voice off (PLAN-V28 T4-1).
+    whenBarOpens(() => {
+      if (!liveHeldOff()) primeAudio()
+    })
     return () => {
       whenBarOpens(null)
     }
@@ -715,7 +729,8 @@ export default function VoiceBar({
   }, [open, shown, phase])
 
   // Live voice will be the engine: this person may use it, and this browser can run it.
-  const liveFirst = liveOn && !typingOnly && (env?.browser ?? browserFacts)().live === true
+  const liveFirst =
+    liveOn && !typingOnly && !liveHeldOff() && (env?.browser ?? browserFacts)().live === true
   const title = titleOf(snapshot, liveFirst)
   const listening = phase === 'starting' || phase === 'listening'
   // The model gets ready first (PLAN-V24 T4-3): nothing to stop yet, and its download shows.
@@ -961,6 +976,12 @@ export default function VoiceBar({
               // The mic moved by itself, a headset plugged in (PLAN-V24 T1-2): said once in all,
               // here or in the pill (T5-1).
               <MovedLine key={movedTo.id} device={movedTo} />
+            ) : null}
+
+            {listening && snapshot.notice ? (
+              // Why the free mic listens in live voice's place (PLAN-V28 T4-1): said once in all,
+              // here or in the pill.
+              <NoticeLine notice={snapshot.notice} />
             ) : null}
 
             {waiting ? null : problemView}

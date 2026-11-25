@@ -22,6 +22,7 @@ import { closeCard, openCard } from '../card/store'
 import VoiceBar from './bar'
 import { setKeepListening } from './keep-listening'
 import { FakeTalks } from './live/fake-talk'
+import { LIVE_DROPPED, LIVE_UNREACHABLE } from './live/words'
 import { closeVoiceBar, isVoiceBarOpen, openVoiceBar } from './store'
 
 const BAR = 'Speak to the Assistant'
@@ -330,9 +331,10 @@ describe('the free mic, as before', () => {
     expect(within(bar).queryByRole('button', { name: 'Mute' })).toBeNull()
   })
 
-  it('takes over at once when a start fails, before a word', async () => {
+  it('takes over at once when a start fails, before a word, and says why once (T4-1)', async () => {
     startManualClock()
     const { talks, mic } = page()
+    const lines = heard()
     const bar = await opened(talks)
     await moved(() => {
       talks.last().finish({ kind: 'failed' })
@@ -343,6 +345,32 @@ describe('the free mic, as before', () => {
     })
     expect(mic.tools).toHaveLength(1)
     expect(within(bar).queryByRole('button', { name: 'Mute' })).toBeNull()
+    expect(within(bar).getByText(LIVE_UNREACHABLE)).toBeInTheDocument()
+    expect(lines.filter((line) => line === LIVE_UNREACHABLE)).toHaveLength(1)
+  })
+
+  it('puts the words no tool call took in the text line, under the line saying why (T4-1)', async () => {
+    startManualClock()
+    const { talks, mic } = page()
+    const bar = await opened(talks)
+    const talk = talks.last()
+    await moved(() => {
+      talk.ready()
+      talk.hear('Then add a task for Friday')
+      talk.leave('Then add a task for Friday')
+    })
+    await moved(() => {
+      talk.finish({ kind: 'lost' })
+    })
+
+    const line = await within(bar).findByRole('textbox', { name: 'Type what to do' })
+    expect(line).toHaveValue('Then add a task for Friday')
+    // The line shows above the words, and is read with them.
+    const why = bar.querySelector('[data-slot=voice-problem]')
+    expect(why).toHaveTextContent(LIVE_DROPPED)
+    expect(line).toHaveAttribute('aria-describedby', why?.id)
+    expect(within(bar).getByRole('button', { name: 'Say it again' })).toBeInTheDocument()
+    expect(mic.tools).toEqual([])
   })
 })
 

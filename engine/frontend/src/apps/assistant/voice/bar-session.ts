@@ -85,6 +85,11 @@
  *   turn answers with its words, and the talk goes on.
  * - **A tool call Google cancels** stops its command request, and a late answer opens nothing.
  * - **"That's all"** as the rep's whole turn ends the talk (`repTurn`, T3-4).
+ *
+ * PLAN-V28 T4-1, **the free mic takes over** by itself, with the line saying why, when a start is
+ * refused, the socket fails, the relay ends the talk with a drop, the limit or an error, our backend
+ * doesn't come back, or the browser goes offline. Words no tool call took go to the text line. The
+ * next V tries live voice again, but after the month's limit (`live/limit.ts`).
  */
 import { isAbort, toApiProblem } from '@/api/client'
 import type {
@@ -103,7 +108,7 @@ import {
   type MicSnapshot,
 } from '@/apps/companies/call-notes/mic/session'
 import type { NameFix } from '@/apps/companies/call-notes/mic/name-fix'
-import { pickBarEngine } from '@/apps/companies/call-notes/mic/voice-engine'
+import { pickBarEngine, pickEngine } from '@/apps/companies/call-notes/mic/voice-engine'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import type { MicProblem } from '@/apps/companies/call-notes/mic/words'
 import type { AfterAnswer, Heard } from './hand-over'
@@ -116,8 +121,16 @@ import {
   replyForProblem,
   type Reply,
 } from './live/bridge'
-import type { MakeTalk, Talk, TalkSnapshot, ToolCall } from './live/talk'
-import { LIVE_DROPPED, NOT_DONE, READY } from './live/words'
+import { holdLiveOff, liveHeldOff, melbourneMonthEnd } from './live/limit'
+import type { MakeTalk, Talk, TalkEnd, TalkSnapshot, ToolCall } from './live/talk'
+import {
+  LIVE_DROPPED,
+  LIVE_LIMIT,
+  LIVE_UNREACHABLE,
+  LIVE_WRONG,
+  NOT_DONE,
+  READY,
+} from './live/words'
 import { pauseFor } from './pauses'
 import { browserScreen, type KeptOn, type ScreenEnv } from './screen'
 import type { Tone } from './tone'
@@ -190,6 +203,11 @@ export type BarProblem =
    * like "Live voice stopped: nothing was heard for a while. Press V to start again."
    */
   | { kind: 'live'; line: string }
+  /**
+   * Live voice handed over (PLAN-V28 T4-1), and the words no tool call took wait in the text line:
+   * the line says why, like "Live voice can't reach Google. Using the free mic."
+   */
+  | { kind: 'fallback'; line: string }
 
 export interface ShownAnswer {
   line: string
@@ -231,6 +249,17 @@ export interface BarSnapshot {
    * bars. Left out or null: the free mic (`mic`).
    */
   live?: TalkSnapshot | null
+  /**
+   * Why the free mic listens in live voice's place (PLAN-V28 T4-1), like "Live voice can't reach
+   * Google. Using the free mic.": said once, under the words, in the bar or the pill. Left out or
+   * null: nothing to say.
+   */
+  notice?: Notice | null
+}
+
+/** A line said once, wherever it first shows (an object, so "once" knows it again). */
+export interface Notice {
+  line: string
 }
 
 /** The review card open now: one that hears the conversation, another kind, or none. */
@@ -337,6 +366,7 @@ const STARTING: BarSnapshot = {
   fixes: [],
   conversation: null,
   live: null,
+  notice: null,
 }
 
 const NEW_CONVERSATION: ConversationSnapshot = { working: null, waiting: 0, line: null, turns: 0 }
@@ -407,6 +437,59 @@ function answerWith(call: LiveCall, reply: Reply | Promise<Reply>): void {
       call.reply({ status: 'error', retryable: true, message: NOT_DONE })
     },
   )
+}
+
+/**
+ * The line the free mic takes over with, when a live talk ends (PLAN-V28 T4-1): the plan's lines,
+ * as the relay sends them, and a refused start's own plain words, which say the free mic is there
+ * (403, 409, 503 and too many starts). A start that never reached our server can't reach Google.
+ * Null: the talk only stops (V, Esc, "that's all", quiet for 5 minutes, its 30 minutes up, a newer
+ * window).
+ */
+function handOverLine(end: TalkEnd): string | null {
+  switch (end.kind) {
+    case 'refused': {
+      const { code, detail } = end.problem
+      if (code === 'live_voice_limit') return LIVE_LIMIT
+      // The server's own words carry its code; the website's words for a network fault don't fit.
+      return (code !== null && detail?.trim()) || LIVE_UNREACHABLE
+    }
+    case 'failed':
+    case 'offline':
+      return LIVE_UNREACHABLE
+    case 'lost':
+      return LIVE_DROPPED
+    case 'ended':
+      switch (end.reason) {
+        case 'limit':
+          return end.line ?? LIVE_LIMIT
+        case 'unreachable':
+          return end.line ?? LIVE_UNREACHABLE
+        case 'dropped':
+          return end.line ?? LIVE_DROPPED
+        case 'error':
+        case 'refused':
+        case 'expired':
+          return end.line ?? LIVE_WRONG
+        default:
+          return null
+      }
+    default:
+      return null
+  }
+}
+
+/**
+ * After this month's limit, live voice stays off until the month changes (T4-1): until the
+ * server's `Retry-After`, where a refused start gave one, else the next Melbourne month.
+ */
+function holdForLimit(end: TalkEnd): void {
+  if (end.kind === 'refused' && end.problem.code === 'live_voice_limit') {
+    const wait = end.problem.retry_after_seconds
+    holdLiveOff(wait !== null && wait > 0 ? Date.now() + wait * 1000 : melbourneMonthEnd())
+  } else if (end.kind === 'ended' && end.reason === 'limit') {
+    holdLiveOff(melbourneMonthEnd())
+  }
 }
 
 /**
@@ -641,9 +724,12 @@ export class BarSession {
     this.listenFree()
   }
 
-  /** Live voice may start for this person now. */
+  /**
+   * Live voice may start for this person now: their switch, and not after this month's limit
+   * (PLAN-V28 T4-1), which keeps it off until the month changes.
+   */
   private liveOn(): boolean {
-    return this.liveVoice?.on() === true
+    return this.liveVoice?.on() === true && !liveHeldOff()
   }
 
   /** The free mic: today's engine, through the mic session. */
@@ -746,24 +832,28 @@ export class BarSession {
   }
 
   /**
-   * The talk ended by itself. Before it began (a start refused, a socket that never reached
-   * `ready`), the free engine takes over at once (Part 4 says why). A mic that failed says so, as
-   * the free mic's does. After it began, the relay's line shows, with Start again and Type instead
-   * (Part 4 refines which ends hand over to the free mic).
+   * The talk ended by itself (T4-1). A mic that failed says so, as the free mic's does. A start
+   * refused, a socket that failed, a drop, the month's limit, an error, our backend gone or the
+   * browser offline: the free mic takes over, with the line saying why. A talk that ended for a
+   * reason of its own (quiet for 5 minutes, its 30 minutes up, a newer window) stops, with its
+   * line and Start again.
    */
   private talkEnded(now: TalkSnapshot): void {
     const end = now.end
-    if (!end || end.kind === 'stopped') return
+    const talk = this.talk
+    if (!end || end.kind === 'stopped' || !talk) return
     if (end.kind === 'mic') {
       this.micFailed(end.problem)
       return
     }
-    if (!now.ready) {
-      this.listenFree()
+    holdForLimit(end)
+    const line = handOverLine(end)
+    if (line !== null) {
+      this.fallBack(line, talk.unsent())
       return
     }
-    const line = end.kind === 'ended' ? end.line : end.kind === 'lost' ? LIVE_DROPPED : null
-    if (line === null) {
+    const own = end.kind === 'ended' ? end.line : null
+    if (own === null) {
       this.stopConversation()
       return
     }
@@ -774,9 +864,35 @@ export class BarSession {
       phase: 'problem',
       mic: null,
       words: said,
-      problem: { kind: 'live', line },
+      problem: { kind: 'live', line: own },
       conversation: null,
     })
+  }
+
+  /**
+   * The free mic takes over from live voice (T4-1), saying why. Words no tool call took go to the
+   * text line, so none is lost; so does everything where no free engine can run here. Otherwise
+   * the free mic listens at once, with the line under its words. Turns already said still go on.
+   */
+  private fallBack(line: string, unsent: string): void {
+    const words = unsent.trim()
+    if (words !== '' || pickEngine(this.tool, this.env) === null) {
+      this.drain = 'quiet'
+      this.stopListening()
+      this.set({
+        phase: 'typing',
+        mic: null,
+        draft: words.slice(0, MAX_CHARS),
+        problem: { kind: 'fallback', line },
+        answer: null,
+        conversation: null,
+        live: null,
+        notice: null,
+      })
+      return
+    }
+    this.listenFree()
+    this.set({ notice: { line } })
   }
 
   // --- A tool call is a turn (PLAN-V28 Part 3) ---------------------------------------------------

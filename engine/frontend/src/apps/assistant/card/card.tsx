@@ -303,6 +303,7 @@ function stripProblem(problem: BarProblem, device: DeviceKind): string {
     case 'left':
       return LEFT_PAGE
     case 'live':
+    case 'fallback':
       // Never here: the card's own V keeps today's engines (PLAN-V28).
       return problem.line
   }

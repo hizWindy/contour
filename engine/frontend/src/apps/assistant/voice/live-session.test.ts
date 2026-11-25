@@ -6,7 +6,7 @@
  * the relay's end shows its line; the quiet stop counts words either way; and every end stops the
  * talk. Made-up names only: Sample Logistics, Jo Sample.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiProblem } from '@/api/client'
 import type { AssistantCommand } from '@/api/types'
 import {
@@ -16,7 +16,8 @@ import {
 } from '@/apps/companies/call-notes/mic/fake-mic'
 import { BarSession, TIMES, type BarSnapshot } from './bar-session'
 import { FakeTalks } from './live/fake-talk'
-import { LIVE_DROPPED } from './live/words'
+import { letLiveBack } from './live/limit'
+import { LIVE_DROPPED, LIVE_LIMIT, LIVE_UNREACHABLE } from './live/words'
 import type { ScreenEnv } from './screen'
 
 const TASK: AssistantCommand = {
@@ -114,6 +115,11 @@ beforeEach(() => {
   vi.useFakeTimers()
 })
 
+afterEach(() => {
+  // The month's limit holds live voice off for the page: each test starts afresh.
+  letLiveBack()
+})
+
 describe('the voice source (T2-3)', () => {
   it('starts a live talk, with the company on screen, and opens no mic session', async () => {
     const { session, talks, mic, now } = setUp()
@@ -168,17 +174,18 @@ describe('the voice source (T2-3)', () => {
   })
 })
 
-describe('a start that fails falls back to the free mic at once (T2-3; Part 4 says why)', () => {
+describe('a start that fails falls back to the free mic at once (T2-3), saying why (T4-1)', () => {
   it.each([
     [
-      'a refused start',
+      'a refused start at the limit',
       {
         kind: 'refused' as const,
         problem: new ApiProblem({ title: 'No', status: 429, code: 'live_voice_limit' }),
       },
+      LIVE_LIMIT,
     ],
-    ['a socket that never reached ready', { kind: 'failed' as const }],
-  ])('%s', async (_, end) => {
+    ['a socket that never reached ready', { kind: 'failed' as const }, LIVE_UNREACHABLE],
+  ])('%s', async (_, end, line) => {
     const { session, talks, mic, now } = setUp()
     session.start('browser_service')
     talks.last().finish(end)
@@ -187,6 +194,7 @@ describe('a start that fails falls back to the free mic at once (T2-3; Part 4 sa
     expect(mic.tools).toHaveLength(1)
     expect(now().phase).toBe('listening')
     expect(now().live).toBeNull()
+    expect(now().notice).toEqual({ line })
     expect(session.keepsListening).toBe(false)
   })
 
@@ -276,11 +284,14 @@ describe('how a live talk ends', () => {
     expect(now().phase).toBe('starting')
   })
 
-  it('our backend not back within 30 seconds says the connection dropped', async () => {
-    const { talks, now } = await live()
+  it('our backend not back within 30 seconds: the free mic takes over, saying the line dropped', async () => {
+    const { talks, mic, now } = await live()
     talks.last().finish({ kind: 'lost' })
+    await tick(100)
 
-    expect(now().problem).toEqual({ kind: 'live', line: LIVE_DROPPED })
+    expect(now().notice).toEqual({ line: LIVE_DROPPED })
+    expect(now().phase).toBe('listening')
+    expect(mic.tools).toHaveLength(1)
   })
 
   it("Type instead stops the talk, and puts the rep's words in the text line", async () => {

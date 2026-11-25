@@ -47,6 +47,7 @@ import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
+import type { Notice } from './bar-session'
 import { LiveCaptions, MuteToggle } from './live/view'
 import { lineOf, micIsOn, useSaidOnce, type PillActionId, type PillState } from './pill-state'
 import { useVKeyOn } from './v-switch'
@@ -68,6 +69,23 @@ export function MovedLine({ device, className }: { device: MicDevice; className?
       className={cn('text-caption text-muted-foreground', className)}
     >
       {nowUsing(device.name)}
+    </p>
+  )
+}
+
+/**
+ * Why the free mic listens in live voice's place (PLAN-V28 T4-1), like "Live voice can't reach
+ * Google. Using the free mic.": said once in all, in the bar or the pill.
+ */
+export function NoticeLine({ notice, className }: { notice: Notice; className?: string }) {
+  const sayIt = useSaidOnce(notice)
+  return (
+    <p
+      role={sayIt ? 'status' : undefined}
+      data-slot="voice-notice"
+      className={cn('text-caption text-pretty text-muted-foreground', className)}
+    >
+      {notice.line}
     </p>
   )
 }
@@ -209,6 +227,7 @@ function Live({ state, hint, hintId, onStop, onAct }: ListeningPillProps) {
       <div data-slot="pill-words" className="flex flex-col gap-1 px-3 pb-2 text-ui">
         {under}
         {movedTo && !preparing ? <MovedLine key={movedTo.id} device={movedTo} /> : null}
+        {snapshot.notice ? <NoticeLine notice={snapshot.notice} /> : null}
       </div>
     </>
   )
