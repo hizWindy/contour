@@ -4,10 +4,10 @@ This plan gives the Assistant a live voice. A rep presses V and talks, as on a p
 
 **TBC** means to be confirmed.
 
-- **Status:** drafted on 25 Nov 2026 from Al-khair's chat, on `plan-v28` in `../contour-v28`, and checked the same day against `master` with PLAN-V27 joined (`b52190b`). Approved on 25 Nov ("implement v28"), and being built: S0 and Part 1 are done.
+- **Status:** drafted on 25 Nov 2026 from Al-khair's chat, on `plan-v28` in `../contour-v28`, and checked the same day against `master` with PLAN-V27 joined (`b52190b`). Approved on 25 Nov ("implement v28"), and being built: S0, Part 1 and Part 2 are done, but for T2-4's look.
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
 - **Last updated:** 25 Nov 2026.
-- **Progress:** Before the build: 1 of 3 (S0; S1 and S2 wait on Al-khair and Levi). Parts 1 to 5: 6 of 21 (Part 1). M1 to M4: 0 of 4.
+- **Progress:** Before the build: 1 of 3 (S0; S1 and S2 wait on Al-khair and Levi). Parts 1 to 5: 10 of 21 (Part 1, and Part 2 but T2-4, which waits for Al-khair's look). M1 to M4: 0 of 4.
 - **Sources:**
   - Al-khair's chat on 25 Nov: his Google account, a test key with about US$5, "the implementation must be superb", and a branch of its own while PLAN-V27 merges;
   - the approval paper `documents/voice/VOICE.pdf` (version 3, 24 Nov), still waiting for Levi's four ticks;
@@ -203,7 +203,7 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
 
 ## Part 1: the server side
 
-- [x] **T1-1. Settings and the switches.** Done 25 Nov (`52c3f05`; the screens come with Part 2). (`core/config.py`, the settings list, `core/auth/models.py`, `core/api/people.py`, `MeOut` in `core/api/auth.py`, Edit person.) Choices 16 to 18.
+- [x] **T1-1. Settings and the switches.** Done 25 Nov (`52c3f05`; Edit person's switch `e2d4e32`; `live_voice` in the sign-in answer too, `a0f14cf`). (`core/config.py`, the settings list, `core/auth/models.py`, `core/api/people.py`, `MeOut` in `core/api/auth.py`, Edit person.) Choices 16 to 18.
   - `.env`: `GEMINI_API_KEY` (a secret), `LIVE_VOICE_OK` and `LIVE_VOICE_NAMES_OK` (exact `true` or `false`, off), `LIVE_VOICE_MODEL` (`gemini-3.8-live`), `LIVE_VOICE_SERVICE` (`gemini_api`, or `agent_platform` with `LIVE_VOICE_PROJECT` and `LIVE_VOICE_LOCATION`), and `HARD_LIVE_VOICE_MONTH_CAP_USD` (5).
   - The Settings page: `live_voice_month_cap_usd` (4, up to the ceiling).
   - Each person: `live_voice` (off), set only by the Platform admin. `MeOut` (`GET /api/v1/auth/me`) gains `live_voice`: true only when the person's switch, `LIVE_VOICE_OK` and the key are all on.
@@ -228,7 +228,7 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
   - **Our backend restarts** (a deploy): the browser reconnects with the talk's id within 30 s. A `dropped` row, or an `open` one no relay holds, opens again for its owner, and the relay resumes from the handle.
   - Pings every 20 s on both sockets, so nothing quiet gets closed.
   - **Done when:** tests pass: a `goAway` mid-talk moves to a new connection with the last handle, and no sound is lost; two drops in a row still resume; and a third ends the talk with its line.
-- [x] **T1-5. The meter and the limit.** Done 25 Nov (`3d86140`; the Admin line's screen comes with Part 2). (`live_voice/meter.py` and `pricing.py`, and the Admin settings line.) Choices 18, 19 and 21.
+- [x] **T1-5. The meter and the limit.** Done 25 Nov (`3d86140`; its line on Settings, under the limit, `1cc2842`). (`live_voice/meter.py` and `pricing.py`, and the Admin settings line.) Choices 18, 19 and 21.
   - Each `usageMetadata` adds to the row's counts, per turn or as running totals (as S1 found). The row is written every 30 s and at the end.
   - The month's total is checked at the start and after each count. At the limit, Gemini finishes its sentence, then the talk ends with "this month's limit is reached", and the free mic takes over.
   - The Admin settings line (Platform admin): "Live voice this month: 42 minutes, about US$0.51 of US$4.00."
@@ -239,26 +239,26 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
 
 ## Part 2: sound in the browser
 
-- [ ] **T2-1. Sound in.** (New in `assistant/voice/live/`: `capture.worklet.ts` and `gate.ts`.) Choices 11, 13 and 14.
+- [x] **T2-1. Sound in.** Done 25 Nov (`b1e80bb`). (New in `assistant/voice/live/`: `capture.worklet.ts` and `gate.ts`.) Choices 11, 13 and 14.
   - The mic opens as `MicSession` opens it today: echo cancellation, noise suppression, automatic gain, and the headset.
   - A new worklet turns the device's sound (44.1 or 48 kHz) into 16 kHz, 16-bit pieces of 20 ms. A filter first stops high sounds folding into speech.
   - The silence gate (choice 13). Its threshold follows the room's noise.
   - **Done when:** tests pass: a 1 kHz tone at 48 kHz comes out at 1 kHz at 16 kHz; each 20 ms piece is 640 bytes; speech after a silence keeps its 0.5 s from before; and 2 s of silence send one "pause".
-- [ ] **T2-2. Sound out.** (New: `live/playback.worklet.ts` and `player.ts`.) Choices 11 and 12.
+- [x] **T2-2. Sound out.** Done 25 Nov (`3b139d7`). (New: `live/playback.worklet.ts` and `player.ts`.) Choices 11 and 12.
   - Plays Gemini's 24 kHz sound through a small buffer, at the device's rate.
   - On `interrupted`, it stops at once and empties the buffer (barge-in). When the gate hears the rep start, the Assistant's voice drops to a third straight away, then stops on `interrupted`, or comes back if Google talks on (TBC at T5-2).
   - It says when it's speaking, for the pill. On an iPhone, sound may start only after a tap, so the mic button's tap starts it (Safari's rule).
   - **Done when:** tests pass: sound plays in order; `interrupted` empties it within one 20 ms piece; and "speaking" ends when the buffer is empty.
-- [ ] **T2-3. The engine choice.** (`call-notes/mic/voice-engine.ts`, `assistant/voice/bar-session.ts`, `vite.config.ts`, the content policy.) Choices 16 and 25.
+- [x] **T2-3. The engine choice.** Done 25 Nov (`90e5de6`; no change to the content policy, see the Log). (`call-notes/mic/voice-engine.ts`, `assistant/voice/bar-session.ts`, `vite.config.ts`, the content policy.) Choices 16 and 25.
   - A new engine, `live`, comes first when `MeOut.live_voice` is true and the browser has an AudioWorklet and WebSockets. Otherwise today's choice, unchanged.
   - A refused start (T1-2's answers) or a failed connection falls back at once (Part 4).
   - The dev proxy for `/api` gets `ws: true`. The content policy's `connect-src 'self'` must let Safari open the socket (TBC: some Safari versions didn't count `wss:` as `'self'`; if so, the live address goes in `index.html` and `deploy/Caddyfile`, and `csp.test.ts` follows).
   - **Done when:** tests pass for each browser in `voice-engine.test.ts`, with and without `live_voice`, and today's choices are unchanged without it.
-- [ ] **T2-4. The pill and the captions.** (`assistant/voice/pill.tsx`, `live/`.) "Words on screen".
+- [ ] **T2-4. The pill and the captions.** Built 25 Nov (`b8b6d18`): tests and the design checks pass; waits for Al-khair's look (see the Log). (`assistant/voice/pill.tsx`, `live/`.) "Words on screen".
   - The states: Connecting, Listening, Working it out (a tool call), Speaking, Reconnecting and Muted. Captions as in "Words on screen". They help in a loud room, and anyone who can't hear well.
   - Stop (V or Esc) and Mute, as today. The pill's state is read out politely to screen readers.
   - **Done when:** tests at 1440 and 390 px pass, the `design-review` skill passes, and Al-khair has looked.
-- [ ] **T2-5. Part 2 check.** Website: lint, types, tests, build, and `node scripts/bundle-report.js`. The first visit stays the same size, within 1 kB: the live code loads with the bar, late.
+- [x] **T2-5. Part 2 check.** Done 25 Nov (`0b26eb9`). Website: lint, types, tests, build, and `node scripts/bundle-report.js`. The first visit stays the same size, within 1 kB: the live code loads with the bar, late.
   - **Done when:** all pass, and the numbers are in the Log.
 
 ## Part 3: the link to Claude and the card
@@ -365,3 +365,10 @@ As [PLAN-V24](PLAN-V24.md)'s "How to work this plan", with these changes:
   - **For Levi (L2):** with live voice on, names still reach Google inside a talk (the rep's words, and Claude's questions like "Jo Sample or Jo Northwind?"). `LIVE_VOICE_NAMES_OK` only gates the hint list.
   - **TBC, for S1:** the Agent Platform's key header; `customVocabulary` as a list of words; `scheduling` inside `response`; usage counts per message or running totals (`LIVE_VOICE_USAGE_TOTALS`, off); text prices (the audio prices until then); and whether a resumed setup may carry new names.
   - **Found while checking it:** a quick log (PLAN-V25 T3-3) sends itself after its 5-second hold. In live voice, the command step reads Gemini's request, so a quick log would send on Gemini's words. Choice 7 and T3-2 now say its card opens instead (TBC at T5-2 with Al-khair).
+- 25 Nov 2026: Part 2 done, in 7 commits (`b1e80bb` to `0b26eb9`), with the screens Part 1 left. Not seen in a browser yet.
+  - **Checks:** lint, types and the build pass. 3,441 website tests pass in 218 files (3,263 at S0). The first visit grew 92 bytes gzip (249,841 to 249,933, 41 files; the CSS is unchanged). The bar's own file grew 6.9 kB gzip, loaded with the bar. The two worklets are files of their own (2.7 and 4.8 kB), loaded only when a talk starts.
+  - **Sound:** a windowed-sinc filter (Blackman, cut-off 7 kHz, more than 70 dB down past 8 kHz) and the change of rate in one pass. Tests: a 1 kHz tone at 48 and 44.1 kHz comes out at 1 kHz, and 12 and 9 kHz don't fold back. The player starts after 120 ms of sound, empties within 5 ms on `interrupted`, and fades over 20 ms when it drops to a third.
+  - **The seam:** the voice bar's session picks its voice source at each start: a live talk (`live/talk.ts`), or today's `MicSession`, unchanged. A live talk is always a conversation, so the card's ear, turns in order, the quiet stop and the wake lock work as they are. A card that opens during a talk opens no mic (tested).
+  - **The content policy is unchanged:** `connect-src 'self'` covers our own `wss:` in Chrome, Edge, Firefox and Safari 16 or later. An older Safari refuses the socket, and the free mic takes over (Part 4).
+  - **The sign-in answer** (`LoginOut`) now says `live_voice` too, so the website knows at once after an in-app sign-in (`a0f14cf`; the website reads it in Part 3).
+  - **For Al-khair's look (T2-4), TBC:** the bar and the pill at 1440, 1280 and 390 px, light and dark; Mute as an icon with a tooltip, so the state's word fits at 390 px; the captions' names "You" and "Assistant"; Edit person's hint; the month line under the limit on Settings; and live voice first even where the browser's model is picked. The gate's numbers (a floor of 0.006 at 3 times the room's noise; 0.03 and 6 times while the Assistant speaks) wait for T5-2.
