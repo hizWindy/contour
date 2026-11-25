@@ -8,16 +8,34 @@
  *
  * Hold V (PLAN-V23 choice 6): the V that opened the bar is marked down until it comes up, so the
  * bar, whose code may load after the key went down, knows whether it is still held.
+ *
+ * Live voice (PLAN-V28 T2-2): on an iPhone, sound starts only inside the tap or key press that
+ * asked for it. So the bar's code, once loaded, hands in what to run as the bar opens
+ * (`whenBarOpens`), and it runs right there, inside the V key press or the Speak tap.
  */
 import { useSyncExternalStore } from 'react'
 
 let open = false
 let wanted = false
 let held = false
+let opening: (() => void) | null = null
 const listeners = new Set<() => void>()
 
 function tell(): void {
   for (const listener of listeners) listener()
+}
+
+/** Runs `run` inside the key press or tap that opens the bar, from now on. Null: nothing. */
+export function whenBarOpens(run: (() => void) | null): void {
+  opening = run
+}
+
+function opened(): void {
+  try {
+    opening?.()
+  } catch {
+    // No sound is no harm: the bar opens either way.
+  }
 }
 
 function subscribe(listener: () => void): () => void {
@@ -32,6 +50,7 @@ export function openVoiceBar(): void {
   if (open) return
   open = true
   held = false
+  opened()
   tell()
 }
 
@@ -40,6 +59,7 @@ export function openVoiceBarByKey(): void {
   if (open) return
   open = true
   held = true
+  opened()
   tell()
 }
 

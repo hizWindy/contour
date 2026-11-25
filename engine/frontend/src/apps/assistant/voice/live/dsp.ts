@@ -1,6 +1,6 @@
 /**
- * Live voice's sound, as plain code (PLAN-V28 T2-1, choice 11). The capture worklet wraps it, so
- * the tests prove it in Node, with no browser.
+ * Live voice's sound, as plain code (PLAN-V28 T2-1, T2-2, choice 11). The two worklets wrap it,
+ * so the tests prove it in Node, with no browser.
  *
  * **Sound in** (`CaptureCore`): the mic's sound at the device's own rate (44.1 or 48 kHz: asking
  * the browser for 16 kHz fails in Firefox) becomes 16 kHz, 16-bit, little-endian pieces of exactly
@@ -15,6 +15,18 @@
  *   2.75625 samples each time. It is the filter and the move in one pass, with no second
  *   interpolation to add its own noise. The `Resampler` in `on-device/turns.ts` only averages
  *   blocks, so it isn't used here.
+ *
+ * **Sound out** (`PlaybackCore`): Gemini's 24 kHz sound plays through a small buffer.
+ *
+ * - **It starts once about 120 ms are in** (TBC), or once the sound has paused that long, or at
+ *   the end of Gemini's turn, so a short "Sure." still plays.
+ * - **On `interrupted` it empties** within one 20 ms piece: the next 5 ms fade out, the rest goes.
+ * - **The voice drops to a third** while the rep starts to talk over it, and comes back, each over
+ *   20 ms, so it never clicks (TBC at T5-2).
+ * - **"Speaking" ends when the buffer is empty:** at once after Gemini's turn ended or a flush;
+ *   mid-turn, after 200 ms of nothing (TBC), so a late piece doesn't make the pill flicker.
+ * - At a device rate other than 24 kHz (a browser that refused a 24 kHz context), the same
+ *   `Resampler` changes the rate first.
  *
  * Nothing here keeps or sends sound: the pieces go where the caller sends them.
  */
@@ -224,5 +236,201 @@ export class CaptureCore {
 
   push(sound: Float32Array): Frame[] {
     return this.framer.push(this.resampler.push(sound))
+  }
+}
+
+// --- Sound out ------------------------------------------------------------------------------------
+
+/** The player's numbers (all TBC at T5-2). */
+export const PLAYBACK = {
+  /** Sound buffered before it starts to play: enough for a late piece, short enough to answer fast. */
+  startMs: 120,
+  /** A flush fades this long, inside one 20 ms piece, so it never clicks. */
+  fadeMs: 5,
+  /** While the rep starts to talk over it: a third. */
+  duckGain: 1 / 3,
+  /** Down to a third, or back, over this long. */
+  duckMs: 20,
+  /** Mid-turn, the buffer empty this long ends "speaking". */
+  graceMs: 200,
+} as const
+
+/** What the player says as it changes: it started speaking, or it went quiet. */
+export type PlaybackChange = 'speaking' | 'quiet'
+
+/** What the page sends the playback worklet. `sound` is 16-bit little-endian PCM at 24 kHz. */
+export type ToPlayer =
+  | { type: 'sound'; pcm: ArrayBuffer }
+  | { type: 'flush' }
+  | { type: 'duck'; on: boolean }
+  | { type: 'end' }
+
+/** What the playback worklet tells the page. */
+export interface FromPlayer {
+  type: PlaybackChange
+}
+
+export interface PlaybackOptions {
+  /** The rate it plays at: the audio context's. */
+  rate: number
+  /** The rate of the sound it is given. Left out: Gemini's 24 kHz. */
+  sourceRate?: number
+}
+
+/** The playback worklet's whole job: a small buffer, the flush, the duck and "speaking". */
+export class PlaybackCore {
+  private readonly resampler: Resampler | null
+  private readonly startSamples: number
+  private readonly fadeSamples: number
+  private readonly graceSamples: number
+  private readonly duckStep: number
+  /** The sound waiting to play, at the playing rate. */
+  private queue: Float32Array[] = []
+  private head = 0
+  private queued = 0
+  /** Sound is going out now (it had its start, and hasn't run dry since). */
+  private playing = false
+  /** What it says: from the first sound out until the buffer is empty (see the file's notes). */
+  private speaking = false
+  /** Gemini's turn ended: what is left plays out, however short, and the end is at once. */
+  private ended = false
+  /** A flush is fading out: samples left of it, of `fadeTotal`. */
+  private fadeLeft = 0
+  private fadeTotal = 0
+  /** Sound waited this long without playing, or ran dry this long mid-turn. */
+  private waited = 0
+  private dry = 0
+  private gain = 1
+  private target = 1
+
+  constructor({ rate, sourceRate = RATE_OUT }: PlaybackOptions) {
+    this.resampler =
+      rate === sourceRate
+        ? null
+        : new Resampler(sourceRate, rate, 0.45 * Math.min(sourceRate, rate))
+    this.startSamples = Math.round((rate * PLAYBACK.startMs) / 1000)
+    this.fadeSamples = Math.max(1, Math.round((rate * PLAYBACK.fadeMs) / 1000))
+    this.graceSamples = Math.round((rate * PLAYBACK.graceMs) / 1000)
+    this.duckStep = 1 / Math.max(1, Math.round((rate * PLAYBACK.duckMs) / 1000))
+  }
+
+  /** Sound in, at the source rate. A new piece after Gemini's turn ended starts its next turn. */
+  push(samples: Float32Array): void {
+    const sound = this.resampler ? this.resampler.push(samples) : samples
+    if (sound.length === 0) return
+    this.ended = false
+    this.queue.push(sound)
+    this.queued += sound.length
+  }
+
+  /** Gemini's turn ended: what is left plays out, even under the start's 120 ms. */
+  end(): void {
+    this.ended = true
+  }
+
+  /** `interrupted`: the next 5 ms fade out, the rest goes, and "speaking" ends with it. */
+  flush(): void {
+    this.fadeTotal = this.playing ? Math.min(this.fadeSamples, this.queued) : 0
+    this.fadeLeft = this.fadeTotal
+    this.keepOnly(this.fadeTotal)
+    this.ended = true
+    this.waited = 0
+    this.dry = 0
+  }
+
+  /** Down to a third (the rep started to talk over it), or back, over 20 ms. */
+  duck(on: boolean): void {
+    this.target = on ? PLAYBACK.duckGain : 1
+  }
+
+  /** How much is waiting to play, in samples at the playing rate. */
+  get buffered(): number {
+    return this.queued
+  }
+
+  get isSpeaking(): boolean {
+    return this.speaking
+  }
+
+  /** Fills one render quantum. Gives back a change of "speaking", or null. */
+  pull(out: Float32Array): PlaybackChange | null {
+    const before = this.speaking
+    if (
+      !this.playing &&
+      this.queued > 0 &&
+      (this.queued >= this.startSamples || this.ended || this.waited >= this.startSamples)
+    ) {
+      this.playing = true
+      this.waited = 0
+    }
+    let filled = 0
+    if (this.playing) {
+      while (filled < out.length && this.queued > 0) {
+        out[filled] = this.next() * this.nextGain() * this.nextFade()
+        filled += 1
+      }
+    }
+    out.fill(0, filled)
+    if (filled > 0) {
+      this.speaking = true
+      this.dry = 0
+    }
+    if (!this.playing && this.queued > 0) this.waited += out.length
+    if (this.playing && this.queued === 0) {
+      // Run dry: it waits for its start again, so a late piece doesn't play in bits.
+      this.playing = false
+      this.fadeLeft = 0
+      this.fadeTotal = 0
+      if (this.ended) this.speaking = false
+    }
+    if (!this.playing && this.queued === 0 && this.speaking && !this.ended) {
+      this.dry += out.length - filled
+      if (this.dry >= this.graceSamples) this.speaking = false
+    }
+    if (this.queued === 0 && this.ended) this.speaking = false
+    return before === this.speaking ? null : this.speaking ? 'speaking' : 'quiet'
+  }
+
+  private next(): number {
+    const chunk = this.queue[0]
+    if (!chunk) return 0
+    const sample = chunk[this.head] ?? 0
+    this.head += 1
+    this.queued -= 1
+    if (this.head >= chunk.length) {
+      this.queue.shift()
+      this.head = 0
+    }
+    return sample
+  }
+
+  private nextGain(): number {
+    if (this.gain < this.target) this.gain = Math.min(this.target, this.gain + this.duckStep)
+    else if (this.gain > this.target) this.gain = Math.max(this.target, this.gain - this.duckStep)
+    return this.gain
+  }
+
+  private nextFade(): number {
+    if (this.fadeTotal === 0) return 1
+    const left = this.fadeLeft
+    this.fadeLeft = Math.max(0, left - 1)
+    return left / this.fadeTotal
+  }
+
+  /** Keeps the next `count` samples and lets the rest go. */
+  private keepOnly(count: number): void {
+    const kept: Float32Array[] = []
+    let need = count
+    let head = this.head
+    for (const chunk of this.queue) {
+      if (need <= 0) break
+      const take = Math.min(need, chunk.length - head)
+      kept.push(chunk.subarray(head, head + take))
+      need -= take
+      head = 0
+    }
+    this.queue = kept
+    this.head = 0
+    this.queued = count - Math.max(0, need)
   }
 }
