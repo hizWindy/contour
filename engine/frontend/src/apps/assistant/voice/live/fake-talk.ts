@@ -64,6 +64,7 @@ export class FakeTalk implements Talk {
 
   answer(answer: ToolAnswer): void {
     this.answers.push(answer)
+    this.set({ working: Math.max(0, this.snapshot.working - 1) })
   }
 
   text(): string {
@@ -71,7 +72,41 @@ export class FakeTalk implements Talk {
     return [rep, hearing].filter((part) => part !== '').join(' ')
   }
 
+  unsent(): string {
+    return this.left
+  }
+
+  /** The rep's words no tool call took yet (`leave`): they go to the text line (T4-1). */
+  private left = ''
+
   // --- The test's own moves ------------------------------------------------------------------------
+
+  /** The rep said words no tool call took yet. */
+  leave(words: string): void {
+    this.left = words
+  }
+
+  /** Gemini asks Contour, with the rep's own words since the last call (PLAN-V28 T3-1). */
+  call(id: string, request: string, heard = ''): void {
+    this.set({ working: this.snapshot.working + 1 })
+    this.options.onToolCall?.({ id, request, heard })
+  }
+
+  /** Google cancelled tool calls (T3-3). */
+  cancel(...ids: string[]): void {
+    this.set({ working: Math.max(0, this.snapshot.working - ids.length) })
+    this.options.onToolCancel?.(ids)
+  }
+
+  /** The rep's whole turn is over (T3-4). */
+  turn(words: string): void {
+    this.options.onRepTurn?.(words)
+  }
+
+  /** The answers given, by tool call id. */
+  answerTo(id: string): ToolAnswer | undefined {
+    return this.answers.find((answer) => answer.id === id)
+  }
 
   set(change: Partial<TalkSnapshot>): void {
     this.snapshot = { ...this.snapshot, ...change }

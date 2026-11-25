@@ -93,6 +93,7 @@ import {
 } from 'react'
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router'
+import { toast } from 'sonner'
 import { readCommand } from '@/api/hooks/assistant'
 import { namesQueryOptions } from '@/api/hooks/assistant-names'
 import { useCallNoteOptions } from '@/api/hooks/call-note-counts'
@@ -524,11 +525,20 @@ export default function VoiceBar({
           names: fixNamesOf(shown.names, list),
           hints: hintsOf(shown.names, list),
           read,
-          hand: (heard) =>
+          hand: (heard, said) =>
             handOver(heard, {
               go: (to) => {
                 void navigate(to)
               },
+              // Live voice says back the line a page opens with (PLAN-V28 T3-1); the toast too.
+              ...(said
+                ? {
+                    tell: (line: string) => {
+                      toast(line)
+                      said(line)
+                    },
+                  }
+                : {}),
               // With the AI off, the words open Log call for a rep who logs calls (choice 17).
               // Read as the answer comes: the switches may load after the bar opened.
               dictate: (words, source) => {

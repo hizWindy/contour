@@ -143,6 +143,25 @@ export async function pickNoteCompany(
 
 // --- After the hold -------------------------------------------------------------------------------
 
+/**
+ * How a send went, for live voice to say back (PLAN-V28 T3-2): "Sent." only once it worked. The
+ * toasts say the same, as before.
+ */
+export type SendOutcome =
+  /** The card's Send worked. */
+  | { kind: 'sent' }
+  /** It didn't go: the card's own error line. */
+  | { kind: 'not_sent'; line: string }
+  /** Undo was pressed in the hold: nothing went. */
+  | { kind: 'undone' }
+
+const SENT_OUTCOME: SendOutcome = { kind: 'sent' }
+
+/** A send that didn't go, in the card's own words: "Not sent." and why. */
+export function notSentOutcome(detail: string | null | undefined): SendOutcome {
+  return { kind: 'not_sent', line: [`${NOT_SENT}.`, detail ?? ''].join(' ').trim() }
+}
+
 export interface SendTools {
   client: QueryClient
   /** Melbourne's day, for reading a task's "When". */
@@ -190,14 +209,15 @@ function callNotSent(why: string, tools: SendTools): void {
   })
 }
 
-async function sendCall(draft: CallDraft, tools: SendTools): Promise<void> {
+async function sendCall(draft: CallDraft, tools: SendTools): Promise<SendOutcome> {
   const id = draft.noteId
-  if (id === null) return
+  if (id === null) return notSentOutcome(null)
   const saved = tools.client.getQueryData<CallNoteOut>(queryKeys.companies.callNote(id))
   if (saved?.status === 'needs_company') {
     // Never to HubSpot before its company (choice 18). The card's Send stops before this.
-    callNotSent(needsCompanySendWords(1), tools)
-    return
+    const why = needsCompanySendWords(1)
+    callNotSent(why, tools)
+    return notSentOutcome(why)
   }
   const answer: CallNoteConfirm = unwrap(
     await api.POST('/companies/call-notes/confirm', { body: { ids: [id] } }),
@@ -207,7 +227,7 @@ async function sendCall(draft: CallDraft, tools: SendTools): Promise<void> {
   const skipped = answer.skipped?.find((one) => one.id === id)
   if (skipped) {
     callNotSent(skipped.why, tools)
-    return
+    return notSentOutcome(skipped.why)
   }
   // Saved before its company, the call taught the mic as it was picked (PLAN-V24 T3-1).
   if (!saved?.company_heard) teach(draft)
@@ -219,18 +239,21 @@ async function sendCall(draft: CallDraft, tools: SendTools): Promise<void> {
       },
     },
   })
+  return SENT_OUTCOME
 }
 
-/** The one send, after the hold. Every failure keeps the draft and says why. */
-export async function sendDraft(draft: CardDraft, tools: SendTools): Promise<void> {
+/**
+ * The one send, after the hold. Every failure keeps the draft and says why. It says how it went
+ * too (`SendOutcome`), for live voice's answer to Gemini.
+ */
+export async function sendDraft(draft: CardDraft, tools: SendTools): Promise<SendOutcome> {
   try {
     switch (draft.action) {
       case 'log_call':
-        await sendCall(draft, tools)
-        return
+        return await sendCall(draft, tools)
       case 'task': {
         const body = taskBodyOf(draft, tools.today)
-        if (!body) return
+        if (!body) return notSentOutcome(null)
         const write = unwrap(
           await api.POST('/companies/assistant/tasks', {
             body,
@@ -241,15 +264,16 @@ export async function sendDraft(draft: CardDraft, tools: SendTools): Promise<voi
           dropCardDraft(draft.by, draft.key)
           teach(draft)
           toast.success(TASK_ADDED)
-          return
+          return SENT_OUTCOME
         }
         const step = write.steps.find((one) => one.status !== 'done')
-        notSent(draft, step?.detail ?? write.error ?? null, tools)
-        return
+        const detail = step?.detail ?? write.error ?? null
+        notSent(draft, detail, tools)
+        return notSentOutcome(detail)
       }
       case 'email': {
         const body = emailBodyOf(draft)
-        if (!body) return
+        if (!body) return notSentOutcome(null)
         const sent = unwrap(
           await api.POST('/companies/assistant/email', {
             body,
@@ -258,14 +282,15 @@ export async function sendDraft(draft: CardDraft, tools: SendTools): Promise<voi
         )
         dropCardDraft(draft.by, draft.key)
         toast.success(emailSent(sent.people.length))
-        return
+        return SENT_OUTCOME
       }
     }
   } catch (error) {
+    const detail = problemDetail(error)
     if (draft.action === 'log_call') {
       // The note is safe in Call logs: only the send didn't start.
       toast.error(NOT_SENT, {
-        description: problemDetail(error) ?? undefined,
+        description: detail ?? undefined,
         action: {
           label: OPEN_CALL_LOGS,
           onClick: () => {
@@ -273,8 +298,9 @@ export async function sendDraft(draft: CardDraft, tools: SendTools): Promise<voi
           },
         },
       })
-      return
+      return notSentOutcome(detail)
     }
-    notSent(draft, problemDetail(error), tools)
+    notSent(draft, detail, tools)
+    return notSentOutcome(detail)
   }
 }

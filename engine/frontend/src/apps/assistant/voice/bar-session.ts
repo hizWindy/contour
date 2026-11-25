@@ -70,6 +70,21 @@
  * the turns. A start refused, or a socket that never reached `ready`, falls back at once to the free
  * engine (Part 4 says why). Each end closes the relay with `stop`. Part 3 turns a tool call into a
  * turn of the same pipeline.
+ *
+ * PLAN-V28 Part 3, **a tool call is a turn** (`toolCall`, `live/bridge.ts`):
+ *
+ * - **It joins the turns, in order:** a card on its way holds it, and an open card's ear reads it
+ *   first. The ear reads the rep's own words as Google heard them since the last tool call, never
+ *   Gemini's request (choice 7): only they send, cancel, keep for later or start a research. The
+ *   command step reads Gemini's request (choice 8), as the free mic sends its words.
+ * - **Gemini's words never send or cancel** (choice 7): an answer of `send` or `cancel` to an open
+ *   card does nothing, and the tool answer asks the rep to say it. A quick log opens its card.
+ * - **Every turn answers its tool call once** (`replyFor`): the card's "Ready. Say send it.",
+ *   Claude's question, a page's line, the research card's question with its cost, the read-back,
+ *   or a problem's plain words. "Sent." waits for the card's real Send, after its hold. A failed
+ *   turn answers with its words, and the talk goes on.
+ * - **A tool call Google cancels** stops its command request, and a late answer opens nothing.
+ * - **"That's all"** as the rep's whole turn ends the talk (`repTurn`, T3-4).
  */
 import { isAbort, toApiProblem } from '@/api/client'
 import type {
@@ -92,8 +107,17 @@ import { pickBarEngine } from '@/apps/companies/call-notes/mic/voice-engine'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import type { MicProblem } from '@/apps/companies/call-notes/mic/words'
 import type { AfterAnswer, Heard } from './hand-over'
-import type { MakeTalk, Talk, TalkSnapshot } from './live/talk'
-import { LIVE_DROPPED } from './live/words'
+import {
+  CARD_GONE_REPLY,
+  commandText,
+  heldBack,
+  ok,
+  replyFor,
+  replyForProblem,
+  type Reply,
+} from './live/bridge'
+import type { MakeTalk, Talk, TalkSnapshot, ToolCall } from './live/talk'
+import { LIVE_DROPPED, NOT_DONE, READY } from './live/words'
 import { pauseFor } from './pauses'
 import { browserScreen, type KeptOn, type ScreenEnv } from './screen'
 import type { Tone } from './tone'
@@ -162,8 +186,8 @@ export type BarProblem =
   /** A phone left the page (locked, or another app in front): the words so far are kept (T2-5). */
   | { kind: 'left' }
   /**
-   * A live talk ended after it began (PLAN-V28): the relay's own line, like "Live voice stopped:
-   * nothing was heard for a while. Press V to start again." (Part 4 refines what follows).
+   * A live talk ended after it began (PLAN-V28), with no free mic to follow: the relay's own line,
+   * like "Live voice stopped: nothing was heard for a while. Press V to start again."
    */
   | { kind: 'live'; line: string }
 
@@ -215,6 +239,12 @@ export type CardShown = 'hears' | 'other' | null
 /** What the card says back to a turn it read itself: a line ("Sent."), or none. */
 export interface CardTook {
   line: string | null
+  /**
+   * The answer to the tool call the turn came from, in live voice (PLAN-V28 T3-2): what the card
+   * did, said back. A promise for what takes time: "Sent." only once the card's Send has worked,
+   * after its hold. Left out: "Ready. Say send it."
+   */
+  reply?: Reply | Promise<Reply>
 }
 
 /** A review card open in the conversation (T2-3): it hears each turn first. */
@@ -228,6 +258,12 @@ export interface CardEar {
   card: () => AssistantCardIn
   /** The command step's answer to a turn said to the card: a change, a send, a new command. */
   answer: (heard: Heard) => AfterAnswer | Promise<AfterAnswer>
+  /**
+   * The card answers every turn itself and never asks the command step (the research card): a
+   * live tool call with none of the rep's words still goes to it (PLAN-V28 choice 7), so Gemini's
+   * words alone never reach it. Left out: such a call goes to the command step.
+   */
+  every?: boolean
 }
 
 export interface BarSessionOptions {
@@ -246,9 +282,10 @@ export interface BarSessionOptions {
   read: (body: AssistantCommandIn, signal: AbortSignal) => Promise<AssistantCommand>
   /**
    * Where an answer goes (`handOver`, or the review card's own). A promise keeps "Working it out"
-   * on until it settles, like a pre-read that has to start first.
+   * on until it settles, like a pre-read that has to start first. `said`: hears the line a page
+   * opens with (`handOver`'s `tell`), for live voice to say back (PLAN-V28 T3-1).
    */
-  hand: (heard: Heard) => AfterAnswer | Promise<AfterAnswer>
+  hand: (heard: Heard, said?: (line: string) => void) => AfterAnswer | Promise<AfterAnswer>
   /**
    * The review card that is open, while the rep speaks a change to it (T3-3): its action and the
    * names of its boxes go with the words, so the command step answers change, send or cancel.
@@ -318,10 +355,21 @@ type Listener = () => void
 /** The V that started listening: not down, down for less than the hold, or held. */
 type Hold = 'none' | 'down' | 'held'
 
+/** A live talk's tool call, carried by its turn (PLAN-V28 T3-1). */
+interface LiveCall {
+  id: string
+  /** The rep's own words since the last tool call: what the card's ear reads (choice 7). */
+  heard: string
+  /** Answers the tool call, once; later answers are dropped. */
+  reply: (reply: Reply) => void
+}
+
 /** A turn of a conversation, or a command typed while its turns are still worked out. */
 interface Turn {
   text: string
   source: CommandSource
+  /** A live talk's tool call (PLAN-V28): its turn answers it. */
+  call?: LiveCall
 }
 
 /** A turn's words as a sentence of its own: it ends on a full stop, or the mark it had. */
@@ -340,6 +388,25 @@ function withLater(failed: string, later: readonly Turn[]): string {
     .map((turn) => turn.text.trim())
     .filter((text) => text !== '')
   return said.length === 0 ? failed : [failed, ...said].map(asSentence).join(' ')
+}
+
+/**
+ * Answers a tool call with what a card did (PLAN-V28 T3-2): at once, or once it is known, like a
+ * send after its 5-second hold. A promise that fails is said as not done.
+ */
+function answerWith(call: LiveCall, reply: Reply | Promise<Reply>): void {
+  if (!(reply instanceof Promise)) {
+    call.reply(reply)
+    return
+  }
+  reply.then(
+    (known) => {
+      call.reply(known)
+    },
+    () => {
+      call.reply({ status: 'error', retryable: true, message: NOT_DONE })
+    },
+  )
 }
 
 /**
@@ -404,6 +471,8 @@ export class BarSession {
   /** A turn is with the command step, or its answer is still settling. */
   private busy = false
   private turnRequest: AbortController | null = null
+  /** The turn with the command step now: a tool call Google cancels stops it (PLAN-V28 T3-3). */
+  private current: Turn | null = null
   private drain: Drain = 'shown'
   /** The last words the command step found unclear: Type instead offers them. */
   private lastUnclear = ''
@@ -619,7 +688,19 @@ export class BarSession {
     this.stopListening()
     this.abortRequest()
     const onPage = this.where ? this.where() : this.onPage
-    const talk = liveVoice.talk({ companyKey: onPage?.company_key ?? null })
+    const talk = liveVoice.talk({
+      companyKey: onPage?.company_key ?? null,
+      // Part 3: each tool call is a turn, its cancel stops it, and the rep's whole turn is read.
+      onToolCall: (call) => {
+        if (talk === this.talk) this.toolCall(talk, call)
+      },
+      onToolCancel: (ids) => {
+        if (talk === this.talk) this.toolCancel(ids)
+      },
+      onRepTurn: (words) => {
+        if (talk === this.talk) this.repTurn(words)
+      },
+    })
     this.talk = talk
     this.talkWords = 0
     this.heardWords = ''
@@ -696,6 +777,59 @@ export class BarSession {
       problem: { kind: 'live', line },
       conversation: null,
     })
+  }
+
+  // --- A tool call is a turn (PLAN-V28 Part 3) ---------------------------------------------------
+
+  /**
+   * A tool call from the talk (T3-1): a turn of the conversation, in order. Its words for the card's
+   * ear are the rep's own; the command step gets Gemini's request (choice 8).
+   */
+  private toolCall(talk: Talk, call: ToolCall): void {
+    if (this.over) return
+    let answered = false
+    this.take({
+      text: commandText(call.request, call.heard),
+      source: 'mic',
+      call: {
+        id: call.id,
+        heard: call.heard,
+        reply: (reply) => {
+          if (answered) return
+          answered = true
+          talk.answer({ id: call.id, ...reply })
+        },
+      },
+    })
+  }
+
+  /**
+   * Google cancelled tool calls (T3-3): the rep talked over them, or 20 seconds passed. A call
+   * still waiting goes no further; the one with the command step stops its request, and its late
+   * answer opens nothing. Neither is answered.
+   */
+  private toolCancel(ids: readonly string[]): void {
+    const gone = new Set(ids)
+    this.queue = this.queue.filter((turn) => !(turn.call && gone.has(turn.call.id)))
+    this.setConversation({ waiting: this.queue.length })
+    const now = this.current
+    if (now?.call && gone.has(now.call.id)) {
+      now.call.reply = () => undefined
+      this.turnRequest?.abort()
+      this.turnRequest = null
+      this.current = null
+      this.busy = false
+      this.setConversation({ working: null })
+      this.next()
+    }
+  }
+
+  /**
+   * The rep's whole turn, once over (T3-4): "stop listening" or "that's all" ends the talk. It was
+   * said, so the bar closes, as it does after the free mic's "that's all".
+   */
+  private repTurn(words: string): void {
+    if (this.live && endsConversation(words)) this.stopConversation(true)
   }
 
   /** Mute in a live talk (T2-4): no sound goes, and the talk goes on. */
@@ -867,6 +1001,7 @@ export class BarSession {
     this.busy = false
     this.turnRequest?.abort()
     this.turnRequest = null
+    this.current = null
     this.ear = null
     this.waitingForCard = false
   }
@@ -1134,11 +1269,15 @@ export class BarSession {
     this.take({ text: text.trim(), source: 'mic' })
   }
 
-  /** A turn is said: the code reads the end words itself, and the rest waits its turn. */
+  /**
+   * A turn is said: the code reads the end words itself, and the rest waits its turn. A tool
+   * call's text is Gemini's request: the rep's own whole turn is read for the end words instead
+   * (`repTurn`).
+   */
   private take(turn: Turn): void {
     if (turn.text === '') return
     this.setConversation({ turns: (this.snapshot.conversation?.turns ?? 0) + 1 })
-    if (endsConversation(turn.text)) {
+    if (!turn.call && endsConversation(turn.text)) {
       // "Stop listening", "that's all": nothing is sent, and the mic stops at once (choice 10).
       if (this.live) this.stopConversation()
       return
@@ -1297,18 +1436,28 @@ export class BarSession {
     }
     this.setConversation({ waiting: this.queue.length })
     const ear = turn.source === 'mic' ? this.hearing() : null
-    const took = ear?.take(turn.text) ?? null
+    const call = turn.call ?? null
+    // The ear reads the rep's own words (choice 7): a tool call's are Google's transcript, never
+    // Gemini's request. With none heard, the request goes to the command step, but for a card that
+    // answers every turn itself (the research card), which asks its question again.
+    const took = call
+      ? ear && (call.heard.trim() !== '' || ear.every === true)
+        ? ear.take(call.heard)
+        : null
+      : (ear?.take(turn.text) ?? null)
     if (took) {
       this.setConversation({ line: took.line })
+      // The card says what it did: "Sent." only once its Send has worked, after the hold.
+      if (call) answerWith(call, took.reply ?? ok(READY))
       this.next()
       return
     }
-    if (turn.source === 'mic' && isShortTurn(turn.text)) {
+    if (!call && turn.source === 'mic' && isShortTurn(turn.text)) {
       // A cough or an "um" never asks the AI (choice 11).
       this.next()
       return
     }
-    if (turn.text.length > MAX_CHARS) {
+    if (!call && turn.text.length > MAX_CHARS) {
       this.tooLong(turn.text)
       this.next()
       return
@@ -1328,6 +1477,7 @@ export class BarSession {
   /** A turn goes to the command step, with what is on screen now, and the open card's boxes. */
   private ask(turn: Turn, ear: CardEar | null): void {
     this.busy = true
+    this.current = turn
     const request = new AbortController()
     this.turnRequest = request
     if (this.live) {
@@ -1348,7 +1498,11 @@ export class BarSession {
         if (this.turnRequest !== request || this.over) return
         this.turnRequest = null
         this.previousTurn = lastTurnOf(command) ?? this.previousTurn
-        this.turnAnswered({ kind: 'command', command, words: turn.text, source: turn.source }, ear)
+        this.turnAnswered(
+          { kind: 'command', command, words: turn.text, source: turn.source },
+          ear,
+          turn,
+        )
       },
       (error: unknown) => {
         if (this.turnRequest !== request || this.over || isAbort(error)) return
@@ -1358,14 +1512,50 @@ export class BarSession {
     )
   }
 
-  /** The answer goes to the card the turn was said to, or where one command's would. */
-  private turnAnswered(heard: Heard, ear: CardEar | null): void {
+  /**
+   * The answer goes to the card the turn was said to, or where one command's would. A tool call's
+   * turn (PLAN-V28 T3-1) is answered once it has gone there, with what it did (`replyFor`).
+   */
+  private turnAnswered(heard: Heard, ear: CardEar | null, turn: Turn | null = null): void {
+    const call = turn?.call ?? null
     if (ear !== null && this.hearing() !== ear) {
       // The card closed meanwhile: its change has nowhere to go.
+      call?.reply(CARD_GONE_REPLY)
       this.turnSettled({ kind: 'close' })
       return
     }
-    const after = ear ? ear.answer(heard) : this.hand(heard)
+    let given = heard
+    if (call && heard.kind === 'command') {
+      const { command } = heard
+      // Choice 7: Gemini's words alone never send or cancel an open card. The rep says it.
+      const held = ear ? heldBack(command) : null
+      if (held) {
+        call.reply(held)
+        this.turnSettled({ kind: 'show', line: held.message, unsure: null, again: false })
+        return
+      }
+      // Choice 7: a quick log opens its card, and waits for the rep's own "send it".
+      if (command.quick === true) given = { ...heard, command: { ...command, quick: false } }
+    }
+    let told: string | null = null
+    const after = ear
+      ? ear.answer(given)
+      : call
+        ? this.hand(given, (line) => {
+            told = line
+          })
+        : this.hand(given)
+    const answer = (settled: AfterAnswer): void => {
+      call?.reply(
+        replyFor({
+          heard: given,
+          after: settled,
+          card: this.cardOpen(),
+          told,
+          toCard: ear !== null,
+        }),
+      )
+    }
     if (after instanceof Promise) {
       // A pre-read starting first: the turns wait for it.
       const request = new AbortController()
@@ -1373,10 +1563,12 @@ export class BarSession {
       void after.then((settled) => {
         if (this.turnRequest !== request || this.over) return
         this.turnRequest = null
+        answer(settled)
         this.turnSettled(settled)
       })
       return
     }
+    answer(after)
     this.turnSettled(after)
   }
 
@@ -1387,6 +1579,7 @@ export class BarSession {
    */
   private turnSettled(after: AfterAnswer): void {
     this.busy = false
+    this.current = null
     if (this.live) {
       this.setConversation({ working: null })
       if (after.kind === 'close' && this.cardOpen() === 'other') {
@@ -1422,6 +1615,11 @@ export class BarSession {
    */
   private turnFailed(error: unknown, turn: Turn, ear: CardEar | null): void {
     this.busy = false
+    this.current = null
+    if (turn.call) {
+      this.liveTurnFailed(error, turn, turn.call, ear)
+      return
+    }
     if (!this.live && this.drain === 'quiet') {
       this.next()
       return
@@ -1442,6 +1640,27 @@ export class BarSession {
     }
     this.set({ phase: 'working', mic: null, words, conversation: null })
     this.failed(error, words, turn.source)
+  }
+
+  /**
+   * A tool call's turn the command step refused (PLAN-V28 T3-1): its plain words go back to Gemini,
+   * and show as the conversation's line, and the talk goes on. With the AI that reads commands off,
+   * the words are dictation, as with the free mic.
+   */
+  private liveTurnFailed(error: unknown, turn: Turn, call: LiveCall, ear: CardEar | null): void {
+    const problem = toApiProblem(error)
+    if (problem.status === 409 && problem.code === 'assistant_off') {
+      // Dictation keeps the rep's own words, as Google heard them, not Gemini's request.
+      this.busy = true
+      this.current = turn
+      const words = call.heard.trim() || turn.text
+      this.turnAnswered({ kind: 'dictation', words, source: turn.source }, ear, turn)
+      return
+    }
+    const reply = replyForProblem(problem)
+    call.reply(reply)
+    this.setConversation({ working: null, line: reply.message })
+    this.next()
   }
 
   // --- The command step -------------------------------------------------------------------------

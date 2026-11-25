@@ -17,7 +17,7 @@ import {
 import { MIC_KEY } from '@/apps/companies/call-notes/mic/devices'
 import { FRAME_BYTES, type Frame } from './dsp'
 import { FakeSockets } from './fake-relay'
-import { DUCK_MS, LiveTalk, type TalkEnv, type ToolCall } from './talk'
+import { CALL_WORDS_MS, DUCK_MS, LiveTalk, type Network, type TalkEnv, type ToolCall } from './talk'
 
 const PATH = '/api/v1/companies/assistant/voice/live?session=0b6f0000-0000-4000-8000-000000000001'
 
@@ -67,11 +67,34 @@ interface SetUp {
   begin?: () => Promise<VoiceSessionOut>
   /** No audio in this browser. */
   noAudio?: boolean
+  /** The browser is offline as it starts. */
+  offline?: boolean
 }
 
-function setUp({ mic: micOptions, begin, noAudio = false }: SetUp = {}) {
+/** The browser's network, as the test says: it can go offline, and online again. */
+function fakeNetwork(offline: boolean) {
+  const state = { online: !offline }
+  const listeners = new Set<() => void>()
+  const network: Network = {
+    online: () => state.online,
+    watch: (onChange) => {
+      listeners.add(onChange)
+      return () => {
+        listeners.delete(onChange)
+      }
+    },
+  }
+  const set = (online: boolean): void => {
+    state.online = online
+    for (const listener of [...listeners]) listener()
+  }
+  return { network, set, listeners }
+}
+
+function setUp({ mic: micOptions, begin, noAudio = false, offline = false }: SetUp = {}) {
   const mic = new FakeMic(micOptions)
   const sockets = new FakeSockets()
+  const net = fakeNetwork(offline)
   const audioClosed = { count: 0 }
   const player = {
     pushed: [] as ArrayBuffer[],
@@ -125,14 +148,17 @@ function setUp({ mic: micOptions, begin, noAudio = false }: SetUp = {}) {
       return begin ? begin() : Promise.resolve(SESSION)
     },
     relay: sockets.env(),
+    network: net.network,
   }
   const calls: ToolCall[] = []
   const cancels: string[][] = []
+  const turns: string[] = []
   const talk = new LiveTalk({
     companyKey: '201',
     env,
     onToolCall: (call) => calls.push(call),
     onToolCancel: (ids) => cancels.push([...ids]),
+    onRepTurn: (words) => turns.push(words),
   })
   const now = () => talk.getSnapshot()
   const frames = (count: number, level: number): void => {
@@ -148,6 +174,8 @@ function setUp({ mic: micOptions, begin, noAudio = false }: SetUp = {}) {
     begun,
     calls,
     cancels,
+    turns,
+    net,
     now,
     frames,
     speaking: (on: boolean) => {
@@ -379,7 +407,7 @@ describe('the captions (T2-4)', () => {
   })
 })
 
-describe('tool calls, for Part 3', () => {
+describe('tool calls (T3-1)', () => {
   it('is "working" until a tool call is answered, and answers each once', async () => {
     const set = await live()
     const socket = set.sockets.last()
@@ -387,6 +415,9 @@ describe('tool calls, for Part 3', () => {
     socket.say({ type: 'tool_call', id: 'call-1', request: 'Log a call with Jo Sample' })
 
     expect(set.now().working).toBe(1)
+    // It waits up to 0.5 s for the rep's words Google is still sending.
+    expect(set.calls).toEqual([])
+    await vi.advanceTimersByTimeAsync(CALL_WORDS_MS)
     expect(set.calls).toEqual([
       { id: 'call-1', request: 'Log a call with Jo Sample', heard: 'Log a call with Jo' },
     ])
@@ -414,12 +445,173 @@ describe('tool calls, for Part 3', () => {
     const set = await live()
     const socket = set.sockets.last()
     socket.say({ type: 'tool_call', id: 'call-1', request: 'Log a call' })
+    await vi.advanceTimersByTimeAsync(CALL_WORDS_MS)
     socket.say({ type: 'tool_cancel', ids: ['call-1', 'call-9'] })
 
     expect(set.now().working).toBe(0)
     expect(set.cancels).toEqual([['call-1']])
     set.talk.answer({ id: 'call-1', status: 'ok', retryable: false, message: 'Late.' })
     expect(socket.json()).toEqual([])
+  })
+
+  it('drops a call Google cancelled while it waited for words: nothing ever sees it', async () => {
+    const set = await live()
+    const socket = set.sockets.last()
+    socket.say({ type: 'tool_call', id: 'call-1', request: 'Log a call' })
+    socket.say({ type: 'tool_cancel', ids: ['call-1'] })
+    await vi.advanceTimersByTimeAsync(CALL_WORDS_MS)
+
+    expect(set.calls).toEqual([])
+    expect(set.cancels).toEqual([])
+    expect(set.now().working).toBe(0)
+  })
+})
+
+describe("the rep's own words for each call (T3-1)", () => {
+  const heard = (text: string) => ({ type: 'heard', text, final: false, interim: false }) as const
+
+  it('takes the words said before the call', async () => {
+    const set = await live()
+    const socket = set.sockets.last()
+    socket.say(heard(' Send it.'))
+    socket.say({ type: 'tool_call', id: 'call-1', request: 'Send it' })
+    await vi.advanceTimersByTimeAsync(CALL_WORDS_MS)
+
+    expect(set.calls.map((call) => call.heard)).toEqual(['Send it.'])
+  })
+
+  it("takes words that come just after the call: Google's transcript can come late", async () => {
+    const set = await live()
+    const socket = set.sockets.last()
+    socket.say({ type: 'tool_call', id: 'call-1', request: 'Send it' })
+    await vi.advanceTimersByTimeAsync(300)
+    socket.say(heard(' Send it.'))
+    await vi.advanceTimersByTimeAsync(CALL_WORDS_MS - 300)
+
+    expect(set.calls.map((call) => call.heard)).toEqual(['Send it.'])
+  })
+
+  it('gives words after the 0.5 s to the next call, not this one', async () => {
+    const set = await live()
+    const socket = set.sockets.last()
+    socket.say({ type: 'tool_call', id: 'call-1', request: 'Log a call with Jo' })
+    await vi.advanceTimersByTimeAsync(CALL_WORDS_MS + 100)
+    socket.say(heard(' The second one.'))
+    socket.say({ type: 'tool_call', id: 'call-2', request: 'The second one' })
+    await vi.advanceTimersByTimeAsync(CALL_WORDS_MS)
+
+    expect(set.calls.map((call) => [call.id, call.heard])).toEqual([
+      ['call-1', ''],
+      ['call-2', 'The second one.'],
+    ])
+  })
+
+  it.each([
+    ['the turn completes', { type: 'turn_complete' }],
+    ['the rep talks over the Assistant', { type: 'interrupted' }],
+    [
+      'Google says the words are finished',
+      { type: 'heard', text: '', final: true, interim: false },
+    ],
+  ] as const)('goes on before the 0.5 s when %s', async (_, message) => {
+    const set = await live()
+    const socket = set.sockets.last()
+    socket.say(heard(' Send it.'))
+    socket.say({ type: 'tool_call', id: 'call-1', request: 'Send it' })
+    socket.say(message)
+
+    expect(set.calls.map((call) => call.heard)).toEqual(['Send it.'])
+  })
+
+  it('goes on at once when the next call comes, each with its own words', async () => {
+    const set = await live()
+    const socket = set.sockets.last()
+    socket.say(heard(' Log a call with Jo.'))
+    socket.say({ type: 'tool_call', id: 'call-1', request: 'Log a call with Jo' })
+    socket.say(heard(' And a task.'))
+    socket.say({ type: 'tool_call', id: 'call-2', request: 'Add a task' })
+    await vi.advanceTimersByTimeAsync(CALL_WORDS_MS)
+
+    expect(set.calls.map((call) => [call.id, call.heard])).toEqual([
+      ['call-1', 'Log a call with Jo. And a task.'],
+      ['call-2', ''],
+    ])
+  })
+
+  it("never counts Google's guess: only finished pieces send anything", async () => {
+    const set = await live()
+    const socket = set.sockets.last()
+    socket.say({ type: 'heard', text: 'send it', final: false, interim: true })
+    socket.say({ type: 'tool_call', id: 'call-1', request: 'Send it' })
+    await vi.advanceTimersByTimeAsync(CALL_WORDS_MS)
+
+    expect(set.calls.map((call) => call.heard)).toEqual([''])
+  })
+
+  it('keeps the words no call took, for the text line if the free mic takes over (T4-1)', async () => {
+    const set = await live()
+    const socket = set.sockets.last()
+    socket.say(heard(' Log a call with Jo.'))
+    socket.say({ type: 'tool_call', id: 'call-1', request: 'Log a call with Jo' })
+    await vi.advanceTimersByTimeAsync(CALL_WORDS_MS)
+    socket.say(heard(' Then add a task'))
+    socket.say({ type: 'heard', text: 'for Fri', final: false, interim: true })
+
+    expect(set.talk.unsent()).toBe('Then add a task for Fri')
+  })
+})
+
+describe("the rep's whole turn (T3-4)", () => {
+  it('goes on once the Assistant answers', async () => {
+    const set = await live()
+    const socket = set.sockets.last()
+    socket.say({ type: 'heard', text: " That's", final: false, interim: false })
+    socket.say({ type: 'heard', text: ' all.', final: false, interim: false })
+    expect(set.turns).toEqual([])
+
+    socket.say({ type: 'said', text: 'Bye for now.' })
+    expect(set.turns).toEqual(["That's all."])
+  })
+
+  it('goes on when Google says it is finished, or the turn completes', async () => {
+    const set = await live()
+    const socket = set.sockets.last()
+    socket.say({ type: 'heard', text: ' Stop listening.', final: true, interim: false })
+    socket.say({ type: 'heard', text: ' Thanks.', final: false, interim: false })
+    socket.say({ type: 'turn_complete' })
+
+    expect(set.turns).toEqual(['Stop listening.', 'Thanks.'])
+  })
+
+  it('goes on after 1.5 s of quiet, as the gate pauses', async () => {
+    const set = await live()
+    set.frames(200, QUIET)
+    set.frames(10, SPEECH)
+    set.sockets.last().say({ type: 'heard', text: " That's all.", final: false, interim: false })
+    set.frames(100, QUIET)
+
+    expect(set.turns).toEqual(["That's all."])
+  })
+})
+
+describe('offline (T4-1)', () => {
+  it('starting offline ends it at once, before any request', async () => {
+    const set = setUp({ offline: true })
+    set.talk.start()
+    await settle()
+
+    expect(set.now().end).toEqual({ kind: 'offline' })
+    expect(set.begun).toEqual([])
+    expect(set.mic.asked).toEqual([])
+  })
+
+  it('going offline ends it, and lets everything go', async () => {
+    const set = await live()
+    set.net.set(false)
+
+    expect(set.now().end).toEqual({ kind: 'offline' })
+    expect(set.mic.live()).toBe(0)
+    expect(set.net.listeners.size).toBe(0)
   })
 })
 
