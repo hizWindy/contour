@@ -337,6 +337,8 @@ export function ResearchCard({
         return { line: null, reply: startedRef.current ?? ok(CHECKING) }
       }
       if (canStart) return { line: sayYesWords(name), reply: unsure(sayYesWords(name)) }
+      // Still reading what we know about a pick: it says so, and asks nothing yet.
+      if (stage.kind === 'checking') return { line: null, reply: unsure(CHECKING) }
       return { line: null, reply: failed(research?.blocked ?? NO_NAME) }
     }
   })
