@@ -41,7 +41,9 @@ import { MicSheet, MicSheetTitle } from '@/components/motion/mic-sheet'
 import { SourceLink } from '@/components/source-link'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
-import type { BarSession } from '../voice/bar-session'
+import type { BarSession, CardTook } from '../voice/bar-session'
+import { failed, ok, unsure, type Reply } from '../voice/live/bridge'
+import { RESEARCH_CANCELLED } from '../voice/live/words'
 import { ListeningPill } from '../voice/pill'
 import { micIsOn, type PillActionId, type PillState } from '../voice/pill-state'
 import { pickByKey, suggestionIn } from './keys'
@@ -57,6 +59,7 @@ import {
   SAY_YES,
   sayYesWords,
   START_RESEARCH,
+  startedWords,
   WHAT_WE_KNOW,
 } from './research-words'
 import { SuggestPart } from './suggest'
@@ -160,6 +163,8 @@ export function ResearchCard({
   const research = stage.kind === 'settled' ? stage.research : null
   const canStart = research?.next === 'ask' && research.can_start
   const startRef = useRef<() => void>(() => undefined)
+  /** The start on its way, and how it went (PLAN-V28 T3-2, for live voice's answer). */
+  const startedRef = useRef<Promise<Reply> | null>(null)
 
   // Enter starts nothing for the first half second (the review card's guard, choice 19).
   useEffect(() => {
@@ -236,14 +241,19 @@ export function ResearchCard({
     }
     setStarting(true)
     setProblem(null)
-    startResearch(body, key).then(
+    // How it went, for live voice's answer (PLAN-V28 T3-2): started, or why not.
+    startedRef.current = startResearch(body, key).then(
       (started) => {
-        addResearch(started.run_id, name || started.company)
+        const shown = name || started.company
+        addResearch(started.run_id, shown)
         onClose()
+        return ok(startedWords(shown))
       },
       (error: unknown) => {
         setStarting(false)
-        setProblem(problemLine(error))
+        const line = problemLine(error)
+        setProblem(line)
+        return failed(line, true)
       },
     )
   }
@@ -300,8 +310,9 @@ export function ResearchCard({
 
   // In a long conversation, the card hears each turn first, with no AI (as the review card,
   // PLAN-V24 T2-3): "yes" starts, "cancel" closes, and anything else is asked again, so a new
-  // command waits for this one.
-  const takeRef = useRef<(words: string) => { line: string | null }>(() => ({ line: null }))
+  // command waits for this one. In live voice it reads the rep's own words only, never Gemini's
+  // (PLAN-V28 choice 7), and says what it did back (`reply`): a research starts on the rep's "yes".
+  const takeRef = useRef<(words: string) => CardTook>(() => ({ line: null }))
   useLayoutEffect(() => {
     takeRef.current = (words) => {
       const answer = startOrNot(words)
@@ -309,23 +320,24 @@ export function ResearchCard({
         const suggestion = suggestionIn(root.current, 'company')
         if (answer === 'start' && suggestion) {
           suggestion.click()
-          return { line: null }
+          return { line: null, reply: ok(CHECKING) }
         }
         if (answer === 'cancel') {
           onClose()
-          return { line: null }
+          return { line: null, reply: ok(RESEARCH_CANCELLED) }
         }
-        return { line: PICK_ONE }
+        return { line: PICK_ONE, reply: unsure(PICK_ONE) }
       }
       if (answer === 'cancel') {
         onClose()
-        return { line: null }
+        return { line: null, reply: ok(RESEARCH_CANCELLED) }
       }
       if (answer === 'start' && canStart) {
         startRef.current()
-        return { line: null }
+        return { line: null, reply: startedRef.current ?? ok(CHECKING) }
       }
-      return { line: canStart ? sayYesWords(name) : null }
+      if (canStart) return { line: sayYesWords(name), reply: unsure(sayYesWords(name)) }
+      return { line: null, reply: failed(research?.blocked ?? NO_NAME) }
     }
   })
   useEffect(() => {
@@ -335,6 +347,7 @@ export function ResearchCard({
       // Never asked: the card answers every turn itself, above.
       card: () => ({ action: 'task', boxes: [] }),
       answer: () => ({ kind: 'close' }),
+      every: true,
     })
   }, [conversation, open])
 

@@ -195,9 +195,13 @@ import {
   readNote,
   removeNote,
   saveNote,
+  notSentOutcome,
   sendDraft,
+  type SendOutcome,
   type SendTools,
 } from './send'
+import { ok as okReply, replyForSend, unsure as unsureReply } from '../voice/live/bridge'
+import { FILL_IN_FIRST, READY } from '../voice/live/words'
 import { openCard, openedCard, type CardRequest } from './store'
 import { isNoHubSpotUser, needsTeammate } from './teammate-rules'
 import {
@@ -487,6 +491,8 @@ function DraftCard({
   const [saveProblem, setSaveProblem] = useState<string | null>(null)
   const armed = useRef(false)
   const closing = useRef<'send' | 'cancel' | null>(null)
+  /** How the send went, once it has: after the 5-second hold (PLAN-V28 T3-2, for live voice). */
+  const sending = useRef<Promise<SendOutcome> | null>(null)
   const stopListen = useRef<((quietly?: boolean) => void) | null>(null)
   const card = useRef<HTMLDivElement>(null)
   const sendButton = useRef<HTMLButtonElement>(null)
@@ -902,16 +908,27 @@ function DraftCard({
     // Kept from now: a page closed in the 5 seconds sends nothing, and the next page offers it.
     keepCardDraft(now, true)
     onClose()
-    startHold({
-      action: now.action,
-      ms: t.hold,
-      stillSignedIn: () => signedInAs(client) === now.by,
-      send: () => {
-        void sendDraft(now, tools)
-      },
-      onUndo: () => {
-        openCard({ kind: 'draft', draft: now })
-      },
+    // How it went, for live voice's answer (PLAN-V28 T3-2): "Sent." only once it has. A sign-out
+    // in the 5 seconds stops it quietly, and nothing went: it is said as undone.
+    sending.current = new Promise<SendOutcome>((settled) => {
+      startHold({
+        action: now.action,
+        ms: t.hold,
+        stillSignedIn: () => {
+          const still = signedInAs(client) === now.by
+          if (!still) settled({ kind: 'undone' })
+          return still
+        },
+        send: () => {
+          void sendDraft(now, tools).then(settled, () => {
+            settled(notSentOutcome(null))
+          })
+        },
+        onUndo: () => {
+          settled({ kind: 'undone' })
+          openCard({ kind: 'draft', draft: now })
+        },
+      })
     })
   }
 
@@ -1085,12 +1102,25 @@ function DraftCard({
   const takeTurn = (words: string): CardTook | null => {
     if (closing.current) return null
     const fixed = cardWordsOf(words)
-    if (fixed === 'send') return { line: trySend('voice') ? SENT : null }
-    if (fixed === 'later') {
-      cancel()
-      return { line: null }
+    if (fixed === 'send') {
+      // In live voice, the answer waits for the real send, after the hold (PLAN-V28 T3-2).
+      const started = trySend('voice')
+      const outcome = started ? sending.current : null
+      return outcome
+        ? { line: SENT, reply: outcome.then(replyForSend) }
+        : { line: null, reply: unsureReply(FILL_IN_FIRST) }
     }
-    return answerByVoice(words)
+    if (fixed === 'later') {
+      const now = latest.current.draft
+      cancel()
+      // Where it waits, as the card's own toast says it.
+      const kept =
+        now.action !== 'log_call' ? DRAFT_KEPT : now.company.found ? CALL_KEPT : KEPT_NEEDS_COMPANY
+      return { line: null, reply: okReply(kept) }
+    }
+    const took = answerByVoice(words)
+    // A pick or an answer to the card's question: it is ready again, or it asks again.
+    return took ? { ...took, reply: took.line ? unsureReply(took.line) : okReply(READY) } : null
   }
 
   // The listening and V's answers run outside React: they call the newest of these.
