@@ -309,6 +309,27 @@ async def test_an_admin_without_the_switch_reads_live_voice_false(world: World) 
 
 
 @pytest.mark.integration
+async def test_the_sign_in_answer_says_live_voice_as_who_am_i_does(world: World) -> None:
+    """The website reads it at once after an in-app sign-in, not a minute later."""
+    world.settings(live_voice_ok=True, gemini_api_key=FAKE_KEY)
+    boss = await make_platform_admin(world)
+    async with world.browser() as browser:
+        signed = await sign_in(browser)
+        assert signed.status_code == 200
+        assert signed.json()["live_voice"] is False  # every tick, but no switch
+        async with world.factory() as db:
+            row = await db.get(User, boss.id)
+            assert row is not None
+            row.live_voice = True
+            await db.commit()
+        again = await sign_in(browser)
+        assert again.json()["live_voice"] is True
+        assert (await me(browser)).json()["live_voice"] is True  # the same answer
+        world.settings(live_voice_ok=False, gemini_api_key=FAKE_KEY)  # the server's switch off
+        assert (await sign_in(browser)).json()["live_voice"] is False
+
+
+@pytest.mark.integration
 async def test_a_viewer_with_the_switch_reads_live_voice_false(world: World) -> None:
     world.settings(live_voice_ok=True, gemini_api_key=FAKE_KEY)
     viewer = await make_account(

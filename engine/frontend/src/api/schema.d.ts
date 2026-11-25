@@ -7405,6 +7405,11 @@ export interface components {
              */
             first_sign_in: boolean;
             /**
+             * Live Voice
+             * @description PLAN-V28: as `live_voice` in `GET /auth/me`, for the person just signed in
+             */
+            live_voice?: boolean;
+            /**
              * Platform Admin Name
              * @description The Platform admin's name, for access messages
              */

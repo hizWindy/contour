@@ -127,6 +127,10 @@ class SessionOut(OutModel):
 
 
 class LoginOut(OutModel):
+    # `live_voice` came in PLAN-V28 (as in `MeOut`), so the website knows it at once after an
+    # in-app sign-in. The API always sends it, and the website's types leave it optional.
+    model_config = ConfigDict(json_schema_extra=optional_in_types("live_voice"))
+
     user: UserOut
     session: SessionOut
     platform_admin_name: str | None = Field(
@@ -134,6 +138,11 @@ class LoginOut(OutModel):
     )
     first_sign_in: bool = Field(
         False, description="True on a person's first sign-in before changing their password"
+    )
+    live_voice: bool = Field(
+        False,
+        description="PLAN-V28: as `live_voice` in `GET /auth/me`, for the person just signed in",
+        json_schema_extra=no_default_in_types,
     )
 
 
@@ -359,6 +368,7 @@ async def login(
         session=session_out(result.session, current=True, limits=limits),
         platform_admin_name=admin_name,
         first_sign_in=first,
+        live_voice=live_voice_for(settings, result.user),
     )
 
 

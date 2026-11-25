@@ -11140,6 +11140,11 @@
             "title": "First Sign In",
             "type": "boolean"
           },
+          "live_voice": {
+            "description": "PLAN-V28: as `live_voice` in `GET /auth/me`, for the person just signed in",
+            "title": "Live Voice",
+            "type": "boolean"
+          },
           "platform_admin_name": {
             "anyOf": [
               {
