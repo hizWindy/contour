@@ -26,6 +26,8 @@ export interface PillState {
   act: (id: PillActionId) => void
   /** Stop, or V: the turn in progress goes, then it stops listening. */
   stop: () => void
+  /** Mute in a live talk (PLAN-V28 T2-4). Left out: the free mic, which has none. */
+  mute?: (on: boolean) => void
 }
 
 /** The mic is on: opening, getting the model ready, or listening. */

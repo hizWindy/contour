@@ -68,10 +68,15 @@
  *   needn't wait. Only once the setting is known and isn't typing, and never on a phone or a
  *   tablet, where it waits for Speak or "Get voice ready" in the profile menu.
  *
- * PLAN-V28 T2-3, **live voice** (`live/`), for a person it is on for (`MeOut.live_voice`): the
- * session picks it at each start where this browser can run it, and the bar hands it the talk's
- * maker. On an iPhone sound starts only inside the tap or key press that asked for it, so the
- * audio is made inside the V key press or the Speak tap that opens the bar (`whenBarOpens`).
+ * PLAN-V28 Part 2, **live voice** (`live/`), for a person it is on for (`MeOut.live_voice`):
+ *
+ * - **The bar talks with Gemini** through our relay. Its title says where the talk stands, in one
+ *   word (`liveTitle`): Connecting, Listening, Working it out, Speaking, Reconnecting or Muted,
+ *   each said once to a screen reader, politely. The captions show the rep's words as Google hears
+ *   them, then the Assistant's. Mute stops the sound going and keeps the talk; Stop (V) and Esc
+ *   end it, as before.
+ * - **On an iPhone** sound starts only inside the tap or key press that asked for it, so the
+ *   audio is made inside the V key press or the Speak tap that opens the bar (`whenBarOpens`).
  */
 import { CircleAlert, RotateCcw } from 'lucide-react'
 import { AnimatePresence, m } from 'motion/react'
@@ -138,6 +143,9 @@ import { isKeepListeningOn, useKeepListening } from './keep-listening'
 import { isPlainV, somethingElseOpen, VOICE_BAR } from './keys'
 import { primeAudio } from './live/audio'
 import { makeTalk, type MakeTalk } from './live/talk'
+import { liveTitle } from './live/state'
+import { LiveCaptions, MuteToggle } from './live/view'
+import { CONNECTING } from './live/words'
 import { cachedNames, firstCompanyOf, fixNamesOf, hintsOf, namesOnPage } from './names'
 import { onPageOf, panelCompany } from './on-page'
 import { onScreen } from './on-screen'
@@ -263,10 +271,15 @@ function downloadOf(snapshot: BarSnapshot): Preparing | null {
   return preparing && preparing.total > 0 ? preparing : null
 }
 
-/** The line at the top: where the bar stands. */
-function titleOf(snapshot: BarSnapshot): string {
+/**
+ * The line at the top: where the bar stands. `liveFirst`: live voice will be its engine (PLAN-V28),
+ * so before the session starts it says "Connecting", not the free mic's "Looking for a mic".
+ */
+function titleOf(snapshot: BarSnapshot, liveFirst = false): string {
   switch (snapshot.phase) {
     case 'starting': {
+      // Live voice gets its start, the mic and the socket ready (PLAN-V28 T2-4).
+      if (snapshot.live || (liveFirst && !snapshot.mic)) return CONNECTING
       // The model on the device gets ready first, where it is the engine (PLAN-V24 T4-3).
       const preparing = snapshot.mic?.preparing
       if (preparing) {
@@ -277,6 +290,8 @@ function titleOf(snapshot: BarSnapshot): string {
       return steps?.found === 'pass' ? STEP_WORDS.allowed.waiting : STEP_WORDS.found.waiting
     }
     case 'listening':
+      // Live voice says where its talk stands, in one word (PLAN-V28 T2-4).
+      if (snapshot.live) return liveTitle(snapshot.live)
       // The speech service is tried again after a blip (PLAN-V24 T1-3).
       if (snapshot.mic?.reconnecting) return RECONNECTING
       // A conversation listens on while a command is read (PLAN-V24 T2-1).
@@ -410,7 +425,7 @@ function actionsOf(snapshot: BarSnapshot): BarAction[] {
  * What a screen reader hears once, as the bar moves on. A problem's own alert speaks for it. A
  * conversation's line (a read-back, "Sent.") is said in place of "Listening".
  */
-function statusOf(snapshot: BarSnapshot): string {
+function statusOf(snapshot: BarSnapshot, liveFirst = false): string {
   if (snapshot.phase === 'answer') return snapshot.answer?.line ?? ''
   const { problem } = snapshot
   // A line said without alarm has no alert of its own: the quiet stop is said here.
@@ -419,7 +434,7 @@ function statusOf(snapshot: BarSnapshot): string {
   // While a command is worked out, the title says so.
   const talk = snapshot.phase === 'listening' ? snapshot.conversation : null
   const line = talk && !talk.working ? talk.line : null
-  return line ?? titleOf(snapshot)
+  return line ?? titleOf(snapshot, liveFirst)
 }
 
 function KeyHint({ children }: { children: ReactNode }) {
@@ -689,7 +704,9 @@ export default function VoiceBar({
     else if (shown && document.activeElement === document.body) bar.current?.focus()
   }, [open, shown, phase])
 
-  const title = titleOf(snapshot)
+  // Live voice will be the engine: this person may use it, and this browser can run it.
+  const liveFirst = liveOn && !typingOnly && (env?.browser ?? browserFacts)().live === true
+  const title = titleOf(snapshot, liveFirst)
   const listening = phase === 'starting' || phase === 'listening'
   // The model gets ready first (PLAN-V24 T4-3): nothing to stop yet, and its download shows.
   const preparing = listening && Boolean(snapshot.mic?.preparing)
@@ -715,6 +732,21 @@ export default function VoiceBar({
   const waiting = waits(problem)
   // A conversation listens (PLAN-V24 T2-1): the command being read, and the next words.
   const conversation = listening ? snapshot.conversation : null
+  // A live talk (PLAN-V28): its captions, bars and Mute in place of the free mic's.
+  const live = listening ? (snapshot.live ?? null) : null
+  const movedTo = live ? live.movedTo : listening ? (snapshot.mic?.movedTo ?? null) : null
+  // Before any words: what to say, the last command's line ("Sent.", a read-back), or what to say
+  // next. Nothing while a command is read: it shows above.
+  const noWords =
+    !conversation || conversation.turns === 0 ? (
+      <SayExamples company={nextCompany} />
+    ) : conversation.working ? (
+      false
+    ) : (
+      <p data-slot="voice-line" className="text-pretty text-muted-foreground">
+        {conversation.line ?? NEXT_COMMAND}
+      </p>
+    )
   // Over the server's limit, the words can't go until they are shortened.
   const tooLong = snapshot.draft.trim().length > MAX_CHARS
   // The device, for the words of the model's problems (the PLAN-V24 browser check).
@@ -735,6 +767,14 @@ export default function VoiceBar({
           stop: () => {
             session.done()
           },
+          // Mute, in a live talk (PLAN-V28 T2-4).
+          ...(snapshot.live
+            ? {
+                mute: (on: boolean) => {
+                  session.mute(on)
+                },
+              }
+            : {}),
         }
       : null
 
@@ -790,7 +830,7 @@ export default function VoiceBar({
             }}
             exit={{ opacity: 0, y: RISE / 2, transition: still ? INSTANT : springs.exit }}
           >
-            <SaidStatus key={cards.seen} text={statusOf(snapshot)} quiet={hadCard} />
+            <SaidStatus key={cards.seen} text={statusOf(snapshot, liveFirst)} quiet={hadCard} />
 
             <div className="flex min-h-6 items-center gap-3">
               <p
@@ -802,7 +842,11 @@ export default function VoiceBar({
               {listening && !preparing ? (
                 // With reduced motion: one still bar beside the word above. Not while the model
                 // gets ready: no mic is open yet, and the title needs the room on a phone.
-                <FrequencyBars source={snapshot.mic?.bars ?? null} label="" className="h-6" />
+                <FrequencyBars
+                  source={live?.bars ?? snapshot.mic?.bars ?? null}
+                  label=""
+                  className="h-6"
+                />
               ) : null}
             </div>
 
@@ -881,22 +925,16 @@ export default function VoiceBar({
                   </p>
                 ) : null}
                 {listening ? (
-                  <LiveWords
-                    chunks={snapshot.mic?.chunks ?? []}
-                    hearing={snapshot.mic?.hearing ?? ''}
-                    empty={
-                      !conversation || conversation.turns === 0 ? (
-                        <SayExamples company={nextCompany} />
-                      ) : conversation.working ? (
-                        false
-                      ) : (
-                        // The last command's line ("Sent.", a read-back), or what to say next.
-                        <p data-slot="voice-line" className="text-pretty text-muted-foreground">
-                          {conversation.line ?? NEXT_COMMAND}
-                        </p>
-                      )
-                    }
-                  />
+                  live ? (
+                    // Live voice's captions: the rep's words, then the Assistant's (PLAN-V28).
+                    <LiveCaptions captions={live.captions} empty={noWords} />
+                  ) : (
+                    <LiveWords
+                      chunks={snapshot.mic?.chunks ?? []}
+                      hearing={snapshot.mic?.hearing ?? ''}
+                      empty={noWords}
+                    />
+                  )
                 ) : snapshot.words ? (
                   <p className="text-pretty">{snapshot.words}</p>
                 ) : null}
@@ -909,10 +947,10 @@ export default function VoiceBar({
               </p>
             ) : null}
 
-            {listening && snapshot.mic?.movedTo ? (
+            {movedTo ? (
               // The mic moved by itself, a headset plugged in (PLAN-V24 T1-2): said once in all,
               // here or in the pill (T5-1).
-              <MovedLine key={snapshot.mic.movedTo.id} device={snapshot.mic.movedTo} />
+              <MovedLine key={movedTo.id} device={movedTo} />
             ) : null}
 
             {waiting ? null : problemView}
@@ -930,6 +968,15 @@ export default function VoiceBar({
                 >
                   {TYPE_INSTEAD}
                 </Button>
+              ) : null}
+              {live && session ? (
+                // Mute (PLAN-V28 T2-4): no sound goes, and the talk goes on.
+                <MuteToggle
+                  muted={live.muted}
+                  onMute={(on) => {
+                    session.mute(on)
+                  }}
+                />
               ) : null}
               {others.map((action) => (
                 <Button

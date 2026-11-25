@@ -23,6 +23,11 @@
  *
  * The voice bar gives it everything it says (`PillState`), from the bar's own words, so the pill
  * says what the bar would. The card adds what to say to it, and puts the focus back on itself.
+ *
+ * **Live voice** (PLAN-V28 T2-4): the same pill, with live voice's states in its title
+ * (`liveTitle`: Connecting, Listening, Working it out, Speaking, Reconnecting, Muted), the captions
+ * (`LiveCaptions`: the rep's words as Google hears them, then the Assistant's) in place of the
+ * words, and Mute beside Stop.
  */
 import { CircleAlert } from 'lucide-react'
 import { AnimatePresence, m } from 'motion/react'
@@ -42,6 +47,7 @@ import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
+import { LiveCaptions, MuteToggle } from './live/view'
 import { lineOf, micIsOn, useSaidOnce, type PillActionId, type PillState } from './pill-state'
 import { useVKeyOn } from './v-switch'
 import { DONE, STOP, TYPE_INSTEAD, VOICE_BAR_NAME } from './words'
@@ -107,6 +113,8 @@ function Live({ state, hint, hintId, onStop, onAct }: ListeningPillProps) {
   const vOn = useVKeyOn()
   const { snapshot, title } = state
   const { mic, conversation } = snapshot
+  // A live talk (PLAN-V28): its captions, bars and Mute in place of the free mic's.
+  const talk = snapshot.live ?? null
   const preparing = mic?.preparing ?? null
   // The model downloads: its progress, as the bar shows it (PLAN-V24 T4-3).
   const download = preparing && preparing.total > 0 ? preparing : null
@@ -132,36 +140,34 @@ function Live({ state, hint, hintId, onStop, onAct }: ListeningPillProps) {
       </div>
     )
   } else {
-    under = (
-      <LiveWords
-        chunks={mic?.chunks ?? []}
-        hearing={mic?.hearing ?? ''}
-        empty={
-          working ? (
-            // The turn the command step reads stays, quieter, until its answer comes.
-            <p data-slot="pill-working" className="text-pretty text-muted-foreground">
-              {working}
-            </p>
-          ) : line ? (
-            <p data-slot="pill-line" className="text-pretty text-foreground">
-              {line}
-            </p>
-          ) : (
-            <p id={hintId} className="text-pretty text-muted-foreground">
-              {hint}
-            </p>
-          )
-        }
-      />
+    const empty = working ? (
+      // The turn the command step reads stays, quieter, until its answer comes.
+      <p data-slot="pill-working" className="text-pretty text-muted-foreground">
+        {working}
+      </p>
+    ) : line ? (
+      <p data-slot="pill-line" className="text-pretty text-foreground">
+        {line}
+      </p>
+    ) : (
+      <p id={hintId} className="text-pretty text-muted-foreground">
+        {hint}
+      </p>
+    )
+    under = talk ? (
+      <LiveCaptions captions={talk.captions} empty={empty} />
+    ) : (
+      <LiveWords chunks={mic?.chunks ?? []} hearing={mic?.hearing ?? ''} empty={empty} />
     )
   }
+  const movedTo = talk ? talk.movedTo : (mic?.movedTo ?? null)
   return (
     <>
       <div className="flex min-h-10 items-center gap-3 py-1 pr-1 pl-3 touch:min-h-12">
         {preparing ? null : (
           // Small bars, for a small pill: 2px bars 2px apart. With reduced motion, one still bar.
           <FrequencyBars
-            source={mic?.bars ?? null}
+            source={talk?.bars ?? mic?.bars ?? null}
             label=""
             className="h-5 shrink-0 gap-0.5 [&>[data-slot=frequency-bar]]:w-0.5"
           />
@@ -169,6 +175,9 @@ function Live({ state, hint, hintId, onStop, onAct }: ListeningPillProps) {
         <p data-slot="pill-title" className="min-w-0 flex-1 truncate font-semibold text-foreground">
           {title}
         </p>
+        {talk && state.mute ? (
+          <MuteToggle muted={talk.muted} onMute={state.mute} iconOnly className="rounded-sm" />
+        ) : null}
         {preparing ? (
           // Nothing to stop yet: the model gets ready first. V still closes it.
           <Button
@@ -199,9 +208,7 @@ function Live({ state, hint, hintId, onStop, onAct }: ListeningPillProps) {
       </div>
       <div data-slot="pill-words" className="flex flex-col gap-1 px-3 pb-2 text-ui">
         {under}
-        {mic?.movedTo && !preparing ? (
-          <MovedLine key={mic.movedTo.id} device={mic.movedTo} />
-        ) : null}
+        {movedTo && !preparing ? <MovedLine key={movedTo.id} device={movedTo} /> : null}
       </div>
     </>
   )
